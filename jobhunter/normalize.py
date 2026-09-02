@@ -283,6 +283,8 @@ def llm_salary(title: str, company: str, location: str | None, description: str 
         ),
         _SALARY_SYSTEM,
         temperature=0.0,
+        alias="cheap",
+        purpose="salary",
         default=None,
     )
     if not isinstance(data, dict) or not data.get("found"):

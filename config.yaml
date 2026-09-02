@@ -1,15 +1,51 @@
 # JobHunter configuration
-llm:
-  base_url: "http://localhost:11434"
-  # 8 GB Mac -> qwen3:4b. If you upgrade RAM / use another machine, switch to qwen3:8b or qwen3:14b.
-  model: "qwen3:4b"
-  embed_model: "nomic-embed-text"
-  # thinking mode off for speed on bulk tasks
-  keep_alive: "30m"       # keep models resident; a reload mid-run costs minutes on 8 GB
-  options:
-    temperature: 0.4
-    num_ctx: 8192
-    num_predict: 900      # cap generation — rubric/draft outputs are short by design
+openrouter:
+  # Every model call goes through here. FINAL-PLAN-V3 4.2.
+  # THE KEY IS NOT IN THIS FILE. Put OPENROUTER_API_KEY in .env (gitignored) or the
+  # environment; see .env.example. Nothing in this file is a secret.
+  enabled: true
+  base_url: "https://openrouter.ai/api/v1"
+  default_alias: "cheap"
+
+  # Refuse to call anything that is not a `:free` model. This is the guard that makes
+  # a mis-edited alias impossible to pay for -- turn it off deliberately, or not at all.
+  free_only: true
+
+  # Aliases, not model ids, at call sites. Swapping a model is one line here.
+  # Chosen from the free roster on 2026-09-02 for the thing this pipeline actually
+  # does -- structured JSON out -- so every one of these supports response_format.
+  # Re-check the roster with: python scripts/run.py models list --free
+  aliases:
+    # 26B MoE, 4B active: fast, instruction-tuned. Triage, salary, classification, parsing.
+    cheap: "google/gemma-4-26b-a4b-it:free"
+    # 120B hybrid MoE, 12B active: the strongest free reasoner that also does JSON.
+    # The fit rubric and the research hook, where being wrong is expensive.
+    judge: "nvidia/nemotron-3-super-120b-a12b:free"
+    # 1M context, strong long-form generation. Drafts and follow-ups a human will read.
+    writer: "minimax/minimax-m3:free"
+  # Other free options that also support JSON, if one of the above is busy or retired:
+  #   z-ai/glm-5.2:free                 (256k, large reasoner)
+  #   google/gemma-4-31b-it:free        (262k, dense)
+  #   minimax/minimax-m2.7:free         (196k)
+  #   dots-studio/dots-3-note-preview   (512k)
+  #   liquid/lfm-2.5-2.6b:free          (65k, compact extraction)
+  #   openrouter/free                   (routes across free models at random)
+
+  # Free models are rate limited by OpenRouter, not by cost: roughly 20 requests a
+  # minute, and a daily request ceiling that is much higher once the account holds
+  # a few credits. A 429 is that ceiling, not a bug -- the client will say so and stop.
+  requests_per_minute: 18          # client-side spacing, kept just under the limit
+
+  # Budget gate, checked BEFORE each request. Free models cost 0 so it never trips
+  # today; it stays because the day an alias is pointed at a paid model, it should.
+  daily_inr_cap: 100
+  monthly_inr_cap: 2500
+  usd_to_inr: 88
+
+  max_tokens: 1200        # per call unless the call site says otherwise
+  temperature: 0.3
+  timeout: 180            # seconds; a free endpoint under load can be slow to start
+  app_title: "ZoNuLy JobHunter"
 
 search:
   # salary filter, in INR lakhs per annum. Jobs in other currencies are converted (approx).
@@ -34,12 +70,16 @@ search:
   max_yoe: 3
 
 matching:
-  # Cheap prefilter before the expensive LLM rubric pass.
-  # nomic-embed-text puts almost all resume<->JD pairs in a narrow 0.55-0.84 band, so an
-  # absolute cutoff is meaningless on its own — the percentile does the real work and the
-  # absolute value is only a floor. Raise the percentile to score fewer, better jobs.
-  embed_prefilter: 0.60
-  embed_prefilter_percentile: 70   # only the top 30% of jobs reach the LLM
+  # The free gate in front of the paid rubric: rare-term-weighted overlap between
+  # the resume and the JD (jobhunter/fit.py). No model, no key, no cost -- OpenRouter
+  # serves no embedding models, so the wide end of the funnel is model-free now.
+  # The absolute floor is a share of the JD's distinctive weight; the percentile
+  # does most of the work, exactly as it did for the old cosine.
+  # Measured over the 1100 postings already scraped: median 0.039, p70 0.047, max 0.171.
+  # A JD has hundreds of distinctive terms and a resume answers a fraction of them, so
+  # the absolute numbers are small and the percentile is what actually gates.
+  fit_prefilter: 0.02              # floor only — below p10, so it almost never binds
+  fit_prefilter_percentile: 70     # only the top 30% of jobs reach the judge model
   # shortlist_probability >= this -> "high match", triggers notification + contact discovery
   high_match_threshold: 65
 
@@ -100,6 +140,24 @@ api:
   port: 8000
   # Next dev falls back to 3001/3002 when 3000 is taken, so allow the neighbours too
   cors_origins: ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://127.0.0.1:3000"]
+
+research:
+  # Web research / data-acquisition layer. Backends are the upstream tools Agent
+  # Reach installs (mcporter+Exa, Jina Reader, gh, yt-dlp, rdt) -- see
+  # `system docs/AGENT-REACH-INTEGRATION.md`.
+  # NO SECRETS HERE. Keys live in the environment or a gitignored .env:
+  #   EXA_API_KEY (optional, only for the exa-api fallback), GITHUB_TOKEN (optional).
+  timeout: 90              # seconds per backend call
+  cache_ttl_hours: 24      # 0 disables the research cache entirely
+  max_chars: 12000         # per fetched page
+  mcporter_server: "exa"   # the mcporter server name holding the Exa MCP
+  # Ordered candidates per capability; the first one that returns content wins.
+  backends:
+    web_search: ["exa-mcp", "exa-api"]
+    page_read: ["jina", "exa-mcp", "direct"]
+    github: ["gh-cli", "github-api"]
+    reddit: ["rdt", "opencli"]
+    youtube: ["yt-dlp"]
 
 db_path: "jobhunter.db"
 profile_path: "profile/profile.json"

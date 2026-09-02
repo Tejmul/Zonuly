@@ -1,15 +1,17 @@
-"""Match scoring: cheap embedding prefilter, then an LLM rubric pass on survivors.
+"""Match scoring: a free lexical gate, then a paid rubric pass on the survivors.
 
-A 4B model on 8 GB RAM can score maybe a few hundred jobs an hour, so the
-embedding pass exists to make sure those calls are spent on plausible jobs.
+The gate used to be an embedding cosine. OpenRouter serves no embedding models, so
+it is rare-term-weighted vocabulary overlap now (`jobhunter.fit`) — which costs
+nothing, needs no provider, and is inspectable term by term. Only what survives it
+reaches the `judge` alias, which is the part that bills.
+
+`Job.embed_sim` still holds that gate score; the column name is historical.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
-import math
 from dataclasses import dataclass
 
 from sqlmodel import col, func, select
@@ -22,47 +24,21 @@ from jobhunter.db import Job, get_session, get_setting, init_db, set_setting, ut
 log = logging.getLogger(__name__)
 
 _M = CONFIG["matching"]
-PREFILTER = float(_M.get("embed_prefilter", 0.60))
-PREFILTER_PCT = _M.get("embed_prefilter_percentile")
+# The floor is a share of the JD's distinctive weight, not a cosine, so it sits an
+# order of magnitude lower than the old value and the percentile does the gating.
+PREFILTER = float(_M.get("fit_prefilter", 0.02))
+PREFILTER_PCT = _M.get("fit_prefilter_percentile", 70)
 HIGH_MATCH = int(_M.get("high_match_threshold", 65))
 MAX_YOE = int(CONFIG["search"].get("max_yoe", 3))
 MIN_LPA = float(CONFIG["search"].get("min_lpa", 24))
 
-EMBED_BATCH = 12  # keep peak RAM modest alongside the chat model
 
-_RESUME_VEC_KEY = "resume_embedding"
-_RESUME_HASH_KEY = "resume_embedding_hash"
+# ---------------------------------------------------------------- lexical gate
 
-
-# ---------------------------------------------------------------- embeddings
-
-def cosine(a: list[float], b: list[float]) -> float:
-    if not a or not b:
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
-    na = math.sqrt(sum(x * x for x in a))
-    nb = math.sqrt(sum(y * y for y in b))
-    return dot / (na * nb) if na and nb else 0.0
-
-
-def resume_vector(*, force: bool = False) -> list[float]:
-    """Embed the profile once and cache it; re-embeds automatically if the resume changed."""
-    from jobhunter import llm
-
-    text = resume_mod.embedding_text()
-    digest = hashlib.sha1(text.encode()).hexdigest()
-
-    with get_session() as session:
-        if not force and get_setting(session, _RESUME_HASH_KEY) == digest:
-            cached = get_setting(session, _RESUME_VEC_KEY)
-            if cached:
-                return json.loads(cached)
-
-        vec = llm.embed_one(text)
-        set_setting(session, _RESUME_VEC_KEY, json.dumps(vec))
-        set_setting(session, _RESUME_HASH_KEY, digest)
-        log.info("resume embedding refreshed (%d dims)", len(vec))
-        return vec
+#: bump when the scoring method changes so stale scores on a different scale are
+#: recomputed instead of being silently compared against a percentile
+PREFILTER_METHOD = "lexical-v1"
+_METHOD_KEY = "prefilter_method"
 
 
 def job_text(job: Job) -> str:
@@ -70,32 +46,41 @@ def job_text(job: Job) -> str:
     return "\n".join(b for b in bits if b)
 
 
-def prefilter(limit: int = 400) -> int:
-    """Compute resume<->JD cosine similarity for jobs that don't have one yet."""
-    init_db()
-    from jobhunter import llm
+def prefilter(limit: int = 400, *, recompute: bool = False) -> int:
+    """Score jobs that have no gate score yet. Free — no model, no network.
 
-    rvec = resume_vector()
+    Switching scoring method invalidates every existing score: a percentile over a
+    mix of cosine and lexical values would be arithmetic on two different scales.
+    So a method change clears the column and redoes the corpus, which is cheap now.
+    """
+    init_db()
+    from jobhunter import fit
+
+    with get_session() as session:
+        if recompute or get_setting(session, _METHOD_KEY) != PREFILTER_METHOD:
+            stale = session.exec(select(Job).where(col(Job.embed_sim).is_not(None))).all()
+            for job in stale:
+                job.embed_sim = None
+                session.add(job)
+            session.commit()
+            set_setting(session, _METHOD_KEY, PREFILTER_METHOD)
+            if stale:
+                log.info("prefilter method -> %s; cleared %d stale scores", PREFILTER_METHOD, len(stale))
+            limit = max(limit, len(stale))
+
+    fit.refresh()
+    resume_terms = fit.resume_profile_terms(force=True)
     done = 0
     with get_session() as session:
         rows = session.exec(
             select(Job).where(col(Job.embed_sim).is_(None)).order_by(col(Job.scraped_at).desc()).limit(limit)
         ).all()
-        for i in range(0, len(rows), EMBED_BATCH):
-            batch = rows[i : i + EMBED_BATCH]
-            try:
-                vecs = llm.embed([job_text(j) for j in batch])
-            except llm.LLMUnavailable:
-                raise
-            except Exception as e:  # noqa: BLE001 — one bad batch shouldn't stop the pass
-                log.warning("embed batch failed: %s", e)
-                continue
-            for job, v in zip(batch, vecs):
-                job.embed_sim = round(cosine(rvec, v), 4)
-                session.add(job)
-                done += 1
-            session.commit()
-    log.info("prefilter: embedded %d jobs", done)
+        for job in rows:
+            job.embed_sim = fit.score_job(job, resume_terms)
+            session.add(job)
+            done += 1
+        session.commit()
+    log.info("prefilter: scored %d jobs lexically", done)
     return done
 
 
@@ -174,6 +159,8 @@ def score_job(job: Job, profile_text: str, yoe: float) -> Score | None:
         RUBRIC_SYSTEM,
         temperature=0.2,
         num_predict=700,
+        alias="judge",          # the one call in the pipeline worth a reasoning model
+        purpose="rubric",
         default=None,
     )
     if not isinstance(data, dict) or not isinstance(data.get("score"), (int, float)):
@@ -284,7 +271,10 @@ def rescore_all() -> int:
                 job.status = "new"
             session.add(job)
         session.commit()
-    resume_vector(force=True)
+    from jobhunter import fit
+
+    fit.refresh()
+    fit.resume_profile_terms(force=True)
     log.info("cleared scores on %d jobs", len(rows))
     return len(rows)
 

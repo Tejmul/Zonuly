@@ -123,6 +123,8 @@ async def research_contact(contact_id: int, job_id: int | None = None) -> dict:
         HOOK_SYSTEM,
         temperature=0.3,
         num_predict=500,
+        alias="judge",          # the hook has to be true, not just fluent
+        purpose="contact-research",
         default={},
     )
     if not isinstance(brief, dict):

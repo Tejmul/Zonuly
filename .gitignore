@@ -3,3 +3,8 @@ knowledge/graph.graphml
 knowledge/graph.json
 .DS_Store
 __pycache__/
+__pycache__/
+*.pyc
+*.db
+.env
+.env.local

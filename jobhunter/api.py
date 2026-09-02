@@ -24,6 +24,7 @@ from sqlmodel import col, func, select
 
 from jobhunter import CONFIG, ROOT
 from jobhunter.db import Company, Contact, Email, Job, Reply, get_session, init_db
+from jobhunter.research.routes import router as research_router
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +52,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Web research / data acquisition (Agent Reach backends) -> /api/research/*
+app.include_router(research_router)
 
 
 # ---------------------------------------------------------------- task registry
@@ -213,6 +217,22 @@ def health() -> dict:
         "counts": matcher.counts(),
         "scheduler": scheduler.status(),
     }
+
+
+@app.get("/api/models")
+def models_status() -> dict:
+    """OpenRouter: key presence, aliases, caps and today's spend. Never the key."""
+    from jobhunter import llm
+
+    return llm.health()
+
+
+@app.get("/api/models/costs")
+def models_costs(days: int = Query(1, ge=1, le=90), month: bool = False) -> dict:
+    """What the model layer has cost, by alias and by stage."""
+    from jobhunter import openrouter
+
+    return {"spend": openrouter.spend(days=days, month=month), "budget": openrouter.budget_status()}
 
 
 @app.get("/api/overview")

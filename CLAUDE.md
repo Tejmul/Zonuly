@@ -54,3 +54,22 @@ python scripts/run.py scrape | score | find-contacts | draft | send | poll | dai
 python scripts/run.py serve           # FastAPI on :8000 (+ scheduler)
 cd dashboard && npm run dev           # dashboard on :3000
 ```
+
+## Web research (Agent Reach backends)
+
+`jobhunter/research/` is the data-acquisition layer: web search (Exa via mcporter), page reading
+(Jina Reader), GitHub, Reddit and YouTube. [Agent Reach](https://github.com/Panniantong/Agent-Reach)
+is an installer + doctor for those upstream tools, **not** a library — it is not vendored, and
+nothing in `jobhunter` imports it. Setup and the full rationale:
+[system docs/AGENT-REACH-INTEGRATION.md](system%20docs/AGENT-REACH-INTEGRATION.md).
+
+```
+python scripts/run.py research doctor                  # which channels are live + how to fix the rest
+python scripts/run.py research web "<describe the ideal page>"
+python scripts/run.py research company "Acme AI" --depth deep
+python scripts/run.py research startups --topic AI --table
+```
+
+It returns records and nothing else: no scoring, no DB writes, no graph, no drafting. Extraction is
+evidence-linked (`evidence_quote`) and never invented — a field with no source stays null.
+Same operations at `/api/research/*`.

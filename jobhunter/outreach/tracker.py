@@ -99,6 +99,8 @@ def classify(body: str, sender: str) -> dict:
         CLASSIFY_SYSTEM,
         temperature=0.0,
         num_predict=200,
+        alias="cheap",
+        purpose="reply-classify",
         default=None,
     )
     valid = {"positive", "negative", "closed", "neutral"}

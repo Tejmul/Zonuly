@@ -196,6 +196,8 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
         DRAFT_SYSTEM,
         temperature=0.6,
         num_predict=600,
+        alias="writer",         # a human reads this one; it is worth the better model
+        purpose="draft",
         default=None,
     )
     if not isinstance(data, dict) or not data.get("body"):
@@ -250,7 +252,8 @@ def draft_followup(email_id: int) -> dict:
         thread_id = parent.gmail_thread_id
 
     data = llm.chat_json(
-        FOLLOWUP_PROMPT.format(**payload), FOLLOWUP_SYSTEM, temperature=0.5, num_predict=300, default=None
+        FOLLOWUP_PROMPT.format(**payload), FOLLOWUP_SYSTEM, temperature=0.5, num_predict=300,
+        alias="writer", purpose="followup", default=None,
     )
     if not isinstance(data, dict) or not data.get("body"):
         return {"error": "LLM produced no usable follow-up"}

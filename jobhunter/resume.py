@@ -106,14 +106,19 @@ def build_profile(path: Path | None = None, *, save: bool = True) -> dict[str, A
     text = read_resume_text(path)
     log.info("Resume text extracted: %d chars", len(text))
 
-    # Note: num_ctx is deliberately left at the config default. Ollama reloads the
-    # model whenever the context size changes, which on 8 GB costs minutes — so every
-    # call site in the pipeline shares one context size and only varies num_predict.
+    # The resume is truncated rather than chunked: the `cheap` alias has a large
+    # context, but a profile is built from the first two pages of a CV anyway.
     prompt = SCHEMA_PROMPT.replace("{resume_text}", text[:9000])
-    data = llm.chat_json(prompt, SYSTEM, temperature=0.1, num_predict=4096, default=None)
+    data = llm.chat_json(
+        prompt, SYSTEM, temperature=0.1, num_predict=4096,
+        alias="cheap", purpose="resume-parse", default=None,
+    )
 
     if not isinstance(data, dict) or not data.get("name"):
-        raise RuntimeError("LLM could not parse the resume into a profile — check `ollama serve` and the model")
+        raise RuntimeError(
+            "The model could not parse the resume into a profile — "
+            "run `python scripts/run.py doctor` to check the OpenRouter key and budget"
+        )
 
     data["_resume_text"] = text
     data["_source"] = str(path or CONFIG.get("resume_path"))

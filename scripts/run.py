@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """JobHunter CLI.
 
-    python scripts/run.py doctor         # check Ollama, Gmail, tokens, DB
+    python scripts/run.py doctor         # check OpenRouter, budget, Gmail, tokens, DB
     python scripts/run.py profile        # parse resume -> profile.json
     python scripts/run.py scrape         # run the scraper fleet
-    python scripts/run.py score          # embed + rubric-score
+    python scripts/run.py score          # lexical gate + rubric-score
     python scripts/run.py find-contacts  # discover contacts at high-match companies
     python scripts/run.py draft          # queue referral drafts for review
     python scripts/run.py gmail-auth     # one-time OAuth consent
@@ -19,6 +19,19 @@
     python scripts/run.py kg path contact:3 constraint:send-cap-25
     python scripts/run.py kg compose "..."            # best feature per stage for a problem statement
     python scripts/run.py kg note "what changed" --about gap:1-send-ledger
+
+    python scripts/run.py research doctor              # which web-research channels are live
+    python scripts/run.py research web "seed-stage AI infra startups hiring in London"
+    python scripts/run.py research read <url> --text
+    python scripts/run.py research github "llm evaluation framework"
+    python scripts/run.py research company "Acme AI" --depth deep
+    python scripts/run.py research startups --topic AI --table
+
+    python scripts/run.py models status                # OpenRouter key, aliases, caps, spend today
+    python scripts/run.py models list --free           # the zero-cost roster, widest context first
+    python scripts/run.py models check --live          # prove each alias answers
+    python scripts/run.py models costs --month         # spend by alias and by stage
+    python scripts/run.py fit-explain 441              # why the free gate scored a job that way
 """
 
 from __future__ import annotations
@@ -64,10 +77,16 @@ def doctor() -> None:
     profile_path = ROOT / CONFIG["profile_path"]
     gh_token = bool((CONFIG.get("contacts") or {}).get("github_token"))
 
+    budget = health["budget"]
     checks = [
-        ("Ollama reachable", health["ok"], f"run `ollama serve` ({llm.BASE_URL})"),
-        ("Chat model pulled", health.get("model_present"), f"run `ollama pull {llm.MODEL}`"),
-        ("Embedding model pulled", health.get("embed_present"), f"run `ollama pull {llm.EMBED_MODEL}`"),
+        ("OpenRouter key", health.get("key_present"), health.get("hint", "")),
+        ("Provider enabled", health.get("enabled"), "set openrouter.enabled: true in config.yaml"),
+        ("Model aliases", health.get("model_present"), "fill the openrouter.aliases block in config.yaml"),
+        (
+            f"Budget (today ₹{budget['day']['spent_inr']:.2f}/₹{budget['day']['cap_inr']:.0f})",
+            not budget["over_cap"],
+            "raise openrouter.daily_inr_cap / monthly_inr_cap in config.yaml",
+        ),
         ("Resume parsed", profile_path.exists(), "run `python scripts/run.py profile`"),
         ("GitHub token", gh_token, "optional: set contacts.github_token (60/hr -> 5000/hr)"),
         ("Hunter.io key", hunter.available(), "optional: set contacts.hunter_api_key (25 lookups/mo)"),
@@ -111,14 +130,14 @@ def score(
     salaries: int = typer.Option(0, help="Also run the LLM salary backfill on N jobs"),
     verbose: bool = False,
 ) -> None:
-    """Embed unscored jobs, then rubric-score the most promising."""
+    """Lexically gate unscored jobs, then rubric-score the most promising."""
     _setup_logging(verbose)
     from jobhunter import matcher, notify, pipeline
 
     if salaries:
         typer.echo(f"salary backfill: {pipeline.extract_salaries(limit=salaries)} resolved")
     typer.echo(f"threshold: {matcher.prefilter_threshold()}")
-    typer.echo(f"embedded: {matcher.prefilter(limit=2000)}")
+    typer.echo(f"gated: {matcher.prefilter(limit=2000)}")
     result = matcher.score_pending(limit=limit)
     notify.notify_high_matches()
     _echo(result)
@@ -505,6 +524,300 @@ def kg_export(
         typer.echo(analyze.write_graphml(out or analyze.GRAPHML_PATH, include_all_jobs=all_jobs))
     else:
         typer.echo(export.write_html(out or export.HTML_PATH, include_all_jobs=all_jobs))
+
+
+# ---------------------------------------------------------------- web research
+
+research_app = typer.Typer(
+    add_completion=False,
+    help="Web research — search, read and mine the open web via the Agent Reach backends",
+)
+app.add_typer(research_app, name="research")
+
+
+@research_app.command("doctor")
+def research_doctor() -> None:
+    """Which research channels work on this machine, and how to fix the rest."""
+    _setup_logging()
+    from jobhunter import research
+
+    report = research.doctor()
+    for exe, info in report["tools"].items():
+        mark = "OK  " if info["status"] == "ok" else "MISS"
+        typer.echo(f"[{mark}] {exe:<12} {info['detail'][:90]}")
+    typer.echo("")
+    for cap, info in report["capabilities"].items():
+        if info["preferred"]:
+            typer.echo(f"[OK  ] {cap:<12} -> {info['preferred']}  (fallbacks: {', '.join(info['usable'][1:]) or 'none'})")
+        else:
+            typer.secho(f"[MISS] {cap:<12} -> nothing usable", fg=typer.colors.YELLOW)
+        for backend, hint in (info["hints"] or {}).items():
+            if hint:
+                typer.echo(f"         {backend}: {hint}")
+    typer.echo("")
+    _echo({"secrets_present": report["secrets"], "reddit": report["reddit"], "cache": report["cache"]})
+
+
+@research_app.command("web")
+def research_web(
+    query: str,
+    limit: int = typer.Option(8, help="How many results"),
+    fresh: bool = typer.Option(False, help="Bypass the 24h cache"),
+) -> None:
+    """Semantic web search. Describe the ideal page, not keywords."""
+    _setup_logging()
+    from jobhunter import research
+
+    _echo(research.search_web(query, limit=limit, fresh=fresh))
+
+
+@research_app.command("read")
+def research_read(
+    url: str,
+    max_chars: int = typer.Option(12000),
+    fresh: bool = typer.Option(False),
+    text: bool = typer.Option(False, "--text", help="Print the page text instead of JSON"),
+) -> None:
+    """Fetch one page as readable text."""
+    _setup_logging()
+    from jobhunter import research
+
+    page = research.read_page(url, max_chars=max_chars, fresh=fresh)
+    typer.echo(page.get("text", "") if text else json.dumps(page, indent=2, default=str))
+
+
+@research_app.command("github")
+def research_github(query: str, limit: int = 10, fresh: bool = False) -> None:
+    """Search public GitHub repositories."""
+    _setup_logging()
+    from jobhunter import research
+
+    _echo(research.search_github(query, limit=limit, fresh=fresh))
+
+
+@research_app.command("reddit")
+def research_reddit(
+    query: str,
+    limit: int = 10,
+    subreddit: str = typer.Option(None, "-r", help="Restrict to one subreddit"),
+    fresh: bool = False,
+) -> None:
+    """Search Reddit. Needs a logged-in backend — Reddit has no anonymous path."""
+    _setup_logging()
+    from jobhunter import research
+
+    _echo(research.search_reddit(query, limit=limit, subreddit=subreddit, fresh=fresh))
+
+
+@research_app.command("youtube")
+def research_youtube(
+    query: str,
+    limit: int = 5,
+    transcript: str = typer.Option(None, help="Instead of searching, transcribe this video URL"),
+) -> None:
+    """Search YouTube, or pull one video's subtitles with --transcript URL."""
+    _setup_logging()
+    from jobhunter import research
+
+    _echo(research.youtube_transcript(transcript) if transcript else research.search_youtube(query, limit=limit))
+
+
+@research_app.command("company")
+def research_company_cmd(
+    name: str,
+    depth: str = typer.Option("standard", help="quick | standard | deep"),
+    website: str = typer.Option(None, help="Skip discovery if you already know the site"),
+    fresh: bool = False,
+) -> None:
+    """Research one company: what it builds, funding, GitHub, hiring signals."""
+    _setup_logging()
+    from jobhunter import research
+
+    _echo(research.research_company(name, website=website, depth=depth, fresh=fresh))
+
+
+@research_app.command("startups")
+def research_startups(
+    topic: str = typer.Option("AI", help="Sector, e.g. AI / fintech / robotics"),
+    regions: str = typer.Option("United States,United Kingdom,United Arab Emirates"),
+    stages: str = typer.Option("seed or Series A", help="Comma-separated stage phrases"),
+    limit: int = typer.Option(10, help="How many companies to return"),
+    enrich: int = typer.Option(5, help="How many to research in depth (website, GitHub, hiring)"),
+    fresh: bool = False,
+    table: bool = typer.Option(False, "--table", help="Human-readable summary instead of JSON"),
+) -> None:
+    """Recently funded startups, with funding and hiring information."""
+    _setup_logging()
+    from jobhunter import research
+
+    out = research.find_startups(
+        topic=topic,
+        regions=[r.strip() for r in regions.split(",") if r.strip()],
+        stages=[s.strip() for s in stages.split(",") if s.strip()],
+        limit=limit,
+        enrich=enrich,
+        fresh=fresh,
+    )
+    if not table:
+        _echo(out)
+        return
+    typer.echo(f"{len(out['companies'])} companies from {len(out['queries'])} searches")
+    typer.echo("")
+    for c in out["companies"]:
+        f = c.get("funding") or {}
+        money = " / ".join(x for x in (f.get("stage"), f.get("amount_raw")) if x) or "funding not stated"
+        typer.secho(f"{c['name']}  [{c.get('confidence', 'inferred')}]", bold=True)
+        typer.echo(f"  region   {c.get('region', '-')}")
+        typer.echo(f"  site     {c.get('website') or '(not resolved)'}")
+        typer.echo(f"  funding  {money}")
+        if f.get("investors"):
+            typer.echo(f"  backers  {', '.join(f['investors'])}")
+        roles = c.get("open_roles") or []
+        typer.echo(f"  hiring   {', '.join(roles) if roles else (c.get('careers_url') or 'no signal found')}")
+        typer.echo(f"  source   {c.get('announcement_url', '')}")
+        typer.echo("")
+
+
+@research_app.command("cache")
+def research_cache(purge: bool = typer.Option(False, help="Delete entries older than the TTL")) -> None:
+    """Research cache stats, or purge stale entries."""
+    from jobhunter.research import cache
+
+    _echo({"deleted": cache.purge()} if purge else cache.stats())
+
+
+# ---------------------------------------------------------------- models & spend
+
+models_app = typer.Typer(add_completion=False, help="OpenRouter — aliases, spend, and a live check")
+app.add_typer(models_app, name="models")
+
+
+@models_app.command("status")
+def models_status() -> None:
+    """Key, aliases, caps and what has been spent today."""
+    _setup_logging()
+    from jobhunter import llm
+
+    _echo(llm.health())
+
+
+@models_app.command("check")
+def models_check(
+    alias: str = typer.Option(None, help="Verify one alias; omit to verify every configured alias"),
+    live: bool = typer.Option(False, "--live", help="Actually spend one tiny call per alias"),
+) -> None:
+    """Verify the configured model ids exist, and optionally that they answer.
+
+    Without --live this costs nothing: it only checks the ids against OpenRouter's
+    public model list. With --live it spends a handful of tokens per alias.
+    """
+    _setup_logging()
+    from jobhunter import openrouter
+
+    resolved = openrouter.resolve_aliases()
+    if "error" in resolved:
+        typer.secho(f"could not reach the model list: {resolved['error']}", fg=typer.colors.YELLOW)
+    else:
+        for name, info in resolved.items():
+            mark = "OK  " if info["available"] and info["free"] else "MISS"
+            tags = []
+            if info["free"]:
+                tags.append("free")
+            else:
+                tags.append("PAID")
+            if info.get("json_mode"):
+                tags.append("json")
+            if info.get("context"):
+                tags.append(f"{info['context']:,} ctx")
+            line = f"[{mark}] {name:<7} {info['model']:<44} {', '.join(tags)}"
+            if not info["available"]:
+                line += "   <- not on openrouter.ai/models"
+            typer.secho(line, fg=None if info["free"] else typer.colors.YELLOW)
+    if not live:
+        typer.echo("")
+        typer.echo("(no call made — pass --live to actually spend a few tokens)")
+        return
+
+    typer.echo("")
+    for name in ([alias] if alias else list(openrouter.ALIASES)):
+        result = openrouter.verify(name)
+        if result["ok"]:
+            typer.secho(
+                f"[OK  ] {name:<7} {result['model']}  {result['tokens_in']}+{result['tokens_out']} tok"
+                f"  ₹{result['cost_inr']:.4f}  {result['latency_ms']}ms  -> {result['text'][:40]!r}",
+                fg=typer.colors.GREEN,
+            )
+        else:
+            typer.secho(f"[FAIL] {name:<7} {result['error']}", fg=typer.colors.RED)
+
+
+@models_app.command("list")
+def models_list(
+    query: str = typer.Argument("", help="Substring of a model id"),
+    limit: int = 20,
+    free: bool = typer.Option(False, "--free", help="Only zero-cost models, widest context first"),
+) -> None:
+    """Search OpenRouter's catalogue. Costs nothing and needs no key.
+
+    `--free` is the one to use when picking aliases: the free roster changes as
+    models come and go, and `json` in the output is what this pipeline needs.
+    """
+    from jobhunter import openrouter
+
+    out = openrouter.models(query, limit=limit, free=free)
+    if out.get("error"):
+        typer.secho(out["error"], fg=typer.colors.RED)
+        raise typer.Exit(1)
+    typer.echo(f"{out['matched']} of {out['total']} models match {query!r}")
+    typer.echo("")
+    zero_but_unsuffixed = False
+    for m in out["models"]:
+        costs_nothing = not (m["prompt_usd_per_m"] or m["completion_usd_per_m"])
+        if costs_nothing and not m["free"]:
+            # zero-priced but without the `:free` suffix free_only keys off, so the
+            # guard would still refuse it — say so rather than showing "$0.000"
+            price, zero_but_unsuffixed = "free *", True
+        elif costs_nothing:
+            price = "free"
+        else:
+            price = f"${m['prompt_usd_per_m'] or 0:.3f}/${m['completion_usd_per_m'] or 0:.3f} per Mtok"
+        ctx = f"{m['context']:,}" if m["context"] else "?"
+        typer.echo(f"  {m['id']:<50} {ctx:>11} ctx  {'json' if m['json_mode'] else '    '}  {price}")
+    if zero_but_unsuffixed:
+        typer.echo("")
+        typer.echo("  * costs nothing, but has no `:free` suffix — openrouter.free_only"
+                   " refuses it anyway, since the guard reads the id, not a price list.")
+
+
+@models_app.command("costs")
+def models_costs(
+    days: int = typer.Option(1, help="Look back this many days"),
+    month: bool = typer.Option(False, "--month", help="Calendar month to date instead"),
+) -> None:
+    """What the model layer has cost, by alias and by stage."""
+    from jobhunter import openrouter
+
+    _echo({"spend": openrouter.spend(days=days, month=month), "budget": openrouter.budget_status()})
+
+
+@app.command()
+def fit_explain(job_id: int) -> None:
+    """Show why the free lexical gate scored one job the way it did."""
+    _setup_logging()
+    from jobhunter import fit
+    from jobhunter.db import Job, get_session
+
+    with get_session() as session:
+        job = session.get(Job, job_id)
+        if job is None:
+            typer.secho(f"no job {job_id}", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        blob = "\n".join([job.title, job.company_name, (job.description or "")[:6000]])
+        title, stored = job.title, job.embed_sim
+    out = fit.explain(blob)
+    typer.secho(f"{title}  —  score {out['score']}  (stored {stored})", bold=True)
+    typer.echo("  matched: " + ", ".join(f"{m['term']}({m['weight']})" for m in out["matched"]))
+    typer.echo("  missing: " + ", ".join(f"{m['term']}({m['weight']})" for m in out["missing"]))
 
 
 if __name__ == "__main__":
