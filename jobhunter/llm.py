@@ -1,67 +1,53 @@
-"""Thin Ollama client — chat, JSON-mode chat, and embeddings.
+"""The model surface every stage calls — now served by OpenRouter.
 
-Every agent in the pipeline goes through here, so swapping the local model for a
-bigger one (or a cloud API) is a config change, not a code change.
+This used to be a local-model client. It is now a thin adapter over
+`jobhunter.openrouter`, keeping the same function signatures so the nine call
+sites in matcher / normalize / resume / outreach did not have to be rewritten.
+Two things did change, and both are deliberate:
+
+  * **`alias=`** — a call site now says whether it wants `cheap`, `judge` or
+    `writer` work. Which model that is lives in `config.yaml`. Calls that do not
+    say get `cheap`, because most of them should be.
+  * **`embed()` no longer works.** OpenRouter serves 421 models and none of them
+    are embedding models, so there is nothing to route to. The resume↔JD
+    prefilter it used to feed is model-free now — see `jobhunter.fit`.
+
+The old local-runtime knobs (`num_ctx`, `keep_alive`) went with it: context is the
+model's business on a hosted API, and nothing is resident to keep alive.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from typing import Any
 
-import httpx
-
-from jobhunter import CONFIG
+from jobhunter import openrouter
+from jobhunter.openrouter import (  # re-exported so callers can catch them from here
+    Answer,
+    BudgetExceeded,
+    LLMUnavailable,
+)
 
 log = logging.getLogger(__name__)
 
-_LLM = CONFIG["llm"]
-BASE_URL = _LLM["base_url"].rstrip("/")
-MODEL = _LLM["model"]
-EMBED_MODEL = _LLM["embed_model"]
-OPTIONS = dict(_LLM.get("options") or {})
-KEEP_ALIVE = _LLM.get("keep_alive", "30m")
+DEFAULT_ALIAS = openrouter.DEFAULT_ALIAS
 
-# Local 4B on 8 GB RAM: a long JD + rubric can take a while on first load.
-_TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=10.0)
-
-_client: httpx.Client | None = None
-
-
-def client() -> httpx.Client:
-    global _client
-    if _client is None:
-        _client = httpx.Client(base_url=BASE_URL, timeout=_TIMEOUT)
-    return _client
+__all__ = [
+    "chat",
+    "chat_json",
+    "embed",
+    "embed_one",
+    "health",
+    "Answer",
+    "LLMUnavailable",
+    "BudgetExceeded",
+    "EmbeddingsUnsupported",
+]
 
 
-class LLMUnavailable(RuntimeError):
-    """Ollama isn't reachable or the model isn't pulled."""
-
-
-def health() -> dict:
-    """Return {ok, models, model_present, embed_present} — used by the API /health route."""
-    try:
-        r = client().get("/api/tags", timeout=5.0)
-        r.raise_for_status()
-        names = [m["name"] for m in r.json().get("models", [])]
-    except Exception as e:  # noqa: BLE001 — health check must never raise
-        return {"ok": False, "error": str(e), "models": [], "model_present": False, "embed_present": False}
-
-    def present(want: str) -> bool:
-        # ollama reports "qwen3:4b"; a bare "qwen3" in config should still match
-        return any(n == want or n.split(":")[0] == want.split(":")[0] for n in names)
-
-    return {
-        "ok": True,
-        "models": names,
-        "model": MODEL,
-        "embed_model": EMBED_MODEL,
-        "model_present": present(MODEL),
-        "embed_present": present(EMBED_MODEL),
-    }
+class EmbeddingsUnsupported(LLMUnavailable):
+    """OpenRouter has no embeddings endpoint. Use `jobhunter.fit` instead."""
 
 
 def chat(
@@ -70,61 +56,30 @@ def chat(
     *,
     json_mode: bool = False,
     temperature: float | None = None,
-    num_ctx: int | None = None,
+    num_ctx: int | None = None,      # noqa: ARG001 — accepted for signature compatibility
     num_predict: int | None = None,
     model: str | None = None,
-    think: bool = False,
+    think: bool = False,             # noqa: ARG001 — see below
+    alias: str = DEFAULT_ALIAS,
+    purpose: str = "",
 ) -> str:
-    """Single-turn chat. Returns the assistant text (thinking stripped).
+    """Single-turn chat. Returns the assistant text with any reasoning stripped.
 
-    Qwen3 is a hybrid-reasoning model. Bulk pipeline work doesn't need the think
-    pass and it costs 5-10x the tokens, so it's off by default — belt and braces,
-    via both the API flag and the `/no_think` prompt switch the model itself honours.
+    `num_predict` maps to `max_tokens`. `num_ctx` is ignored — a hosted model's
+    context window is not ours to set. `think` is ignored too: reasoning models
+    reason whether or not we ask, and the trace is stripped either way.
     """
-    messages: list[dict[str, str]] = []
-    sys_text = system or ""
-    if not think:
-        # the switch belongs in the system turn — appended to the user turn the model
-        # sometimes echoes it back as part of the answer
-        sys_text = (sys_text + "\n/no_think").strip()
-    if sys_text:
-        messages.append({"role": "system", "content": sys_text})
-    messages.append({"role": "user", "content": prompt})
-
-    options = dict(OPTIONS)
-    if temperature is not None:
-        options["temperature"] = temperature
-    if num_ctx is not None:
-        options["num_ctx"] = num_ctx
-    if num_predict is not None:
-        options["num_predict"] = num_predict
-
-    payload: dict[str, Any] = {
-        "model": model or MODEL,
-        "messages": messages,
-        "stream": False,
-        "options": options,
-        "think": think,
-        # 8 GB is tight for a 4B chat model + an embedder; keeping both resident
-        # avoids multi-minute reload stalls partway through a long scoring run
-        "keep_alive": KEEP_ALIVE,
-    }
-    if json_mode:
-        payload["format"] = "json"
-
-    try:
-        r = client().post("/api/chat", json=payload)
-        r.raise_for_status()
-    except httpx.ConnectError as e:
-        raise LLMUnavailable(f"Ollama not reachable at {BASE_URL} — is `ollama serve` running?") from e
-    except httpx.HTTPStatusError as e:
-        body = e.response.text[:300]
-        if e.response.status_code == 404:
-            raise LLMUnavailable(f"Model '{model or MODEL}' not found — run `ollama pull {model or MODEL}`") from e
-        raise LLMUnavailable(f"Ollama error {e.response.status_code}: {body}") from e
-
-    content = r.json().get("message", {}).get("content", "")
-    return _strip_think(content).strip()
+    answer = openrouter.complete(
+        prompt,
+        system,
+        alias=alias,
+        json_mode=json_mode,
+        temperature=temperature,
+        max_tokens=num_predict,
+        model=model,
+        purpose=purpose or alias,
+    )
+    return answer.text
 
 
 def chat_json(
@@ -135,11 +90,22 @@ def chat_json(
     retries: int = 2,
     **kw: Any,
 ) -> Any:
-    """Chat in JSON mode with parse-retry. Returns `default` if the model never produces valid JSON."""
+    """Chat in JSON mode with parse-retry. Returns `default` if the model never
+    produces valid JSON.
+
+    A budget refusal is not a parse failure: it propagates immediately rather than
+    burning the retries, because trying again cannot help.
+    """
     last_raw = ""
     for attempt in range(retries + 1):
         nudge = "" if attempt == 0 else "\n\nYour previous reply was not valid JSON. Reply with JSON only."
-        raw = chat(prompt + nudge, system, json_mode=True, **kw)
+        try:
+            raw = chat(prompt + nudge, system, json_mode=True, **kw)
+        except BudgetExceeded:
+            raise
+        except LLMUnavailable as e:
+            log.error("model call failed: %s", e)
+            return default
         last_raw = raw
         parsed = _extract_json(raw)
         if parsed is not None:
@@ -149,56 +115,54 @@ def chat_json(
     return default
 
 
+# ---------------------------------------------------------------- embeddings (gone)
+
+_EMBED_MSG = (
+    "OpenRouter serves no embedding models, so llm.embed() has nothing to route to. "
+    "The resume<->JD prefilter is model-free now: use jobhunter.fit.score() / "
+    "matcher.prefilter(). If you genuinely need vectors, add a dedicated embeddings "
+    "provider — that is a separate key and a separate cost."
+)
+
+
 def embed(texts: list[str], *, model: str | None = None) -> list[list[float]]:
-    """Embed a batch of texts. Returns one vector per input, in order."""
-    if not texts:
-        return []
-    try:
-        r = client().post(
-            "/api/embed",
-            json={
-                "model": model or EMBED_MODEL,
-                "input": texts,
-                "truncate": True,
-                "keep_alive": KEEP_ALIVE,
-            },
-        )
-        r.raise_for_status()
-    except httpx.ConnectError as e:
-        raise LLMUnavailable(f"Ollama not reachable at {BASE_URL} — is `ollama serve` running?") from e
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            raise LLMUnavailable(
-                f"Embedding model '{model or EMBED_MODEL}' not found — run `ollama pull {model or EMBED_MODEL}`"
-            ) from e
-        raise LLMUnavailable(f"Ollama embed error {e.response.status_code}: {e.response.text[:300]}") from e
-    return r.json()["embeddings"]
+    raise EmbeddingsUnsupported(_EMBED_MSG)
 
 
 def embed_one(text: str, **kw: Any) -> list[float]:
-    vecs = embed([text], **kw)
-    return vecs[0] if vecs else []
+    raise EmbeddingsUnsupported(_EMBED_MSG)
+
+
+# ---------------------------------------------------------------- health
+
+
+def health() -> dict:
+    """Provider status for `doctor` and `/api/health`.
+
+    Keeps the `model_present` / `embed_present` keys the previous health call returned
+    so the existing callers keep rendering; `embed_present` is now permanently
+    false and says why.
+    """
+    status = openrouter.health()
+    aliases = status.get("aliases") or {}
+    return {
+        **status,
+        "model": aliases.get(DEFAULT_ALIAS) or "(no alias configured)",
+        "models": sorted(set(aliases.values())),
+        "model_present": bool(aliases),
+        "embed_model": None,
+        "embed_present": False,
+        "embed_note": "OpenRouter has no embeddings endpoint — prefilter is model-free (jobhunter.fit)",
+    }
 
 
 # ---------------------------------------------------------------- helpers
 
-_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
-
-
-def _strip_think(text: str) -> str:
-    text = _THINK_RE.sub("", text)
-    # Ollama can emit the reasoning with only a closing tag (the opener is consumed
-    # by the chat template) — everything before the last </think> is reasoning.
-    if "</think>" in text:
-        text = text.rsplit("</think>", 1)[1]
-    # an unclosed <think> means the model ran out of budget mid-reasoning
-    if "<think>" in text:
-        text = text.split("<think>")[0]
-    return text
-
 
 def _extract_json(raw: str) -> Any:
     """Parse JSON, tolerating markdown fences and leading/trailing prose."""
+    import json
+
     raw = raw.strip()
     if not raw:
         return None

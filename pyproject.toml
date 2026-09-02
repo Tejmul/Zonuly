@@ -24,6 +24,16 @@ dependencies = [
     "networkx>=3.6.1",
 ]
 
+[project.optional-dependencies]
+# Agent Reach is a TOOL (installer + doctor for the upstream research backends),
+# not a library — nothing in jobhunter imports it. Prefer installing it in its own
+# environment: pipx install "agent-reach @ <the URL below>". This extra exists for
+# anyone who wants it inside the project venv instead: `uv sync --extra research`.
+# PyPI's agent-reach is stale at 0.1.0; the GitHub archive is 1.5.x.
+research = [
+    "agent-reach @ https://github.com/Panniantong/Agent-Reach/archive/refs/heads/main.zip",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
