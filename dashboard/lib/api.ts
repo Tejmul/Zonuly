@@ -187,10 +187,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       cache: "no-store",
     });
   } catch {
+    // Name the base it tried. On a deployed page, a local base means the build had no
+    // NEXT_PUBLIC_API_BASE — the page is asking the viewer's own laptop for the API.
+    const local = API_BASE.includes("127.0.0.1") || API_BASE.includes("localhost");
+    const here = typeof window !== "undefined" ? window.location.hostname : "";
+    const deployed = here !== "" && !/^(localhost|127\.0\.0\.1)$/.test(here);
     throw new ApiError(
-      API_BASE.includes("127.0.0.1") || API_BASE.includes("localhost")
-        ? "Can't reach the API. Start it with `python scripts/run.py serve`."
-        : "Can't reach the API right now.",
+      local && deployed
+        ? `This deployed page is looking for the API at ${API_BASE} — on your own machine. ` +
+          "Set NEXT_PUBLIC_API_BASE to the deployed API's URL in the hosting project's environment and redeploy (it is baked in at build time)."
+        : local
+          ? `Can't reach the API at ${API_BASE}. Start it with \`python scripts/run.py serve\`.`
+          : `Can't reach the API at ${API_BASE}. It is down, or it refused this page's origin — add ` +
+            `${typeof window !== "undefined" ? window.location.origin : "this origin"} to ZONULY_CORS_ORIGINS on the API and redeploy.`,
       0,
     );
   }
