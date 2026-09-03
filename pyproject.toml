@@ -40,3 +40,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["jobhunter"]
+
+[tool.hatch.metadata]
+# The `research` extra points at a GitHub archive (Agent Reach has no current PyPI
+# release). Hatchling rejects direct URLs in package metadata by default; this only
+# lets the project build, it does not install the extra.
+allow-direct-references = true

@@ -404,7 +404,13 @@ def sources() -> dict:
 # ---------------------------------------------------------------- companies & contacts
 
 @app.get("/api/companies")
-def list_companies(has_contacts: bool | None = None, limit: int = Query(200, le=1000)) -> list[dict]:
+def list_companies(
+    has_contacts: bool | None = None,
+    tier: str | None = Query(None, description="tier1 | tier2 | prospect | unknown | reject"),
+    hiring: str | None = Query(None, description="verified | role_missing | not_authorized | unreachable"),
+    sort: str = Query("score", description="score | tier | pay | name"),
+    limit: int = Query(200, le=1000),
+) -> list[dict]:
     with get_session() as session:
         companies = session.exec(select(Company).order_by(col(Company.name)).limit(limit)).all()
         out = []
@@ -415,6 +421,10 @@ def list_companies(has_contacts: bool | None = None, limit: int = Query(200, le=
             if has_contacts is True and n_contacts == 0:
                 continue
             if has_contacts is False and n_contacts > 0:
+                continue
+            if tier and (c.tier or "unknown") != tier:
+                continue
+            if hiring and (c.hiring_status or "unchecked") != hiring:
                 continue
             n_jobs = session.exec(
                 select(func.count()).select_from(Job).where(Job.company_id == c.id)
@@ -435,9 +445,61 @@ def list_companies(has_contacts: bool | None = None, limit: int = Query(200, le=
                     "contacts": n_contacts,
                     "best_score": best,
                     "contacts_found_at": c.contacts_found_at.isoformat() if c.contacts_found_at else None,
+                    # --- targeting (jobhunter/targeting.py): why this company, or why not
+                    "tier": c.tier,
+                    "tier_reason": c.tier_reason,
+                    "description": c.description,
+                    "region": c.hq_region,
+                    "underrated": c.underrated,
+                    "stipend_inr_month": c.stipend_inr_month,
+                    "ppo_lpa": c.ppo_lpa,
+                    "funding_stage": c.funding_stage,
+                    "funding_amount_usd_m": c.funding_amount_usd_m,
+                    # --- hiring authenticity (jobhunter/hiring_verify.py)
+                    "hiring_status": c.hiring_status,
+                    "hiring_evidence": c.hiring_evidence,
+                    "careers_url": c.careers_url,
                 }
             )
-        return sorted(out, key=lambda c: (c["best_score"] is None, -(c["best_score"] or 0)))
+        tier_rank = {"tier1": 0, "tier2": 1, "prospect": 2, "unknown": 3, "reject": 4}
+        sorters = {
+            "score": lambda c: (c["best_score"] is None, -(c["best_score"] or 0)),
+            "tier": lambda c: (tier_rank.get(c["tier"] or "unknown", 9), -(c["ppo_lpa"] or 0), c["name"]),
+            "pay": lambda c: (-(c["ppo_lpa"] or 0), c["name"]),
+            "name": lambda c: c["name"].lower(),
+        }
+        return sorted(out, key=sorters.get(sort, sorters["score"]))
+
+
+@app.get("/api/network")
+def company_network(include_rejects: bool = False) -> dict:
+    """The company atlas: layers, nodes, dependencies, chokepoints, bottlenecks."""
+    from jobhunter import network
+
+    return network.build(include_rejects=include_rejects)
+
+
+@app.get("/api/companies/grouped")
+def companies_grouped(include_rejects: bool = False) -> dict:
+    """One row per company, with its roles grouped by family and its referrers attached.
+
+    Distinct from /api/network, which is a map: there a company legitimately appears in
+    every role family it hires for. Here the company is the unit.
+    """
+    from jobhunter import network
+
+    return network.company_list(include_rejects=include_rejects)
+
+
+@app.get("/api/companies/{company_id}/detail")
+def company_detail(company_id: int) -> dict:
+    """Everything known about one company, with the graph's verdict attached."""
+    from jobhunter import network
+
+    out = network.company_detail(company_id)
+    if out.get("error"):
+        raise HTTPException(status_code=404, detail=out["error"])
+    return out
 
 
 @app.get("/api/contacts")
@@ -464,6 +526,22 @@ def find_contacts(company_id: int) -> dict:
     from jobhunter import contacts as contacts_mod
 
     return {"task_id": _run_task(f"find-contacts:{company_id}", contacts_mod.discover, company_id)}
+
+
+@app.post("/api/companies/{company_id}/verify-hiring")
+def verify_hiring(company_id: int, fresh: bool = False) -> dict:
+    """Re-check the hiring claim against the company's own board / careers page."""
+    from jobhunter import hiring_verify
+
+    return {"task_id": _run_task(f"verify:{company_id}", hiring_verify.verify_company, company_id, fresh=fresh)}
+
+
+@app.post("/api/companies/{company_id}/enrich")
+def enrich_company(company_id: int, fresh: bool = False) -> dict:
+    """Read the company's own site for a description and funding, then re-grade."""
+    from jobhunter import enrich
+
+    return {"task_id": _run_task(f"enrich:{company_id}", enrich.enrich_company, company_id, fresh=fresh)}
 
 
 @app.post("/api/contacts/{contact_id}/research")

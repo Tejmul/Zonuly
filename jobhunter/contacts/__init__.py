@@ -16,7 +16,7 @@ import logging
 from sqlmodel import col, select
 
 from jobhunter import CONFIG
-from jobhunter.contacts import github_miner, hunter, patterns, site_scraper, verify
+from jobhunter.contacts import github_miner, hunter, patterns, roles, site_scraper, verify
 from jobhunter.db import Company, Contact, Job, get_session, init_db, utcnow
 from jobhunter.scrapers.base import make_client
 
@@ -128,6 +128,16 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
             existing.add(email)
             if p["confidence"] == "verified":
                 stats["verified"] += 1
+            # label them on the way in: an unranked contact list is not a queue
+            verdict = roles.classify(p.get("role"), name=p.get("name"), email=email,
+                                     bio=p.get("verify_note"))
+            if verdict.role_class == "other" and p["source"] == "github":
+                # No bio, but they commit to the company's public repos: that is an
+                # engineer, and the evidence is the commit history, not a guess.
+                verdict = roles.RoleVerdict("engineer", verdict.seniority,
+                                            roles.RANKS.get("engineer", roles.DEFAULT_RANK),
+                                            "commits in the company's public repos", "source")
+            stats[verdict.role_class] = stats.get(verdict.role_class, 0) + 1
             session.add(
                 Contact(
                     company_id=company_id,
@@ -137,7 +147,12 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                     github=p.get("github"),
                     source=p["source"],
                     confidence=p["confidence"],
-                    is_recruiter=bool(p.get("is_recruiter")),
+                    is_recruiter=verdict.role_class in ("recruiter", "tech_recruiter") or bool(p.get("is_recruiter")),
+                    role_class=verdict.role_class,
+                    seniority=verdict.seniority,
+                    referral_rank=verdict.referral_rank,
+                    role_evidence=verdict.evidence,
+                    classified_at=utcnow(),
                     research_notes=p.get("verify_note"),
                 )
             )
@@ -156,10 +171,18 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
     return stats
 
 
-def discover_for_high_matches(limit: int = 5, *, refresh_days: int = 30) -> list[dict]:
-    """Find contacts at companies that have a high-match job and no recent contact run."""
+def discover_for_high_matches(limit: int = 5, *, refresh_days: int = 30,
+                              tiers: tuple[str, ...] = ("tier1", "tier2", "prospect")) -> list[dict]:
+    """Find contacts at target companies that have a high-match job and no recent run.
+
+    `tiers` is the company grade from jobhunter/targeting.py: a company we have already
+    decided not to chase does not get a contact hunt. An ungraded company (tier None)
+    still qualifies — grading may simply not have run yet — but a `reject` never does.
+    """
     init_db()
     from datetime import timedelta
+
+    from jobhunter.targeting import TIER_ORDER
 
     cutoff = utcnow() - timedelta(days=refresh_days)
     with get_session() as session:
@@ -168,12 +191,18 @@ def discover_for_high_matches(limit: int = 5, *, refresh_days: int = 30) -> list
             .where(Job.status == "high_match", col(Job.company_id).is_not(None))
             .distinct()
         ).all()
-        company_ids = []
+        candidates = []
         for cid in rows:
             company = session.get(Company, cid)
-            if company and (company.contacts_found_at is None or company.contacts_found_at < cutoff):
-                company_ids.append(cid)
-        company_ids = company_ids[:limit]
+            if company is None:
+                continue
+            if company.tier and company.tier not in tiers:
+                continue
+            if company.contacts_found_at is not None and company.contacts_found_at >= cutoff:
+                continue
+            candidates.append((TIER_ORDER.get(company.tier or "unknown", 9), -(company.ppo_lpa or 0), cid))
+        candidates.sort()
+        company_ids = [cid for _, _, cid in candidates][:limit]
 
     return [asyncio.run(discover_for_company(cid)) for cid in company_ids]
 

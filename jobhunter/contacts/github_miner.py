@@ -16,13 +16,15 @@ from dataclasses import dataclass
 
 import httpx
 
-from jobhunter import CONFIG
+from jobhunter import CONFIG, secret
 from jobhunter.scrapers.base import get_json
 
 log = logging.getLogger(__name__)
 
 API = "https://api.github.com"
-TOKEN = (CONFIG.get("contacts") or {}).get("github_token") or ""
+# The environment (.env, gitignored) is the one door for credentials; the config
+# key is kept only so an old config.yaml keeps working, and it should stay empty.
+TOKEN = secret("GITHUB_TOKEN") or (CONFIG.get("contacts") or {}).get("github_token") or ""
 
 # GitHub's privacy relay and bot accounts — never worth contacting
 _NOREPLY = re.compile(r"(noreply|no-reply|users\.noreply\.github\.com|example\.com|localhost)", re.I)

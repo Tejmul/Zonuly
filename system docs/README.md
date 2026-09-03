@@ -9,7 +9,8 @@ Every design document for the project, in reading order. When two disagree,
 | 2nd | [FINAL-PLAN-V3.md](FINAL-PLAN-V3.md) | **The plan.** Built from gtm-arch, zon-arch and CHOKEPOINTS: OpenRouter-only model layer, pydantic-ai agents that can only propose, faithfulness + publish gates, three scraping channels behind a staging gate, launchd ticks, Telegram review, calendar sync, permission system, 13-step build order. |
 | 3rd | [FINAL-PLAN-V2.md](FINAL-PLAN-V2.md) | Superseded by v3. Kept for the restated-problem analysis (§0) and the tool/permission tables it introduced. |
 | 4th | [FINAL-PLAN.md](FINAL-PLAN.md) | Superseded on model strategy and orchestration. Still the record of D1, D5–D9 and what the running code proved. |
-| 5th | [KNOWLEDGE-GRAPH.md](KNOWLEDGE-GRAPH.md) | The knowledge graph (D10) — how data and context are stored together, the CLI/API, `compose`, and how to keep it true. |
+| 5th | [REQUIREMENTS.md](REQUIREMENTS.md) | **The completion audit** — MOTIV 1:1 against the code: per-step percentages, FR/NFR status with evidence, the missing documents, priority order. Regenerated after every approved step. |
+| 6th | [KNOWLEDGE-GRAPH.md](KNOWLEDGE-GRAPH.md) | The knowledge graph (D10) — how data and context are stored together, the CLI/API, `compose`, and how to keep it true. |
 | ref | [IDEA.md](IDEA.md) | The original narrative brief (2026-08-01). MOTIV.md supersedes it on targets. |
 | input | [CHOKEPOINTS.md](CHOKEPOINTS.md) | A keyless scraper run at the source's rate limit, 24/7. Source of the launchd tick, staging/promote gate, freshness alarm and the "bugs already paid for" table. |
 | input | [gtm-arch.md](gtm-arch.md) | gtm-os — Apify no-cookies LinkedIn actors with costs, budget gates and caches; the untrusted-content wrapper; HITL. |

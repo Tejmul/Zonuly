@@ -37,6 +37,17 @@ def search(
     return research.search_web(q, limit=limit, fresh=fresh)
 
 
+@router.get("/x")
+def x_posts(
+    q: str = Query(..., min_length=2, description="What the ideal post says, e.g. 'we are hiring a founding AI engineer, remote'"),
+    limit: int = Query(20, ge=1, le=50),
+    days: int = Query(30, ge=1, le=365, description="Reported back only — the search engine gives no dates yet"),
+    fresh: bool = Query(False, description="Bypass the cache"),
+) -> dict:
+    """Posts on X via a site:x.com web search — no X account, no cookies, no X API. Records only."""
+    return research.search_x(q, limit=limit, days=days, fresh=fresh)
+
+
 @router.get("/read")
 def read(
     url: str = Query(..., description="Public http(s) URL"),

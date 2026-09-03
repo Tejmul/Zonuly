@@ -19,7 +19,7 @@ import ipaddress
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 import httpx
@@ -154,8 +154,20 @@ def search(
     *,
     fresh: bool = False,
     timeout: int | None = None,
+    category: str | None = None,
+    days: int | None = None,
+    include_domains: list[str] | None = None,
 ) -> dict:
     """Semantic web search. Returns {query, backend, results: [...], error?}.
+
+    `include_domains` restricts hits to those hosts (e.g. ["reddit.com"] to read what
+    people say rather than what companies say). Exa-API only, like the two below.
+
+    `category` narrows Exa's index ("news", "company", "github", "research paper",
+    ... — "tweet" was retired by Exa, and x.com is not in its index at all);
+    `days` keeps only pages published in the last N days. Both are Exa-API-only
+    — the MCP tool exposes neither, so it is skipped when either is set rather
+    than silently answering a different question.
 
     Never raises on a dead backend — an empty `results` with a populated `error`
     is a truthful answer and lets a caller carry on with the other channels.
@@ -164,30 +176,40 @@ def search(
     if not query:
         return {"query": query, "backend": None, "results": [], "error": "empty query"}
 
+    params = {"limit": limit, "category": category, "days": days,
+              "domains": ",".join(sorted(include_domains)) if include_domains else None}
     if not fresh:
-        hit = cache.get("search", query, limit=limit)
+        hit = cache.get("search", query, **params)
         if hit:
             return hit
 
     tried: list[str] = []
+    _errors.clear()
     timeout = timeout or backends.TIMEOUT
     for backend in backends.candidates("web_search"):
-        tried.append(backend)
         results: list[SearchResult] = []
         if backend == "exa-mcp":
+            if category or days or include_domains:
+                continue
+            tried.append(backend)
             text = _exa_mcp_call("web_search_exa", {"query": query, "numResults": limit}, timeout)
             if text:
                 results = _parse_exa_text(text)
         elif backend == "exa-api":
-            results = _exa_api_search(query, limit, timeout)
+            tried.append(backend)
+            results = _exa_api_search(query, limit, timeout, category=category, days=days,
+                                      include_domains=include_domains)
         if results:
             out = {
                 "query": query,
                 "backend": backend,
                 "tried": tried,
+                "category": category,
+                "days": days,
+                "include_domains": include_domains,
                 "results": [r.as_dict() for r in results[:limit]],
             }
-            cache.put("search", query, out, backend=backend, limit=limit)
+            cache.put("search", query, out, backend=backend, **params)
             return out
 
     return {
@@ -195,31 +217,102 @@ def search(
         "backend": None,
         "tried": tried,
         "results": [],
-        "error": "no web-search backend returned results",
+        "error": "; ".join(_errors) or "no web-search backend returned results",
         "hint": backends.HINTS.get("exa-mcp", ""),
     }
 
 
-def _exa_api_search(query: str, limit: int, timeout: int) -> list[SearchResult]:
+# Why the last search() got nothing, per backend. Search is synchronous and
+# single-threaded here, so a module list is enough; it is reset on every call.
+_errors: list[str] = []
+
+
+# ------------------------------------------------------------------ exa budget
+#
+# The Exa key is a $10 free tier and there is no money behind it (Tejmul,
+# 2026-09-03). One search with page text costs roughly a cent, so the whole
+# allowance is ~1,000 searches; a runaway loop could spend it in an afternoon.
+# The cap is counted per UTC day in the settings table, exactly like Hunter's
+# monthly budget, and checked BEFORE the request. Cache hits never count.
+
+EXA_DAILY_CAP = int(RESEARCH.get("exa_daily_cap", 40))
+_EXA_USED_KEY = "exa_used"      # "YYYY-MM-DD:count"
+
+
+def _today() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def exa_budget() -> dict:
+    """{cap, used, left} for today. No key -> everything 0."""
+    if not backends.secret("EXA_API_KEY"):
+        return {"cap": 0, "used": 0, "left": 0}
+    from jobhunter.db import get_session, get_setting
+
+    with get_session() as session:
+        raw = get_setting(session, _EXA_USED_KEY, "")
+    day, _, count = raw.partition(":")
+    used = int(count) if day == _today() and count.isdigit() else 0
+    return {"cap": EXA_DAILY_CAP, "used": used, "left": max(0, EXA_DAILY_CAP - used)}
+
+
+def _spend_exa() -> None:
+    from jobhunter.db import get_session, get_setting, set_setting
+
+    with get_session() as session:
+        raw = get_setting(session, _EXA_USED_KEY, "")
+        day, _, count = raw.partition(":")
+        used = int(count) if day == _today() and count.isdigit() else 0
+        set_setting(session, _EXA_USED_KEY, f"{_today()}:{used + 1}")
+
+
+def _exa_api_search(
+    query: str, limit: int, timeout: int, *, category: str | None = None, days: int | None = None,
+    include_domains: list[str] | None = None,
+) -> list[SearchResult]:
     key = backends.secret("EXA_API_KEY")
     if not key:
         return []
+    budget = exa_budget()
+    if budget["left"] <= 0:
+        _errors.append(f"exa-api: daily cap of {budget['cap']} searches reached — resets at 00:00 UTC "
+                       "(research.exa_daily_cap in config.yaml)")
+        log.warning("exa api: daily cap %d reached, not searching", budget["cap"])
+        return []
+    _spend_exa()
+    body: dict = {
+        "query": query,
+        "numResults": limit,
+        "contents": {"text": {"maxCharacters": 2000}, "highlights": True},
+    }
+    if category:
+        body["category"] = category
+    if include_domains:
+        body["includeDomains"] = list(include_domains)
+    if days:
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        body["startPublishedDate"] = since.strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
         r = httpx.post(
             EXA_API,
             headers={"x-api-key": key, "Content-Type": "application/json"},
-            json={
-                "query": query,
-                "numResults": limit,
-                "contents": {"text": {"maxCharacters": 2000}, "highlights": True},
-            },
+            json=body,
             timeout=timeout,
         )
         if r.status_code >= 400:
-            log.debug("exa api -> %s", r.status_code)
+            # Exa says why in the body ("category no longer supported", bad key,
+            # out of credits). That sentence is the answer; a bare status hides it.
+            reason = r.text[:200]
+            try:
+                reason = str(r.json().get("error") or reason)[:200]
+            except Exception:  # noqa: BLE001
+                pass
+            _errors.append(f"exa-api {r.status_code}: {reason}")
+            log.warning("exa api -> %s: %s", r.status_code, reason)
             return []
         data = r.json()
     except Exception as e:  # noqa: BLE001 — a dead backend falls through to the next
+        _errors.append(f"exa-api: {type(e).__name__}: {str(e)[:160]}")
         log.debug("exa api failed: %s", e)
         return []
 
@@ -239,6 +332,155 @@ def _exa_api_search(query: str, limit: int, timeout: int) -> list[SearchResult]:
             )
         )
     return [r for r in out if r.url]
+
+
+# ------------------------------------------------------------------ X (twitter)
+
+_X_HOST = re.compile(r"(^|\.)(x\.com|twitter\.com)$", re.I)
+_X_STATUS = re.compile(r"^/([A-Za-z0-9_]{1,15})/status/(\d+)", re.I)
+
+
+def _x_post(url: str) -> tuple[str, str] | None:
+    """(author handle, post id) if this URL is an X post, else None."""
+    parsed = urlparse(url if "://" in url else "https://" + url)
+    if not _X_HOST.search((parsed.hostname or "").lower()):
+        return None
+    m = _X_STATUS.match(parsed.path or "")
+    return (m.group(1), m.group(2)) if m else None
+
+
+# Measured 2026-09-03: Exa returns nothing for x.com (its "tweet" category is
+# retired and includeDomains=x.com yields 0 on every query), Jina's search
+# endpoint needs a paid key, and the X API's search tier costs ~$200/month.
+# DuckDuckGo's HTML endpoint with `site:x.com` is the one free channel that
+# returned real posts — and it bot-challenged the second request of the run.
+# So this is deliberately slow, cached for a day, and says so when blocked.
+
+DDG_HTML = "https://html.duckduckgo.com/html/"
+DDG_MIN_GAP_S = float(RESEARCH.get("ddg_min_gap_seconds", 10))
+_ddg_last_call = 0.0
+_DDG_CHALLENGE = re.compile(r"(anomaly|captcha|challenge|bots use DuckDuckGo too)", re.I)
+_DDG_RESULT = re.compile(
+    r'class="result__a"[^>]*href="(?P<href>[^"]+)"[^>]*>(?P<title>.*?)</a>.*?'
+    r'(?:class="result__snippet"[^>]*>(?P<snippet>.*?)</a>)?',
+    re.S,
+)
+
+
+def _ddg_target(href: str) -> str:
+    """DDG wraps every result in a redirect: /l/?uddg=<encoded target>."""
+    from urllib.parse import parse_qs, unquote
+
+    if "uddg=" not in href:
+        return href
+    return unquote(parse_qs(urlparse(href).query).get("uddg", [""])[0])
+
+
+def _ddg_site_search(site: str, query: str, timeout: int) -> tuple[list[dict], str | None]:
+    """([{url, title, snippet}], error). One polite request; never raises."""
+    import time
+
+    global _ddg_last_call
+    wait = DDG_MIN_GAP_S - (time.monotonic() - _ddg_last_call)
+    if wait > 0:
+        time.sleep(wait)
+    _ddg_last_call = time.monotonic()
+    try:
+        r = httpx.get(
+            DDG_HTML,
+            params={"q": f"site:{site} {query}"},
+            headers={"User-Agent": UA, "Accept": "text/html"},
+            timeout=timeout,
+            follow_redirects=True,
+        )
+    except Exception as e:  # noqa: BLE001
+        return [], f"duckduckgo: {type(e).__name__}: {str(e)[:120]}"
+    body = r.text
+    if r.status_code != 200 or _DDG_CHALLENGE.search(body[:6000]):
+        return [], (f"duckduckgo bot challenge (HTTP {r.status_code}) — it rate-limits by IP; "
+                    f"wait a few minutes and keep to one query per {DDG_MIN_GAP_S:.0f}s")
+    out: list[dict] = []
+    for m in _DDG_RESULT.finditer(body):
+        url = _ddg_target(m.group("href"))
+        title = html_to_text(m.group("title") or "", limit=300)
+        snippet = html_to_text(m.group("snippet") or "", limit=1000)
+        if url:
+            out.append({"url": url, "title": title, "snippet": snippet})
+    return out, None
+
+
+def search_x(
+    query: str,
+    limit: int = 20,
+    *,
+    days: int | None = None,
+    fresh: bool = False,
+    timeout: int | None = None,
+) -> dict:
+    """Posts on X that answer `query`. Records only — no X account, no cookies,
+    no X API: MOTIV §6's LinkedIn rule applied to X.
+
+    Backed by a `site:x.com` web search (see the note above), so coverage is
+    what a search engine has indexed, not what X shows a logged-in user, and
+    the honest measure is the count this returns. DDG gives no dates, so
+    `published` is None until the post itself is read; `days` is accepted for
+    the API's sake and reported back, never silently applied.
+
+    Every result is an x.com status URL — the post can always be quoted and
+    linked downstream. Anything else the engine returned is dropped, not
+    passed off as a post.
+    """
+    query = (query or "").strip()
+    if not query:
+        return {"query": query, "backend": None, "posts": [], "error": "empty query"}
+
+    params = {"limit": limit}
+    if not fresh:
+        hit = cache.get("x", query, **params)
+        if hit:
+            return hit
+
+    rows, error = _ddg_site_search("x.com", query, timeout or backends.TIMEOUT)
+    posts: list[dict] = []
+    seen: set[str] = set()
+    dropped = 0
+    for row in rows:
+        who = _x_post(row["url"])
+        if not who:
+            dropped += 1
+            continue
+        handle, post_id = who
+        if post_id in seen:
+            continue
+        seen.add(post_id)
+        posts.append(
+            {
+                "url": f"https://x.com/{handle}/status/{post_id}",
+                "handle": handle,
+                "post_id": post_id,
+                "text": (row.get("snippet") or row.get("title") or "")[:2000] or None,
+                "published": None,
+                "source": "duckduckgo",
+            }
+        )
+        if len(posts) >= limit:
+            break
+
+    out = {
+        "query": query,
+        "backend": "duckduckgo" if posts else None,
+        "days": days,
+        "days_applied": False,
+        "posts": posts,
+        "dropped_non_posts": dropped,
+    }
+    if error:
+        out["error"] = error
+    elif not posts:
+        out["error"] = "search engine returned no x.com posts for this query"
+    else:
+        cache.put("x", query, out, backend="duckduckgo", **params)
+    return out
 
 
 # ------------------------------------------------------------------ page read

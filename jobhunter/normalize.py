@@ -49,10 +49,28 @@ _TITLE_EXCLUDE = re.compile(
     r"support|success|solutions? (?:consultant|architect)|"
     r"mechanical|electrical|civil|chemical|hardware|firmware|asic|rf\b|optical|"
     r"technician|field|quality|qa manager|"
-    r"intern(?:ship)?|apprentice|trainee|co[- ]?op)\b",
+    r"apprentice|co[- ]?op)\b",
     re.I,
 )
-_SENIORITY = re.compile(r"\b(senior|sr\.?|lead|principal|staff|l[4-9]\b|iii|iv|v\b)\b", re.I)
+# Internships are NOT excluded any more. Most target companies hire freshers through
+# a paid internship that converts to a PPO, so an internship with a real stipend is
+# the front door, not a distraction (Tejmul, 2026-09-03). What we still drop is the
+# unpaid/low-paid kind, and that is decided by the stipend bar in targeting.py, not
+# by the title.
+_INTERNSHIP_RE = re.compile(r"\b(intern|internship|trainee|industrial training|summer analyst)\b", re.I)
+_SENIORITY = re.compile(r"\b(senior|sr\.?|lead|principal|staff|architect|l[4-9]\b|iii|iv|v\b)\b", re.I)
+# We are freshers (Tejmul, 2026-09-03): senior-titled roles are still scraped and kept —
+# a company hiring seniors is a company hiring — but they are flagged (Job.is_senior)
+# and the queue, counts and page put fresher roles first. The hard drop is opt-in.
+EXCLUDE_SENIOR = bool(_S.get("exclude_senior", False))
+
+
+def is_internship(title: str | None, description: str | None = None) -> bool:
+    """Does this posting describe an internship rather than a full-time role?"""
+    if title and _INTERNSHIP_RE.search(title):
+        return True
+    head = (description or "")[:600]
+    return bool(head and _INTERNSHIP_RE.search(head) and re.search(r"\bstipend\b", head, re.I))
 
 
 def title_relevant(title: str) -> bool:
@@ -60,6 +78,8 @@ def title_relevant(title: str) -> bool:
     if not title:
         return False
     if _TITLE_EXCLUDE.search(title):
+        return False
+    if EXCLUDE_SENIOR and is_senior(title):
         return False
     return bool(_ROLE_WORDS.search(title))
 
@@ -75,6 +95,28 @@ def location_ok(location: str | None, remote: bool = False) -> bool:
 
 def is_senior(title: str) -> bool:
     return bool(_SENIORITY.search(title or ""))
+
+
+# "Remote from anywhere" — the company says, in its own words, that it hires across borders
+# without sponsorship. This is the ideal company for the currency-gap thesis (MOTIV §2), so
+# it is a first-class signal, not a note. Matched on location and description; the phrase
+# has to be theirs, so a plain "remote" (which usually means remote-in-country) is not enough.
+_ANYWHERE = re.compile(
+    r"(work from anywhere|remote[- ]?(?:first|only|native)|fully[- ]remote|100%[- ]remote|"
+    r"remote\s*[\(\-–—:,]?\s*(?:global|globally|worldwide|world[- ]wide|anywhere|international(?:ly)?|"
+    r"any (?:country|location|time ?zone))|anywhere in the world|any(?:where)? in the world|"
+    r"globally distributed|distributed team|hire (?:from )?anywhere|hiring (?:globally|worldwide|internationally)|"
+    r"time ?zone[- ]agnostic|async[- ]first|no (?:visa|work permit|sponsorship)[^.]{0,30}(?:required|needed|necessary)|"
+    r"work from (?:any(?:where| country)|your (?:home )?country)|remote \(?(?:emea|apac|latam|india|asia|europe)\)?)",
+    re.I,
+)
+
+
+def remote_anywhere(location: str | None, description: str | None = None) -> bool:
+    """Does the posting itself say the role can be done from any country?"""
+    if location and _ANYWHERE.search(location):
+        return True
+    return bool(description) and bool(_ANYWHERE.search(description[:6000]))
 
 
 # Several boards serve UTF-8 bytes that were already decoded once as cp1252,
@@ -146,6 +188,10 @@ _COMP_CUE = re.compile(
     r"\b(salary|compensation|pay|package|ctc|base|remuneration|stipend|offer|band|range|lpa)\b", re.I
 )
 _INR_CUE = re.compile(r"(₹|\bINR\b|\bRs\.?\b|\bLPA\b|\blakhs?\b|\blacs?\b|\bcrores?\b)", re.I)
+_NOT_MONEY = re.compile(
+    r"\b401\s*\(?\s*k\s*\)?\b|\b403\s*\(?\s*b\s*\)?\b|\b24\s*/\s*7\b|\b(?:19|20)\d{2}\b(?!\s*(?:k|K|m|M|lpa|LPA))",
+    re.I,
+)
 
 
 def _to_number(num: str) -> float | None:
@@ -215,6 +261,9 @@ def _parse_one(text: str) -> Salary:
         windows = [text]
 
     for win in windows[:12]:
+        # "401(k)" is a retirement plan, not a $401k salary; "24/7", "365 days" and
+        # years are numbers with units that are not money either
+        win = _NOT_MONEY.sub(" ", win)
         period = "month" if _PER_MONTH.search(win) else "hour" if _PER_HOUR.search(win) else "year"
 
         m = _RANGE.search(win)
@@ -309,3 +358,100 @@ def salary_in_range(sal: Salary) -> bool:
         return True
     top = sal.max_lpa or sal.min_lpa or 0
     return top >= MIN_LPA
+
+
+# ---------------------------------------------------------------- stipend & PPO
+
+_STIPEND_CUE = re.compile(r"\b(stipend|intern(?:ship)? (?:pay|compensation|salary)|paid internship)\b", re.I)
+_PPO_CUE = re.compile(
+    r"\b(ppo|pre[- ]?placement offer|full[- ]time offer|on conversion|convert(?:s|ed|ing)? to (?:a )?full[- ]time|"
+    r"post[- ]conversion|conversion (?:ctc|package|salary)|return offer)\b",
+    re.I,
+)
+_SENT_SPLIT = re.compile(r"(?<=[.!?\n])\s+")
+_WHITESPACE = re.compile(r"\s+")
+
+
+@dataclass
+class PayFacts:
+    """The two numbers company targeting runs on, each with the sentence it came from.
+
+    Null means "the posting does not say" — never zero, never a guess. A company with
+    no stated pay grades `unknown` and waits for research; it is not rejected.
+    """
+
+    stipend_inr_month: int | None = None
+    stipend_evidence: str | None = None
+    ppo_lpa: float | None = None
+    ppo_evidence: str | None = None
+    ppo_source: str | None = None      # "ppo" (stated as a conversion offer) | "salary" (the full-time band)
+
+
+def _sentences(text: str, limit: int = 400) -> list[str]:
+    out = []
+    for raw in _SENT_SPLIT.split(text):
+        sent = _WHITESPACE.sub(" ", raw).strip()
+        if 8 < len(sent) < 400:
+            out.append(sent)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _monthly_inr(sentence: str) -> tuple[int, str] | None:
+    """(INR per month, the money token) from a sentence, or None."""
+    monthly = bool(_PER_MONTH.search(sentence))
+    for m in _MONEY.finditer(sentence):
+        if not (m.group("cur") or m.group("unit") or m.group("curafter")):
+            continue
+        n = _to_number(m.group("num"))
+        if n is None:
+            continue
+        cur = _currency_of(m.group("cur") or m.group("curafter"), sentence)
+        unit = (m.group("unit") or "").lower()
+        value = n
+        if unit == "k":
+            value *= 1_000
+        elif unit in ("l", "lac", "lacs", "lakh", "lakhs", "lpa"):
+            value *= 100_000
+            cur = "INR"
+        elif unit in ("m", "mn", "mm", "million"):
+            value *= 1_000_000
+        inr = value * RATES_TO_INR.get(cur, RATES_TO_INR["INR"])
+        if not monthly:
+            # an annual figure in a stipend sentence ("₹6,00,000 per year internship")
+            if inr >= 600_000:
+                inr /= 12
+            else:
+                continue  # a bare number with no period is not a stipend claim
+        # sanity band: ₹2k–₹10L a month. Outside it, the number is not a stipend.
+        if 2_000 <= inr <= 1_000_000:
+            return int(round(inr)), m.group(0).strip()[:60]
+    return None
+
+
+def parse_pay(*texts: str | None) -> PayFacts:
+    """Read the internship stipend and the PPO / full-time package out of a posting.
+
+    Regex only and evidence-linked: every number carries the sentence it was read
+    from, so the dashboard and the knowledge graph can show *why* a company is tier1.
+    """
+    facts = PayFacts()
+    for text in texts:
+        if not text:
+            continue
+        for sent in _sentences(text):
+            if facts.stipend_inr_month is None and _STIPEND_CUE.search(sent):
+                hit = _monthly_inr(sent)
+                if hit:
+                    facts.stipend_inr_month, _ = hit
+                    facts.stipend_evidence = sent[:300]
+            if facts.ppo_lpa is None and _PPO_CUE.search(sent):
+                sal = _parse_one(sent)
+                if sal.ok():
+                    facts.ppo_lpa = sal.max_lpa or sal.min_lpa
+                    facts.ppo_evidence = sent[:300]
+                    facts.ppo_source = "ppo"
+            if facts.stipend_inr_month is not None and facts.ppo_lpa is not None:
+                return facts
+    return facts

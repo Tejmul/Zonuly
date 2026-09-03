@@ -16,8 +16,11 @@ openrouter:
   # does -- structured JSON out -- so every one of these supports response_format.
   # Re-check the roster with: python scripts/run.py models list --free
   aliases:
-    # 26B MoE, 4B active: fast, instruction-tuned. Triage, salary, classification, parsing.
-    cheap: "google/gemma-4-26b-a4b-it:free"
+    # Triage, salary, role classification, company descriptions, parsing.
+    # Was google/gemma-4-26b-a4b-it:free — that endpoint returned a hard rate limit on
+    # every call on 2026-09-03 while judge and writer answered fine, so it is the model
+    # that is saturated, not the account. Swap back if it frees up.
+    cheap: "minimax/minimax-m2.7:free"
     # 120B hybrid MoE, 12B active: the strongest free reasoner that also does JSON.
     # The fit rubric and the research hook, where being wrong is expensive.
     judge: "nvidia/nemotron-3-super-120b-a12b:free"
@@ -49,7 +52,10 @@ openrouter:
 
 search:
   # salary filter, in INR lakhs per annum. Jobs in other currencies are converted (approx).
-  min_lpa: 24
+  # Tejmul, 2026-09-03: the floor is ₹30 L, remote or on-site, when pay is stated.
+  # Unstated pay is not a rejection (silence is the norm) — it is `unknown`, and the
+  # company shows as "needs research" until its own pages say otherwise.
+  min_lpa: 30
   max_lpa: 200            # keep the MVRX-Labs-style outliers
   usd_to_inr: 88
   eur_to_inr: 95
@@ -68,6 +74,10 @@ search:
   locations_ok: ["india", "remote", "bengaluru", "bangalore", "hyderabad", "mumbai", "pune", "delhi", "gurgaon", "gurugram", "noida", "chennai", "worldwide", "anywhere"]
   # jobs asking for more YOE than this are penalized (user is a fresher / new grad)
   max_yoe: 3
+  # Freshers: Senior / Sr / Lead / Staff / Principal / Architect titles are scraped and
+  # kept but flagged (job.is_senior) and ranked after fresher roles. true drops them
+  # before they are stored instead.
+  exclude_senior: false
 
 matching:
   # The free gate in front of the paid rubric: rare-term-weighted overlap between
@@ -82,6 +92,117 @@ matching:
   fit_prefilter_percentile: 70     # only the top 30% of jobs reach the judge model
   # shortlist_probability >= this -> "high match", triggers notification + contact discovery
   high_match_threshold: 65
+
+targeting:
+  # WHAT A TARGET COMPANY LOOKS LIKE. MOTIV §2, refined with Tejmul 2026-09-03.
+  #
+  # Most of these companies run an internship -> PPO model: a paid internship first,
+  # conversion to a full-time offer if the work lands. The stipend is therefore a
+  # *predictor*, not a perk -- a company that will not pay ₹50k/month for an intern
+  # does not turn around and pay ₹30 LPA on conversion. So it is a hard bar.
+  stipend_min_inr_month: 50000
+  ppo_tier1_lpa: 30        # PPO / full-time package >= this  -> tier1, the primary queue
+  ppo_tier2_lpa: 30        # was 24; Tejmul set the floor at 30 on 2026-09-03, so tier2 is empty
+  # Below tier2 the company grades `reject` -- kept in the DB, never queued.
+  # Pay we could not find is NOT a rejection: it grades `unknown` and waits for
+  # research, because silence about salary is the norm, not a signal.
+
+  # Recently funded, still small. A mega-round is no longer underrated.
+  funding:
+    stages_ok: ["pre-seed", "seed", "series a", "series b"]
+    max_age_months: 30
+    max_amount_usd_m: 400
+    # When no pay is stated anywhere, funding is the proxy for ability to pay (Tejmul,
+    # 2026-09-03: "based on valuation we decide"). A US/UK/EU company that raised at
+    # least `strong_min_usd_m` within max_age_months can pay a $40k remote engineer
+    # without noticing; under `weak_max_usd_m` it probably cannot. It is an estimate,
+    # labelled as one on every page — never shown as a figure the company stated.
+    strong_min_usd_m: 3
+    weak_max_usd_m: 2
+
+  # PAY POWER — the visible benchmark: "how easily can this company pay a fresher
+  # ₹30–40 L?" (Tejmul, 2026-09-03: "based on how much they raised recently, the raise
+  # date, the company's value"). Bands, best first; the first rule that fits decides.
+  #   pays          100  a posting states >= ₹30 L (region floor) — they wrote the number
+  #   deep_pockets   85  >= deep_min_usd_m raised within deep_max_months, OR Series A+
+  #                      within funding.max_age_months, OR stated valuation >= deep_valuation_usd_m
+  #   funded         65  >= funding.strong_min_usd_m within max_age_months, OR a YC batch
+  #                      within max_age_months with team >= yc_min_team
+  #   thin           30  under weak_max_usd_m, pre-seed, or older than max_age_months
+  #   unknown         0  nothing found yet
+  # India never scores above `thin` without a stated number (rupee pay ≠ dollar rounds).
+  # Whether we CHASE them is a separate question: hyped names and teams over
+  # harvest.max_team are still out, whatever their Pay Power.
+  pay_power:
+    deep_min_usd_m: 10
+    deep_max_months: 24
+    deep_valuation_usd_m: 50
+    yc_min_team: 10
+    # money per head shown beside the score: raised / team size, comfortable at
+    per_head_comfortable_usd_k: 200
+
+  # "Open your eyes to the global world" -- the currency gap is the whole thesis.
+  # Every non-India region clears ₹30 LPA automatically in local terms, so their
+  # floor is 0; India carries MOTIV's explicit ₹30 LPA fresher floor.
+  regions:
+    - key: us
+      min_lpa: 0
+      match: ["united states", "usa", "u.s.", "san francisco", "bay area", "new york", "nyc", "seattle", "austin", "boston", "los angeles", "chicago", "denver", "palo alto", "mountain view", "california", "texas"]
+    - key: uk
+      min_lpa: 0
+      match: ["united kingdom", "england", "london", "manchester", "oxford", "edinburgh", "bristol", "scotland"]
+    - key: de
+      min_lpa: 0
+      match: ["germany", "deutschland", "berlin", "munich", "münchen", "hamburg", "frankfurt", "cologne", "köln", "stuttgart"]
+    - key: nl
+      min_lpa: 0
+      match: ["netherlands", "holland", "amsterdam", "rotterdam", "utrecht", "eindhoven", "the hague", "den haag"]
+    - key: eu
+      min_lpa: 0
+      match: ["ireland", "dublin", "france", "paris", "spain", "madrid", "barcelona", "portugal", "lisbon", "sweden", "stockholm", "denmark", "copenhagen", "norway", "oslo", "finland", "helsinki", "switzerland", "zurich", "zürich", "austria", "vienna", "belgium", "brussels", "poland", "warsaw", "krakow", "kraków", "czech", "prague", "estonia", "tallinn"]
+    - key: india
+      min_lpa: 30
+      match: ["india", "bengaluru", "bangalore", "hyderabad", "mumbai", "pune", "delhi", "gurgaon", "gurugram", "noida", "chennai", "kolkata", "ahmedabad", "jaipur", "indore", "kochi"]
+    - key: remote
+      min_lpa: 0
+      match: ["remote", "anywhere", "worldwide", "distributed", "work from home"]
+
+  # UNDERRATED ONLY. MOTIV §2: the household names are hyped, oversubscribed and
+  # DSA-gated -- thousands of applications pending, people already selected sitting
+  # on waitlists. Our odds are not there. Matching is word-wise on the company name,
+  # so "Amazon" is excluded but "Amazonia Labs" is not.
+  hyped:
+    big_tech: ["google", "alphabet", "youtube", "deepmind", "microsoft", "github", "linkedin", "amazon", "aws", "apple", "meta", "facebook", "instagram", "whatsapp", "netflix", "nvidia", "tesla", "spacex", "openai", "anthropic", "ibm", "intel", "oracle", "salesforce", "adobe", "sap", "cisco", "qualcomm", "samsung", "vmware", "dell", "uber", "lyft", "airbnb", "twitter", "snap", "tiktok", "bytedance", "spotify", "shopify", "paypal", "stripe", "coinbase", "palantir", "databricks", "snowflake", "atlassian", "dropbox", "zoom", "slack", "servicenow", "workday", "twilio", "cloudflare", "datadog", "mongodb", "elastic", "hubspot", "doordash", "instacart", "robinhood", "reddit", "pinterest", "discord", "figma", "canva", "notion", "asana", "gitlab", "docker", "hashicorp", "confluent", "goldman sachs", "jpmorgan", "morgan stanley", "jane street", "citadel", "two sigma", "optiver", "hudson river trading"]
+    india_household: ["tcs", "infosys", "wipro", "hcl", "tech mahindra", "cognizant", "accenture", "capgemini", "deloitte", "kpmg", "mindtree", "ltimindtree", "mphasis", "zoho", "freshworks", "flipkart", "swiggy", "zomato", "paytm", "phonepe", "ola", "oyo", "byju", "unacademy", "razorpay", "zerodha", "cred", "meesho", "nykaa", "dream11", "sharechat", "jio", "reliance", "adani", "tata", "mahindra", "bajaj", "hdfc", "icici", "sbi"]
+
+  # WHO WE ASK FOR A REFERRAL, best first. `rank` orders the outreach queue.
+  # No alumni/college targeting: that network is already known personally and does
+  # not need a machine (Tejmul, 2026-09-03).
+  people:
+    max_per_company: 30
+    roles:
+      - {key: founder,         rank: 1, refer: true,  label: "Founder / CTO / co-founder"}
+      - {key: senior_engineer, rank: 2, refer: true,  label: "Senior / staff / lead engineer"}
+      - {key: engineer,        rank: 3, refer: true,  label: "Software engineer, SDE 1-3"}
+      - {key: eng_manager,     rank: 4, refer: true,  label: "Engineering manager"}
+      - {key: tech_recruiter,  rank: 5, refer: true,  label: "Technical recruiter / tech HR"}
+      - {key: recruiter,       rank: 6, refer: true,  label: "General HR / talent"}
+      - {key: other,           rank: 9, refer: false, label: "Everyone else"}
+
+  # IS THE HIRING CLAIM REAL? A founder posting "we are hiring" every day on X is
+  # not evidence. The company's own careers page or ATS board is. A claim with no
+  # corroboration there is marked `not_authorized` and never drafted against.
+  hiring_verification:
+    careers_paths: ["/careers", "/jobs", "/careers/", "/join-us", "/work-with-us", "/company/careers", "/about/careers", "/open-roles"]
+    max_age_days: 21         # a verification older than this is re-checked
+    timeout: 20
+
+harvest:
+  # Bulk company harvest (jobhunter/harvest.py) — N different companies that fit, then
+  # their boards, roles and grade. Admission happens before a row exists:
+  max_team: 200            # bigger than this is not underrated any more
+  regions: ["us", "uk", "de", "nl", "eu", "india", "remote"]   # keys from targeting.regions
+  # exa_queries: []        # override the default company-search queries (25 sites each)
 
 contacts:
   max_per_company: 20
@@ -151,6 +272,16 @@ research:
   cache_ttl_hours: 24      # 0 disables the research cache entirely
   max_chars: 12000         # per fetched page
   mcporter_server: "exa"   # the mcporter server name holding the Exa MCP
+  # The Exa key is a $10 free tier with no money behind it. ~1 cent a search, so
+  # ~1,000 searches in total; this caps how many a day, counted before the call,
+  # cache hits excluded. `research doctor` shows today's used/left.
+  # Raised 40 -> 100 on 2026-09-03 for the company-facts pass (one search per company
+  # with roles, ~500 of them, ≈ $3–4 of the $10). Drop back to 40 when that pass is done.
+  exa_daily_cap: 100
+  # X search through the THROWAWAY session (X_AUTH_TOKEN / X_CT0 in .env) — the one
+  # login-gated read allowed. Read-only, few, slow; a suspension stops it, never a retry.
+  x_daily_searches: 10
+  x_min_gap_seconds: 30
   # Ordered candidates per capability; the first one that returns content wins.
   backends:
     web_search: ["exa-mcp", "exa-api"]

@@ -528,6 +528,174 @@ def kg_export(
 
 # ---------------------------------------------------------------- web research
 
+@kg_app.command("why")
+def kg_why(
+    company: list[str] = typer.Argument(..., help="Company name, or a company:<id> node"),
+    json_: bool = typer.Option(False, "--json"),
+) -> None:
+    """Should we write to this company, to whom, and what do we actually know?
+
+    Assembled by traversal: what they do -> funding + investors -> tier and why ->
+    whether their own careers page backs the hiring -> which open roles want skills we
+    have -> who can refer us -> whether we are allowed to write to them.
+    """
+    _setup_logging()
+    from jobhunter.kg import hunt
+
+    # Company names have spaces ("Scale AI"), so the name is taken as the rest of the
+    # line and joined — quotes optional. Anything from a "#" on is a shell comment that
+    # survived a copy-paste, not part of the name.
+    name = " ".join(company).split("#")[0].strip()
+    out = hunt.why(name)
+    if out.get("error"):
+        typer.secho(out["error"], fg=typer.colors.RED)
+        raise typer.Exit(1)
+    if json_:
+        _echo(out)
+        return
+
+    act_colour = {"write": typer.colors.GREEN, "skip": typer.colors.RED,
+                  "wait": typer.colors.YELLOW}.get(out["verdict"]["act"], typer.colors.CYAN)
+    typer.secho(f"\n{out['company']}  [{out['tier'] or 'ungraded'}]  {out['region'] or ''}", bold=True)
+    if out["what_they_do"]:
+        typer.echo(f"  {out['what_they_do']}")
+    typer.secho(f"\n  -> {out['verdict']['act'].upper()}: {out['verdict']['why']}", fg=act_colour, bold=True)
+
+    typer.secho("\n  pay", bold=True)
+    pay = out["pay"]
+    stipend = f"₹{pay['stipend_inr_month']:,}/month" if pay["stipend_inr_month"] else "not stated"
+    ppo = f"₹{pay['ppo_lpa']:g} LPA" if pay["ppo_lpa"] else "not stated"
+    typer.echo(f"    stipend: {stipend}")
+    typer.echo(f"    PPO    : {ppo}")
+    typer.echo(f"    why    : {out['tier_reason']}")
+
+    fund = out["funding"]
+    if fund["stage"] or fund["investors"]:
+        typer.secho("\n  funding", bold=True)
+        typer.echo(f"    {fund['stage'] or 'stage unstated'}"
+                   + (f" · ${fund['amount_usd_m']}M" if fund["amount_usd_m"] else "")
+                   + (f" · {', '.join(i['name'] for i in fund['investors'])}" if fund["investors"] else ""))
+
+    hiring = out["hiring"]
+    typer.secho("\n  are they really hiring?", bold=True)
+    typer.echo(f"    {hiring['status'] or 'unchecked'} — {(hiring['evidence'] or 'nobody has checked')[:150]}")
+
+    if out["skills_they_want_that_i_have"]:
+        typer.secho("\n  they ask for, and I have", bold=True)
+        typer.echo(f"    {', '.join(out['skills_they_want_that_i_have'][:14])}")
+
+    if out["open_roles"]:
+        typer.secho("\n  open roles", bold=True)
+        for j in out["open_roles"][:6]:
+            typer.echo(f"    {j['title'][:56]:58} {j['skill_overlap']} skill(s) match")
+
+    typer.secho("\n  who to ask", bold=True)
+    if not out["who_to_ask"]:
+        typer.echo("    nobody found yet — run `find-contacts`")
+    for c in out["who_to_ask"][:8]:
+        mark, colour = "", None
+        if c.get("employment") == "contradicted":
+            mark, colour = f"  DOES NOT WORK HERE: {c['employment_why']}", typer.colors.RED
+        elif c.get("employment") == "unproven":
+            mark, colour = "  (employment unproven)", typer.colors.YELLOW
+        if not c["guardrail"]["ok"]:
+            mark, colour = f"  BLOCKED: {c['guardrail']['why']}", typer.colors.RED
+        line = f"    {c['rank']} {str(c['role_class']):16} {str(c['name'])[:24]:26} <{c['email'] or 'no address'}>"
+        typer.secho(line + mark, fg=colour)
+    typer.echo()
+
+
+@kg_app.command("shortlist")
+def kg_shortlist(
+    limit: int = typer.Option(15),
+    json_: bool = typer.Option(False, "--json"),
+) -> None:
+    """Rank targets by everything the graph knows: grade, verified hiring, skill overlap, reachable people."""
+    _setup_logging()
+    from jobhunter.kg import hunt
+
+    rows = hunt.shortlist(limit=limit)
+    if json_:
+        _echo(rows)
+        return
+    for r in rows:
+        typer.secho(f"  [{r['tier']}] {r['name']}", bold=True, nl=False)
+        typer.echo(f"  · {r['region'] or '?'} · hiring:{r['hiring'] or 'unchecked'}"
+                   f" · {r['open_roles']} role(s) · {r['skill_overlap']} skill(s) · {r['reachable_people']} reachable")
+        if r["what_they_do"]:
+            typer.echo(f"        {r['what_they_do'][:104]}")
+        if r["ask_first"]:
+            typer.echo(f"        ask first: {r['ask_first']['name']} ({r['ask_first']['role_class']})")
+
+
+@kg_app.command("expand")
+def kg_expand(
+    ref: list[str] = typer.Argument(..., help="A company or an investor"),
+    limit: int = typer.Option(20),
+) -> None:
+    """Who else did their investors fund? Companies two hops away, underrated by construction."""
+    _setup_logging()
+    from jobhunter.kg import hunt
+
+    out = hunt.expand(" ".join(ref).split("#")[0].strip(), limit=limit)
+    if out.get("error"):
+        typer.secho(out["error"], fg=typer.colors.RED)
+        raise typer.Exit(1)
+    typer.secho(f"{out['seed']} — via {', '.join(out['investors']) or 'no investor edges'}", bold=True)
+    if out.get("hint"):
+        typer.secho(f"  {out['hint']}", fg=typer.colors.YELLOW)
+    for r in out["companies"]:
+        typer.echo(f"  [{r['tier'] or '-'}] {r['name']:34} shared: {', '.join(r['via'][:3])}")
+
+
+@kg_app.command("guard")
+def kg_guard(ref: list[str] = typer.Argument(..., help="A contact or a company")) -> None:
+    """May we write to them? MOTIV §6's cooldown rules, answered by traversal."""
+    _setup_logging()
+    from jobhunter.kg import hunt
+
+    out = hunt.guardrails(" ".join(ref).split("#")[0].strip())
+    if out.get("error"):
+        typer.secho(out["error"], fg=typer.colors.RED)
+        raise typer.Exit(1)
+    if "contacts" in out:
+        typer.secho(f"{out['company']}: {out['clear']} clear, {out['blocked']} blocked", bold=True)
+        for c in out["contacts"]:
+            colour = typer.colors.GREEN if c["ok"] else typer.colors.RED
+            typer.secho(f"  {'OK ' if c['ok'] else 'NO '} {c['contact'][:30]:32} {c['why']}", fg=colour)
+    else:
+        colour = typer.colors.GREEN if out["ok"] else typer.colors.RED
+        typer.secho(f"{out['contact']}: {out['why']}", fg=colour)
+
+
+@kg_app.command("audit")
+def kg_audit(
+    limit: int = typer.Option(10, help="Rows per check"),
+    json_: bool = typer.Option(False, "--json"),
+) -> None:
+    """Contradictions between what different parts of the graph believe.
+
+    Each table is individually consistent; it is the relationships that go wrong — a
+    contact whose address is on another company's domain, a draft against a hiring claim
+    we disproved, a rejected company we spent model calls scoring.
+    """
+    _setup_logging()
+    from jobhunter.kg import hunt
+
+    out = hunt.audit(limit_per_check=limit)
+    if json_:
+        _echo(out)
+        return
+    if not out["findings"]:
+        typer.secho("no contradictions found", fg=typer.colors.GREEN)
+        return
+    for check, rows in out["findings"].items():
+        typer.secho(f"\n{check}  ({len(rows)})", fg=typer.colors.YELLOW, bold=True)
+        for r in rows:
+            bits = " · ".join(f"{k}={v}" for k, v in r.items() if k != "id" and v is not None)
+            typer.echo(f"    {bits[:150]}")
+
+
 research_app = typer.Typer(
     add_completion=False,
     help="Web research — search, read and mine the open web via the Agent Reach backends",
@@ -555,7 +723,8 @@ def research_doctor() -> None:
             if hint:
                 typer.echo(f"         {backend}: {hint}")
     typer.echo("")
-    _echo({"secrets_present": report["secrets"], "reddit": report["reddit"], "cache": report["cache"]})
+    _echo({"secrets_present": report["secrets"], "reddit": report["reddit"], "cache": report["cache"],
+           "exa_budget": report["exa_budget"]})
 
 
 @research_app.command("web")
@@ -569,6 +738,33 @@ def research_web(
     from jobhunter import research
 
     _echo(research.search_web(query, limit=limit, fresh=fresh))
+
+
+@research_app.command("x")
+def research_x(
+    query: str,
+    limit: int = typer.Option(20, help="How many posts"),
+    days: int = typer.Option(30, help="Reported back only — the search engine gives no dates yet"),
+    fresh: bool = typer.Option(False, help="Bypass the 24h cache"),
+) -> None:
+    """Posts on X via a site:x.com web search — no X account, no cookies, no X API. Records only."""
+    _setup_logging()
+    from jobhunter import research
+
+    _echo(research.search_x(query, limit=limit, days=days, fresh=fresh))
+
+
+@research_app.command("x-search")
+def research_x_search(
+    query: str,
+    limit: int = typer.Option(20, help="How many posts"),
+    fresh: bool = typer.Option(False, help="Bypass the 24h cache"),
+) -> None:
+    """Live X search through the THROWAWAY session in .env — read-only, capped per day, gapped. Records only."""
+    _setup_logging()
+    from jobhunter.research import x_search
+
+    _echo(x_search.search(query, limit=limit, fresh=fresh))
 
 
 @research_app.command("read")
@@ -818,6 +1014,300 @@ def fit_explain(job_id: int) -> None:
     typer.secho(f"{title}  —  score {out['score']}  (stored {stored})", bold=True)
     typer.echo("  matched: " + ", ".join(f"{m['term']}({m['weight']})" for m in out["matched"]))
     typer.echo("  missing: " + ", ".join(f"{m['term']}({m['weight']})" for m in out["missing"]))
+
+
+# ---------------------------------------------------------------- targeting
+
+targets_app = typer.Typer(
+    add_completion=False,
+    help="Company targeting — underrated, recently funded, stipend ₹50k+/month, PPO tiers",
+)
+app.add_typer(targets_app, name="targets")
+
+
+def _tier_colour(tier: str | None) -> str:
+    return {
+        "tier1": typer.colors.GREEN, "tier2": typer.colors.CYAN,
+        "prospect": typer.colors.BLUE, "unknown": typer.colors.YELLOW,
+    }.get(tier or "", typer.colors.RED)
+
+
+@targets_app.command("grade")
+def targets_grade(
+    pay: bool = typer.Option(True, help="Re-read stipend / PPO out of job descriptions first"),
+    limit: int = typer.Option(None, help="Only this many companies"),
+) -> None:
+    """Grade every company: hyped -> reject, then funding, then the stipend bar and the tiers."""
+    _setup_logging()
+    from jobhunter import targeting
+
+    if pay:
+        typer.echo(f"job pay pass: {targeting.extract_job_pay()}")
+    counts = targeting.grade_companies(limit=limit)
+    for tier in ("tier1", "tier2", "prospect", "unknown", "reject"):
+        typer.secho(f"  {tier:9} {counts.get(tier, 0):4}", fg=_tier_colour(tier))
+    typer.echo(f"  (of the rejects, {counts.get('hyped_excluded', 0)} are hyped names)")
+
+
+@targets_app.command("list")
+def targets_list(
+    tier: str = typer.Option(None, help="tier1 | tier2 | prospect | unknown | reject"),
+    limit: int = typer.Option(25),
+    json_: bool = typer.Option(False, "--json"),
+) -> None:
+    """The graded registry, best first."""
+    _setup_logging()
+    from jobhunter import targeting
+
+    rows = targeting.targets(tier=tier, limit=limit)
+    if json_:
+        _echo(rows)
+        return
+    for r in rows:
+        pay = f"₹{r['ppo_lpa']:g} LPA" if r["ppo_lpa"] else "pay unknown"
+        stipend = f" · stipend ₹{r['stipend_inr_month']:,}/mo" if r["stipend_inr_month"] else ""
+        hiring = f" · hiring:{r['hiring_status']}" if r["hiring_status"] else ""
+        typer.secho(f"  [{r['tier'] or '-'}] {r['name']}", fg=_tier_colour(r["tier"]), bold=True)
+        typer.echo(f"        {pay}{stipend} · {r['region'] or 'region unknown'}{hiring}")
+        if r["description"]:
+            typer.echo(f"        {r['description'][:100]}")
+        typer.echo(f"        why: {(r['reason'] or '')[:110]}")
+
+
+@targets_app.command("enrich")
+def targets_enrich(
+    limit: int = typer.Option(10, help="How many companies to research"),
+    company_id: int = typer.Option(None, help="Just this one"),
+    fresh: bool = typer.Option(False, help="Bypass the research cache"),
+    model: bool = typer.Option(True, help="Use the `cheap` alias for the description"),
+) -> None:
+    """Read each company's own site: what they do, and who funded them. Re-grades after."""
+    _setup_logging()
+    from jobhunter import enrich
+
+    results = ([enrich.enrich_company(company_id, fresh=fresh, use_model=model)]
+               if company_id else
+               enrich.enrich_pending(limit=limit, fresh=fresh, use_model=model))
+    for r in results:
+        if r.get("error"):
+            typer.secho(f"  {r['error']}", fg=typer.colors.RED)
+            continue
+        typer.secho(f"  {r['company']} -> {r.get('tier')}", fg=_tier_colour(r.get("tier")), bold=True)
+        typer.echo(f"      {r.get('description') or 'no description found'}")
+        if r.get("funding"):
+            typer.echo(f"      funding: {r['funding']}")
+
+
+@targets_app.command("verify")
+def targets_verify(
+    limit: int = typer.Option(10),
+    company_id: int = typer.Option(None, help="Verify one company"),
+    job_id: int = typer.Option(None, help="Verify the company behind one scraped posting"),
+    role: str = typer.Option(None, help="Test a specific claimed role"),
+    fresh: bool = typer.Option(False, help="Bypass the page cache"),
+) -> None:
+    """Is the hiring claim real? Check the company's own ATS board and careers page.
+
+    A claim their own pages do not back is marked `not_authorized` and never drafted on.
+    """
+    _setup_logging()
+    from jobhunter import hiring_verify as hv
+
+    if job_id:
+        results = [hv.claim_from_job(job_id)]
+    elif company_id:
+        results = [hv.verify_company(company_id, claimed_role=role, fresh=fresh)]
+    else:
+        results = hv.verify_pending(limit=limit, fresh=fresh)
+
+    colours = {
+        hv.VERIFIED: typer.colors.GREEN, hv.ROLE_MISSING: typer.colors.YELLOW,
+        hv.NOT_AUTHORIZED: typer.colors.RED, hv.UNREACHABLE: typer.colors.MAGENTA,
+    }
+    for r in results:
+        if r.get("error"):
+            typer.secho(f"  {r['error']}", fg=typer.colors.RED)
+            continue
+        typer.secho(f"  {r['company']}: {r['status']}", fg=colours.get(r["status"]), bold=True)
+        typer.echo(f"      {(r.get('evidence') or '')[:160]}")
+        if r.get("roles"):
+            typer.echo(f"      roles on their own page: {', '.join(r['roles'][:5])}")
+
+
+# ---------------------------------------------------------------- harvest
+
+harvest_app = typer.Typer(
+    add_completion=False,
+    help="Bulk company harvest — N different companies that fit, then their boards, roles and grade",
+)
+app.add_typer(harvest_app, name="harvest")
+
+
+@harvest_app.command("yc")
+def harvest_yc(limit: int = typer.Option(None, help="Newest batches first; default all that fit")) -> None:
+    """Admit every hiring YC company that fits (region, size, not hyped) from the open yc-oss mirror."""
+    _setup_logging()
+    from jobhunter import harvest
+
+    _echo(harvest.admit_yc(limit=limit).as_dict())
+
+
+@harvest_app.command("exa")
+def harvest_exa(
+    query: list[str] = typer.Option(None, "--query", "-q", help="Repeatable; default is harvest.exa_queries"),
+    per_query: int = typer.Option(25, help="Company sites per search (25 is the cheap tier)"),
+    fresh: bool = typer.Option(False, help="Bypass the 24h cache"),
+) -> None:
+    """Company sites from Exa's company index — one search per query, inside exa_daily_cap."""
+    _setup_logging()
+    from jobhunter import harvest
+
+    _echo(harvest.admit_exa(query or None, per_query=per_query, fresh=fresh).as_dict())
+
+
+@harvest_app.command("x")
+def harvest_x(
+    query: list[str] = typer.Option(None, "--query", "-q", help="Repeatable; default is harvest.x_queries"),
+    per_query: int = typer.Option(20, help="Posts per search"),
+    fresh: bool = typer.Option(False, help="Bypass the 24h cache"),
+) -> None:
+    """Hiring posts on X (throwaway session, capped) -> companies with the post as their hiring record."""
+    _setup_logging()
+    from jobhunter import harvest
+
+    _echo(harvest.admit_x(query or None, per_query=per_query, fresh=fresh).as_dict())
+
+
+@harvest_app.command("probe")
+def harvest_probe(limit: int = typer.Option(None), concurrency: int = typer.Option(6)) -> None:
+    """Find each new company's public ATS board. A live board = hiring verified."""
+    _setup_logging()
+    from jobhunter import harvest
+
+    _echo(harvest.probe_ats(limit=limit, concurrency=concurrency))
+
+
+@harvest_app.command("roles")
+def harvest_roles(
+    limit: int = typer.Option(None),
+    all_boards: bool = typer.Option(False, "--all", help="Re-read boards that already have jobs"),
+) -> None:
+    """Every open role from each discovered board, through the normal relevance and location gates."""
+    _setup_logging()
+    from jobhunter import harvest
+
+    _echo(harvest.scrape_roles(limit=limit, only_without_jobs=not all_boards))
+
+
+@harvest_app.command("facts")
+def harvest_facts(limit: int = typer.Option(60, help="Companies to look up today (one Exa search each, inside exa_daily_cap)")) -> None:
+    """Company facts from Exa's company index — what they do, headcount, HQ, founded, round — for companies with roles."""
+    _setup_logging()
+    from jobhunter import enrich
+    from jobhunter.research import web
+
+    res = enrich.facts_pending(limit=limit)
+    _echo({"companies": len(res), "described": sum(1 for r in res if r.get("description")),
+           "team": sum(1 for r in res if r.get("team_size")), "funding": sum(1 for r in res if r.get("funding")),
+           "errors": sum(1 for r in res if r.get("error")), "exa": web.exa_budget()})
+
+
+@harvest_app.command("story")
+def harvest_story(
+    limit: int = typer.Option(300, help="Companies to read tonight"),
+    what: str = typer.Option("story", help="'description' for unread sites, 'story' for the About-page origin"),
+) -> None:
+    """Read each company's own site (home + About) for description, origin story, funding, valuation, team. No Exa."""
+    _setup_logging()
+    from jobhunter import enrich
+
+    res = enrich.enrich_pending(limit=limit, use_search=False, missing=what)
+    _echo({"companies": len(res), "described": sum(1 for r in res if r.get("description")),
+           "story": sum(1 for r in res if r.get("story")), "funding": sum(1 for r in res if r.get("funding")),
+           "valuation": sum(1 for r in res if r.get("valuation_usd_m")), "errors": sum(1 for r in res if r.get("error"))})
+
+
+@harvest_app.command("people")
+def harvest_people(
+    limit: int = typer.Option(200, help="How many companies to search this run"),
+    tiers: str = typer.Option("tier1,tier2,prospect,unknown", help="Comma-separated, best first"),
+    any_roles: bool = typer.Option(False, "--any", help="Also companies with no scraped roles yet"),
+) -> None:
+    """Who could refer us — the free waterfall (GitHub, site, pattern) over fitting companies, best tier first."""
+    _setup_logging()
+    from jobhunter import harvest
+
+    _echo(harvest.find_people(limit=limit, tiers=tuple(t.strip() for t in tiers.split(",") if t.strip()),
+                              require_roles=not any_roles))
+
+
+@harvest_app.command("status")
+def harvest_status() -> None:
+    """How many different companies fit, and how far each has got."""
+    from jobhunter import harvest
+
+    _echo(harvest.status())
+
+
+@harvest_app.command("run")
+def harvest_run(
+    target: int = typer.Option(500, help="How many different fitting companies we are after"),
+    yc_limit: int = typer.Option(None),
+    exa: bool = typer.Option(True, help="Top up from Exa when YC alone falls short"),
+) -> None:
+    """The whole scrape: companies -> roles + hiring proof -> description, story, pay (Pay Power) -> people who can refer."""
+    _setup_logging()
+    from jobhunter import harvest
+
+    _echo(harvest.run(target=target, yc_limit=yc_limit, exa=exa))
+
+
+# ---------------------------------------------------------------- people
+
+people_app = typer.Typer(
+    add_completion=False,
+    help="People targeting — who at a company can actually refer us, best first",
+)
+app.add_typer(people_app, name="people")
+
+
+@people_app.command("classify")
+def people_classify(
+    all_: bool = typer.Option(False, "--all", help="Re-classify everyone, not just the unlabelled"),
+    model: bool = typer.Option(False, help="Send the residue the rules can't place to `cheap`"),
+    limit: int = typer.Option(None),
+) -> None:
+    """Label every contact: founder · senior engineer · engineer · EM · tech HR · recruiter."""
+    _setup_logging()
+    from jobhunter.contacts import roles
+
+    stats = roles.classify_contacts(limit=limit, only_missing=not all_, use_model=model)
+    scanned = stats.pop("scanned", 0)
+    calls = stats.pop("model_calls", 0)
+    typer.echo(f"  {scanned} contacts, {calls} model call(s)")
+    for key in sorted(stats, key=lambda k: roles.RANKS.get(k, 9)):
+        typer.echo(f"    {roles.RANKS.get(key, 9)} {key:16} {stats[key]}")
+
+
+@people_app.command("queue")
+def people_queue(
+    company_id: int = typer.Option(None, help="Only this company"),
+    limit: int = typer.Option(25),
+    json_: bool = typer.Option(False, "--json"),
+) -> None:
+    """The referral queue: who to ask first, and why we think they can refer."""
+    _setup_logging()
+    from jobhunter.contacts import roles
+
+    rows = roles.referral_queue(company_id=company_id, limit=limit)
+    if json_:
+        _echo(rows)
+        return
+    for r in rows:
+        typer.secho(f"  {r['rank']} {r['label'] or r['role_class']}", fg=typer.colors.CYAN, nl=False)
+        typer.echo(f" — {r['name'] or 'unnamed'} <{r['email'] or 'no address'}> [{r['confidence']}]")
+        if r["evidence"]:
+            typer.echo(f"      read from: {r['evidence']}")
 
 
 if __name__ == "__main__":

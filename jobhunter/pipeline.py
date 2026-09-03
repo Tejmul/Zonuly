@@ -147,6 +147,15 @@ def upsert_company(session: Session, job: RawJob) -> Company:
         company.ats_slug = job.ats_slug
     if job.github_org and not company.github_org:
         company.github_org = job.github_org
+    if not company.hiring_claim_url:
+        # the first posting we saw is the hiring post on record: a person on HN, or
+        # the company's own board. Kept until something better (a named X post) lands.
+        source = job.extra.get("post_source") or ("ats" if job.ats else job.source)
+        company.hiring_claim = job.title
+        company.hiring_claim_url = job.url
+        company.hiring_claim_by = job.extra.get("posted_by")
+        company.hiring_claim_source = source
+        company.hiring_claim_at = job.posted_at
     session.flush()
     return company
 
@@ -189,6 +198,11 @@ def persist(jobs: list[RawJob], stats: ScrapeStats) -> ScrapeStats:
                 ).first()
 
             sal = norm.parse_salary(j.salary_raw, j.description)
+            # internship -> PPO is the route most target companies hire freshers by, so
+            # the stipend and the conversion package are read at scrape time and become
+            # the evidence company grading runs on (jobhunter/targeting.py).
+            pay = norm.parse_pay(j.salary_raw, j.description)
+            intern = norm.is_internship(j.title, j.description)
 
             if existing:
                 # refresh volatile fields; never clobber scoring work
@@ -204,6 +218,11 @@ def persist(jobs: list[RawJob], stats: ScrapeStats) -> ScrapeStats:
                     existing.salary_raw = sal.raw
                     existing.salary_extracted = True
                 existing.company_id = existing.company_id or company.id
+                existing.is_internship = intern
+                existing.is_senior = norm.is_senior(j.title)
+                existing.remote_anywhere = existing.remote_anywhere or norm.remote_anywhere(j.location, j.description)
+                existing.stipend_inr_month = existing.stipend_inr_month or pay.stipend_inr_month
+                existing.ppo_lpa = existing.ppo_lpa or pay.ppo_lpa
                 session.add(existing)
                 stats.updated += 1
                 continue
@@ -225,6 +244,11 @@ def persist(jobs: list[RawJob], stats: ScrapeStats) -> ScrapeStats:
                     salary_raw=sal.raw or j.salary_raw,
                     currency=sal.currency,
                     salary_extracted=sal.ok(),
+                    is_internship=intern,
+                    is_senior=norm.is_senior(j.title),
+                    remote_anywhere=norm.remote_anywhere(j.location, j.description),
+                    stipend_inr_month=pay.stipend_inr_month,
+                    ppo_lpa=pay.ppo_lpa,
                 )
             )
             stats.inserted += 1

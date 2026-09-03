@@ -1,0 +1,28 @@
+# Never bake these into an image: secrets, the live database, local envs, caches.
+.env
+.env.*
+secrets/
+jobhunter.db
+jobhunter.db-*
+*.sqlite*
+
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# The dashboard is its own repo and its own image (Next.js); not part of this one.
+dashboard/
+
+.git/
+.github/
+.claude/
+.DS_Store
+*.log
+
+# Design documents and generated views are not runtime inputs.
+system docs/
+knowledge/graph.html
+knowledge/BRIEF.md

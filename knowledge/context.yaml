@@ -315,6 +315,31 @@ stages:
 
 # ------------------------------------------------------------------ modules (layering: nothing imports upward)
 modules:
+  - id: module:jobhunter.targeting
+    label: targeting.py
+    path: jobhunter/targeting.py
+    layer_order: 1
+    summary: Company grading — hyped exclusion, funding window, the ₹50k stipend bar, the tier1/tier2/prospect bands. No network.
+  - id: module:jobhunter.enrich
+    label: enrich.py
+    path: jobhunter/enrich.py
+    layer_order: 2
+    summary: Fills the registry from the research layer — what a company does, who funded it — then re-grades it.
+  - id: module:jobhunter.hiring_verify
+    label: hiring_verify.py
+    path: jobhunter/hiring_verify.py
+    layer_order: 2
+    summary: Corroborates a hiring claim against the company's own ATS board or careers page; marks the unbacked ones not_authorized.
+  - id: module:jobhunter.contacts.roles
+    label: contacts/roles.py
+    path: jobhunter/contacts/roles.py
+    layer_order: 2
+    summary: Role classification and referral ranking — founder · senior engineer · engineer · EM · tech HR · recruiter.
+  - id: module:jobhunter.kg.hunt
+    label: kg/hunt.py
+    path: jobhunter/kg/hunt.py
+    layer_order: 3
+    summary: The graph as the decision surface — why <company>, shortlist, expand via investors, guard, audit.
   - id: module:jobhunter.db
     label: db.py
     path: jobhunter/db.py
@@ -379,6 +404,12 @@ modules:
     layer_order: 2
     summary: APScheduler — daily scrape+score cycle, hourly reply poll; sequential on purpose (8 GB).
     depends_on: [module:jobhunter.pipeline, module:jobhunter.matcher, module:jobhunter.outreach, module:jobhunter.kg]
+  - id: module:jobhunter.research
+    label: research/
+    path: jobhunter/research/
+    layer_order: 1
+    summary: Web-research backends — Exa/mcporter search, Jina Reader, GitHub, Reddit, YouTube; evidence-linked extraction; no DB writes.
+    depends_on: [module:jobhunter.llm]
   - id: module:jobhunter.kg
     label: kg/
     path: jobhunter/kg/
@@ -443,16 +474,256 @@ tools:
   - {id: tool:pydantic-ai, label: "pydantic-ai-slim[openai] — the agent loop (typed I/O, tools, validation retries)", tier: 0, cost: free, status: gap, used_by: [feature:agent-runtime-capabilities]}
   - {id: tool:brave-search, label: "Brave Search API — free tier ~2,000 queries/month", tier: 1, cost: free tier, status: gap, used_by: [feature:research-rig-cited]}
   - {id: tool:telegram-bot, label: Telegram Bot API — review cards and notifications, tier: 1, cost: free, status: gap, used_by: [feature:telegram-review-surface, feature:calendar-events]}
-  - {id: tool:wikimedia-dbpedia, label: "Wikimedia REST + DBpedia SPARQL — company facts (HQ, founded, headcount) in bulk", tier: 1, cost: free, keyless: true, rate: "Wikimedia 500/hr documented; DBpedia Crawl-delay 10", status: bench, note: "CHOKEPOINTS §4.2; add when company enrichment needs it"}
-  - {id: tool:companies-house, label: "UK Companies House API — company legitimacy, officers, filings", tier: 1, cost: free key, status: bench, note: "for UK targets; is this a real funded company"}
-  - {id: tool:opencorporates, label: "OpenCorporates — company registry lookups across jurisdictions", tier: 1, cost: free tier, status: bench, note: "DE/EU legitimacy checks"}
-  - {id: tool:product-hunt, label: "Product Hunt API — recently launched startups", tier: 1, cost: free key, status: bench, note: "another feed into the funding/launch → registry path"}
+  - {id: tool:wikimedia-dbpedia, label: "Wikimedia REST + DBpedia SPARQL — company facts (HQ, founded, headcount) in bulk", tier: 1, cost: free, keyless: true, rate: "Wikimedia 500/hr documented; DBpedia Crawl-delay 10", status: bench, note: "CHOKEPOINTS §4.2; add when company enrichment needs it", related: [feature:staging-audit-promote]}
+  - {id: tool:companies-house, label: "UK Companies House API — company legitimacy, officers, filings", tier: 1, cost: free key, status: bench, note: "for UK targets; is this a real funded company", related: [feature:region-currency-targeting]}
+  - {id: tool:opencorporates, label: "OpenCorporates — company registry lookups across jurisdictions", tier: 1, cost: free tier, status: bench, note: "DE/EU legitimacy checks", related: [feature:region-currency-targeting]}
+  - {id: tool:product-hunt, label: "Product Hunt API — recently launched startups", tier: 1, cost: free key, status: bench, note: "another feed into the funding/launch → registry path", related: [feature:funding-feed-registry]}
+  - {id: tool:exa-mcporter, label: "Exa semantic search via mcporter (free tier 1000/mo; EXA_API_KEY HTTP fallback)", tier: 1, cost: free tier, status: built, used_by: [feature:agent-reach-research-layer]}
+  - {id: tool:jina-reader, label: "Jina Reader (r.jina.ai) — URL to clean text", tier: 1, cost: free, keyless: true, status: built, used_by: [feature:agent-reach-research-layer]}
   - {id: tool:linkedin-login-automation, label: "Logged-in LinkedIn automation (Phantombuster, Dripify, cookie actors)", tier: 4, cost: "your account", status: forbidden, related: [constraint:no-linkedin-automation]}
   - {id: tool:paid-email-finders, label: "Findymail / Anymailfinder / MillionVerifier / Apollo / Clay", tier: 2, cost: "₹3–5k/month", status: dropped, used_by: [feature:paid-email-finders-verification]}
   - {id: tool:saas-infra, label: "Neo4j / Kùzu / Postgres / Temporal / LiteLLM / Nango / Trigger.dev / Slack / Brave", tier: 0, cost: various, status: dropped, related: [decision:d4-deterministic-orchestrator, decision:d9-no-sqlite-vec, decision:d10-kg-in-sqlite]}
 
 # ------------------------------------------------------------------ features: every idea any draft proposed, and its fate
 features:
+  # ---- company + people targeting (built 2026-09-03)
+  - id: feature:underrated-only
+    label: Underrated companies only — hyped names rejected by name
+    summary: >
+      A household name is disqualified before any other rule runs: thousands of applications
+      are already pending there, people who were selected are on waitlists, and the interview
+      is DSA-gated. 120 names in config.yaml targeting.hyped, matched word-wise so "Amazon"
+      is excluded and "Amazonia Labs" is not. Proved on the real registry — 24 of 263
+      companies rejected as hyped, including Databricks, Stripe, OpenAI, CRED and PhonePe.
+    status: built
+    stage: stage:filter
+    serves: [constraint:single-user-laptop]
+    implemented_in: [module:jobhunter.targeting]
+  - id: feature:stipend-bar-50k
+    label: The ₹50k/month internship stipend bar
+    summary: >
+      Target companies hire freshers through a paid internship that converts to a PPO, so the
+      stipend predicts the conversion package: a company that will not pay ₹50k/month for an
+      intern does not pay ₹30 LPA on conversion. Under the bar is a hard reject. Internships
+      are no longer excluded by title (normalize.py) and the stipend is read at scrape time
+      with the sentence it came from. NOT YET BINDING ON REAL DATA — no enabled source carries
+      internship postings; see gap:internship-source.
+    status: partial
+    stage: stage:filter
+    implemented_in: [module:jobhunter.normalize, module:jobhunter.targeting, module:jobhunter.pipeline]
+  - id: feature:company-tiers
+    label: tier1 / tier2 / prospect — the queue order
+    summary: >
+      PPO or full-time package ≥ ₹30 LPA is tier1; ₹24–30 LPA is tier2 ("category two");
+      below ₹24 LPA is reject. Silence is not a rejection — most postings never state a PPO,
+      so a company with no pay figure that employs engineers AND has hiring confirmed on its
+      own careers page grades `prospect` and stays in the queue. Every verdict carries the
+      rule that produced it in company.tier_reason.
+    status: built
+    stage: stage:filter
+    implemented_in: [module:jobhunter.targeting]
+  - id: feature:global-region-targeting
+    label: US · UK · Germany · Netherlands · EU · India · remote
+    summary: >
+      The currency gap is the thesis, so the hunt is global. Every non-India region clears
+      ₹30 LPA automatically in local terms and carries a floor of 0; India carries MOTIV's
+      explicit ₹30 LPA fresher floor as an annotation on the tier. Replaces the old
+      India+remote allowlist as the targeting geography (search.locations_ok still gates scrape).
+    status: partial
+    stage: stage:filter
+    implemented_in: [module:jobhunter.targeting]
+  - id: feature:hiring-authenticity
+    label: not_authorized — a hiring claim their own site does not back
+    summary: >
+      A founder posting "we're hiring" daily on X is not evidence; an aggregator listing a
+      filled role is not evidence. The company's own ATS board (Greenhouse/Lever/Ashby, with
+      its role titles enumerated) or its careers page has to agree. Verdicts — verified,
+      role_missing, not_authorized, unreachable — with the company's own sentence quoted.
+      An explicit "we do not currently have any open positions" is the strongest disconfirmation.
+      Proved on real companies: Conservation Metrics is not_authorized against a live HN posting.
+    status: built
+    stage: stage:filter
+    implemented_in: [module:jobhunter.hiring_verify]
+  - id: feature:bulk-company-harvest
+    label: harvest.py — N different companies that fit, then their boards, roles and grade; YC directory + Exa company search behind one admission gate
+    summary: |
+      MOTIV §4 step 1 at volume. The open yc-oss mirror of the YC directory (one-liner, regions,
+      batch, team size) and Exa `category: company` searches (25 sites a call, inside
+      research.exa_daily_cap) feed an admission gate that applies targeting's rules before a row
+      exists — hyped names, regions outside harvest.regions, teams over max_team are skipped.
+      Then ATS probe (a live board = hiring verified), roles through pipeline.persist, grade.
+      First run 2026-09-03: 376 → 1,879 companies, 1,826 fitting, 541 with a live board, 479 with
+      relevant roles (1,271 of 9,226 read), tier1 220. `harvest run|yc|exa|probe|roles|people|status`.
+    status: built
+    stage: stage:scrape
+    serves: [constraint:free-tier, constraint:student-budget, guarantee:no-fabrication]
+  - id: feature:hiring-post-provenance
+    label: The hiring post on record — who posted it, where, and the link — on every company
+    summary: |
+      "Where did you get this?" answered with a name and a link. company.hiring_claim_by /
+      hiring_claim_source / hiring_claim_at beside hiring_claim and hiring_claim_url; filled by
+      HN (the poster's username), the YC directory, the company's own board, and X posts when
+      they land. Shown on the Companies page. Backfilled 2026-09-03: 1,581 of 1,879 companies.
+    status: built
+    stage: stage:scrape
+    serves: [guarantee:no-fabrication, feature:hiring-authenticity]
+  - id: feature:x-public-post-reader
+    label: X without a session — single posts read from the public embed endpoint; discovery via site:x.com web search
+    summary: |
+      Measured 2026-09-03: Exa does not index x.com (its tweet category is retired), Jina's
+      search needs a paid key, the X API's search tier is ~$200/month. cdn.syndication.twimg.com
+      /tweet-result and the guest-token GraphQL TweetResultByRestId return a single post's text,
+      date and author with no login. Discovery stays keyless via DuckDuckGo `site:x.com` (fragile:
+      bot-challenged on the second request) — `research x`. Search/timelines are login-gated; a
+      throwaway session was supplied but the logged-in Playwright intercept is blocked by the
+      Claude Code permission classifier, so it is unbuilt. Records only; claims for hiring_verify.
+    status: partial
+    stage: stage:scrape
+    serves: [constraint:no-linkedin-automation, constraint:free-tier]
+  - id: feature:atlas-market-map
+    label: Atlas as a market map — industry-chain layers, market segments as nodes, chokepoints = companies ready to be asked
+    summary: |
+      Redrawn 2026-09-03 after Tejmul said the pipeline-bucket nodes ("Pay not stated yet: 1,550",
+      "Python: 225") made no sense. jobhunter/segments.py files every company under one segment
+      (Fintech & payments, LLM inference & AI infrastructure, Dev tools…) on five layers
+      (infrastructure → AI models & tooling → developer tools → applications → services) from its
+      own description and YC industries — rules, first match wins, verticals before generic words,
+      no model, "Unclassified" shown as such. network.build() sizes nodes by fitting companies and
+      marks a CHOKEPOINT where at least one company is a *bet* (hiring proven on its own site + a
+      fresher role + remote-from-anywhere or India + a lead with a usable email) and a BOTTLENECK
+      where near-bets lack only a lead or the hiring check. Links = a company's secondary segments.
+      Click a node → its companies, bets first, each saying what it is missing.
+    status: built
+    stage: stage:platform
+    serves: [constraint:send-cap-25, guarantee:no-fabrication]
+    replaces: [feature:atlas-funnel]
+  - id: feature:remote-anywhere-signal
+    label: job.remote_anywhere — the posting itself says "work from anywhere / no visa"; companies with it rank first
+    summary: |
+      MOTIV §2 only pays at companies that hire across borders without sponsorship. normalize.
+      remote_anywhere() reads the posting's own words (work from anywhere, remote — worldwide,
+      timezone-agnostic, no visa sponsorship required…); the Companies page and the atlas put those
+      companies first; Exa discovery queries target the phrasing. Senior roles are kept but flagged
+      (job.is_senior) — freshers only, senior never chased (search.exclude_senior stays off).
+    status: built
+    stage: stage:filter
+    serves: [problem:pay-gap-geographic]
+  - id: feature:pay-basis-from-funding
+    label: How we decide a company can pay a fresher ₹30 L+ when nothing is stated — funding as the proxy, labelled as an estimate
+    summary: |
+      Tejmul, 2026-09-03: "based on valuation we decide." Order of evidence: (1) pay stated in a
+      posting; (2) the company's own site / About page and press, read for funding, valuation,
+      team and the origin story (one `cheap` call, every field with its quoted words, dropped
+      without them); (3) the estimate — targeting.funding_pay_basis(): US/UK/EU HQ with seed ≥ $3M
+      or Series A+ inside 30 months → funding-strong ("able to pay a $40k remote engineer without
+      noticing"); a YC batch inside 30 months with a team ≥ 10 → funding-strong (a seed company
+      that hired ten people has raised past the batch cheque); pre-seed / < $2M / stale → weak;
+      India never lifts above weak without a stated figure (rupee pay does not follow dollar
+      rounds). company.pay_basis + pay_basis_evidence are shown on the page under "Can they pay a
+      fresher ₹30 L+?" and never as a figure the company stated. Glassdoor is not scraped (login
+      wall, ToS); the model's memory is never a source for a number.
+    status: built
+    stage: stage:filter
+    serves: [guarantee:no-fabrication, problem:pay-gap-geographic]
+  - id: feature:pay-power-benchmark
+    label: PAY POWER — the visible 0–100 benchmark for "how easily can this company pay a fresher ₹30–40 L"
+    summary: |
+      Tejmul, 2026-09-03: "create a benchmark like valuation capitalisation and keep it visible."
+      targeting.pay_power(): pays 100 (a posting states ≥ ₹30 L) · deep pockets 85 ($10M+ inside
+      24 months, or Series A+ inside 30 months, or valuation ≥ $50M) · funded 65 ($3–10M inside 30
+      months, or YC batch inside 30 months with team ≥ 10) · thin 30 · unknown 0. India never above
+      thin without a stated number. Money per head (raised ÷ team) shown beside it. Thresholds in
+      config.yaml targeting.pay_power; the bands are printed on the Companies page and on every
+      company page next to the score and the sentence that decided it. A later round no longer
+      rejects a company (Revenuecat: Series C → deep pockets 85, prospect); "underrated" is now
+      hype + team ≤ 200 only. First grade: pays 243 · deep 6 · funded 103 · thin 410 · unknown 1,233.
+      Parser fixes the same day: "401(k)" was read as a $401k salary (34 jobs, 7 companies), a
+      homepage "$100,000" as a $100,000M round (3 companies) — both cleaned and guarded.
+    status: built
+    stage: stage:filter
+    serves: [guarantee:no-fabrication, problem:pay-gap-geographic]
+    replaces: [feature:pay-basis-from-funding]
+  - id: feature:company-story
+    label: company.story / valuation / team_size — the backstory read from their own words (About page, YC long description)
+    summary: |
+      Sanus-style diligence for every company: where it started, who, what since; valuation only
+      when a source states it; team size. YC long descriptions give 1,251 stories for free;
+      enrich.py's own-site pass (no Exa) reads home + About for the rest. Shown on the company
+      page as "The story" with the URL it was read from.
+    status: built
+    stage: stage:research
+    serves: [guarantee:no-fabrication]
+  - id: feature:referral-role-classes
+    label: Who can actually refer us — role classes and ranks
+    summary: >
+      Founder (1) · senior/staff/founding engineer (2) · SDE 1-3 and AI/ML engineer (3) ·
+      engineering manager (4) · technical HR / technical recruiter (5) · general HR (6) ·
+      everyone else (9). Keyword rules first with the matched text kept as evidence, the
+      residue optionally to the `cheap` OpenRouter alias, a shared mailbox (careers@, hr@)
+      read as a role in itself. No alumni/college targeting — that network is already known
+      personally. Ties break on a verified address over a guessed one.
+    status: built
+    stage: stage:contacts
+    implemented_in: [module:jobhunter.contacts.roles]
+  - id: feature:company-knowledge-in-graph
+    label: Every company in the graph with what it does, its stipend and its PPO
+    summary: >
+      Company nodes carry description, tier and the reason for it, region, stipend and PPO
+      with their evidence sentences, funding stage/amount/investors, and the hiring verdict
+      with the quote behind it. tier: and region: nodes make "every tier1 company in Germany"
+      a traversal rather than a scan; contacts link to role: nodes by class.
+    status: built
+    stage: stage:platform
+    implemented_in: [module:jobhunter.kg, module:jobhunter.enrich]
+  - id: feature:graph-as-decision-surface
+    label: The graph answers the questions, it does not just mirror the tables
+    summary: >
+      `kg why <company>` assembles the whole decision by traversal — what they do,
+      funding and investors, tier and why, whether their own careers page backs the
+      hiring, which open roles ask for skills we have, who can refer us, and whether we
+      are allowed to write to them — ending in one verdict: write / wait / verify / skip.
+      `kg shortlist` ranks targets on all of it at once; `kg guard` answers MOTIV §6's
+      cooldown from the email edges; `kg expand` walks company → investor → company.
+    status: built
+    stage: stage:platform
+    implemented_in: [module:jobhunter.kg.hunt]
+  - id: feature:job-skill-edges
+    label: job -REQUIRES-> skill, the free explainable half of matching
+    summary: >
+      Skill nodes previously linked only to profile:me, which made them labels rather
+      than a graph. Every job is now matched against the profile's skills in one pass and
+      linked — 3,068 edges over 1,237 jobs — so profile:me -HAS_SKILL-> skill <-REQUIRES-
+      job is a path. "Which of their roles want what I have" and "which of my skills does
+      no target job ask for" are both traversals, at zero model cost.
+    status: built
+    stage: stage:score
+    implemented_in: [module:jobhunter.kg]
+  - id: feature:employment-evidence
+    label: An address on another company's domain is evidence AGAINST employment
+    summary: >
+      Every WORKS_AT edge carries confirmed / unproven / contradicted with the reason.
+      Found by it on the real data: Affirm's GitHub org carries forked Apache Flink
+      repositories, so commit mining filed twenty Flink committers on @confluent.io as
+      Affirm employees — 13 of the 25 stored contacts are contradicted. The verdict in
+      `kg why` refuses to recommend a contradicted contact and states "employment
+      unproven" when the address is personal, so a draft can never claim what we cannot
+      show. This is MOTIV §6 "nothing is invented" enforced structurally rather than by
+      prompt.
+    status: built
+    stage: stage:contacts
+    serves: [guarantee:no-fabrication, guarantee:confidence-labels]
+    implemented_in: [module:jobhunter.kg, module:jobhunter.kg.hunt]
+  - id: feature:graph-audit
+    label: kg audit — contradictions between what different parts of the graph believe
+    summary: >
+      Each table is individually consistent; the relationships are what go wrong, and
+      that is what a graph can see and a row cannot. Checks: contacts who do not work at
+      the company they are filed under, drafts against a hiring claim we disproved,
+      rejected companies we spent model calls scoring, targets nobody has hiring-checked,
+      and skills no target job asks for. First real run: 13 / 108 / 5 / 6.
+    status: built
+    stage: stage:platform
+    implemented_in: [module:jobhunter.kg.hunt]
   # ---- platform
   - id: feature:python-pipeline-nextjs-ui
     label: Python pipeline + Next.js UI over REST
@@ -493,7 +764,7 @@ features:
   - id: feature:single-llm-client-seam
     label: One thin llm.py — the only place a model is called
     summary: Chat, JSON mode with parse-retry, embeddings. Swapping to a bigger local model or a hosted one is a config line. Pull this seam first if reply rates are bad.
-    status: partial
+    status: built
     stage: stage:platform
     proposed_by: [arch:plan, arch:final]
     serves: [guarantee:data-stays-local, constraint:local-only]
@@ -1189,7 +1460,7 @@ features:
   - id: feature:openrouter-model-layer
     label: OpenRouter-only model layer — aliases cheap / judge / writer, num_retries 0, think-stripping, a cost row per call, budget gate, no key → stage does not run
     summary: Replaces Ollama entirely. Model ids live only in config; call sites use aliases; the conductor owns retry; today's date injected into every prompt.
-    status: gap
+    status: built
     stage: stage:platform
     proposed_by: [arch:gtm, arch:chokepoints, arch:plan-v3]
     serves: [constraint:no-local-model, constraint:student-budget, constraint:approval-first]
@@ -1197,7 +1468,7 @@ features:
   - id: feature:lexical-fit-prefilter
     label: Model-free lexical fit — rarity-weighted vocabulary overlap between resume and JD, stemmed, stop-listed
     summary: CHOKEPOINTS fit.py applied to jobs. Costs nothing, runs over every posting, replaces the embedding prefilter that needed a local embedder.
-    status: gap
+    status: built
     stage: stage:embed
     proposed_by: [arch:chokepoints, arch:plan-v3]
     serves: [constraint:student-budget, constraint:no-local-model]
@@ -1280,7 +1551,7 @@ features:
   - id: feature:research-rig-cited
     label: Brave Search + politeness-core fetch + cheap model → observations and facts that each carry an artifact span; uncited items dropped; source quality classified separately
     summary: CHOKEPOINTS research_brave.py and gtm-arch web_search/web_fetch (SSRF-guarded, no redirects). The drafter never receives an uncited observation.
-    status: gap
+    status: partial
     stage: stage:research
     proposed_by: [arch:chokepoints, arch:gtm, arch:orchestration]
     serves: [guarantee:no-fabrication, constraint:free-tier]
@@ -1323,8 +1594,51 @@ features:
     serves: [constraint:approval-first, constraint:no-local-model]
     replaces: [feature:layering-lint]
 
+  - id: feature:agent-reach-research-layer
+    label: Agent-Reach research layer — web search (Exa via mcporter), Jina Reader, GitHub, Reddit, YouTube; ordered health-checked backends; evidence_quote on every extracted field
+    summary: jobhunter/research/, /api/research/*, `research` CLI. Standalone by design — returns records, no DB writes, no drafting. Agent Reach itself is an installer/doctor, not vendored; only its backend-contract idea is kept. See system docs/AGENT-REACH-INTEGRATION.md.
+    status: built
+    stage: stage:research
+    proposed_by: [arch:plan-v3]
+    serves: [guarantee:no-fabrication, constraint:free-tier]
+    implemented_in: [module:jobhunter.research]
 # ------------------------------------------------------------------ decisions (FINAL-PLAN §3 + this session)
 decisions:
+  - id: decision:d22-underrated-only
+    label: D22 — underrated companies only, hyped names rejected by name
+    summary: >
+      Tejmul, 2026-09-03: "Don't target companies which every person would know." The hyped
+      list is config, not code, and runs before every other rule. Consequence — well-known
+      but not-listed companies (Vercel, Ramp, Scale AI) still pass on name alone; the funding
+      ceiling ($400M) is what is meant to catch them, and it needs funding data to do so.
+    adopts: [feature:underrated-only]
+  - id: decision:d23-stipend-predicts-ppo
+    label: D23 — the ₹50k/month stipend is a hard bar because it predicts the PPO
+    summary: >
+      Tejmul, 2026-09-03: "If the company is not giving more than 50, I don't think that
+      company will give more than 24 or 30 plus." So the stipend is not a perk to weigh, it
+      is a gate to fail. Internships stop being excluded by title as a consequence.
+    adopts: [feature:stipend-bar-50k]
+  - id: decision:d24-tier2-is-24-to-30
+    label: D24 — tier1 ≥ ₹30 LPA, tier2 ₹24–30 LPA, reject below
+    summary: >
+      "Category two" companies are kept and queued behind tier1, never dropped. Below ₹24 LPA
+      the company stays in the database but is never queued.
+    adopts: [feature:company-tiers]
+  - id: decision:d25-silence-is-not-a-no
+    label: D25 — no stated PPO is not a rejection; engineers + verified hiring make it a prospect
+    summary: >
+      Tejmul, 2026-09-03: "Most job posts don't say there is a PPO available. Once you see
+      software engineers over there and they're hiring actively, you can also add that company."
+      Hence the `prospect` tier, which depends on the hiring verifier having run.
+    adopts: [feature:company-tiers, feature:hiring-authenticity]
+  - id: decision:d26-no-alumni-targeting
+    label: D26 — no NST/alumni targeting
+    summary: >
+      Tejmul, 2026-09-03: the first NST batch is small and already known personally, so a
+      machine adds nothing. The people layer targets roles, not schools, and looks globally.
+    adopts: [feature:referral-role-classes]
+    rejects: []
   - id: decision:d1-python
     label: D1 — Python, not TypeScript
     summary: The value of the system sits in the scraping, PDF and email ecosystem, which is Python's. The frontend stays Next.js over REST. Consequence — the portal's layering lint doesn't port; the rule holds by convention.
@@ -1444,6 +1758,45 @@ decisions:
 
 # ------------------------------------------------------------------ gaps, in build order (FINAL-PLAN §10–11)
 gaps:
+  - id: gap:contact-employment-false-positives
+    label: Commit mining files non-employees as employees — 13 of 25 contacts are contradicted
+    summary: >
+      github_miner walks an org's repositories, but a fork carries the upstream project's
+      committers: Affirm's forked Apache Flink repos produced twenty @confluent.io people
+      filed as Affirm staff, and GitLab's produced three more on personal domains. The
+      graph now labels these `contradicted` and refuses to recommend them, which stops the
+      false claim — but the miner still creates them. It should skip forked repositories,
+      weight commits by recency and count, and prefer people whose address is on the
+      company domain.
+    builds: [feature:employment-evidence]
+  - id: gap:investor-edges-have-no-data
+    label: company -FUNDED_BY-> investor is built but 0 edges exist
+    summary: >
+      `kg expand` walks company → investor → company to grow the registry with companies
+      that are underrated by construction. The sync writes the edges, but no company has
+      investor data yet: enrichment reads only the company's own site, which rarely states
+      a funding round in a sentence the extractor accepts. Blocked on the same thing as
+      gap:funding-data-for-underrated — a search backend or the funding RSS feeds.
+    builds: [feature:graph-as-decision-surface]
+  - id: gap:internship-source
+    label: No enabled source carries internship postings, so the stipend bar never binds
+    summary: >
+      Greenhouse, Lever, Ashby, HN, RemoteOK, WeWorkRemotely and YC are full-time and
+      remote-senior heavy. A 601-posting scrape on 2026-09-03 produced zero internships and
+      zero stipend figures across 1,237 stored jobs — the four "intern" title matches are
+      "Internal" and "International". The ₹50k bar and the PPO extraction are built, unit-proved
+      on fixtures and wired into scrape and grading, but no real row exercises them until a
+      source that carries internships is enabled (Instahyre/Cutshort are Playwright-based and off;
+      Internshala and Wellfound are unbuilt).
+    builds: [feature:stipend-bar-50k]
+  - id: gap:funding-data-for-underrated
+    label: The $400M funding ceiling has no funding data to work with
+    summary: >
+      Without a web-search backend (no EXA_API_KEY, no mcporter) enrichment reads only the
+      company's own site, where funding is rarely stated in a sentence the extractor will
+      accept. So well-known-but-unlisted companies still grade tier1 on name alone. Needs
+      either the funding RSS feeds (feature:funding-feed-registry) or a search backend.
+    builds: [feature:underrated-only]
   - id: gap:16-permission-gate
     label: V3 #0 — Permission gate + ledgers (permissions.yaml, budgets.py, approval_request, action_log, agent_run, costs)
     priority: 0
@@ -1664,3 +2017,8 @@ notes:
     date: "2026-08-31"
     summary: Tejmul rejected v2 as "the old architecture with deltas" and ruled out Ollama (it wrecks the machine). v3 rebuilds on the three documents — OpenRouter-only aliases with ledgers and caps, pydantic-ai agents that can only propose, fact/draft proposals with thresholds, faithfulness and publish gates, politeness core + tick + staging/promote, Apify pin registry, Brave research rig, Telegram review cards, calendar syncToken flow. D18–D21 recorded; v2 gaps replaced by 13 numbered v3 steps awaiting approval. No app code changed.
     about: [arch:plan-v3, decision:d18-no-local-model, decision:d19-agents-propose-runtime-enforces, decision:d20-three-channel-scraping, decision:d21-telegram-review, constraint:no-local-model]
+  - id: note:2026-09-03-audit-and-requirements
+    label: 1:1 completion audit against MOTIV; REQUIREMENTS.md written; graph statuses synced to code
+    date: "2026-09-03"
+    summary: Audited after the OpenRouter + Agent-Reach commits. Roughly 51% of MOTIV's twelve steps built, ~35% proven — nothing past DRAFT has ever run because no Gmail OAuth credentials exist; zero emails sent. Built since last audit — openrouter.py (aliases, free_only, ₹ caps, cost ledger), fit.py lexical gate, llm.py adapter, jobhunter/research (Exa/Jina/GitHub/Reddit/YouTube, evidence-linked). Still missing — permission gate (v3 step 0), send ledger, proposals + faithfulness gates, roles, candidates, Telegram, calendar, tick/launchd, Apify, tests. Full detail in system docs/REQUIREMENTS.md.
+    about: [arch:plan-v3, feature:openrouter-model-layer, feature:lexical-fit-prefilter, feature:agent-reach-research-layer, decision:d18-no-local-model]

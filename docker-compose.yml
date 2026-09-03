@@ -1,0 +1,56 @@
+# ZoNuLy — one image, two ways to run it.
+#
+#   docker compose build                         # build the pipeline image
+#   docker compose run --rm cli doctor           # any `python scripts/run.py ...` command
+#   docker compose run --rm cli harvest status
+#   docker compose up -d api                     # FastAPI on :8000 with the scheduler
+#
+# State lives OUTSIDE the container, exactly where it lives today:
+#   ./jobhunter.db   the SQLite database (pipeline + knowledge graph)
+#   ./secrets/       Gmail OAuth client + token
+#   ./profile/       resume.pdf + profile.json
+#   ./.env           every credential (never copied into the image; see .dockerignore)
+#
+# Memory: the API + a scrape cycle stays well under 1 GB; the limits below are a
+# ceiling, not a reservation. There is no model runtime — OpenRouter only.
+
+services:
+  api:
+    build:
+      context: .
+      target: base
+    image: zonuly/jobhunter:local
+    env_file: .env
+    environment:
+      TZ: Asia/Kolkata
+    ports:
+      - "127.0.0.1:8000:8000"     # loopback only; the dashboard proxies to it
+    volumes:
+      - ./jobhunter.db:/app/jobhunter.db
+      - ./secrets:/app/secrets
+      - ./profile:/app/profile
+      - ./config.yaml:/app/config.yaml:ro
+      - ./companies.yaml:/app/companies.yaml:ro
+      - ./knowledge:/app/knowledge
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1.0
+
+  # One-shot commands with the same image and the same volumes.
+  cli:
+    image: zonuly/jobhunter:local
+    build:
+      context: .
+      target: base
+    env_file: .env
+    environment:
+      TZ: Asia/Kolkata
+    entrypoint: ["python", "scripts/run.py"]
+    volumes:
+      - ./jobhunter.db:/app/jobhunter.db
+      - ./secrets:/app/secrets
+      - ./profile:/app/profile
+      - ./config.yaml:/app/config.yaml:ro
+      - ./companies.yaml:/app/companies.yaml:ro
+      - ./knowledge:/app/knowledge
+    profiles: ["cli"]

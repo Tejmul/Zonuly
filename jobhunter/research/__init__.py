@@ -30,7 +30,7 @@ See `system docs/AGENT-REACH-INTEGRATION.md` for setup.
 
 from __future__ import annotations
 
-from jobhunter.research import backends, cache
+from jobhunter.research import backends, cache, web
 from jobhunter.research.agent import company as research_company
 from jobhunter.research.agent import (
     detect_ats,
@@ -56,6 +56,7 @@ from jobhunter.research.reddit import search as search_reddit
 from jobhunter.research.reddit import status as reddit_status
 from jobhunter.research.web import read as read_page
 from jobhunter.research.web import search as search_web
+from jobhunter.research.web import search_x
 from jobhunter.research.youtube import search as search_youtube
 from jobhunter.research.youtube import transcript as youtube_transcript
 
@@ -65,12 +66,14 @@ def doctor() -> dict:
     report = backends.doctor()
     report["reddit"] = reddit_status()
     report["cache"] = cache.stats()
+    report["exa_budget"] = web.exa_budget()
     return report
 
 
 __all__ = [
     # channels
     "search_web",
+    "search_x",
     "read_page",
     "search_github",
     "search_github_users",
