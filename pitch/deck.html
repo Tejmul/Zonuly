@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ZoNuLy — pitch</title>
+<style>
+  /* ------------------------------------------------------------------ tokens */
+  :root {
+    --paper: #f7f6f2; --surface: #ffffff; --ink: #14140f; --ink-2: #4a4a42; --ink-3: #8a8a80;
+    --line: #e4e2da; --accent: #c8452b; --accent-2: #1f5f8b; --ok: #2f7a4b;
+    --display: "Inter", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: var(--display); }
+  @page { size: 1280px 720px; margin: 0; }
+  .slide {
+    position: relative; width: 1280px; height: 720px; overflow: hidden; padding: 64px 72px;
+    background: var(--paper); page-break-after: always; break-after: page;
+  }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+  h1 { font-size: 64px; line-height: 1.02; letter-spacing: -.03em; margin: 18px 0 0; font-weight: 700; }
+  h2 { font-size: 40px; line-height: 1.08; letter-spacing: -.025em; margin: 14px 0 0; font-weight: 700; }
+  h3 { font-size: 20px; margin: 0 0 8px; letter-spacing: -.01em; }
+  p { font-size: 18px; line-height: 1.5; color: var(--ink-2); margin: 0; }
+  .lede { font-size: 24px; line-height: 1.4; color: var(--ink-2); max-width: 900px; margin-top: 22px; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .accent { color: var(--accent); }
+  .foot { position: absolute; left: 72px; right: 72px; bottom: 34px; display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: .06em; }
+  .rule { height: 1px; background: var(--line); margin: 26px 0; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px; }
+  .card p { font-size: 16px; }
+  .metric .v { font-family: var(--mono); font-size: 48px; font-weight: 600; letter-spacing: -.03em; line-height: 1; }
+  .metric .l { margin-top: 10px; font-size: 15px; color: var(--ink-2); }
+  .metric .s { margin-top: 6px; font-size: 13px; color: var(--ink-3); }
+  .tag { display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-2); background: var(--surface); }
+  .flow { display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; margin-top: 30px; }
+  .step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 14px; min-height: 168px; }
+  .step .n { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+  .step h4 { margin: 8px 0 6px; font-size: 16px; letter-spacing: -.01em; }
+  .step p { font-size: 13px; line-height: 1.4; }
+  .step.gate { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .step.gate h4 { color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+  .shot { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; box-shadow: 0 8px 30px rgba(0,0,0,.08); }
+  .shot img { display: block; width: 100%; height: auto; }
+  .quote { border-left: 3px solid var(--accent); padding-left: 16px; font-size: 15px; color: var(--ink-2); font-style: italic; }
+  .big { font-family: var(--mono); font-size: 120px; font-weight: 600; letter-spacing: -.05em; line-height: .95; }
+  .vs { display: grid; grid-template-columns: 1fr auto 1fr; gap: 28px; align-items: center; margin-top: 30px; }
+  .vs .x { font-family: var(--mono); font-size: 28px; color: var(--ink-3); }
+  ul.clean { list-style: none; padding: 0; margin: 0; }
+  ul.clean li { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 17px; color: var(--ink-2); display: flex; gap: 14px; }
+  ul.clean li b { color: var(--ink); min-width: 190px; font-weight: 600; }
+  .mark { position: absolute; top: 40px; right: 72px; font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ 1. title -->
+<section class="slide" style="display:flex;flex-direction:column;justify-content:center;">
+  <div class="eyebrow">ZoNuLy · a referral engine for engineers</div>
+  <h1>Get referred,<br>not filtered.</h1>
+  <p class="lede">A portal application is one of 800. A referral from an engineer puts you in a stack of ten.
+    ZoNuLy finds the funded startups nobody has heard of yet, proves they are hiring, finds the engineers
+    who can refer you, and writes the ask — then stops for your approval.</p>
+  <div style="margin-top:40px;display:flex;gap:28px;align-items:baseline;">
+    <span class="tag">Tejmul Movin</span>
+    <span class="tag">Newton School of Technology · B.Tech CS + AI '27</span>
+    <span class="tag">live at dashboard-blue-eight-86.vercel.app</span>
+  </div>
+  <div class="foot"><span>ZoNuLy</span><span>01 / 09</span></div>
+</section>
+
+<!-- ============================================================ 2. problem -->
+<section class="slide">
+  <div class="eyebrow">The problem</div>
+  <h2>Four things stand between a strong student and a ₹30 L+ role — and all four are mechanical.</h2>
+  <div class="grid-2" style="margin-top:34px;">
+    <div class="card"><h3>1 · You never see the good jobs</h3><p>Funded startups post on their own careers page and wait. By the time an aggregator lists the role, hundreds have applied.</p></div>
+    <div class="card"><h3>2 · You can't tell which are worth your time</h3><p>"AI Engineer" spans eight years of ML to founding-engineer-for-a-strong-student. Only reading the JD against the résumé tells you which.</p></div>
+    <div class="card"><h3>3 · Cold applications go nowhere</h3><p>A portal submission is one of 800. A referral from an engineer, even a weak one, puts you in a stack of ten.</p></div>
+    <div class="card"><h3>4 · Referrals don't scale by hand</h3><p>Find a person, their role, their email, their work; write something that isn't a template; send; follow up; track. Twenty minutes each — and there is coursework.</p></div>
+  </div>
+  <p style="margin-top:26px;font-size:17px;">Search, filtering, drafting and follow-up are machine work. Human judgement matters at exactly one moment: <b>"yes, send that to that person."</b></p>
+  <div class="foot"><span>ZoNuLy</span><span>02 / 09</span></div>
+</section>
+
+<!-- ============================================================ 3. insight -->
+<section class="slide">
+  <div class="eyebrow">The insight</div>
+  <h2>The pay gap is geographic. The winners are the companies nobody has heard of yet.</h2>
+  <div class="vs">
+    <div class="card" style="text-align:center;padding:30px;">
+      <div class="eyebrow">an engineer in an office in the US / UK / Germany costs</div>
+      <div class="big" style="font-size:88px;margin-top:10px;">₹1.5–2 Cr</div>
+      <p style="margin-top:8px;">a year, all-in</p>
+    </div>
+    <div class="x">vs</div>
+    <div class="card" style="text-align:center;padding:30px;border-color:var(--accent);">
+      <div class="eyebrow">the same company hires an equally capable engineer remote from India for</div>
+      <div class="big accent" style="font-size:88px;margin-top:10px;">₹20–50 L</div>
+      <p style="margin-top:8px;">and it is a rounding error to them</p>
+    </div>
+  </div>
+  <div class="grid-3" style="margin-top:28px;">
+    <div><h3>Who exploits the gap</h3><p>Recently funded startups — seed to Series B — with money, a role to fill, and no time. They hire remote from anywhere, no visa needed.</p></div>
+    <div><h3>Who doesn't</h3><p>Google, Microsoft, Amazon and the household names: hyped, oversubscribed, DSA-gated. Thousands of applicants per role. Not where the odds are.</p></div>
+    <div><h3>So the target is</h3><p>US / UK / EU companies hiring remote from India at any well-paid local rate, and Indian companies on-site at ₹30 L+. Every company gets an honest grade — a low grade decides ordering, never whether we try.</p></div>
+  </div>
+  <div class="foot"><span>ZoNuLy</span><span>03 / 09</span></div>
+</section>
+
+<!-- ============================================================ 4. what it does -->
+<section class="slide">
+  <div class="eyebrow">What ZoNuLy does</div>
+  <h2>From "a company exists" to "an engineer there has your résumé" — with one human step.</h2>
+  <div class="flow">
+    <div class="step"><div class="n">01</div><h4>Find</h4><p>Funded startups from the YC directory, company search, Hacker News and X hiring posts. Hyped names rejected by name.</p></div>
+    <div class="step"><div class="n">02</div><h4>Prove hiring</h4><p>Every claim checked against the company's own job board or careers page. Unbacked claims are labelled, never repeated.</p></div>
+    <div class="step"><div class="n">03</div><h4>Roles</h4><p>Every open role, fresher roles first, remote-from-anywhere flagged from the posting's own words.</p></div>
+    <div class="step"><div class="n">04</div><h4>Grade pay</h4><p>Stated pay, else the Pay Power benchmark from funding, recency, team size and valuation — shown as an estimate.</p></div>
+    <div class="step"><div class="n">05</div><h4>Leads</h4><p>Engineers who commit to the company's public repos, founders, EMs — with verified emails, ranked by who can refer.</p></div>
+    <div class="step"><div class="n">06</div><h4>Draft</h4><p>One honest email per person, personalised from what they actually built. Nothing invented.</p></div>
+    <div class="step gate"><div class="n">07</div><h4>You approve</h4><p>The review queue is the only path to send. Ten seconds per email; the other nineteen minutes are done.</p></div>
+    <div class="step"><div class="n">08</div><h4>Send &amp; track</h4><p>From your own Gmail, 25 a day, spaced. Replies classified, one follow-up, never two.</p></div>
+  </div>
+  <p style="margin-top:26px;font-size:16px;color:var(--ink-3);">The 25-a-day cap is the real ceiling — so everything upstream is about spending 25 emails well: the right company, the right person, the right sentence.</p>
+  <div class="foot"><span>ZoNuLy</span><span>04 / 09</span></div>
+</section>
+
+<!-- ============================================================ 5. numbers -->
+<section class="slide">
+  <div class="eyebrow">What it has found · live database, 3 September 2026</div>
+  <h2>One day of running it, on an 8 GB laptop, for ₹0.</h2>
+  <div class="grid-4" style="margin-top:30px;">
+    <div class="card metric"><div class="v">1,957</div><div class="l">companies mapped</div><div class="s">US 1,229 · remote 407 · UK 93 · India 93 · EU 101</div></div>
+    <div class="card metric"><div class="v">948</div><div class="l">hiring proven on their own site</div><div class="s">783 unbacked claims rejected</div></div>
+    <div class="card metric"><div class="v">2,088</div><div class="l">open roles</div><div class="s">1,439 fresher · 468 say "work from anywhere"</div></div>
+    <div class="card metric"><div class="v accent">3,737</div><div class="l">leads who can refer</div><div class="s">3,620 with verified emails · 288 companies</div></div>
+  </div>
+  <div class="grid-3" style="margin-top:22px;">
+    <div class="card metric"><div class="v">1,779</div><div class="l">companies with a description read from their own site</div><div class="s">1,355 with the founding story</div></div>
+    <div class="card metric"><div class="v">349</div><div class="l">companies that can pay a fresher ₹30–40 L</div><div class="s">stated in a posting, or Pay Power ≥ 65</div></div>
+    <div class="card metric"><div class="v accent">89</div><div class="l">ready to ask today</div><div class="s">hiring proven · fresher role · remote-from-anywhere · a lead with an email</div></div>
+  </div>
+  <div class="foot"><span>ZoNuLy</span><span>05 / 09</span></div>
+</section>
+
+<!-- ============================================================ 6. trust -->
+<section class="slide">
+  <div class="eyebrow">Why it can be trusted</div>
+  <h2>Nothing is invented. Every number carries the sentence it was read from.</h2>
+  <div class="grid-2" style="margin-top:28px;align-items:start;">
+    <div>
+      <ul class="clean">
+        <li><b>Hiring is proven</b><span>Only the company's own board or careers page counts. 783 "we're hiring" claims failed that test today and were labelled, not repeated.</span></li>
+        <li><b>Pay is graded openly</b><span>The Pay Power benchmark is printed next to every score, with the sentence that decided it.</span></li>
+        <li><b>People are evidenced</b><span>A lead is an engineer who commits to the company's public repos, with a verified address — never a scraped LinkedIn.</span></li>
+        <li><b>Hard limits, not settings</b><span>No logged-in LinkedIn automation. 25 emails a day. One follow-up, never two. Nothing sends without a human reading it.</span></li>
+      </ul>
+    </div>
+    <div class="card" style="padding:18px 20px;">
+      <div class="eyebrow" style="margin-bottom:10px;">Pay Power — can they pay a fresher ₹30–40 L?</div>
+      <table>
+        <tr><th>Band</th><th>Score</th><th>Rule</th></tr>
+        <tr><td><b>Pays</b></td><td class="num">100</td><td>a posting states ≥ ₹30 L — they wrote the number</td></tr>
+        <tr><td><b>Deep pockets</b></td><td class="num">85</td><td>$10M+ in 24 months, Series A+ in 30, or valued ≥ $50M</td></tr>
+        <tr><td><b>Funded</b></td><td class="num">65</td><td>$3–10M in 30 months, or a YC batch with a team of 10+</td></tr>
+        <tr><td><b>Thin</b></td><td class="num">30</td><td>under $2M, pre-seed, or the raise is stale</td></tr>
+        <tr><td><b>Unknown</b></td><td class="num">0</td><td>nothing found — needs research, not an email</td></tr>
+      </table>
+      <p class="quote" style="margin-top:14px;">"raised seed $12M 8 months ago, US HQ — able to pay a $40k remote engineer without noticing"</p>
+    </div>
+  </div>
+  <div class="foot"><span>ZoNuLy</span><span>06 / 09</span></div>
+</section>
+
+<!-- ============================================================ 7. product -->
+<section class="slide">
+  <div class="eyebrow">The product</div>
+  <h2>A market map to filter by, and one page per company with everything on it.</h2>
+  <div class="grid-2" style="margin-top:24px;align-items:start;">
+    <div>
+      <div class="shot"><img src="shots/atlas.png" alt="The Atlas: industry-chain layers, market segments as nodes, chokepoints where a company is ready to ask"></div>
+      <p style="margin-top:12px;font-size:14px;"><b>The Atlas.</b> Five industry-chain layers, 34 market segments sized by companies. Click segments, flip switches — hiring proven, fresher roles, hire from anywhere, has a lead — and the matching companies appear below.</p>
+    </div>
+    <div>
+      <div class="shot"><img src="shots/company.png" alt="A company page: description, hiring post, roles, leads to reach, story, Pay Power"></div>
+      <p style="margin-top:12px;font-size:14px;"><b>One company, one page.</b> Who they are and how they started · the hiring post on record (who posted it, where) · roles, fresher first · the leads to reach with a Draft button · Pay Power with its sentence.</p>
+    </div>
+  </div>
+  <div class="foot"><span>ZoNuLy</span><span>07 / 09</span></div>
+</section>
+
+<!-- ============================================================ 8. how it's built -->
+<section class="slide">
+  <div class="eyebrow">How it's built</div>
+  <h2>Local-first, ₹0 recurring, runs on a student laptop — and deployed.</h2>
+  <div class="grid-3" style="margin-top:30px;">
+    <div class="card"><h3>Pipeline</h3><p>Python 3.12 · SQLite · FastAPI. Every stage commits per item, so a kill loses nothing and a rerun resumes. A knowledge graph (8,000+ nodes) records every decision and the evidence behind it.</p></div>
+    <div class="card"><h3>Data, all public</h3><p>YC directory · Greenhouse / Lever / Ashby boards · Hacker News · X hiring posts · the company's own site and About page · GitHub commit history · Exa company index. No LinkedIn session, ever.</p></div>
+    <div class="card"><h3>Models</h3><p>Free models through OpenRouter, behind a cost ledger and daily caps. The model reads text we fetched and returns fields with the quote they came from; a field without its quote is dropped.</p></div>
+  </div>
+  <div class="grid-3" style="margin-top:22px;">
+    <div class="card"><h3>Front end</h3><p>Next.js dashboard: Atlas, Companies, Leads, review Queue, Replies, Tracker. Global search, serial numbers, one-click drafts.</p></div>
+    <div class="card"><h3>Deployed</h3><p>Docker image on Railway (API, read-only public mode with masked emails) and Vercel (dashboard). Same image runs the nightly passes on any always-on box.</p></div>
+    <div class="card"><h3>Cost</h3><p>₹0 a month to run. The only paid key is a $10 search credit that covers ~1,000 company lookups. GitHub, X and every company site are free.</p></div>
+  </div>
+  <div class="foot"><span>ZoNuLy</span><span>08 / 09</span></div>
+</section>
+
+<!-- ============================================================ 9. outcome -->
+<section class="slide">
+  <div class="eyebrow">The outcome</div>
+  <h2>Twenty-five honest emails a day, to the right people, adds up.</h2>
+  <div class="grid-4" style="margin-top:30px;">
+    <div class="card metric"><div class="v">500</div><div class="l">sends a month</div><div class="s">25 a day × 20 working days, per person</div></div>
+    <div class="card metric"><div class="v">25–50</div><div class="l">replies</div><div class="s">5–10%, from real engineers and founders</div></div>
+    <div class="card metric"><div class="v accent">8–20</div><div class="l">referrals, calls, assessments</div><div class="s">after the "hiring is done" replies</div></div>
+    <div class="card metric"><div class="v accent">3–8</div><div class="l">interviews a month</div><div class="s">at companies that pay in dollars</div></div>
+  </div>
+  <div class="grid-2" style="margin-top:28px;align-items:start;">
+    <div>
+      <h3>What "done" looks like</h3>
+      <p>Open the app once a day. Overnight it found companies you had never heard of, proved they are hiring, graded what they pay, found the engineers who can refer you and wrote the emails. Read the queue, fix the lines that don't sound like you, approve. Ten minutes.</p>
+    </div>
+    <div>
+      <h3>Try it</h3>
+      <ul class="clean">
+        <li><b>Dashboard</b><span class="num">dashboard-blue-eight-86.vercel.app</span></li>
+        <li><b>API</b><span class="num">zonuly-production.up.railway.app/api/health</span></li>
+        <li><b>Code</b><span class="num">github.com/Tejmul/Zonuly-</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>ZoNuLy · Tejmul Movin · © 2026, all rights reserved</span><span>09 / 09</span></div>
+</section>
+
+</body>
+</html>
