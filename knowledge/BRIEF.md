@@ -1,6 +1,6 @@
 # ZoNuLy — context brief
 
-> Generated 2026-09-03T16:30 from the knowledge graph (8287 nodes, 26457 edges). Do not edit — run `python scripts/run.py kg brief`.
+> Generated 2026-09-03T17:14 from the knowledge graph (8304 nodes, 26474 edges). Do not edit — run `python scripts/run.py kg brief`.
 > To query: `kg search <text>` · `kg show <id>` · `kg path <a> <b>` · `kg compose "<problem>"` · to remember: `kg note "<what changed>" --about <id>`.
 
 ## The problem
