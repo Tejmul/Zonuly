@@ -8,3 +8,5 @@ __pycache__/
 *.db
 .env
 .env.local
+outbox/
+secrets/
