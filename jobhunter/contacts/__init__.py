@@ -62,6 +62,7 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                     "source": "github",
                     "confidence": "verified" if p.email else "scraped",
                     "is_recruiter": _looks_recruiter(p.bio),
+                    "employer_claim": (p.company or "").strip() or None,
                 }
             )
         stats["github"] = len(gh_people)
@@ -154,6 +155,7 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                     role_evidence=verdict.evidence,
                     classified_at=utcnow(),
                     research_notes=p.get("verify_note"),
+                    employer_claim=p.get("employer_claim"),
                 )
             )
             stats["added"] += 1

@@ -653,6 +653,61 @@ features:
     status: built
     stage: stage:research
     serves: [guarantee:no-fabrication]
+  - id: feature:review-gate-flags
+    label: The review gate — every draft carries the facts it was allowed to use and the flags a reviewer must read
+    summary: |
+      outreach/gates.py: faithfulness (proper nouns and numbers must appear in the profile, the
+      person's own evidence or the company's own pages — unsupported ones are listed), AI-tell
+      vocabulary, length band, one ask, dashes, guessed address. Stored on Email.review_flags and
+      Email.evidence, shown in the Queue above the editor; drafts expire after 7 days. The gate
+      never rewrites — it flags, the human decides. Drafts now use the company's own facts
+      (description, origin, hiring proof, the hiring post, the role) and the lead's evidence.
+    status: built
+    stage: stage:review
+    serves: [guarantee:no-fabrication, constraint:human-review]
+  - id: feature:send-ledger-dryrun
+    label: Send ledger locked inside the send, guessed-address cap, and a dry-run mode that runs the whole loop into outbox/
+    summary: |
+      outreach/ledger.py: one row per candidate per day, BEGIN IMMEDIATE, the slot is taken before
+      the mail leaves and given back on failure; pattern-guessed addresses have their own cap of 5.
+      outreach.send_mode dryrun|gmail — dry-run writes .eml files to outbox/ and marks threads
+      dryrun:<id> (never polled), so drafts → approval → send → reply → calendar can be rehearsed
+      before the Gmail OAuth client exists. Rehearsed end to end on 2026-09-03.
+    status: built
+    stage: stage:send
+    serves: [constraint:send-cap-25, constraint:human-review]
+  - id: feature:reply-to-calendar
+    label: A yes with a time becomes an Event — model + regex extraction, conflicts, reschedule draft, Google Calendar push
+    summary: |
+      outreach/schedule.py: a positive reply is read for intent (call / assessment / interview /
+      referral made), proposed times (model with today's date injected; plain regex "Thursday 4pm
+      IST" when the model is down), link, deadline, and the sentence it came from. Event rows;
+      two events within 45 minutes are a conflict and the reschedule email is drafted into the
+      Queue (never sent by the machine, never names the other company). outreach/calendar.py
+      pushes confirmed events with the same OAuth client as Gmail (calendar.events scope added).
+      Calendar page in the dashboard. Replies can also be recorded by hand (record-reply).
+    status: built
+    stage: stage:schedule
+    serves: [problem:a-yes-must-not-get-lost]
+  - id: feature:learn-report
+    label: LEARN — reply and yes rates by who we asked, Pay Power, segment, region, source, role level, remote, length, week
+    summary: |
+      outreach/learn.py, derived from Email/Reply/Contact/Company/Job rows, nothing stored;
+      /api/learn and the "What works" section on the Tracker page, with a plain reading of the
+      numbers. The first 100 sends are the calibration set.
+    status: built
+    stage: stage:track
+    serves: [problem:learn-the-funnel]
+  - id: feature:forked-org-guard
+    label: Commit history in an org full of other companies' engineers is not employment evidence — those committers are not leads
+    summary: |
+      network._reachable: when ≥30% of a company's corporate-domain committers are on another
+      company's domain (Affirm's forked Flink repos; 173 orgs measured on 2026-09-03), freemail
+      committers from that org are held back unless their own GitHub profile names the company
+      (Contact.employer_claim, stored from the profile's company field from now on).
+    status: built
+    stage: stage:contacts
+    serves: [guarantee:no-fabrication]
   - id: feature:referral-role-classes
     label: Who can actually refer us — role classes and ranks
     summary: >

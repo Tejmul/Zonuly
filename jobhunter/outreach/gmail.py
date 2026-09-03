@@ -13,10 +13,12 @@ _G = CONFIG.get("gmail") or {}
 CREDENTIALS_FILE = ROOT / _G.get("credentials_file", "secrets/gmail_credentials.json")
 TOKEN_FILE = ROOT / _G.get("token_file", "secrets/gmail_token.json")
 
-# send + read own mail. gmail.send alone can't poll threads for replies.
+# send + read own mail (gmail.send alone can't poll threads for replies), and write
+# events to our own calendar so a "yes" lands there. One consent screen for all three.
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/calendar.events",
 ]
 
 

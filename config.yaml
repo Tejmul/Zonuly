@@ -218,6 +218,21 @@ outreach:
   daily_send_cap: 25
   followup_after_days: 5
   max_followups: 1
+  # HOW SENDS LEAVE THE MACHINE. `dryrun` performs the whole loop — ledger, cap, window,
+  # status changes — but writes the mail to outbox/ instead of Gmail, so the pipeline can
+  # be exercised end to end before the OAuth client exists. Switch to `gmail` once
+  # `python scripts/run.py gmail-auth` has run. Nothing else changes.
+  send_mode: dryrun
+  guessed_daily_cap: 5        # pattern-guessed addresses bounce; they get their own, smaller cap
+  draft_expiry_days: 7        # a draft older than this is stale: re-draft, never approve
+  contact_cooldown_days: 30   # neither of us writes to the same person twice in this window
+  company_cooldown_days: 30   # one ask per company per candidate in this window
+  # The review gate: proper nouns and numbers in a draft must appear in the facts it was
+  # given (profile, the person's own evidence, the company's own pages). Unsupported ones
+  # are flagged for the reviewer, never silently published.
+  gate:
+    min_words: 70
+    max_words: 160
   send_window: [10, 19]   # local hours between which sends happen
   user_name: "Tejmul Movin"
   user_headline: "AI/ML Engineer • B.Tech CS+AI '27, Newton School of Technology"
@@ -231,6 +246,15 @@ outreach:
 gmail:
   credentials_file: "secrets/gmail_credentials.json"   # OAuth client from Google Cloud Console
   token_file: "secrets/gmail_token.json"
+
+calendar:
+  # Same OAuth client and token as Gmail (the consent screen asks for calendar.events too).
+  # A "yes" with a time lands on this calendar; a clash drafts the reschedule for review.
+  enabled: true
+  calendar_id: "primary"
+  timezone: "Asia/Kolkata"
+  default_minutes: 30         # when the reply names a start but no length
+  conflict_window_minutes: 45 # two events closer than this are a conflict
 
 notifications:
   macos: true

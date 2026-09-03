@@ -54,10 +54,17 @@ RESEARCH ON THEM (may be empty — if so, write a good email without pretending 
 Hook: {hook}
 Shared ground: {shared_ground}
 Their notable repos: {repos}
+What we know they do there: {contact_evidence}
+
+THE COMPANY (their own words; use only these facts):
+{company_facts}
 
 THE JOB THE CANDIDATE WANTS:
-{job_title}
+{job_title}{job_where}
 Why it fits (from the matcher): {match_reasons}
+
+Every proper noun and number you write must come from the facts above or the candidate's
+background. If a fact is not there, do not write it.
 
 ASK: a referral for this role, or if they'd rather not, 10 minutes of advice.
 
@@ -123,10 +130,74 @@ def _compose(body: str, contact_name: str | None) -> str:
     return f"{_clean_body(body, contact_name)}\n\nThanks,\n{signature()}"
 
 
-def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = True) -> dict:
-    """Create one draft email in the review queue."""
+DRAFT_EXPIRY_DAYS = int(_O.get("draft_expiry_days", 7))
+CONTACT_COOLDOWN_DAYS = int(_O.get("contact_cooldown_days", 30))
+COMPANY_COOLDOWN_DAYS = int(_O.get("company_cooldown_days", 30))
+
+
+def _company_facts(company: Company | None, job: Job | None) -> tuple[str, dict]:
+    """The company's own words the draft may use, and the same as structured evidence."""
+    if company is None:
+        return "(nothing known)", {}
+    facts: dict = {}
+    lines = []
+    if company.description:
+        facts["description"] = {"text": company.description, "source": company.website or "their site"}
+        lines.append(f"- What they build: {company.description}")
+    if company.story and (company.story_evidence or "").startswith("http"):
+        snippet = company.story[:400]
+        facts["origin"] = {"text": snippet, "source": company.story_evidence}
+        lines.append(f"- How they started (from {company.story_evidence}): {snippet}")
+    if company.funding_stage or company.funding_amount_usd_m:
+        f = " ".join(p for p in [company.funding_stage, f"${company.funding_amount_usd_m:g}M" if company.funding_amount_usd_m else None] if p)
+        facts["funding"] = {"text": f, "source": company.funding_evidence or "their pages"}
+        lines.append(f"- Funding: {f}")
+    if company.hiring_status in ("verified", "role_missing") and company.hiring_evidence:
+        facts["hiring"] = {"text": company.hiring_evidence, "source": company.careers_url or company.hiring_claim_url}
+        lines.append(f"- Hiring, on their own page: {company.hiring_evidence[:200]}")
+    if company.hiring_claim_by and company.hiring_claim_source in ("x", "hn"):
+        facts["hiring_post"] = {"text": f"{company.hiring_claim_by} posted that they are hiring", "source": company.hiring_claim_url}
+        lines.append(f"- {company.hiring_claim_by} posted on {company.hiring_claim_source.upper()} that they are hiring")
+    if job:
+        where = job.location or ("remote" if job.remote else None)
+        facts["role"] = {"text": job.title + (f" ({where})" if where else ""), "source": job.url}
+        if job.remote_anywhere:
+            facts["remote_anywhere"] = {"text": "the posting says the role can be done from anywhere", "source": job.url}
+            lines.append("- The posting says the role can be done from anywhere")
+    return ("\n".join(lines) or "(nothing beyond the name)"), facts
+
+
+def _cooldown(session, contact_id: int, company_id: int, candidate_id: int) -> str | None:
+    """MOTIV §6: never both of us to one person in a month; one ask per company per month."""
+    from datetime import timedelta
+
+    since = utcnow() - timedelta(days=CONTACT_COOLDOWN_DAYS)
+    recent = session.exec(
+        select(Email).where(Email.contact_id == contact_id, col(Email.status).in_(["approved", "sent", "replied"]),
+                            col(Email.created_at) >= since)
+    ).first()
+    if recent:
+        who = "you" if recent.candidate_id == candidate_id else "your teammate"
+        return f"{who} already wrote to this person on {recent.created_at:%d %b} — {CONTACT_COOLDOWN_DAYS}-day cooldown"
+    since_c = utcnow() - timedelta(days=COMPANY_COOLDOWN_DAYS)
+    recent_c = session.exec(
+        select(Email).where(Email.company_id == company_id, Email.candidate_id == candidate_id, Email.kind == "cold",
+                            col(Email.status).in_(["approved", "sent", "replied"]), col(Email.created_at) >= since_c)
+    ).first()
+    if recent_c:
+        return f"you already asked someone at this company on {recent_c.created_at:%d %b} — one ask per company per {COMPANY_COOLDOWN_DAYS} days"
+    return None
+
+
+def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = True,
+              candidate_id: int = 1, force: bool = False) -> dict:
+    """Create one draft email in the review queue, gated: the facts it may use are
+    recorded, and anything in the body that is not among them is flagged for review."""
     init_db()
+    from datetime import timedelta
+
     from jobhunter import llm, resume
+    from jobhunter.outreach import gates
 
     with get_session() as session:
         contact = session.get(Contact, contact_id)
@@ -135,10 +206,10 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
         company = session.get(Company, contact.company_id)
         job = session.get(Job, job_id) if job_id else None
         if job is None:
+            # fresher roles first, then remote-from-anywhere, then the matcher's score
             job = session.exec(
-                select(Job)
-                .where(Job.company_id == contact.company_id, col(Job.match_score).is_not(None))
-                .order_by(col(Job.match_score).desc())
+                select(Job).where(Job.company_id == contact.company_id)
+                .order_by(col(Job.is_senior), col(Job.remote_anywhere).desc(), col(Job.match_score).desc())
             ).first()
 
         dup = session.exec(
@@ -150,12 +221,21 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
         ).first()
         if dup:
             return {"error": "already drafted for this contact", "email_id": dup.id}
+        if not force:
+            why = _cooldown(session, contact_id, contact.company_id, candidate_id)
+            if why:
+                return {"error": why}
 
         contact_name, contact_role, contact_email = contact.name, contact.role, contact.email
+        contact_evidence = contact.role_evidence or ""
+        contact_conf = contact.confidence
         company_name = company.name if company else "your company"
         company_id = contact.company_id
         notes = contact.research_notes
         job_title = job.title if job else "engineering roles"
+        job_where = ""
+        if job and (job.location or job.remote):
+            job_where = f" ({job.location or 'remote'})"
         job_reasons = ""
         if job and job.match_reasons:
             try:
@@ -163,6 +243,7 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
             except (json.JSONDecodeError, AttributeError):
                 job_reasons = ""
         job_db_id = job.id if job else None
+        company_facts_text, company_facts = _company_facts(company, job)
 
     brief: dict = {}
     if notes:
@@ -178,19 +259,23 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
         brief = asyncio.run(research_contact(contact_id, job_db_id)) or {}
 
     repos = ", ".join(r.get("name", "") for r in (brief.get("repos") or [])[:3]) or "(none found)"
+    profile_text = resume.profile_summary(max_chars=1400)
 
     data = llm.chat_json(
         DRAFT_PROMPT.format(
             user_name=USER_NAME,
             user_headline=USER_HEADLINE,
-            profile=resume.profile_summary(max_chars=1400),
+            profile=profile_text,
             contact_name=contact_name or "there",
             contact_role=contact_role or "engineer",
             company=company_name,
             hook=brief.get("hook") or "(none — do not pretend to know their work)",
             shared_ground=brief.get("shared_ground") or "(none)",
             repos=repos,
+            contact_evidence=contact_evidence or "(nothing beyond their address)",
+            company_facts=company_facts_text,
             job_title=job_title,
+            job_where=job_where,
             match_reasons=job_reasons or "(not scored)",
         ),
         DRAFT_SYSTEM,
@@ -206,6 +291,20 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
     subject = _EM_DASH.sub(", ", str(data.get("subject") or f"Referral for {job_title} at {company_name}"))
     body = _compose(str(data["body"]), contact_name)
 
+    # ---- the gate: what the draft was allowed to say, and whether it stayed inside it
+    corpus = "\n".join(filter(None, [
+        profile_text, USER_NAME, USER_HEADLINE, " ".join(USER_LINKS), USER_EMAIL,
+        contact_name, contact_role, contact_evidence, company_name, job_title, job_where,
+        brief.get("hook"), brief.get("shared_ground"), repos, job_reasons,
+        company_facts_text, " ".join(f["text"] for f in company_facts.values()),
+    ]))
+    verdict = gates.check(body, corpus=corpus, signature=signature(), address_confidence=contact_conf)
+    evidence = {
+        "person": {"evidence": contact_evidence or None, "hook": brief.get("hook"), "shared_ground": brief.get("shared_ground"), "repos": repos},
+        "company": company_facts,
+        "role": {"title": job_title, "where": job_where.strip(" ()") or None, "why_it_fits": job_reasons or None},
+    }
+
     with get_session() as session:
         email = Email(
             contact_id=contact_id,
@@ -216,12 +315,46 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
             body=body,
             kind="cold",
             status="draft",
+            review_flags=json.dumps(verdict.as_list()),
+            evidence=json.dumps(evidence, default=str),
+            expires_at=utcnow() + timedelta(days=DRAFT_EXPIRY_DAYS),
+            address_confidence=contact_conf,
+            candidate_id=candidate_id,
         )
         session.add(email)
         session.commit()
         session.refresh(email)
-        log.info("drafted email %s -> %s (%s)", email.id, contact_email, company_name)
-        return {"email_id": email.id, "subject": email.subject, "to": email.to_email}
+        log.info("drafted email %s -> %s (%s) flags=%d", email.id, contact_email, company_name, len(verdict.flags))
+        return {"email_id": email.id, "subject": email.subject, "to": email.to_email,
+                "flags": verdict.as_list(), "words": verdict.words}
+
+
+def draft_for_bets(limit: int = 10, *, candidate_id: int = 1) -> list[dict]:
+    """One draft per company that is ready to ask: hiring proven, a fresher role, remote from
+    anywhere (or India), and a lead with a usable address — the best lead, the best role."""
+    from jobhunter import network
+
+    init_db()
+    atlas = network.build()
+    bets = [c for c in atlas["companies"] if c["bet"]]
+    out: list[dict] = []
+    with get_session() as session:
+        for c in bets:
+            if len(out) >= limit:
+                break
+            company = session.get(Company, c["id"])
+            people = session.exec(select(Contact).where(Contact.company_id == c["id"])).all()
+            leads = network._reachable(company, people)
+            leads.sort(key=lambda p: ((p.referral_rank or 9), p.confidence != "verified", p.name is None))
+            if not leads:
+                continue
+            job = session.exec(
+                select(Job).where(Job.company_id == c["id"])
+                .order_by(col(Job.is_senior), col(Job.remote_anywhere).desc(), col(Job.match_score).desc())
+            ).first()
+            lead = leads[0]
+            out.append({"company": company.name, "lead": lead.name, **draft_for(lead.id, job.id if job else None, candidate_id=candidate_id)})
+    return out
 
 
 def draft_followup(email_id: int) -> dict:

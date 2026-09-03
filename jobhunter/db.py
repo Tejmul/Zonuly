@@ -127,6 +127,9 @@ class Contact(SQLModel, table=True):
     source: str                           # github | site | hunter | pattern
     confidence: str = "scraped"           # verified | pattern-guessed | scraped
     is_recruiter: bool = False
+    # what their own profile says they work at (GitHub "company" field) — employment
+    # evidence in their words, which commit history alone is not
+    employer_claim: Optional[str] = None
     # ---- role classification (jobhunter/contacts/roles.py). Who can actually refer us?
     role_class: Optional[str] = Field(default=None, index=True)
     # founder | senior_engineer | engineer | eng_manager | tech_recruiter | recruiter | other
@@ -157,6 +160,60 @@ class Email(SQLModel, table=True):
     approved_at: Optional[datetime] = None
     sent_at: Optional[datetime] = None
     followup_sent: bool = False
+    # ---- the review gate's evidence (outreach/gates.py)
+    review_flags: Optional[str] = None      # JSON list of {kind, detail} the reviewer should see
+    evidence: Optional[str] = None          # JSON: the facts the draft was allowed to use, with sources
+    expires_at: Optional[datetime] = None   # a draft older than this is stale and cannot be approved
+    address_confidence: Optional[str] = None  # verified | pattern-guessed | scraped, frozen at draft time
+    candidate_id: int = Field(default=1, index=True)   # which of us this is from (two profiles, one machine)
+
+
+class SendLedger(SQLModel, table=True):
+    """One row per candidate per day: the 25-a-day cap, spent irreversibly inside the send."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    candidate_id: int = Field(default=1, index=True)
+    day: str = Field(index=True)              # local date, YYYY-MM-DD
+    cap: int = 25
+    used: int = 0
+    guessed_cap: int = 5                      # pattern-guessed addresses bounce; they get their own cap
+    guessed_used: int = 0
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class Event(SQLModel, table=True):
+    """A "yes" that carries a time: a call, an assessment, an interview — on our calendar."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    reply_id: Optional[int] = Field(default=None, foreign_key="reply.id")
+    email_id: int = Field(foreign_key="email.id", index=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
+    contact_id: int = Field(foreign_key="contact.id")
+    candidate_id: int = Field(default=1, index=True)
+    kind: str = "call"                        # call | assessment | interview | referral_done | other
+    starts_at: Optional[datetime] = None      # naive UTC
+    ends_at: Optional[datetime] = None
+    timezone: Optional[str] = None            # the zone the sender wrote in
+    link: Optional[str] = None                # Meet / Zoom / Calendly / assessment URL
+    deadline: Optional[datetime] = None       # e.g. "complete the assessment by Friday"
+    quote: Optional[str] = None               # the sentence the time was read from
+    needs_action: Optional[str] = None        # what we must do, in their words
+    status: str = Field(default="proposed", index=True)   # proposed | confirmed | conflict | done | cancelled
+    conflict_with: Optional[int] = None       # another event id
+    calendar_event_id: Optional[str] = None
+    notified_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class Candidate(SQLModel, table=True):
+    """Two of us run the same machine: per-candidate identity, mailbox and caps."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    email: Optional[str] = None
+    headline: Optional[str] = None
+    profile_path: Optional[str] = None
+    gmail_token_file: Optional[str] = None
+    daily_cap: int = 25
+    active: bool = True
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class Reply(SQLModel, table=True):

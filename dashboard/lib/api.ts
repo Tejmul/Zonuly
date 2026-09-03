@@ -86,8 +86,26 @@ export type Email = {
   approved_at: string | null;
   sent_at: string | null;
   followup_sent: boolean;
+  review_flags?: { kind: string; detail: string }[];
+  evidence?: {
+    person?: { evidence?: string | null; hook?: string | null; shared_ground?: string | null; repos?: string | null };
+    company?: Record<string, { text: string; source: string | null }>;
+    role?: { title?: string | null; where?: string | null; why_it_fits?: string | null };
+  } | null;
+  expires_at?: string | null;
+  stale?: boolean;
+  address_confidence?: string | null;
+  candidate_id?: number;
   job?: Job | null;
   replies?: Reply[];
+};
+
+export type EventRow = {
+  id: number; kind: string; status: string; company: string | null; company_id: number;
+  contact: string | null; email_id: number; starts_at: string | null; ends_at: string | null;
+  local: string | null; timezone: string | null; link: string | null; deadline: string | null;
+  quote: string | null; needs_action: string | null; conflict_with: number | null;
+  calendar_event_id: string | null; created_at: string;
 };
 
 export type Reply = {

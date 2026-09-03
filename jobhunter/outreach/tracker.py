@@ -109,6 +109,42 @@ def classify(body: str, sender: str) -> dict:
     return data
 
 
+def record_reply(email_id: int, body: str, *, sender: str, message_id: str | None = None) -> dict:
+    """Store one inbound reply, classify it, and — if it carries a yes with a time, a link
+    or a deadline — put it on the calendar path. Used by the Gmail poll and by the
+    operator's "record a reply" action (a pasted reply, or a dry-run rehearsal)."""
+    import uuid
+
+    init_db()
+    verdict = classify(body, sender)
+    sentiment = verdict["sentiment"]
+    with get_session() as session:
+        reply = Reply(
+            email_id=email_id,
+            gmail_message_id=message_id or f"manual:{uuid.uuid4().hex[:12]}",
+            from_addr=sender,
+            body=body[:8000],
+            sentiment=sentiment,
+            sentiment_reason=f"{verdict.get('reason', '')} | next: {verdict.get('action', '')}"[:400],
+            received_at=utcnow(),
+        )
+        session.add(reply)
+        email = session.get(Email, email_id)
+        if email and email.status == "sent":
+            email.status = "replied"
+            session.add(email)
+        session.commit()
+        session.refresh(reply)
+        reply_id = reply.id
+
+    out = {"reply_id": reply_id, "sentiment": sentiment, "reason": verdict.get("reason"), "action": verdict.get("action")}
+    if sentiment == "positive":
+        from jobhunter.outreach import schedule
+
+        out["events"] = schedule.events_from_reply(reply_id)
+    return out
+
+
 def poll(limit: int = 50) -> dict:
     """Check every sent thread for new inbound messages."""
     init_db()
@@ -136,6 +172,8 @@ def poll(limit: int = 50) -> dict:
         }
 
     for email_id, thread_id, to_email in threads:
+        if str(thread_id).startswith("dryrun:"):
+            continue   # never left the machine; nothing to poll
         stats["threads_checked"] += 1
         try:
             thread = svc.users().threads().get(userId="me", id=thread_id, format="full").execute()
@@ -156,27 +194,7 @@ def poll(limit: int = 50) -> dict:
             if not body:
                 continue
 
-            verdict = classify(body, sender)
-            sentiment = verdict["sentiment"]
-
-            with get_session() as session:
-                session.add(
-                    Reply(
-                        email_id=email_id,
-                        gmail_message_id=msg_id,
-                        from_addr=headers.get("from") or to_email,
-                        body=body[:8000],
-                        sentiment=sentiment,
-                        sentiment_reason=f"{verdict.get('reason', '')} | next: {verdict.get('action', '')}"[:400],
-                        received_at=utcnow(),
-                    )
-                )
-                email = session.get(Email, email_id)
-                if email and email.status == "sent":
-                    email.status = "replied"
-                    session.add(email)
-                session.commit()
-
+            sentiment = record_reply(email_id, body, sender=headers.get("from") or to_email, message_id=msg_id)["sentiment"]
             known.add(msg_id)
             stats["new_replies"] += 1
             stats[sentiment] += 1

@@ -20,6 +20,11 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 
+const FLAG_LABEL: Record<string, string> = {
+  faithfulness: "unsupported claim", ai_tell: "reads machine-written", length: "length", one_ask: "more than one ask",
+  dashes: "dashes", guessed: "guessed address", conflict: "calendar clash",
+};
+
 export default function QueuePage() {
   const drafts = useApi<Email[]>("/api/emails?status=draft");
   const approved = useApi<Email[]>("/api/emails?status=approved");
@@ -62,7 +67,8 @@ export default function QueuePage() {
   }
 
   async function generateDrafts() {
-    const { task_id } = await api.post<{ task_id: string }>("/api/emails/draft-batch?limit=5");
+    // the Atlas's bets: hiring proven, a fresher role, remote-from-anywhere, a lead — one each
+    const { task_id } = await api.post<{ task_id: string }>("/api/emails/draft-bets?limit=5");
     watch(task_id, () => void drafts.reload());
   }
 
@@ -187,6 +193,37 @@ export default function QueuePage() {
               {active.contact_role ? (
                 <p className="text-xs leading-relaxed text-ink-3">{active.contact_role}</p>
               ) : null}
+
+              {/* The gate's findings: what a reviewer must see before "yes, send that". */}
+              {(active.stale || (active.review_flags?.length ?? 0) > 0) && (
+                <div className="rounded-sm border border-line bg-surface px-3 py-2.5">
+                  <p className="eyebrow">Read before approving</p>
+                  <ul className="mt-1.5 space-y-1 text-xs leading-relaxed text-ink-2">
+                    {active.stale && (
+                      <li><b className="text-ink">stale</b> — older than the expiry window; re-draft rather than approve, the facts may have changed.</li>
+                    )}
+                    {(active.review_flags ?? []).map((f, i) => (
+                      <li key={i}><b className="text-ink">{FLAG_LABEL[f.kind] ?? f.kind}</b> — {f.detail}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {active.evidence && (
+                <details className="text-xs text-ink-2">
+                  <summary className="cursor-pointer select-none text-ink-3 hover:text-ink">
+                    The facts this draft was allowed to use
+                  </summary>
+                  <div className="mt-2 space-y-1.5 leading-relaxed">
+                    {active.evidence.person?.evidence && <p><b>Them:</b> {active.evidence.person.evidence}</p>}
+                    {active.evidence.person?.hook && <p><b>Hook:</b> {active.evidence.person.hook}</p>}
+                    {active.evidence.person?.shared_ground && <p><b>Shared ground:</b> {active.evidence.person.shared_ground}</p>}
+                    {active.evidence.company && Object.entries(active.evidence.company).map(([k, v]) => (
+                      <p key={k}><b>{k.replace("_", " ")}:</b> {v.text}{v.source ? <span className="text-ink-3"> · {String(v.source).replace(/^https?:\/\//, "").slice(0, 50)}</span> : null}</p>
+                    ))}
+                    {active.evidence.role?.title && <p><b>Role:</b> {active.evidence.role.title}{active.evidence.role.where ? ` (${active.evidence.role.where})` : ""}</p>}
+                  </div>
+                </details>
+              )}
 
               <label className="flex flex-col gap-1.5">
                 <span className="eyebrow">Subject</span>

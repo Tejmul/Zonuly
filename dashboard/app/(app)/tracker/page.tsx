@@ -8,6 +8,7 @@ import { cn, relTime } from "@/lib/utils";
 import { PageHead, TaskStrip } from "@/components/shell";
 import { ConfidenceBadge, Odds, SentimentBadge } from "@/components/signals";
 import { OperatorOnly } from "@/components/access";
+import { Learn } from "@/components/learn";
 import {
   Badge,
   Button,
@@ -161,6 +162,8 @@ export default function TrackerPage() {
           </Table>
         )}
       </Panel>
+
+      <Learn />
 
       <TaskStrip tasks={tasks} onDismiss={dismiss} />
     </>

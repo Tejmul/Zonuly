@@ -17,6 +17,7 @@ const LINKS = [
   // Replies is real inbound mail from real people; the public instance refuses it, so
   // the tab is not offered there rather than leading to a 403.
   { href: "/replies", label: "Replies", operatorOnly: true },
+  { href: "/calendar", label: "Calendar" },
   { href: "/tracker", label: "Tracker" },
 ];
 

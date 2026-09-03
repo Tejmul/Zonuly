@@ -15,9 +15,9 @@ from email.message import EmailMessage
 
 from sqlmodel import col, func, select
 
-from jobhunter import CONFIG
+from jobhunter import CONFIG, ROOT
 from jobhunter.db import Email, get_session, init_db, utcnow
-from jobhunter.outreach import gmail
+from jobhunter.outreach import gmail, ledger
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +25,10 @@ _O = CONFIG["outreach"]
 DAILY_CAP = int(_O.get("daily_send_cap", 25))
 SEND_WINDOW = _O.get("send_window", [10, 19])
 STAGGER_SECONDS = _O.get("stagger_seconds", [45, 210])
+# dryrun: the whole loop runs (ledger, cap, window, statuses) but the mail is written to
+# outbox/ instead of leaving the machine. gmail: the real thing, after gmail-auth.
+SEND_MODE = str(_O.get("send_mode", "dryrun")).lower()
+OUTBOX = ROOT / "outbox"
 
 
 def sent_today() -> int:
@@ -39,8 +43,22 @@ def sent_today() -> int:
         ).one()
 
 
-def remaining_today() -> int:
-    return max(0, DAILY_CAP - sent_today())
+def remaining_today(candidate_id: int = 1) -> int:
+    # the ledger is the truth (a slot is taken inside the send); the DB count is the cross-check
+    return min(ledger.status(candidate_id)["left"], max(0, DAILY_CAP - sent_today()))
+
+
+def _dryrun_send(email_id: int, to: str, subject: str, body: str) -> dict:
+    """Write the mail to outbox/ and return a fake Gmail result, so the loop completes."""
+    OUTBOX.mkdir(exist_ok=True)
+    path = OUTBOX / f"{email_id:05d}.eml"
+    msg = EmailMessage()
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg["X-ZoNuLy-Mode"] = "dryrun"
+    msg.set_content(body)
+    path.write_bytes(msg.as_bytes())
+    return {"id": f"dryrun:{email_id}", "threadId": f"dryrun:{email_id}", "path": str(path)}
 
 
 def in_send_window(now: datetime | None = None) -> bool:
@@ -75,19 +93,29 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
             return {"error": f"email is '{email.status}', only approved emails are sent"}
         to, subject, body = email.to_email, email.subject, email.body
         thread_id = email.gmail_thread_id
+        candidate_id = email.candidate_id
+        guessed = (email.address_confidence or "verified") != "verified"
 
-    if remaining_today() <= 0:
-        return {"error": f"daily cap reached ({DAILY_CAP}/day)"}
     if not ignore_window and not in_send_window():
         return {"error": f"outside send window {SEND_WINDOW[0]}:00-{SEND_WINDOW[1]}:00 local"}
 
+    # the slot is taken BEFORE the mail leaves — 25 a day, spent irreversibly (MOTIV §6)
+    ok, why = ledger.reserve(candidate_id, guessed=guessed)
+    if not ok:
+        return {"error": why}
+
     try:
-        svc = gmail.service()
-        result = svc.users().messages().send(userId="me", body=_build_message(to, subject, body, thread_id)).execute()
+        if SEND_MODE == "gmail":
+            svc = gmail.service()
+            result = svc.users().messages().send(userId="me", body=_build_message(to, subject, body, thread_id)).execute()
+        else:
+            result = _dryrun_send(email_id, to, subject, body)
     except gmail.GmailNotConfigured as e:
+        ledger.release(candidate_id, guessed=guessed)
         return {"error": str(e)}
     except Exception as e:  # noqa: BLE001 — API errors are reported, not raised, so the queue keeps moving
         log.exception("send failed for email %s", email_id)
+        ledger.release(candidate_id, guessed=guessed)
         with get_session() as session:
             email = session.get(Email, email_id)
             email.status = "failed"
@@ -106,8 +134,9 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
         session.add(email)
         session.commit()
 
-    log.info("sent email %s to %s (thread %s)", email_id, to, result.get("threadId"))
-    return {"sent": True, "email_id": email_id, "to": to, "thread_id": result.get("threadId")}
+    log.info("sent email %s to %s (thread %s, mode %s)", email_id, to, result.get("threadId"), SEND_MODE)
+    return {"sent": True, "email_id": email_id, "to": to, "thread_id": result.get("threadId"),
+            "mode": SEND_MODE, **({"path": result["path"]} if result.get("path") else {})}
 
 
 def send_approved(limit: int | None = None, *, ignore_window: bool = False, stagger: bool = True) -> dict:
@@ -149,6 +178,8 @@ def approve(email_id: int, *, subject: str | None = None, body: str | None = Non
             return {"error": f"no email {email_id}"}
         if email.status not in ("draft", "rejected"):
             return {"error": f"cannot approve an email that is '{email.status}'"}
+        if email.expires_at and email.expires_at < utcnow():
+            return {"error": "this draft is stale (older than the expiry window) — re-draft it; the facts may have changed"}
         if subject is not None:
             email.subject = subject[:180]
         if body is not None:
@@ -182,5 +213,7 @@ def quota() -> dict:
         "remaining_today": remaining_today(),
         "send_window": SEND_WINDOW,
         "in_window": in_send_window(),
+        "send_mode": SEND_MODE,
+        "ledger": ledger.status(),
         "gmail": gmail.status(),
     }

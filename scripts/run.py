@@ -1134,6 +1134,83 @@ def targets_verify(
             typer.echo(f"      roles on their own page: {', '.join(r['roles'][:5])}")
 
 
+# ---------------------------------------------------------------- outreach
+
+outreach_app = typer.Typer(
+    add_completion=False,
+    help="The back half: gated drafts -> your approval -> send (dry-run or Gmail) -> replies -> calendar -> what works",
+)
+app.add_typer(outreach_app, name="outreach")
+
+
+@outreach_app.command("bets")
+def outreach_bets(limit: int = typer.Option(10, help="One draft per ready-to-ask company")) -> None:
+    """Draft one gated email per company that is ready to ask (best lead, best role). Goes to the queue."""
+    _setup_logging()
+    from jobhunter.outreach import drafter
+
+    _echo(drafter.draft_for_bets(limit=limit))
+
+
+@outreach_app.command("send")
+def outreach_send(
+    limit: int = typer.Option(None, help="At most this many, inside the daily cap"),
+    ignore_window: bool = typer.Option(False, help="Send outside the 10:00–19:00 window (rehearsals only)"),
+    no_stagger: bool = typer.Option(False, help="Skip the human-ish spacing (rehearsals only)"),
+) -> None:
+    """Send what you approved. outreach.send_mode decides dry-run (outbox/) or Gmail."""
+    _setup_logging()
+    from jobhunter.outreach import sender
+
+    _echo(sender.send_approved(limit=limit, ignore_window=ignore_window, stagger=not no_stagger))
+
+
+@outreach_app.command("ledger")
+def outreach_ledger_cmd() -> None:
+    """Today's send ledger: cap, used, guessed-address cap."""
+    from jobhunter.outreach import ledger, sender
+
+    _echo({"send_mode": sender.SEND_MODE, **ledger.status()})
+
+
+@outreach_app.command("reply")
+def outreach_reply(
+    email_id: int = typer.Argument(..., help="The sent email the reply belongs to"),
+    body: str = typer.Argument(..., help="The reply text, pasted"),
+    sender: str = typer.Option(None, help="Their address; defaults to the email's recipient"),
+) -> None:
+    """Record a reply by hand: classified, and scheduled if it carries a yes with a time."""
+    _setup_logging()
+    from jobhunter.outreach import tracker
+
+    _echo(tracker.record_reply(email_id, body, sender=sender or "them"))
+
+
+@outreach_app.command("events")
+def outreach_events(upcoming: bool = typer.Option(False)) -> None:
+    """Every call, assessment and interview on record, with the sentence it was read from."""
+    from jobhunter.outreach import schedule
+
+    _echo(schedule.list_events(upcoming_only=upcoming))
+
+
+@outreach_app.command("confirm")
+def outreach_confirm(event_id: int) -> None:
+    """Confirm a proposed time; it goes on the calendar when the OAuth client is in place."""
+    _setup_logging()
+    from jobhunter.outreach import schedule
+
+    _echo(schedule.confirm(event_id))
+
+
+@outreach_app.command("learn")
+def outreach_learn(days: int = typer.Option(None, help="Only sends in the last N days")) -> None:
+    """Reply and yes rates by who we asked, what they can pay, segment, region, source, framing."""
+    from jobhunter.outreach import learn
+
+    _echo(learn.report(days=days))
+
+
 # ---------------------------------------------------------------- harvest
 
 harvest_app = typer.Typer(

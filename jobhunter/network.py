@@ -590,14 +590,35 @@ def _trust(c: Company, jobs: list[Job]) -> tuple[dict, str]:
 
 def _reachable(c: Company, people: list[Contact]) -> list[Contact]:
     """Leads we could actually write to: an address, a referring role, and a domain that
-    does not contradict working there."""
+    does not contradict working there.
+
+    The forked-org guard: when a company's GitHub org is largely other companies' engineers
+    (Affirm's org carries forked Apache Flink repos, so commit mining filed Flink committers
+    on confluent.io as Affirm staff), the org's commit history is not employment evidence —
+    and its committers on freemail addresses are dropped too, since the same history is all
+    that vouched for them. `kg audit` reports the same contradiction; this is where it bites.
+    """
     domain = (c.domain or "").lower()
-    return [
-        p for p in people
-        if p.email and (p.referral_rank or 9) <= 6
-        and (not domain or p.email.split("@")[-1].lower() == domain
-             or p.email.split("@")[-1].lower() in _FREEMAIL)
-    ]
+    gh = [p for p in people if p.source == "github" and p.email]
+    corp = [p for p in gh if p.email.split("@")[-1].lower() not in _FREEMAIL]
+    foreign = [p for p in corp if domain and not p.email.split("@")[-1].lower().endswith(domain)]
+    forked_org = len(corp) >= 3 and len(foreign) / len(corp) >= 0.3
+    stem = "".join(ch for ch in (c.name or "").lower() if ch.isalnum())[:8]
+    out = []
+    for p in people:
+        if not p.email or (p.referral_rank or 9) > 6:
+            continue
+        dom = p.email.split("@")[-1].lower()
+        on_domain = bool(domain) and dom == domain
+        # their own profile naming the company is evidence commit history is not
+        says_so = bool(stem) and stem in "".join(ch for ch in (p.employer_claim or "").lower() if ch.isalnum())
+        if on_domain or says_so:
+            out.append(p)
+        elif dom in _FREEMAIL and not (forked_org and p.source == "github"):
+            out.append(p)
+        elif not domain and dom in _FREEMAIL:
+            out.append(p)
+    return out
 
 
 def build(*, include_rejects: bool = False) -> dict:

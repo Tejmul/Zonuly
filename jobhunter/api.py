@@ -240,7 +240,23 @@ def _email_dict(e: Email, *, contact: Contact | None = None, company: Company | 
         "approved_at": e.approved_at.isoformat() if e.approved_at else None,
         "sent_at": e.sent_at.isoformat() if e.sent_at else None,
         "followup_sent": e.followup_sent,
+        # the review gate's findings and the facts the draft was allowed to use
+        "review_flags": _json_or(e.review_flags, []),
+        "evidence": _json_or(e.evidence, None),
+        "expires_at": e.expires_at.isoformat() if e.expires_at else None,
+        "stale": bool(e.expires_at and e.expires_at < datetime.utcnow()),
+        "address_confidence": e.address_confidence,
+        "candidate_id": e.candidate_id,
     })
+
+
+def _json_or(raw: str | None, default):
+    if not raw:
+        return default
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return default
 
 
 # ---------------------------------------------------------------- health & overview
@@ -735,6 +751,92 @@ def followup(email_id: int) -> dict:
     from jobhunter.outreach import drafter
 
     return {"task_id": _run_task(f"followup:{email_id}", drafter.draft_followup, email_id)}
+
+
+@app.post("/api/emails/draft-bets")
+def draft_bets(limit: int = 10) -> dict:
+    """One gated draft per company that is ready to ask (the Atlas's bets), best lead, best role."""
+    from jobhunter.outreach import drafter
+
+    return {"task_id": _run_task("draft-bets", drafter.draft_for_bets, limit)}
+
+
+@app.get("/api/outreach/ledger")
+def outreach_ledger(candidate_id: int = 1) -> dict:
+    from jobhunter.outreach import ledger, sender
+
+    return {"send_mode": sender.SEND_MODE, **ledger.status(candidate_id)}
+
+
+class ReplyIn(BaseModel):
+    body: str
+    sender: str | None = None
+
+
+@app.post("/api/emails/{email_id}/record-reply")
+def record_reply(email_id: int, payload: ReplyIn) -> dict:
+    """Record a reply by hand — one that arrived outside Gmail polling, or a rehearsal in
+    dry-run mode. It is classified and, if it carries a yes with a time, scheduled."""
+    from jobhunter.outreach import tracker
+
+    with get_session() as session:
+        email = session.get(Email, email_id)
+        if email is None:
+            raise HTTPException(404, "unknown email")
+        sender = payload.sender or email.to_email
+    return tracker.record_reply(email_id, payload.body, sender=sender)
+
+
+# ---------------------------------------------------------------- calendar & events
+
+@app.get("/api/events")
+def list_events(upcoming: bool = False) -> list[dict]:
+    from jobhunter.outreach import schedule
+
+    return schedule.list_events(upcoming_only=upcoming)
+
+
+@app.post("/api/events/{event_id}/confirm")
+def confirm_event(event_id: int) -> dict:
+    from jobhunter.outreach import schedule
+
+    return schedule.confirm(event_id)
+
+
+@app.post("/api/events/{event_id}/reschedule")
+def reschedule_event(event_id: int) -> dict:
+    from jobhunter.outreach import schedule
+
+    return schedule.draft_reschedule(event_id)
+
+
+@app.post("/api/events/{event_id}/status")
+def set_event_status(event_id: int, status: Literal["proposed", "confirmed", "done", "cancelled"]) -> dict:
+    from jobhunter.db import Event
+
+    with get_session() as session:
+        ev = session.get(Event, event_id)
+        if ev is None:
+            raise HTTPException(404, "unknown event")
+        ev.status = status
+        session.add(ev)
+        session.commit()
+    return {"event_id": event_id, "status": status}
+
+
+@app.get("/api/calendar/status")
+def calendar_status() -> dict:
+    from jobhunter.outreach import calendar
+
+    return calendar.status()
+
+
+@app.get("/api/learn")
+def learn_report(days: int | None = None) -> dict:
+    """The funnel with numbers: reply and yes rates by every lever we control."""
+    from jobhunter.outreach import learn
+
+    return learn.report(days=days)
 
 
 # ---------------------------------------------------------------- tracker & replies
