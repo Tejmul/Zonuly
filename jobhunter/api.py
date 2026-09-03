@@ -78,9 +78,20 @@ app.add_middleware(BaseHTTPMiddleware, dispatch=_access_guard)
 # Origins come from config locally and from the environment in a deployment, where the
 # Vercel URL is not known until the frontend exists.
 _ORIGINS = [o.strip() for o in os.environ.get("ZONULY_CORS_ORIGINS", "").split(",") if o.strip()]
+# The dashboard is opened from localhost, from the laptop's LAN address (10.x / 192.168.x —
+# what `next dev` prints as "Network:"), and from a Vercel preview. A preflight from any
+# origin not listed is answered 400, which the page reports as "can't reach the API" —
+# so the local and private-network cases are matched by pattern rather than listed one
+# port at a time. Public deployments still name their origin in ZONULY_CORS_ORIGINS.
+_ORIGIN_REGEX = (
+    r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+    r"192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|[\w-]+\.local)(:\d+)?$"
+    r"|^https://[\w-]+\.vercel\.app$"
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_ORIGINS or _API.get("cors_origins", ["http://localhost:3000"]),
+    allow_origin_regex=_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
