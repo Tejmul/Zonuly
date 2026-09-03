@@ -8,6 +8,7 @@ import { api, useApi, useTaskWatcher, type Job } from "@/lib/api";
 import { lpa, relTime } from "@/lib/utils";
 import { TaskStrip } from "@/components/shell";
 import { ConfidenceBadge, Odds } from "@/components/signals";
+import { OperatorOnly } from "@/components/access";
 import {
   Badge,
   Button,
@@ -176,9 +177,11 @@ export default function JobDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant={job.status === "applied" ? "default" : "quiet"} size="sm" onClick={markApplied}>
-            {job.status === "applied" ? "Applied ✓" : "Mark applied"}
-          </Button>
+          <OperatorOnly>
+            <Button variant={job.status === "applied" ? "default" : "quiet"} size="sm" onClick={markApplied}>
+              {job.status === "applied" ? "Applied ✓" : "Mark applied"}
+            </Button>
+          </OperatorOnly>
           <Button asChild size="sm" variant="quiet">
             <a href={job.url} target="_blank" rel="noreferrer">
               Open posting <ExternalLink size={13} />
@@ -269,10 +272,12 @@ export default function JobDetailPage() {
               eyebrow="Who to ask"
               title="Leads at this company"
               action={
-                <Button size="sm" variant="quiet" onClick={findContacts}>
-                  <UserSearch size={13} />
-                  Find
-                </Button>
+                <OperatorOnly>
+                  <Button size="sm" variant="quiet" onClick={findContacts}>
+                    <UserSearch size={13} />
+                    Find
+                  </Button>
+                </OperatorOnly>
               }
             />
             {!job.contacts?.length ? (
@@ -299,10 +304,12 @@ export default function JobDetailPage() {
                       <ConfidenceBadge confidence={contact.confidence} />
                     </div>
                     <div className="mt-2 flex items-center gap-2">
-                      <Button size="sm" variant="quiet" onClick={() => draftTo(contact.id)}>
-                        <Mail size={12} />
-                        Draft ask
-                      </Button>
+                      <OperatorOnly>
+                        <Button size="sm" variant="quiet" onClick={() => draftTo(contact.id)}>
+                          <Mail size={12} />
+                          Draft ask
+                        </Button>
+                      </OperatorOnly>
                       {contact.github ? (
                         <a
                           href={contact.github}
@@ -321,112 +328,116 @@ export default function JobDetailPage() {
             )}
           </Panel>
 
-          <Panel className="border-violet-900/50">
-            <PanelHead 
-              eyebrow="Strategic Chokepoint (Human-in-the-Loop)" 
-              title={<span className="text-violet-300 font-semibold flex items-center gap-1.5">Company Context & VC Tracker</span>} 
-            />
-            <div className="flex flex-col gap-3.5 p-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+          {/* An editable panel of the operator's own private notes. Not shown at all
+              on a public instance: it cannot save there, and it is labelled private. */}
+          <OperatorOnly>
+            <Panel className="border-violet-900/50">
+              <PanelHead 
+                eyebrow="Strategic Chokepoint (Human-in-the-Loop)" 
+                title={<span className="text-violet-300 font-semibold flex items-center gap-1.5">Company Context & VC Tracker</span>} 
+              />
+              <div className="flex flex-col gap-3.5 p-4 text-xs">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="eyebrow text-[10px] text-violet-400">Classification</span>
+                    <select
+                      value={companyType}
+                      onChange={(e) => setCompanyType(e.target.value)}
+                      className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-violet-500 outline-none cursor-pointer"
+                    >
+                      <option value="">Unclassified</option>
+                      <option value="Series A AI Startup">Series A AI Startup</option>
+                      <option value="Big Tech / High Payer">Big Tech / High Payer</option>
+                      <option value="Bootstrapped / Small Team">Bootstrapped / Small Team</option>
+                      <option value="YC Company">YC Company</option>
+                      <option value="Agency / Consult">Agency / Consult</option>
+                    </select>
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="eyebrow text-[10px] text-violet-400">Funding Tier</span>
+                    <select
+                      value={fundingTier}
+                      onChange={(e) => setFundingTier(e.target.value)}
+                      className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-violet-500 outline-none cursor-pointer"
+                    >
+                      <option value="">Unspecified</option>
+                      <option value="Seed">Seed Stage</option>
+                      <option value="Series A">Series A</option>
+                      <option value="Series B">Series B</option>
+                      <option value="Series C+">Series C+</option>
+                      <option value="Bootstrapped">Bootstrapped</option>
+                      <option value="Self-Sustaining">Self-Sustaining</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="eyebrow text-[10px] text-violet-400">Runway Runway</span>
+                    <select
+                      value={runway}
+                      onChange={(e) => setRunway(e.target.value)}
+                      className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-violet-500 outline-none cursor-pointer"
+                    >
+                      <option value="">Unspecified</option>
+                      <option value="Critical (<6mo)">{"Critical (<6mo)"}</option>
+                      <option value="Medium (6-18mo)">Medium (6-18mo)</option>
+                      <option value="Stable (18-36mo)">Stable (18-36mo)</option>
+                      <option value="Evergreen / Profit">Evergreen / Profit</option>
+                    </select>
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="eyebrow text-[10px] text-violet-400">Headcount scale</span>
+                    <select
+                      value={headcount}
+                      onChange={(e) => setHeadcount(e.target.value)}
+                      className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-violet-500 outline-none cursor-pointer"
+                    >
+                      <option value="">Unspecified</option>
+                      <option value="1-10 (Founding)">1-10 (Founding)</option>
+                      <option value="11-50">11-50 (Early)</option>
+                      <option value="51-200">51-200 (Scale)</option>
+                      <option value="200+">200+ (Large)</option>
+                    </select>
+                  </label>
+                </div>
+
                 <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow text-[10px] text-violet-400">Classification</span>
-                  <select
-                    value={companyType}
-                    onChange={(e) => setCompanyType(e.target.value)}
-                    className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-violet-500 outline-none cursor-pointer"
-                  >
-                    <option value="">Unclassified</option>
-                    <option value="Series A AI Startup">Series A AI Startup</option>
-                    <option value="Big Tech / High Payer">Big Tech / High Payer</option>
-                    <option value="Bootstrapped / Small Team">Bootstrapped / Small Team</option>
-                    <option value="YC Company">YC Company</option>
-                    <option value="Agency / Consult">Agency / Consult</option>
-                  </select>
+                  <span className="eyebrow text-[10px] text-violet-400">Lead Investors</span>
+                  <input
+                    type="text"
+                    value={leadInvestors}
+                    onChange={(e) => setLeadInvestors(e.target.value)}
+                    placeholder="Sequoia, Founders Fund, Y Combinator, etc."
+                    className="rounded-sm border border-line bg-paper px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-3 focus:border-violet-500 outline-none"
+                  />
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow text-[10px] text-violet-400">Funding Tier</span>
-                  <select
-                    value={fundingTier}
-                    onChange={(e) => setFundingTier(e.target.value)}
-                    className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-violet-500 outline-none cursor-pointer"
-                  >
-                    <option value="">Unspecified</option>
-                    <option value="Seed">Seed Stage</option>
-                    <option value="Series A">Series A</option>
-                    <option value="Series B">Series B</option>
-                    <option value="Series C+">Series C+</option>
-                    <option value="Bootstrapped">Bootstrapped</option>
-                    <option value="Self-Sustaining">Self-Sustaining</option>
-                  </select>
+                  <span className="eyebrow text-[10px] text-violet-400">Private Notes & Strategic Insights</span>
+                  <textarea
+                    value={notesText}
+                    onChange={(e) => setNotesText(e.target.value)}
+                    placeholder="Enter custom context, scheduled interviews, specific contact instructions, or shared connections..."
+                    rows={4}
+                    className="rounded-sm border border-line bg-paper p-2 text-xs text-ink placeholder:text-ink-3 focus:border-violet-500 outline-none resize-none"
+                  />
                 </label>
+
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={saveCompanyNotes}
+                  disabled={savingNotes}
+                  className="mt-1 font-medium bg-violet-600 border-violet-500 text-white hover:bg-violet-500"
+                >
+                  {savingNotes ? "Saving Profile..." : "Save Strategic Context"}
+                </Button>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow text-[10px] text-violet-400">Runway Runway</span>
-                  <select
-                    value={runway}
-                    onChange={(e) => setRunway(e.target.value)}
-                    className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-violet-500 outline-none cursor-pointer"
-                  >
-                    <option value="">Unspecified</option>
-                    <option value="Critical (<6mo)">{"Critical (<6mo)"}</option>
-                    <option value="Medium (6-18mo)">Medium (6-18mo)</option>
-                    <option value="Stable (18-36mo)">Stable (18-36mo)</option>
-                    <option value="Evergreen / Profit">Evergreen / Profit</option>
-                  </select>
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow text-[10px] text-violet-400">Headcount scale</span>
-                  <select
-                    value={headcount}
-                    onChange={(e) => setHeadcount(e.target.value)}
-                    className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-violet-500 outline-none cursor-pointer"
-                  >
-                    <option value="">Unspecified</option>
-                    <option value="1-10 (Founding)">1-10 (Founding)</option>
-                    <option value="11-50">11-50 (Early)</option>
-                    <option value="51-200">51-200 (Scale)</option>
-                    <option value="200+">200+ (Large)</option>
-                  </select>
-                </label>
-              </div>
-
-              <label className="flex flex-col gap-1.5">
-                <span className="eyebrow text-[10px] text-violet-400">Lead Investors</span>
-                <input
-                  type="text"
-                  value={leadInvestors}
-                  onChange={(e) => setLeadInvestors(e.target.value)}
-                  placeholder="Sequoia, Founders Fund, Y Combinator, etc."
-                  className="rounded-sm border border-line bg-paper px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-3 focus:border-violet-500 outline-none"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1.5">
-                <span className="eyebrow text-[10px] text-violet-400">Private Notes & Strategic Insights</span>
-                <textarea
-                  value={notesText}
-                  onChange={(e) => setNotesText(e.target.value)}
-                  placeholder="Enter custom context, scheduled interviews, specific contact instructions, or shared connections..."
-                  rows={4}
-                  className="rounded-sm border border-line bg-paper p-2 text-xs text-ink placeholder:text-ink-3 focus:border-violet-500 outline-none resize-none"
-                />
-              </label>
-
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={saveCompanyNotes}
-                disabled={savingNotes}
-                className="mt-1 font-medium bg-violet-600 border-violet-500 text-white hover:bg-violet-500"
-              >
-                {savingNotes ? "Saving Profile..." : "Save Strategic Context"}
-              </Button>
-            </div>
-          </Panel>
+            </Panel>
+          </OperatorOnly>
 
           <Panel>
             <PanelHead eyebrow="Provenance" title="Company" />

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from sqlmodel import Field, Session, SQLModel, create_engine
@@ -176,7 +178,14 @@ class Setting(SQLModel, table=True):
     value: str
 
 
-DB_PATH = ROOT / CONFIG["db_path"]
+# The path is a config value locally and an environment variable in a deployment,
+# where the database lives on a mounted volume (or is a read-only snapshot baked into
+# the image) rather than next to the source.
+_DB_ENV = os.environ.get("ZONULY_DB_PATH", "").strip()
+DB_PATH = Path(_DB_ENV) if _DB_ENV else ROOT / CONFIG["db_path"]
+if not DB_PATH.is_absolute():
+    DB_PATH = ROOT / DB_PATH
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 # Several processes write this file at once (the API, a people hunt, a harvest). SQLite
 # serialises writers; the default 5 s wait was too short whenever one of them held a
 # transaction across a network call, and "database is locked" lost work. 30 s is the

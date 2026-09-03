@@ -7,6 +7,7 @@ import { api, useApi, useTaskWatcher, type Email, type Quota } from "@/lib/api";
 import { relTime } from "@/lib/utils";
 import { PageHead, TaskStrip } from "@/components/shell";
 import { ConfidenceBadge } from "@/components/signals";
+import { OperatorOnly } from "@/components/access";
 import {
   Badge,
   Button,
@@ -82,15 +83,19 @@ export default function QueuePage() {
         description="Nothing is sent until you approve it. Edit freely — what you save is what goes out."
         action={
           <>
-            <Button variant="quiet" size="sm" onClick={generateDrafts}>
-              <Sparkles size={13} />
-              Draft 5 more
-            </Button>
-            {(approved.data?.length ?? 0) > 0 ? (
-              <Button variant="primary" size="sm" onClick={sendApproved}>
-                <Send size={13} />
-                Send {approved.data?.length} approved
+            <OperatorOnly>
+              <Button variant="quiet" size="sm" onClick={generateDrafts}>
+                <Sparkles size={13} />
+                Draft 5 more
               </Button>
+            </OperatorOnly>
+            {(approved.data?.length ?? 0) > 0 ? (
+              <OperatorOnly>
+                <Button variant="primary" size="sm" onClick={sendApproved}>
+                  <Send size={13} />
+                  Send {approved.data?.length} approved
+                </Button>
+              </OperatorOnly>
             ) : null}
           </>
         }
@@ -128,9 +133,11 @@ export default function QueuePage() {
               title="Queue is clear"
               hint="Draft referral asks from a job's contact list, or generate a batch for your highest-scoring companies."
               action={
-                <Button size="sm" onClick={generateDrafts}>
-                  Draft 5 more
-                </Button>
+                <OperatorOnly>
+                  <Button size="sm" onClick={generateDrafts}>
+                    Draft 5 more
+                  </Button>
+                </OperatorOnly>
               }
             />
           ) : (
@@ -197,14 +204,32 @@ export default function QueuePage() {
               </label>
 
               <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-                <Button variant="primary" onClick={() => act("approve")} disabled={busy}>
-                  <Check size={14} />
-                  {dirty ? "Save and approve" : "Approve"}
-                </Button>
-                <Button variant="danger" onClick={() => act("reject")} disabled={busy}>
-                  <X size={14} />
-                  Reject
-                </Button>
+                {/* Shown disabled rather than hidden: the gate every draft has to pass
+                    through is the point of the page, and an empty toolbar does not say
+                    that a gate exists. */}
+                <OperatorOnly
+                  fallback={
+                    <>
+                      <Button variant="primary" disabled title="Read-only demonstration">
+                        <Check size={14} />
+                        Approve
+                      </Button>
+                      <Button variant="danger" disabled title="Read-only demonstration">
+                        <X size={14} />
+                        Reject
+                      </Button>
+                    </>
+                  }
+                >
+                  <Button variant="primary" onClick={() => act("approve")} disabled={busy}>
+                    <Check size={14} />
+                    {dirty ? "Save and approve" : "Approve"}
+                  </Button>
+                  <Button variant="danger" onClick={() => act("reject")} disabled={busy}>
+                    <X size={14} />
+                    Reject
+                  </Button>
+                </OperatorOnly>
                 {active.job_id ? (
                   <Button asChild variant="quiet" size="sm">
                     <Link href={`/roles/${active.job_id}`}>See the job</Link>

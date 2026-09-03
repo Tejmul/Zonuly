@@ -7,6 +7,7 @@ import { api, useApi, useTaskWatcher, type Job } from "@/lib/api";
 import { lpa, relTime } from "@/lib/utils";
 import { PageHead, TaskStrip } from "@/components/shell";
 import { Odds } from "@/components/signals";
+import { OperatorOnly } from "@/components/access";
 import {
   Badge,
   Button,
@@ -57,9 +58,11 @@ export default function RolesPage() {
           data ? `${data.total} jobs match these filters.` : "Every job the scrapers kept."
         }
         action={
-          <Button variant="quiet" size="sm" onClick={scoreMore}>
-            Score 40 more
-          </Button>
+          <OperatorOnly>
+            <Button variant="quiet" size="sm" onClick={scoreMore}>
+              Score 40 more
+            </Button>
+          </OperatorOnly>
         }
       />
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { GitBranch, Mail, UserSearch } from "lucide-react";
 import { api, useApi, useTaskWatcher, type Company, type Contact } from "@/lib/api";
+import { OperatorOnly } from "@/components/access";
 import { relTime } from "@/lib/utils";
 import { PageHead, TaskStrip } from "@/components/shell";
 import { ConfidenceBadge, Odds } from "@/components/signals";
@@ -17,6 +18,13 @@ import {
   PanelHead,
   Select,
 } from "@/components/ui/primitives";
+
+/** A hook the extractor never found is stored as the string "null", not as an absent
+ *  field, so a plain truthiness check renders the word "null" under someone's name. */
+function hookOf(research: { hook?: string | null } | null | undefined): string | null {
+  const hook = research?.hook?.trim();
+  return hook && hook.toLowerCase() !== "null" ? hook : null;
+}
 
 export default function LeadsPage() {
   const [selected, setSelected] = useState<number | null>(null);
@@ -162,9 +170,9 @@ export default function LeadsPage() {
                     {contact.role ? (
                       <div className="mt-1 line-clamp-2 text-xs text-ink-3">{contact.role}</div>
                     ) : null}
-                    {contact.research?.hook ? (
+                    {hookOf(contact.research) ? (
                       <div className="mt-2 border-l-2 border-line pl-2.5 text-xs italic text-ink-3">
-                        {contact.research.hook}
+                        {hookOf(contact.research)}
                       </div>
                     ) : null}
                   </div>
@@ -183,10 +191,12 @@ export default function LeadsPage() {
                         <GitBranch size={14} />
                       </a>
                     ) : null}
-                    <Button size="sm" variant="quiet" onClick={() => draftTo(contact.id)}>
-                      <Mail size={12} />
-                      Draft
-                    </Button>
+                    <OperatorOnly>
+                      <Button size="sm" variant="quiet" onClick={() => draftTo(contact.id)}>
+                        <Mail size={12} />
+                        Draft
+                      </Button>
+                    </OperatorOnly>
                   </div>
                 </li>
               ))}

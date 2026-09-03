@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/theme";
 import { SearchBox } from "@/components/search-box";
+import { useAccess } from "@/components/access";
 
 // The order is the workflow: find companies (list or map) → the people at them →
 // approve the drafts → watch what comes back. Roles live inside each company page.
@@ -13,12 +14,16 @@ const LINKS = [
   { href: "/atlas", label: "Atlas" },
   { href: "/leads", label: "Leads" },
   { href: "/queue", label: "Queue" },
-  { href: "/replies", label: "Replies" },
+  // Replies is real inbound mail from real people; the public instance refuses it, so
+  // the tab is not offered there rather than leading to a 403.
+  { href: "/replies", label: "Replies", operatorOnly: true },
   { href: "/tracker", label: "Tracker" },
 ];
 
 export function AppNav() {
   const path = usePathname();
+  const { publicInstance } = useAccess();
+  const links = LINKS.filter((l) => !(l.operatorOnly && publicInstance));
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-paper/85 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-6 px-6">
@@ -26,7 +31,7 @@ export function AppNav() {
           ZoNuLy
         </Link>
         <nav className="flex items-center gap-1 overflow-x-auto">
-          {LINKS.map((l) => {
+          {links.map((l) => {
             // /companies/12 belongs to the atlas, so the atlas tab stays lit there
             const active =
               path === l.href ||

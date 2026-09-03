@@ -13,8 +13,12 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
-# The dashboard is its own repo and its own image (Next.js); not part of this one.
+# The dashboard is deployed separately (Vercel); not part of this image.
 dashboard/
+
+# The source scrape the landing page was cut from: 48 MB of build context that the
+# image never copies. demo.db is deliberately NOT ignored — the API serves it.
+assets/
 
 .git/
 .github/

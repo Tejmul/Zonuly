@@ -7,6 +7,7 @@ import { api, useApi, useTaskWatcher, type TrackerRow } from "@/lib/api";
 import { cn, relTime } from "@/lib/utils";
 import { PageHead, TaskStrip } from "@/components/shell";
 import { ConfidenceBadge, Odds, SentimentBadge } from "@/components/signals";
+import { OperatorOnly } from "@/components/access";
 import {
   Badge,
   Button,
@@ -61,10 +62,12 @@ export default function TrackerPage() {
               <option value="replied">Replied</option>
               <option value="failed">Failed</option>
             </Select>
-            <Button variant="quiet" size="sm" onClick={poll}>
-              <RefreshCw size={13} />
-              Check for replies
-            </Button>
+            <OperatorOnly>
+              <Button variant="quiet" size="sm" onClick={poll}>
+                <RefreshCw size={13} />
+                Check for replies
+              </Button>
+            </OperatorOnly>
           </>
         }
       />

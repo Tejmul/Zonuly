@@ -41,6 +41,13 @@ COPY scripts ./scripts
 COPY config.yaml companies.yaml ./
 COPY knowledge ./knowledge
 
+# The read-only snapshot the public instance serves (scripts/make_demo_db.py builds it).
+# Baking it in is what lets the deployment run with no volume and no writable disk:
+# nothing on a public instance writes, so nothing needs to persist. An operator
+# instance overrides ZONULY_DB_PATH to point at a mounted volume instead.
+COPY demo.db ./demo.db
+ENV ZONULY_DB_PATH=/app/demo.db
+
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
@@ -52,10 +59,12 @@ USER app
 
 EXPOSE 8000
 HEALTHCHECK --interval=60s --timeout=5s --start-period=20s \
-  CMD curl -fsS http://127.0.0.1:8000/api/health || exit 1
+  CMD curl -fsS "http://127.0.0.1:${PORT:-8000}/api/health" || exit 1
 
-# FastAPI + the scheduler. `cli` in compose overrides this with `python scripts/run.py ...`.
-CMD ["uvicorn", "jobhunter.api:app", "--host", "0.0.0.0", "--port", "8000"]
+# Shell form on purpose: Railway and friends assign the port at run time and health-check
+# it, so $PORT has to be expanded by a shell rather than frozen into the image.
+# `cli` in compose overrides this with `python scripts/run.py ...`.
+CMD uvicorn jobhunter.api:app --host 0.0.0.0 --port ${PORT:-8000}
 
 
 # ---------------------------------------------------------------- optional: browser

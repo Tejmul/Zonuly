@@ -156,6 +156,8 @@ export type Health = {
     jobs: { id: string; name: string; next_run: string | null }[];
     last_runs: Record<string, { at: string; result: unknown; error: string | null }>;
   };
+  /** Absent on older backends, so every read of it is optional. */
+  access?: { public: boolean; read_only: boolean; operator_key_set: boolean };
 };
 
 export type Task = {
@@ -186,7 +188,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch {
     throw new ApiError(
-      "Can't reach the API. Start it with `python scripts/run.py serve`.",
+      API_BASE.includes("127.0.0.1") || API_BASE.includes("localhost")
+        ? "Can't reach the API. Start it with `python scripts/run.py serve`."
+        : "Can't reach the API right now.",
       0,
     );
   }

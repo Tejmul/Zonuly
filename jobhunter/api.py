@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import uuid
 from contextlib import asynccontextmanager
@@ -18,11 +19,12 @@ from typing import Any, Literal
 import yaml
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 from sqlmodel import col, func, select
 
-from jobhunter import CONFIG, ROOT
+from jobhunter import CONFIG, ROOT, access
 from jobhunter.db import Company, Contact, Email, Job, Reply, get_session, init_db
 from jobhunter.research.routes import router as research_router
 
@@ -34,7 +36,9 @@ _API = CONFIG.get("api") or {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    if _API.get("scheduler", True):
+    # The scheduler stays off on a public instance: it would scrape from a datacenter
+    # IP (which LinkedIn blocks on sight) and poll a mailbox nobody there owns.
+    if _API.get("scheduler", True) and not access.PUBLIC:
         from jobhunter import scheduler
 
         scheduler.start()
@@ -45,9 +49,38 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="JobHunter API", version="1.0", lifespan=lifespan)
+
+
+async def _access_guard(request, call_next):
+    """One gate in front of every route, present and future.
+
+    A per-route dependency is a thing somebody forgets to add to route number
+    forty-one; a middleware cannot be forgotten. See jobhunter/access.py — with
+    ZONULY_PUBLIC unset this costs one dict lookup and changes nothing.
+    """
+    verdict = access.refusal(request.method, request.url.path, request.headers)
+    if verdict is not None:
+        status, detail = verdict
+        return JSONResponse({"detail": detail}, status_code=status)
+    # Recorded for this request only, so the serialisers know whether to redact.
+    token = access.set_operator(access.is_operator(request.headers))
+    try:
+        return await call_next(request)
+    finally:
+        access.reset_operator(token)
+
+
+# Added before CORS so that CORS ends up the outer layer: a refusal still carries
+# Access-Control-Allow-Origin, and the browser shows the reason instead of reporting
+# a CORS failure that hides it.
+app.add_middleware(BaseHTTPMiddleware, dispatch=_access_guard)
+
+# Origins come from config locally and from the environment in a deployment, where the
+# Vercel URL is not known until the frontend exists.
+_ORIGINS = [o.strip() for o in os.environ.get("ZONULY_CORS_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_API.get("cors_origins", ["http://localhost:3000"]),
+    allow_origins=_ORIGINS or _API.get("cors_origins", ["http://localhost:3000"]),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -155,7 +188,9 @@ def _contact_dict(c: Contact, company_name: str | None = None) -> dict:
             notes = json.loads(c.research_notes)
         except json.JSONDecodeError:
             notes = {"notes": c.research_notes}
-    return {
+    # Redaction happens here, at the one place a Contact becomes JSON, so no endpoint
+    # can leak an address by forgetting to ask.
+    return access.redact_contact({
         "id": c.id,
         "company_id": c.company_id,
         "company_name": company_name,
@@ -170,11 +205,11 @@ def _contact_dict(c: Contact, company_name: str | None = None) -> dict:
         "research": notes,
         "researched_at": c.researched_at.isoformat() if c.researched_at else None,
         "created_at": c.created_at.isoformat() if c.created_at else None,
-    }
+    })
 
 
 def _email_dict(e: Email, *, contact: Contact | None = None, company: Company | None = None) -> dict:
-    return {
+    return access.redact_email({
         "id": e.id,
         "contact_id": e.contact_id,
         "company_id": e.company_id,
@@ -194,7 +229,7 @@ def _email_dict(e: Email, *, contact: Contact | None = None, company: Company | 
         "approved_at": e.approved_at.isoformat() if e.approved_at else None,
         "sent_at": e.sent_at.isoformat() if e.sent_at else None,
         "followup_sent": e.followup_sent,
-    }
+    })
 
 
 # ---------------------------------------------------------------- health & overview
@@ -216,6 +251,7 @@ def health() -> dict:
         "profile": {"exists": profile_path.exists(), "path": str(profile_path)},
         "counts": matcher.counts(),
         "scheduler": scheduler.status(),
+        "access": access.status(),
     }
 
 
@@ -992,7 +1028,9 @@ def serve(host: str | None = None, port: int | None = None, reload: bool = False
 
     uvicorn.run(
         "jobhunter.api:app" if reload else app,
-        host=host or _API.get("host", "127.0.0.1"),
-        port=port or int(_API.get("port", 8000)),
+        # Railway (and every other platform) assigns a port and health-checks it, so
+        # $PORT wins over the config default whenever it is set.
+        host=host or os.environ.get("ZONULY_HOST") or _API.get("host", "127.0.0.1"),
+        port=port or int(os.environ.get("PORT") or _API.get("port", 8000)),
         reload=reload,
     )
