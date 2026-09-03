@@ -33,7 +33,7 @@ WORKDIR /app
 
 # Dependencies first, so a code change does not reinstall the world.
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,id=s/c0e9a8a4-adb4-43f3-b4b2-4d88d6623a08-/root/.cache/uv,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 
 COPY jobhunter ./jobhunter
@@ -48,7 +48,7 @@ COPY knowledge ./knowledge
 COPY demo.db ./demo.db
 ENV ZONULY_DB_PATH=/app/demo.db
 
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,id=s/c0e9a8a4-adb4-43f3-b4b2-4d88d6623a08-/root/.cache/uv,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 # A non-root user; the DB and secrets are volumes owned by it.
@@ -73,7 +73,7 @@ CMD uvicorn jobhunter.api:app --host 0.0.0.0 --port ${PORT:-8000}
 # it adds ~400 MB and is deliberately not the default.
 FROM base AS browser
 USER root
-RUN --mount=type=cache,target=/root/.cache/ms-playwright \
+RUN --mount=type=cache,id=s/c0e9a8a4-adb4-43f3-b4b2-4d88d6623a08-/root/.cache/ms-playwright,target=/root/.cache/ms-playwright \
     playwright install --with-deps chromium \
  && chown -R app:app /opt/pw-browsers
 USER app
