@@ -16,6 +16,7 @@ import { useGSAP } from "@gsap/react";
 import { ArrowRight, CircleSlash, Network, ShieldCheck } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme";
+import { Rights } from "@/components/rights";
 import { FaceMosaic, SAMPLE_LEADS, type Lead } from "@/components/landing/mosaic";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
@@ -367,6 +368,7 @@ export default function Landing() {
             Photographs are of engineers at public startup events, shown unnamed. They
             illustrate the crowd the atlas searches, not the people in it.
           </p>
+          <Rights className="w-full text-right sm:w-auto" />
         </div>
       </footer>
     </div>
