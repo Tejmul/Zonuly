@@ -703,6 +703,70 @@ def run(target: int = 500, *, yc_limit: int | None = None, exa: bool = True,
     return summary
 
 
+# ------------------------------------------------------------------ discovery from the funding press
+
+# Regions worded for a news search, mapped to our region keys.
+_NEWS_REGIONS = [
+    ("the United States", "us"), ("the United Kingdom", "uk"), ("Germany", "de"),
+    ("the Netherlands", "nl"), ("Europe", "eu"), ("India", "india"),
+]
+_NEWS_TOPICS = ["AI", "developer tools", "fintech", "infrastructure", "data", "healthtech", "cybersecurity", "SaaS"]
+
+
+def discover_funded(*, topics: list[str] | None = None, per_topic: int = 8, max_searches: int = 30) -> HarvestStats:
+    """Admit new companies that the existing funding-press scraper (research.find_startups)
+    turns up. That scraper searches TechCrunch / EU-Startups / Sifted / YourStory etc. via
+    Exa and returns records with a name, region and round; here we run it across our target
+    regions and topics and put the ones that fit into the registry — the admission step it
+    was missing. Each admitted company then flows into probe → roles → people like any other.
+    """
+    from jobhunter import research
+    from jobhunter.research import web
+
+    init_db()
+    stats = HarvestStats("funding-news")
+    day = datetime.now().timetuple().tm_yday
+    topics = topics or _NEWS_TOPICS
+    regions = [w for w, _ in _NEWS_REGIONS]
+    key_of = dict(_NEWS_REGIONS)
+    stage = ["seed", "Series A", "pre-seed", "Series B"][day % 4]
+    budget = max(1, max_searches // max(1, len(topics)))
+    with get_session() as session:
+        for topic in topics:
+            if web.exa_budget()["left"] <= 3:
+                stats.skip("exa budget reached")
+                break
+            res = research.find_startups(topic=topic, regions=regions, stages=[stage],
+                                         limit=budget * 4, per_query=per_topic, enrich=0)
+            for c in res.get("companies") or []:
+                stats.seen += 1
+                name = _clean_name(c.get("name") or "") or ""
+                if not name or len(name) < 2:
+                    stats.skip("no usable name")
+                    continue
+                if not targeting.hype_check(name)[0]:
+                    stats.skip("hyped name")
+                    continue
+                region = key_of.get(c.get("region"), targeting.region_of(c.get("region")))
+                if region not in REGIONS_OK:
+                    stats.skip("region outside targets")
+                    continue
+                fd = c.get("funding") or {}
+                amt = fd.get("amount_usd_m")
+                fund = {"stage": (fd.get("stage") or "").lower() or None, "announced": fd.get("announced"),
+                        "amount_usd_m": amt if (amt and amt <= 2000) else None,
+                        "evidence": (fd.get("evidence_quote") or c.get("announcement_title") or "")[:300]} if fd else None
+                stats.candidates += 1
+                _upsert(session, name=name, website=None, source="funding-news",
+                        description=_first_sentence(c.get("announcement_title")), region=region,
+                        note=f"funding press: {(c.get('announcement_title') or '')[:100]}", funding=fund,
+                        claim={"text": c.get("announcement_title", "")[:200], "url": c.get("announcement_url"), "by": None},
+                        stats=stats)
+            session.commit()
+    log.info("discover_funded: %s", stats.as_dict())
+    return stats
+
+
 # ------------------------------------------------------------------ four channels in parallel
 
 def parallel_run(minutes: int = 30) -> dict:
@@ -749,10 +813,16 @@ def parallel_run(minutes: int = 30) -> dict:
 
     def exa() -> dict:
         s = {"admitted": 0, "facts": 0}
-        # a few rotating discovery queries, then facts until the cap
-        day = datetime.now().timetuple().tm_yday
-        q = [DEFAULT_EXA_QUERIES[(day + i) % len(DEFAULT_EXA_QUERIES)] for i in range(4)]
-        s["admitted"] = admit_exa(q).admitted
+        # discovery from the funding press + company search, then facts, until the cap
+        news = discover_funded(max_searches=12)
+        s["admitted"] += news.admitted
+        if web.exa_budget()["left"] > 5:
+            day = datetime.now().timetuple().tm_yday
+            q = [DEFAULT_EXA_QUERIES[(day + i) % len(DEFAULT_EXA_QUERIES)] for i in range(3)]
+            s["admitted"] += admit_exa(q).admitted
+        # a discovery burst leaves new companies with no board/roles — probe and scrape them
+        probe_ats(limit=60)
+        scrape_roles(limit=60)
         while _t.time() < deadline and web.exa_budget()["left"] > 5:
             r = enrich.facts_pending(limit=20)
             if not r:

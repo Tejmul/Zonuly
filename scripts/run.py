@@ -1369,6 +1369,18 @@ def harvest_parallel(minutes: int = typer.Option(30, help="How long to run the f
     _echo(harvest.parallel_run(minutes=minutes))
 
 
+@harvest_app.command("discover")
+def harvest_discover(
+    topic: list[str] = typer.Option(None, "--topic", "-t", help="Repeatable; default is the eight standard topics"),
+    max_searches: int = typer.Option(30, help="Cap on Exa searches this run"),
+) -> None:
+    """Find new funded startups from the funding press (via Exa) and admit the ones that fit."""
+    _setup_logging()
+    from jobhunter import harvest
+
+    _echo(harvest.discover_funded(topics=topic or None, max_searches=max_searches).as_dict())
+
+
 @harvest_app.command("levels")
 def harvest_levels(limit: int = typer.Option(40, help="Companies to look up on levels.fyi")) -> None:
     """Read levels.fyi pay (via scrape.do) for companies with roles and no stated figure."""
