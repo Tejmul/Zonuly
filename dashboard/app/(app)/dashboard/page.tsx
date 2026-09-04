@@ -134,7 +134,6 @@ export default function Dashboard() {
 
       {/* ------------------------------------------------------------ the KPIs */}
       <section data-plate className="plate grid grid-cols-2 divide-line lg:grid-cols-4 lg:divide-x">
-        <span className="tick" />
         <Stat
           hero
           label="Ready to ask today"
@@ -339,7 +338,6 @@ function Plate({
 }: { title: string; sub?: string; children: React.ReactNode; className?: string }) {
   return (
     <section data-plate className={`plate px-4 py-4 ${className}`}>
-      <span className="tick" />
       <h2 className="text-[13px] font-semibold tracking-[-0.01em]">{title}</h2>
       {sub && <p className="mt-1 max-w-[70ch] text-[11.5px] leading-relaxed text-ink-3">{sub}</p>}
       <div className="mt-4">{children}</div>

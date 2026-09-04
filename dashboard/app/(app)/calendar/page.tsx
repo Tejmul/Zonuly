@@ -72,7 +72,6 @@ function Section({ title, rows, busy, onAct, empty }: {
 }) {
   return (
     <div className="plate">
-      <span className="tick" />
       <div className="border-b border-line px-4 py-3">
         <h2 className="font-[family-name:var(--font-display)] text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>
       </div>

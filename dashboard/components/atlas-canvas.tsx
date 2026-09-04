@@ -109,7 +109,6 @@ export function AtlasCanvas({
 
   return (
     <div className="plate relative overflow-hidden">
-      <span className="tick" />
 
       <div className="absolute top-3 right-3 z-10 flex gap-1">
         {[

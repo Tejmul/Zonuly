@@ -30,7 +30,6 @@ export function Learn() {
 
   return (
     <div className="plate mt-4">
-      <span className="tick" />
       <div className="border-b border-line px-4 py-3">
         <h2 className="font-[family-name:var(--font-display)] text-[15px] font-semibold tracking-[-0.01em]">What works</h2>
         <p className="mt-0.5 text-[12px] text-ink-2">

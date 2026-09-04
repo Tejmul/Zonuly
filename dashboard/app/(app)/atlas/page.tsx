@@ -1,240 +1,234 @@
 "use client";
 
+/*  Atlas.
+ *
+ *  It used to be a map of the market — 34 industry segments and a hairball of grey
+ *  edges — which answered "what is out there". Nobody was asking that. The question
+ *  is "given my resume and what I actually want, where should my hours go", and
+ *  that is a computation.
+ *
+ *  So: your resume on the left, six weighted terms in the middle, segments lighting
+ *  up, companies ranked on the right, and every wire between them a real number out
+ *  of lib/atlas-model.ts. Move a slider and watch the ranking move. Hover a company
+ *  and the path that produced it stays lit while everything else drops away.
+ *
+ *  The old result columns were wrong and the user was right about it: a raw region
+ *  code and a roles/leads fraction told you nothing about whether to spend a morning
+ *  on a company. The columns now say what it pays, whether you could take it, and
+ *  what actually carried its score.
+ */
+
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowRight, Search, X } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { useApi } from "@/lib/api";
-import { TierPill } from "@/components/ui/tier";
-import { AtlasCanvas } from "@/components/atlas-canvas";
+import { AtlasNet } from "@/components/atlas-net";
+import {
+  DEFAULT_WEIGHTS, FIELDS, TERMS, rank, resumeSignals, segmentHeat, suggestedFields,
+  type Company, type FieldKey, type Profile, type TermKey, type Weights,
+} from "@/lib/atlas-model";
 
-/* The Atlas is a filter. The map shows the market (industry-chain layers, segments sized by
-   companies); clicking segments adds them to the filter, the switches narrow further, and
-   the box underneath always shows exactly the companies that match — one click to open. */
-
-type NodeT = {
-  id: string; layer: string; label: string; note: string | null;
-  count: number; bets: number; near: number; leads: number; fresher: number; anywhere: number; roles: number;
-  chokepoint: boolean; bottleneck: boolean; company_ids: number[];
-};
-type CompanyT = {
-  id: number; name: string; tier: string | null; region: string | null;
-  description: string | null; website: string | null; funding_stage: string | null;
-  ppo_lpa: number | null; stipend_inr_month: number | null; hiring_status: string | null;
-  segment: string; segment_label: string;
-  roles: number; fresher: number; anywhere: number; leads: number;
-  bet: boolean; near: boolean; missing: string[];
-  hiring_post: { url: string; by: string | null; source: string | null } | null;
-};
-type Atlas = {
-  stages: { key: string; code: string; label: string; blurb: string; nodes: number }[];
-  nodes: NodeT[];
-  edges: { source: string; target: string; weight: number }[];
-  companies: CompanyT[];
-  stats: Record<string, number>;
-  definitions: Record<string, string>;
-};
-type Mode = "layers" | "chokepoints" | "bottlenecks";
-
-const REGIONS: [string, string][] = [
-  ["", "any region"], ["us", "US"], ["uk", "UK"], ["de", "Germany"], ["eu", "Europe"], ["nl", "Netherlands"],
-  ["india", "India"], ["remote", "Remote"],
-];
-const SWITCHES: { key: keyof Filters; label: string; hint: string }[] = [
-  { key: "hiring", label: "hiring proven", hint: "their own board or careers page lists open roles" },
-  { key: "fresher", label: "fresher roles", hint: "at least one role that is not senior/staff/lead" },
-  { key: "anywhere", label: "hire from anywhere", hint: "a posting says work from any country / no visa" },
-  { key: "lead", label: "has a lead", hint: "someone with a usable email who can refer" },
-  { key: "bets", label: "ready to ask", hint: "all four line up" },
-];
-type Filters = { hiring: boolean; fresher: boolean; anywhere: boolean; lead: boolean; bets: boolean };
-const MISSING_SHORT: Record<string, string> = { hiring: "hiring", fresher: "fresher role", location: "remote-anywhere", lead: "lead" };
+type Atlas = { companies: Company[]; stats: Record<string, number> };
 
 export default function AtlasPage() {
-  const { data, loading, error } = useApi<Atlas>("/api/network");
-  const [mode, setMode] = useState<Mode>("layers");
-  const [query, setQuery] = useState("");
-  const [picked, setPicked] = useState<string[]>([]);          // selected segment ids
-  const [region, setRegion] = useState("");
-  const [tier, setTier] = useState("");
-  const [f, setF] = useState<Filters>({ hiring: false, fresher: false, anywhere: false, lead: false, bets: false });
-  const [find, setFind] = useState("");
+  const net = useApi<Atlas>("/api/network");
+  const prof = useApi<Profile>("/api/profile");
 
-  const results = useMemo(() => {
-    if (!data) return [];
-    const segs = new Set(picked);
-    const needle = find.trim().toLowerCase();
-    return data.companies.filter((c) => {
-      if (segs.size && !segs.has(c.segment)) return false;
-      if (region && c.region !== region) return false;
-      if (tier && c.tier !== tier) return false;
-      if (f.hiring && !["verified", "role_missing"].includes(c.hiring_status ?? "")) return false;
-      if (f.fresher && !c.fresher) return false;
-      if (f.anywhere && !c.anywhere) return false;
-      if (f.lead && !c.leads) return false;
-      if (f.bets && !c.bet) return false;
-      if (needle && !`${c.name} ${c.description ?? ""}`.toLowerCase().includes(needle)) return false;
-      return true;
+  const [fields, setFields] = useState<FieldKey[] | null>(null);
+  const [w, setW] = useState<Weights>(DEFAULT_WEIGHTS);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [q, setQ] = useState("");
+
+  // Until the resume lands, the opening position is read from it rather than
+  // guessed — the page should never greet you with an empty board.
+  // Both memoised: scoring runs over ~2,000 companies x 6 terms, so a new array
+  // identity on every keystroke in the search box would re-rank the whole atlas.
+  const suggested = useMemo(() => suggestedFields(prof.data ?? null), [prof.data]);
+  const chosen = fields ?? suggested;
+  const companies = useMemo(() => net.data?.companies ?? [], [net.data]);
+
+  const ranked = useMemo(() => rank(companies, chosen, w, 60), [companies, chosen, w]);
+  const heat = useMemo(() => segmentHeat(companies, chosen, w), [companies, chosen, w]);
+  const inputs = useMemo(() => resumeSignals(prof.data ?? null), [prof.data]);
+
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return ranked;
+    return ranked.filter((r) =>
+      `${r.company.name} ${r.company.description ?? ""} ${r.company.segment_label}`.toLowerCase().includes(needle),
+    );
+  }, [ranked, q]);
+
+  if (net.error) return <p className="py-8 text-[13px] text-ink-3">{net.error}</p>;
+  if (!net.data) return <p className="py-8 text-[13px] text-ink-3">Reading the atlas…</p>;
+
+  const toggleField = (k: FieldKey) =>
+    setFields((cur) => {
+      const base = cur ?? chosen;
+      return base.includes(k) ? base.filter((x) => x !== k) : [...base, k];
     });
-  }, [data, picked, region, tier, f, find]);
 
-  if (error) return <Note>{error}</Note>;
-  if (loading && !data) return <Note>Drawing the map…</Note>;
-  if (!data) return null;
-
-  const active = picked.length + (region ? 1 : 0) + (tier ? 1 : 0) + Object.values(f).filter(Boolean).length + (find ? 1 : 0);
-  const pickedNodes = data.nodes.filter((n) => picked.includes(n.id));
-  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
-  const clear = () => { setPicked([]); setRegion(""); setTier(""); setF({ hiring: false, fresher: false, anywhere: false, lead: false, bets: false }); setFind(""); };
+  const dirty = JSON.stringify(w) !== JSON.stringify(DEFAULT_WEIGHTS) || fields !== null;
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-[-0.02em]">Atlas</h1>
-        <p className="mt-0.5 text-[12.5px] text-ink-2">
-          Click segments on the map to filter, flip the switches, and the companies that match appear in the box below.
+      <header>
+        <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-[-0.02em]">
+          Atlas
+        </h1>
+        <p className="mt-1 max-w-[70ch] text-[12.5px] leading-relaxed text-ink-2">
+          Your resume goes in on the left. Six things get weighed. Segments light up, and the
+          companies worth your hours come out on the right — each one traceable back through
+          the wires that produced it. Change what you want and the whole thing recomputes.
         </p>
-        <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 border-t border-line pt-2">
-          {([["companies", data.stats.companies], ["segments", data.stats.nodes], ["ready to ask", data.stats.bets],
-            ["one step away", data.stats.near], ["chokepoints", data.stats.chokepoints]] as [string, number][]).map(([l, v]) => (
-            <span key={l} className="flex items-baseline gap-1.5">
-              <span className="tnum text-[13px] font-medium">{(v ?? 0).toLocaleString()}</span>
-              <span className="marginal">{l}</span>
-            </span>
-          ))}
-        </div>
-      </div>
+      </header>
 
-      {/* ------------------------------------------------------------ filters */}
-      <div className="plate px-4 py-3">
-        <span className="tick" />
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="relative min-w-0 flex-1 sm:max-w-[200px]">
-            <Search size={13} className="absolute top-1/2 left-2.5 -translate-y-1/2 text-ink-3" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Find a segment on the map"
-              className="h-8 w-full rounded-md border border-line bg-surface pr-2 pl-7 text-[12px] placeholder:text-ink-3 focus:border-line-strong focus:outline-none"
-            />
-          </label>
-          <select value={region} onChange={(e) => setRegion(e.target.value)} className="h-8 rounded-md border border-line bg-surface px-2 text-[12px]">
-            {REGIONS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-          </select>
-          <select value={tier} onChange={(e) => setTier(e.target.value)} className="h-8 rounded-md border border-line bg-surface px-2 text-[12px]">
-            <option value="">any grade</option>
-            <option value="tier1">tier 1</option>
-            <option value="tier2">tier 2</option>
-            <option value="prospect">prospect</option>
-            <option value="unknown">pay unknown</option>
-          </select>
-          {SWITCHES.map((s) => (
+      {/* ------------------------------------------------------------ inputs */}
+      <section className="plate p-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="eyebrow">What do you want to work on</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {FIELDS.map((f) => {
+                const on = chosen.includes(f.key);
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => toggleField(f.key)}
+                    aria-pressed={on}
+                    title={f.blurb}
+                    className={`cursor-pointer rounded-md border px-2.5 py-1.5 text-[12px] transition-colors ${
+                      on
+                        ? "border-ink bg-ink text-on-ink"
+                        : "border-line text-ink-2 hover:border-line-strong hover:text-ink"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 max-w-[62ch] text-[11px] leading-relaxed text-ink-3">
+              {chosen.length
+                ? FIELDS.filter((f) => chosen.includes(f.key)).map((f) => f.blurb).join(" ")
+                : "Nothing picked, so the field term is neutral and the other five decide."}
+            </p>
+          </div>
+
+          {dirty && (
             <button
-              key={s.key}
-              title={s.hint}
-              onClick={() => setF((x) => ({ ...x, [s.key]: !x[s.key] }))}
-              className={`marginal cursor-pointer rounded-md border px-2.5 py-1.5 transition-colors ${
-                f[s.key] ? "border-ink bg-ink" : "border-line hover:text-ink"
-              }`}
-              style={f[s.key] ? { color: "var(--on-ink)" } : undefined}
+              type="button"
+              onClick={() => { setW(DEFAULT_WEIGHTS); setFields(null); }}
+              className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-[11.5px] text-ink-3 hover:text-ink"
             >
-              {s.label}
+              <RotateCcw size={12} />
+              Reset to what your resume suggests
             </button>
-          ))}
-          <div className="ml-auto flex rounded-md border border-line p-px">
-            {(["layers", "chokepoints", "bottlenecks"] as Mode[]).map((m) => (
-              <button
-                key={m}
-                title={m === "layers" ? "show everything" : data.definitions[m === "chokepoints" ? "chokepoint" : "bottleneck"]}
-                onClick={() => setMode(m)}
-                className={`marginal cursor-pointer rounded-[5px] px-2.5 py-1.5 transition-colors ${mode === m ? "bg-ink" : "hover:text-ink"}`}
-                style={mode === m ? { color: "var(--on-ink)" } : undefined}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
-        </div>
-        {pickedNodes.length > 0 && (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="marginal">segments:</span>
-            {pickedNodes.map((n) => (
-              <button key={n.id} onClick={() => toggle(n.id)} className="chip cursor-pointer hover:bg-surface-2">
-                {n.label} <X size={11} />
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <AtlasCanvas
-        stages={data.stages}
-        nodes={data.nodes}
-        edges={data.edges}
-        mode={mode}
-        query={query}
-        picked={picked}
-        onToggle={toggle}
-      />
-
-      {/* ------------------------------------------------------------ results */}
-      <div className="plate">
-        <span className="tick" />
-        <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
-          <h2 className="font-[family-name:var(--font-display)] text-[15px] font-semibold tracking-[-0.01em]">
-            <span className="tnum">{results.length.toLocaleString()}</span> {results.length === 1 ? "company" : "companies"}
-            {active ? " match" : ""}
-          </h2>
-          <label className="relative min-w-0 flex-1 sm:max-w-[220px]">
-            <Search size={13} className="absolute top-1/2 left-2.5 -translate-y-1/2 text-ink-3" />
-            <input
-              value={find}
-              onChange={(e) => setFind(e.target.value)}
-              placeholder="Find a company in the results"
-              className="h-8 w-full rounded-md border border-line bg-surface pr-2 pl-7 text-[12px] placeholder:text-ink-3 focus:border-line-strong focus:outline-none"
-            />
-          </label>
-          {active > 0 && (
-            <button onClick={clear} className="marginal ml-auto cursor-pointer hover:text-ink">clear filters</button>
           )}
         </div>
-        {results.length === 0 ? (
-          <p className="px-4 py-8 text-[13px] text-ink-3">Nothing matches. Loosen a switch or clear the segments.</p>
-        ) : (
-          <ul className="max-h-[32rem] divide-y divide-line overflow-y-auto">
-            {results.slice(0, 300).map((c, i) => (
+
+        <div className="mt-4 border-t border-line pt-3">
+          <p className="eyebrow">How much each thing should count</p>
+          <div className="mt-2 grid gap-x-8 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+            {TERMS.map((t) => (
+              <label key={t.key} className="block cursor-pointer" title={t.asks}>
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="text-[11.5px] text-ink-2">{t.label}</span>
+                  <span className="tnum text-[11px] text-ink-3">{w[t.key].toFixed(2)}</span>
+                </span>
+                <input
+                  type="range" min={0} max={1} step={0.05} value={w[t.key]}
+                  onChange={(e) => setW({ ...w, [t.key as TermKey]: Number(e.target.value) })}
+                  className="mt-1 w-full cursor-pointer accent-[var(--ink)]"
+                  aria-label={`${t.label}: ${t.asks}`}
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ----------------------------------------------------------- network */}
+      <section className="plate p-4">
+        <AtlasNet
+          inputs={inputs}
+          segments={heat}
+          ranked={ranked}
+          weights={w}
+          fields={chosen}
+          picked={picked}
+          onPick={setPicked}
+        />
+      </section>
+
+      {/* ----------------------------------------------------------- results */}
+      <section className="plate">
+        <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
+          <h2 className="text-[13px] font-semibold">
+            {shown.length} compan{shown.length === 1 ? "y" : "ies"}, best first
+          </h2>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Find one"
+            className="h-8 w-48 rounded-sm border border-line bg-surface px-2.5 text-[12px] outline-none placeholder:text-ink-3 focus:border-line-strong"
+          />
+          <span className="ml-auto text-[11px] text-ink-3">
+            Score is the weighted sum above, out of 100
+          </span>
+        </div>
+
+        <ul className="divide-y divide-line">
+          {shown.slice(0, 40).map((r, i) => {
+            const c = r.company;
+            return (
               <li key={c.id}>
                 <Link
                   href={`/companies/${c.id}`}
-                  className="group flex items-center gap-2.5 px-4 py-2 transition-colors hover:bg-surface-2"
+                  onMouseEnter={() => setPicked(c.id)}
+                  className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-2 sm:grid-cols-[2rem_14rem_minmax(0,1fr)_auto]"
                 >
-                  <span className="tnum w-7 shrink-0 text-right text-[11px] text-ink-3">{i + 1}</span>
-                  <TierPill tier={c.tier} />
-                  <span className="truncate text-[12.5px] font-medium">{c.name}</span>
-                  {c.bet && <span className="chip shrink-0">ready</span>}
-                  {c.anywhere > 0 && <span className="chip shrink-0">anywhere</span>}
-                  <span className="hidden flex-1 truncate text-[12px] text-ink-3 lg:block">{c.description ?? c.segment_label}</span>
-                  <span className="marginal shrink-0">{c.region ?? "—"}</span>
-                  <span className="tnum w-16 shrink-0 text-right text-[11px] text-ink-3">{c.fresher}/{c.roles} roles</span>
-                  <span className="tnum w-14 shrink-0 text-right text-[11px] text-ink-3">{c.leads} lead{c.leads === 1 ? "" : "s"}</span>
-                  {!c.bet && c.missing.length > 0 && (
-                    <span className="hidden w-40 shrink-0 truncate text-[11px] text-ink-3 xl:block">
-                      needs {c.missing.map((m) => MISSING_SHORT[m] ?? m).join(", ")}
+                  <span className="tnum text-[11px] text-ink-3">{i + 1}</span>
+
+                  <span className="min-w-0">
+                    <span className="block truncate text-[12.5px] font-medium">{c.name}</span>
+                    <span className="block truncate text-[11px] text-ink-3">{c.segment_label}</span>
+                  </span>
+
+                  {/* The columns that matter: what carried the score, not a region code. */}
+                  <span className="hidden min-w-0 flex-wrap items-center gap-1.5 sm:flex">
+                    {r.top.map((k) => (
+                      <span key={k} className="chip">
+                        {TERMS.find((t) => t.key === k)?.label}
+                      </span>
+                    ))}
+                    <span className="ml-1 truncate text-[11px] text-ink-3">
+                      {r.terms.pay.why} · {r.terms.remote.why}
                     </span>
-                  )}
-                  <ArrowRight size={12} className="shrink-0 text-ink-3 transition-transform group-hover:translate-x-0.5" />
+                  </span>
+
+                  <span className="flex items-center gap-3">
+                    <span className="bar-track hidden h-[8px] w-16 sm:block">
+                      <span
+                        className="bar-mark block h-full"
+                        style={{ width: `${Math.max(2, r.score * 100)}%`, background: "var(--data-2)" }}
+                      />
+                    </span>
+                    <span className="tnum w-8 text-right text-[12px]">{Math.round(r.score * 100)}</span>
+                  </span>
                 </Link>
               </li>
-            ))}
-          </ul>
+            );
+          })}
+        </ul>
+
+        {shown.length === 0 && (
+          <p className="px-4 py-6 text-[12px] text-ink-3">
+            Nothing matches. Widen a field or drop a weight to zero.
+          </p>
         )}
-        {results.length > 300 && (
-          <p className="border-t border-line px-4 py-2 text-[11.5px] text-ink-3">Showing the first 300 — add a filter to narrow it.</p>
-        )}
-      </div>
+      </section>
     </div>
   );
-}
-
-function Note({ children }: { children: React.ReactNode }) {
-  return <p className="py-8 text-[13px] text-ink-3">{children}</p>;
 }

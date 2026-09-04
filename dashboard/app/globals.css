@@ -8,8 +8,9 @@
   rule, and position. That is a stricter brief than a palette, and a cleaner result —
   a chart reads faster when nothing on it is decorative.
 
-  The one structural device is the plate: a hairline frame with corner ticks and a
-  numbered code, borrowed from printed survey charts, which is what this product is.
+  The one structural device is the plate: a panel with a visible hairline frame.
+  It used to carry corner ticks borrowed from printed survey charts; they were
+  ornament, they out-contrasted the border they sat on, and they read as a bug.
 */
 
 @theme {
@@ -112,23 +113,9 @@ body {
   background-size: 32px 32px;
 }
 
-/* A plate: hairline frame, ticked corners. The only ornament in the system. */
-.plate { position: relative; border: 1px solid var(--line); background: var(--surface); }
-/* The bottom-corner ticks hang off this span. It must not occupy a slot in the
-   plate's own layout, or a grid plate loses its first cell to it. */
-.plate > .tick { position: absolute; inset: 0; pointer-events: none; }
-.plate::before, .plate::after,
-.plate > .tick::before, .plate > .tick::after {
-  content: "";
-  position: absolute;
-  width: 6px; height: 6px;
-  border-color: var(--line-strong);
-  pointer-events: none;
-}
-.plate::before { top: -1px; left: -1px; border-top: 1px solid; border-left: 1px solid; }
-.plate::after  { top: -1px; right: -1px; border-top: 1px solid; border-right: 1px solid; }
-.plate > .tick::before { bottom: -1px; left: -1px; border-bottom: 1px solid; border-left: 1px solid; }
-.plate > .tick::after  { bottom: -1px; right: -1px; border-bottom: 1px solid; border-right: 1px solid; }
+/* A plate: a panel with a frame you can see. The corner ticks that used to hang
+   off it are gone — see the note further down where --plate-edge is set. */
+.plate { position: relative; border: 1px solid var(--plate-edge); background: var(--surface); }
 
 .tnum { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 
@@ -389,3 +376,27 @@ body {
    a visible bar would sit under the links on a phone. */
 .scrollbar-none { scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* --------------------------------------------------------------- the atlas
+   A dot travelling each live wire: one dash on a copy of the path, offset from
+   one end to the other. It carries no information beyond "this wire is live" —
+   the picture is complete without it, which is why reduced motion simply
+   removes it rather than substituting anything. */
+@keyframes atlas-signal { from { stroke-dashoffset: 620; } to { stroke-dashoffset: 0; } }
+.atlas-pulse {
+  stroke-dasharray: 5 615;
+  animation: atlas-signal 2.6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .atlas-pulse { animation: none; opacity: 0; }
+}
+
+/* ------------------------------------------------------------- plate, redone
+   The frame used to be --line (1.28:1 on white) with 6px corner ticks in
+   --line-strong (1.65:1). The ticks out-contrasted the border they sat on, so
+   the eye caught four floating marks and never found the box between them: it
+   read as a border that had failed to render rather than as a frame. The ticks
+   are gone — they were ornament, and ornament that looks like a bug is worse
+   than no ornament — and the edge is now visible on its own. */
+:root { --plate-edge: #a6a6af; }   /* 2.42:1 on white — a hairline you can actually see */
+:root.dark { --plate-edge: #51515c; } /* 2.46:1 on the dark surface */

@@ -245,7 +245,6 @@ export default function Landing() {
               deliberately anonymous — a role and its proof, never a name. */}
           <div className="mt-14 hidden lg:col-span-5 lg:mt-0 lg:block lg:pl-10">
             <div data-record className="record plate ml-auto max-w-[19rem] p-4">
-              <span className="tick" />
               <div className="flex items-baseline justify-between">
                 <span className="eyebrow">Sample record</span>
                 <span className="tnum text-[10px] text-[#9a9aa4]">{String(lead.n).padStart(3, "0")}</span>
@@ -291,7 +290,6 @@ export default function Landing() {
         <div className="mt-12 grid gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-6">
           {SOURCES.map((src) => (
             <article key={src.name} data-reveal className={`source ${src.span}`}>
-              <span className="tick" />
               <div className="flex items-baseline justify-between gap-4">
                 <h3 className="text-[15px] font-semibold tracking-tight">{src.name}</h3>
                 <span className="idx shrink-0">{src.tag}</span>

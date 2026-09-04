@@ -192,7 +192,6 @@ export default function CompaniesPage() {
       </div>
 
       <div className="plate">
-        <span className="tick" />
         {rows.length === 0 ? (
           <p className="px-4 py-8 text-[13px] text-ink-3">
             No company matches. Loosen the filter, or run{" "}
