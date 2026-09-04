@@ -1360,6 +1360,24 @@ def harvest_people(
                               require_roles=not any_roles))
 
 
+@harvest_app.command("parallel")
+def harvest_parallel(minutes: int = typer.Option(30, help="How long to run the four channels")) -> None:
+    """Run all four channels at once (keyless · Exa · OpenRouter · scrape.do), each a different stage, no duplicates."""
+    _setup_logging()
+    from jobhunter import harvest
+
+    _echo(harvest.parallel_run(minutes=minutes))
+
+
+@harvest_app.command("levels")
+def harvest_levels(limit: int = typer.Option(40, help="Companies to look up on levels.fyi")) -> None:
+    """Read levels.fyi pay (via scrape.do) for companies with roles and no stated figure."""
+    _setup_logging()
+    from jobhunter import levels
+
+    _echo(levels.lookup_pending(limit=limit))
+
+
 @harvest_app.command("status")
 def harvest_status() -> None:
     """How many different companies fit, and how far each has got."""

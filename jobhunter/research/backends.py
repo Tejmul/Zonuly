@@ -39,7 +39,7 @@ TIMEOUT = int(RESEARCH.get("timeout", 90))
 #: capability -> ordered candidate backends. config.yaml `research.backends` wins.
 DEFAULT_ROUTES: dict[str, list[str]] = {
     "web_search": ["exa-mcp", "exa-api"],
-    "page_read": ["jina", "exa-mcp", "direct"],
+    "page_read": ["jina", "direct", "scrapedo"],
     "github": ["gh-cli", "github-api"],
     "reddit": ["rdt", "opencli"],
     "youtube": ["yt-dlp"],
@@ -56,10 +56,11 @@ BACKEND_EXE: dict[str, str | None] = {
     "rdt": "rdt",
     "opencli": "opencli",
     "yt-dlp": "yt-dlp",
+    "scrapedo": None,          # pure HTTP, needs the Scrape_dog token
 }
 
 #: backends that only work once a secret is present
-BACKEND_SECRET: dict[str, str] = {"exa-api": "EXA_API_KEY"}
+BACKEND_SECRET: dict[str, str] = {"exa-api": "EXA_API_KEY", "scrapedo": "Scrape_dog"}
 
 
 # ------------------------------------------------------------------ secrets

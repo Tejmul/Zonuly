@@ -47,6 +47,7 @@ L = {
     "describe": int(_T.get("describe_per_tick", 40)),
     "story": int(_T.get("story_per_tick", 40)),
     "facts": int(_T.get("facts_per_tick", 90)),
+    "levels": int(_T.get("levels_per_tick", 60)),
     "exa_queries": int(_T.get("exa_discovery_queries_per_day", 6)),
 }
 
@@ -146,6 +147,10 @@ def run_paid() -> dict:
     # the model passes: descriptions for bare sites, then origin stories
     _step(s, "describe", lambda: _count(enrich.enrich_pending(limit=L["describe"], use_search=False, missing="description")))
     _step(s, "story", lambda: _count(enrich.enrich_pending(limit=L["story"], use_search=False, missing="story")))
+    # levels.fyi pay via scrape.do — the fix for "pay unknown" on mid-size companies
+    from jobhunter import levels
+
+    _step(s, "levels", lambda: levels.lookup_pending(limit=L["levels"]))
     from jobhunter import targeting
 
     _step(s, "grade", targeting.grade_companies, regrade=True)

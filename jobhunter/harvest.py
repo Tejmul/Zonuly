@@ -703,5 +703,101 @@ def run(target: int = 500, *, yc_limit: int | None = None, exa: bool = True,
     return summary
 
 
-__all__ = ["admit_yc", "admit_exa", "admit_x", "probe_ats", "scrape_roles", "find_people", "status", "run",
-           "batch_date"]
+# ------------------------------------------------------------------ four channels in parallel
+
+def parallel_run(minutes: int = 30) -> dict:
+    """Run the four data channels at once, each on a different STAGE so they never
+    duplicate each other's work (Tejmul, 2026-09-04):
+
+      keyless   people hunt + board discovery + roles + hiring verification   (free)
+      exa       company facts — headcount, HQ, round, description             (Exa cap)
+      model     origin stories from About pages                               (OpenRouter)
+      scrapedo  levels.fyi pay + reading sites the free fetchers can't        (scrape.do cap)
+
+    Each channel's queue filters on its own done-marker ([facts]/[story]/[levels],
+    description IS NULL, contacts_found_at, hiring_checked_at) and commits per item, so
+    two channels touching the same company write different fields and never collide.
+    """
+    import concurrent.futures as cf
+    import time as _t
+
+    from jobhunter import enrich, hiring_verify, levels, targeting
+    from jobhunter.research import web
+
+    deadline = _t.time() + minutes * 60
+    out: dict = {"minutes": minutes, "channels": {}}
+
+    def keyless() -> dict:
+        s = {"people": 0, "verified": 0, "roles": 0, "boards": 0}
+        while _t.time() < deadline:
+            p = find_people(limit=20)
+            s["people"] += p.get("with_people", 0)
+            s["verified"] += p.get("verified", 0)
+            if _t.time() > deadline:
+                break
+            v = hiring_verify.verify_pending(limit=20, tiers=("tier1", "tier2", "prospect", "unknown"))
+            s["verified_hiring"] = s.get("verified_hiring", 0) + len(v)
+            probe_ats(limit=40)
+            r = scrape_roles(limit=40)
+            s["roles"] += r.get("inserted", 0)
+            if not p.get("companies") and not v:
+                p2 = find_people(limit=20, require_roles=False)
+                s["people"] += p2.get("with_people", 0)
+                if not p2.get("companies"):
+                    break
+        return s
+
+    def exa() -> dict:
+        s = {"admitted": 0, "facts": 0}
+        # a few rotating discovery queries, then facts until the cap
+        day = datetime.now().timetuple().tm_yday
+        q = [DEFAULT_EXA_QUERIES[(day + i) % len(DEFAULT_EXA_QUERIES)] for i in range(4)]
+        s["admitted"] = admit_exa(q).admitted
+        while _t.time() < deadline and web.exa_budget()["left"] > 5:
+            r = enrich.facts_pending(limit=20)
+            if not r:
+                break
+            s["facts"] += len(r)
+        s["exa_budget"] = web.exa_budget()
+        return s
+
+    def model() -> dict:
+        s = {"story": 0, "described": 0}
+        while _t.time() < deadline:
+            r = enrich.enrich_pending(limit=20, use_search=False, missing="story")
+            s["story"] += sum(1 for x in r if x.get("story"))
+            if not r:
+                r = enrich.enrich_pending(limit=20, use_search=False, missing="description")
+                s["described"] += sum(1 for x in r if x.get("description"))
+                if not r:
+                    break
+        return s
+
+    def scrapedo() -> dict:
+        s = {"looked": 0, "found": 0}
+        while _t.time() < deadline and web.scrapedo_budget()["daily_left"] > 0:
+            r = levels.lookup_pending(limit=15)
+            s["looked"] += r.get("looked", 0)
+            s["found"] += r.get("found", 0)
+            if r.get("looked", 0) == 0:
+                break
+        s["scrapedo_budget"] = web.scrapedo_budget()
+        return s
+
+    jobs = {"keyless": keyless, "exa": exa, "model": model, "scrapedo": scrapedo}
+    with cf.ThreadPoolExecutor(max_workers=4) as ex:
+        futs = {ex.submit(fn): name for name, fn in jobs.items()}
+        for fut in cf.as_completed(futs):
+            name = futs[fut]
+            try:
+                out["channels"][name] = fut.result()
+            except Exception as e:  # noqa: BLE001 — one channel failing must not sink the run
+                log.exception("channel %s failed", name)
+                out["channels"][name] = {"error": str(e)[:200]}
+    targeting.grade_companies(regrade=True)
+    out["status"] = status()
+    return out
+
+
+__all__ = ["admit_yc", "admit_exa", "admit_x", "probe_ats", "scrape_roles", "find_people", "parallel_run",
+           "status", "run", "batch_date"]

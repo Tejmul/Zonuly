@@ -294,6 +294,7 @@ tick:
   describe_per_tick: 40
   story_per_tick: 40
   facts_per_tick: 90
+  levels_per_tick: 60
   exa_discovery_queries_per_day: 6
 
 api:
@@ -312,6 +313,11 @@ research:
   cache_ttl_hours: 24      # 0 disables the research cache entirely
   max_chars: 12000         # per fetched page
   mcporter_server: "exa"   # the mcporter server name holding the Exa MCP
+  # scrape.do — proxy fetcher for pages that block a datacenter read (careers pages,
+  # levels.fyi, company sites). Token is `Scrape_dog` in .env. 1,000 requests/month free;
+  # used only as a page_read fallback after jina and direct, and by levels.fyi pay lookup.
+  scrapedo_monthly: 1000
+  scrapedo_daily: 120
   # The Exa key is a $10 free tier with no money behind it. ~1 cent a search, so
   # ~1,000 searches in total; this caps how many a day, counted before the call,
   # cache hits excluded. `research doctor` shows today's used/left.
@@ -325,7 +331,7 @@ research:
   # Ordered candidates per capability; the first one that returns content wins.
   backends:
     web_search: ["exa-mcp", "exa-api"]
-    page_read: ["jina", "exa-mcp", "direct"]
+    page_read: ["jina", "direct", "scrapedo"]
     github: ["gh-cli", "github-api"]
     reddit: ["rdt", "opencli"]
     youtube: ["yt-dlp"]

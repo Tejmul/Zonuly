@@ -42,6 +42,105 @@ UA = (CONFIG.get("sources") or {}).get(
 JINA = "https://r.jina.ai/"
 EXA_API = "https://api.exa.ai/search"
 EXA_CONTENTS_API = "https://api.exa.ai/contents"
+SCRAPEDO_API = "https://api.scrape.do/"
+
+# scrape.do — a proxy fetcher that owns the IP-rotation risk, so it reads pages that
+# block a datacenter fetch (careers pages behind Cloudflare, levels.fyi, company sites).
+# 1,000 requests/month on the free plan; spent only when jina and direct both fail.
+SCRAPEDO_MONTHLY = int(RESEARCH.get("scrapedo_monthly", 1000))
+SCRAPEDO_DAILY = int(RESEARCH.get("scrapedo_daily", 120))
+_SCRAPEDO_MONTH_KEY = "scrapedo_used"      # "YYYY-MM:count"
+_SCRAPEDO_DAY_KEY = "scrapedo_used_day"    # "YYYY-MM-DD:count"
+
+
+def _scrapedo_token() -> str:
+    return backends.secret("Scrape_dog", "SCRAPEDO_TOKEN", "SCRAPE_DO_TOKEN")
+
+
+def scrapedo_budget() -> dict:
+    """{monthly_left, daily_left}. Everything 0 without a token."""
+    if not _scrapedo_token():
+        return {"monthly_cap": 0, "monthly_left": 0, "daily_cap": 0, "daily_left": 0}
+    from jobhunter.db import get_session, get_setting
+
+    now = datetime.now(timezone.utc)
+    month, day = now.strftime("%Y-%m"), now.strftime("%Y-%m-%d")
+    with get_session() as s:
+        mraw = get_setting(s, _SCRAPEDO_MONTH_KEY, "")
+        draw = get_setting(s, _SCRAPEDO_DAY_KEY, "")
+    mk, _, mc = mraw.partition(":")
+    dk, _, dc = draw.partition(":")
+    mused = int(mc) if mk == month and mc.isdigit() else 0
+    dused = int(dc) if dk == day and dc.isdigit() else 0
+    return {"monthly_cap": SCRAPEDO_MONTHLY, "monthly_left": max(0, SCRAPEDO_MONTHLY - mused),
+            "daily_cap": SCRAPEDO_DAILY, "daily_left": max(0, SCRAPEDO_DAILY - dused)}
+
+
+def _scrapedo_spend() -> None:
+    from jobhunter.db import get_session, get_setting, set_setting
+
+    now = datetime.now(timezone.utc)
+    month, day = now.strftime("%Y-%m"), now.strftime("%Y-%m-%d")
+    with get_session() as s:
+        mraw = get_setting(s, _SCRAPEDO_MONTH_KEY, "")
+        draw = get_setting(s, _SCRAPEDO_DAY_KEY, "")
+        mk, _, mc = mraw.partition(":")
+        dk, _, dc = draw.partition(":")
+        mused = int(mc) if mk == month and mc.isdigit() else 0
+        dused = int(dc) if dk == day and dc.isdigit() else 0
+        set_setting(s, _SCRAPEDO_MONTH_KEY, f"{month}:{mused + 1}")
+        set_setting(s, _SCRAPEDO_DAY_KEY, f"{day}:{dused + 1}")
+
+
+def _read_scrapedo(url: str, timeout: int, *, render: bool = False) -> tuple[str | None, str | None]:
+    """Fetch through scrape.do and reduce to text. Budget-checked before the call."""
+    tok = _scrapedo_token()
+    if not tok:
+        return None, None
+    b = scrapedo_budget()
+    if b["monthly_left"] <= 0 or b["daily_left"] <= 0:
+        log.info("scrape.do budget exhausted (monthly %d, daily %d)", b["monthly_left"], b["daily_left"])
+        return None, None
+    params = {"token": tok, "url": url}
+    if render:
+        params["render"] = "true"
+    _scrapedo_spend()
+    try:
+        r = httpx.get(SCRAPEDO_API, params=params, timeout=timeout, follow_redirects=True)
+        if r.status_code >= 400:
+            log.debug("scrape.do %s -> %s", url, r.status_code)
+            return None, None
+        html = r.text
+    except Exception as e:  # noqa: BLE001
+        log.debug("scrape.do failed for %s: %s", url, e)
+        return None, None
+    if _ANTIBOT.search(html[:4000]):
+        return None, None
+    title = None
+    m = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
+    if m:
+        title = re.sub(r"\s+", " ", m.group(1)).strip()[:200]
+    return title, html_to_text(html, limit=MAX_CHARS)
+
+
+def fetch_html_scrapedo(url: str, *, render: bool = False, timeout: int = 45) -> str | None:
+    """Raw HTML through scrape.do (for parsers that need the markup, e.g. levels.fyi)."""
+    tok = _scrapedo_token()
+    if not tok:
+        return None
+    b = scrapedo_budget()
+    if b["monthly_left"] <= 0 or b["daily_left"] <= 0:
+        return None
+    params = {"token": tok, "url": url}
+    if render:
+        params["render"] = "true"
+    _scrapedo_spend()
+    try:
+        r = httpx.get(SCRAPEDO_API, params=params, timeout=timeout, follow_redirects=True)
+        return r.text if r.status_code < 400 else None
+    except Exception as e:  # noqa: BLE001
+        log.debug("scrape.do html failed for %s: %s", url, e)
+        return None
 
 
 # ------------------------------------------------------------------ url safety
@@ -526,6 +625,8 @@ def read(
             text = _exa_mcp_call("web_fetch_exa", {"urls": [url], "maxCharacters": limit}, timeout)
         elif backend == "direct":
             title, text = _read_direct(url, timeout)
+        elif backend == "scrapedo":
+            title, text = _read_scrapedo(url, timeout)
         if text and text.strip():
             page = Page(
                 url=url,
