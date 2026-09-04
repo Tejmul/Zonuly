@@ -1134,6 +1134,48 @@ def targets_verify(
             typer.echo(f"      roles on their own page: {', '.join(r['roles'][:5])}")
 
 
+# ---------------------------------------------------------------- tick (launchd)
+
+tick_app = typer.Typer(
+    add_completion=False,
+    help="The unattended pipeline: an hourly free tick and a daily paid tick under launchd, on a schedule and on wake",
+)
+app.add_typer(tick_app, name="tick")
+
+
+@tick_app.command("run")
+def tick_run(kind: str = typer.Option("free", help="free | paid | all")) -> None:
+    """Run one bounded slice now (what launchd calls). Takes the lock; skips if another tick is running."""
+    _setup_logging()
+    from jobhunter import tick
+
+    _echo(tick.run(kind))
+
+
+@tick_app.command("install")
+def tick_install() -> None:
+    """Write and load both LaunchAgents: com.zonuly.tick.free (hourly + on wake) and .paid (daily 06:15 + on login)."""
+    from jobhunter import tick
+
+    _echo(tick.install())
+
+
+@tick_app.command("uninstall")
+def tick_uninstall() -> None:
+    """Unload and remove both LaunchAgents."""
+    from jobhunter import tick
+
+    _echo(tick.uninstall())
+
+
+@tick_app.command("status")
+def tick_status() -> None:
+    """Are the agents loaded, when did each last run, and what did it do."""
+    from jobhunter import tick
+
+    _echo(tick.status())
+
+
 # ---------------------------------------------------------------- outreach
 
 outreach_app = typer.Typer(

@@ -280,6 +280,22 @@ scheduler:
   scrape_hour: 8          # daily full scrape+score at this local hour
   reply_poll_minutes: 60  # how often to poll Gmail for replies
 
+tick:
+  # The unattended pipeline (jobhunter/tick.py) under launchd — `python scripts/run.py tick install`.
+  #   free  every hour and on wake: people hunt, hiring verification, YC/boards/roles, pay, grade
+  #   paid  daily after the caps reset and on login: Exa discovery + company facts, X posts,
+  #         the model passes (descriptions, origin stories), grade, knowledge-graph sync
+  # Each stage is bounded so a tick ends inside its interval; each reads its budget first.
+  free_interval_seconds: 3600
+  paid_hour: 6
+  paid_minute: 15
+  people_per_tick: 40
+  verify_per_tick: 60
+  describe_per_tick: 40
+  story_per_tick: 40
+  facts_per_tick: 90
+  exa_discovery_queries_per_day: 6
+
 api:
   host: "127.0.0.1"
   port: 8000

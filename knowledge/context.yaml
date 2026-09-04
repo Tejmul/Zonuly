@@ -653,6 +653,24 @@ features:
     status: built
     stage: stage:research
     serves: [guarantee:no-fabrication]
+  - id: feature:launchd-tick
+    label: The unattended pipeline — an hourly free tick and a daily paid tick under launchd, on a schedule and on wake
+    summary: |
+      jobhunter/tick.py, installed by `tick install` as ~/Library/LaunchAgents/com.zonuly.tick.free
+      (StartInterval 3600 + RunAtLoad — hourly, and when the laptop wakes/logs in) and .paid
+      (StartCalendarInterval 06:15 + RunAtLoad — daily after the Exa/X/OpenRouter caps reset).
+      free: people hunt → hiring verification → YC/boards/roles → people for role-less companies →
+      pay re-read → grade. paid: rotating Exa discovery queries → X posts → probe/roles → Exa
+      company facts (only what is left of the cap) → model passes (descriptions, origin stories)
+      → grade → knowledge-graph sync + BRIEF. fcntl lock on data/tick.lock so ticks never overlap;
+      per-tick limits in config.yaml tick:; each stage commits per item; tick:last:<kind> in the
+      setting table and logs/tick-<kind>.log answer "when did it last run and what did it do".
+      Tejmul, 2026-09-04: "whenever the laptop is open it should start and work automatically —
+      complete the 2,000 target."
+    status: built
+    stage: stage:platform
+    serves: [constraint:8gb-ram, constraint:free-tier, constraint:student-budget]
+    replaces: [feature:hourly-tick-launchd]
   - id: feature:review-gate-flags
     label: The review gate — every draft carries the facts it was allowed to use and the flags a reviewer must read
     summary: |
