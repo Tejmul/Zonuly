@@ -6,35 +6,49 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /** Shortlist odds share one cool-to-warm ramp everywhere they appear. */
+/* Tone helpers.
+ *
+ * These returned classes from a colour system this app no longer has — bg-signal,
+ * bg-jade, text-fog-400, bg-steel. None of those tokens exist in globals.css any
+ * more, so Tailwind emitted no rule for them and every score meter, badge and bar
+ * they touched rendered with no fill at all. That is most of why the dashboard was
+ * unreadable. They now return tokens that exist.
+ *
+ * With no hue to spend, state is carried the way the rest of this system carries
+ * it: by weight and fill depth, from the same ink ramp the charts use.
+ */
+
 export function scoreTone(score: number | null | undefined) {
-  if (score == null) return { text: "text-fog-400", bar: "bg-ink-500", label: "unscored" };
-  if (score >= 75) return { text: "text-signal", bar: "bg-signal", label: "strong" };
-  if (score >= 60) return { text: "text-jade", bar: "bg-jade", label: "worth a shot" };
-  if (score >= 40) return { text: "text-fog-200", bar: "bg-steel", label: "long shot" };
-  return { text: "text-fog-400", bar: "bg-ink-500", label: "unlikely" };
+  if (score == null) return { text: "text-ink-3", bar: "bg-data-5", label: "unscored" };
+  if (score >= 75) return { text: "text-ink", bar: "bg-data-1", label: "strong" };
+  if (score >= 60) return { text: "text-ink", bar: "bg-data-2", label: "worth a shot" };
+  if (score >= 40) return { text: "text-ink-2", bar: "bg-data-3", label: "long shot" };
+  return { text: "text-ink-3", bar: "bg-data-4", label: "unlikely" };
 }
 
 export function sentimentTone(sentiment: string | null | undefined) {
   switch (sentiment) {
     case "positive":
-      return { text: "text-jade", ring: "border-jade-deep", bg: "bg-jade-deep/15" };
+      // The only filled badge in the app. A reply that says yes is the one event
+      // worth interrupting a scan for, so it is the one thing drawn in solid ink.
+      return { text: "text-on-ink", ring: "border-ink", bg: "bg-ink" };
     case "negative":
-      return { text: "text-clay", ring: "border-clay-deep", bg: "bg-clay-deep/15" };
+      return { text: "text-ink-2", ring: "border-line-strong", bg: "bg-surface-2" };
     case "closed":
-      return { text: "text-fog-400", ring: "border-ink-500", bg: "bg-ink-700" };
+      return { text: "text-ink-3", ring: "border-line", bg: "bg-surface-2" };
     default:
-      return { text: "text-fog-200", ring: "border-ink-500", bg: "bg-ink-700" };
+      return { text: "text-ink-2", ring: "border-line", bg: "bg-surface" };
   }
 }
 
 export function confidenceTone(confidence: string | null | undefined) {
   switch (confidence) {
     case "verified":
-      return { text: "text-jade", ring: "border-jade-deep", bg: "bg-jade-deep/15" };
+      return { text: "text-ink", ring: "border-line-strong", bg: "bg-surface-2" };
     case "pattern-guessed":
-      return { text: "text-signal", ring: "border-signal-deep", bg: "bg-signal-deep/12" };
+      return { text: "text-ink-2", ring: "border-line", bg: "bg-surface" };
     default:
-      return { text: "text-fog-400", ring: "border-ink-500", bg: "bg-ink-700" };
+      return { text: "text-ink-3", ring: "border-line", bg: "bg-surface" };
   }
 }
 
