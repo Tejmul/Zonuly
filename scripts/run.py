@@ -278,6 +278,25 @@ def discover(limit: int = typer.Option(60, help="How many YC companies to probe"
     _echo({"added": len(fresh), "total": len(existing), "new": [c["name"] for c in fresh]})
 
 
+@app.command(name="add-company")
+def add_company_cmd(
+    name: str = typer.Argument(..., help="Company name"),
+    website: str = typer.Option(None, help="Their site, which sharpens the board guess"),
+    ats: str = typer.Option(None, help="greenhouse | lever | ashby, when you already know"),
+    slug: str = typer.Option(None, help="Board token from the careers-page URL"),
+    scrape: bool = typer.Option(True, help="Pull the board straight away"),
+) -> None:
+    """Add one company: find its job board, seed companies.yaml, pull its roles."""
+    _setup_logging()
+    from jobhunter.onboard import AddError, add_company
+
+    try:
+        _echo(add_company(name, website, ats_hint=ats, ats_slug=slug, scrape_now=scrape))
+    except AddError as e:
+        typer.secho(str(e), fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+
 @app.command()
 def serve(
     host: str = typer.Option(None),
@@ -1379,6 +1398,15 @@ def harvest_discover(
     from jobhunter import harvest
 
     _echo(harvest.discover_funded(topics=topic or None, max_searches=max_searches).as_dict())
+
+
+@harvest_app.command("discover-parallel")
+def harvest_discover_parallel(minutes: int = typer.Option(20)) -> None:
+    """Three discovery branches at once (Exa · RSS · scrape.do), each finding new funded companies."""
+    _setup_logging()
+    from jobhunter import harvest
+
+    _echo(harvest.discover_parallel(minutes=minutes))
 
 
 @harvest_app.command("levels")

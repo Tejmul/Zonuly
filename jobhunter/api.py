@@ -542,6 +542,41 @@ def company_network(include_rejects: bool = False) -> dict:
     return network.build(include_rejects=include_rejects)
 
 
+class NewCompany(BaseModel):
+    name: str
+    website: str | None = None
+    ats: str | None = None          # greenhouse | lever | ashby, when you know it
+    ats_slug: str | None = None     # the board token from the careers-page URL
+    scrape_now: bool = True
+
+
+@app.post("/api/companies")
+def add_company(body: NewCompany) -> dict:
+    """Add one company by name: find its public job board, record it, seed it into
+    companies.yaml so every future cycle crawls it, and pull its roles now.
+
+    Dispatched as a task like every other multi-second operation here — probing a
+    board means a handful of HTTP requests against three ATS providers, and a busy
+    board can carry several hundred postings."""
+    from jobhunter import onboard
+
+    name = (body.name or "").strip()
+    if len(name) < 2:
+        raise HTTPException(422, "Give the company a name.")
+
+    return {
+        "task_id": _run_task(
+            f"add-company:{name}",
+            onboard.add_company,
+            name,
+            body.website,
+            ats_hint=body.ats,
+            ats_slug=body.ats_slug,
+            scrape_now=body.scrape_now,
+        )
+    }
+
+
 @app.get("/api/companies/grouped")
 def companies_grouped(include_rejects: bool = False) -> dict:
     """One row per company, with its roles grouped by family and its referrers attached.

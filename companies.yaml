@@ -569,3 +569,15 @@ companies:
     ats: ashby
     ats_slug: "vellum"
     tags: [ai]   # ~1 open roles at seed time
+  - name: "Vanta"
+    website: "https://vanta.com"
+    domain: "vanta.com"
+    ats: "ashby"
+    ats_slug: "vanta"
+    tags: [added-by-hand]
+  - name: "Mercury"
+    website: "https://mercury.com"
+    domain: "mercury.com"
+    ats: "greenhouse"
+    ats_slug: "mercury"
+    tags: [added-by-hand]

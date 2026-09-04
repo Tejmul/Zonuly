@@ -7,6 +7,8 @@ import { ArrowRight, ChevronRight, Search } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { rise } from "@/components/anim";
 import { TierPill } from "@/components/ui/tier";
+import { AddCompany } from "@/components/add-company";
+import { OperatorOnly } from "@/components/access";
 
 type Family = { family: string; count: number; titles: string[]; best_score: number | null; internships: number; fresher: number; anywhere: number };
 type Row = {
@@ -18,6 +20,7 @@ type Row = {
   region: string | null; tier: string | null; tier_reason: string | null;
   ppo_lpa: number | null; stipend_inr_month: number | null;
   funding_stage: string | null; hiring_status: string | null; hiring_evidence: string | null;
+  funding?: { stage: string | null; amount_usd_m: number | null; announced: string | null } | null;
   hiring_post: { text: string | null; url: string; by: string | null; source: string | null; at: string | null } | null;
   roles: { total: number; fresher: number; anywhere: number; internships: number; families: Family[] };
   referrals: {
@@ -38,6 +41,16 @@ const FILTERS = [
   { key: "referrals", label: "has a referrer" },
 ] as const;
 type Filter = (typeof FILTERS)[number]["key"];
+
+/* When pay can't be proven, show what they raised and when — "Seed · $12M · Mar 26". */
+function fundingLine(f?: { stage: string | null; amount_usd_m: number | null; announced: string | null } | null): string | null {
+  if (!f || (!f.stage && !f.announced)) return null;
+  const parts: string[] = [];
+  if (f.stage) parts.push(f.stage.replace(/\b\w/g, (m) => m.toUpperCase()));
+  if (f.amount_usd_m) parts.push(`$${f.amount_usd_m}M`);
+  if (f.announced) parts.push(f.announced.length >= 7 ? f.announced.slice(0, 7) : f.announced.slice(0, 4));
+  return parts.join(" · ") || null;
+}
 
 const PP_SHORT: Record<string, string> = {
   pays: "pays", deep_pockets: "deep pockets", funded: "funded", thin: "thin", unknown: "unknown",
@@ -68,7 +81,7 @@ const SOURCE_LABEL: Record<string, string> = {
 
 export default function CompaniesPage() {
   const root = useRef<HTMLDivElement>(null);
-  const { data, loading, error } = useApi<Payload>("/api/companies/grouped");
+  const { data, loading, error, reload } = useApi<Payload>("/api/companies/grouped");
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("complete");
   const [open, setOpen] = useState<number | null>(null);
@@ -101,13 +114,24 @@ export default function CompaniesPage() {
   return (
     <div ref={root} className="space-y-4">
       <div>
-        <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-[-0.02em]">
-          Companies
-        </h1>
-        <p className="mt-0.5 text-[12.5px] text-ink-2">
-          One row per company. A company hiring fifteen people is one company — its roles
-          are grouped underneath it.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-[-0.02em]">
+              Companies
+            </h1>
+            <p className="mt-0.5 text-[12.5px] text-ink-2">
+              One row per company. A company hiring fifteen people is one company — its roles
+              are grouped underneath it.
+            </p>
+          </div>
+          {/* Writes to companies.yaml and pulls a board, so it is not offered on the
+              public instance — where the API would refuse it anyway. */}
+          <OperatorOnly>
+            <div className="shrink-0">
+              <AddCompany onAdded={reload} />
+            </div>
+          </OperatorOnly>
+        </div>
         <details className="mt-2 text-[12px] text-ink-2">
           <summary className="cursor-pointer select-none text-ink-3 hover:text-ink">
             Pay Power — the benchmark behind the score in the last column
@@ -203,14 +227,14 @@ export default function CompaniesPage() {
                   <Cell v={`${c.roles.fresher} fresher · ${c.roles.total} role${c.roles.total === 1 ? "" : "s"}${c.roles.anywhere ? " · anywhere" : ""}`} />
                   <Cell v={c.referrals.reachable ? `${c.referrals.reachable} to ask` : "no one yet"} />
                   <Cell v={c.hiring_status === "verified" ? "hiring proven" : c.hiring_status ?? "unchecked"} />
-                  {/* PAY POWER — the benchmark: how easily can they pay a fresher ₹30–40 L */}
+                  {/* Pay if we can prove it; otherwise the funding raised, with the date, as the fallback */}
                   <span
-                    className={`tnum w-28 shrink-0 text-right text-[11.5px] ${(c.pay_power?.score ?? 0) >= 65 ? "" : "text-ink-3"}`}
+                    className={`tnum w-32 shrink-0 text-right text-[11.5px] ${(c.pay_power?.score ?? 0) >= 65 ? "" : "text-ink-3"}`}
                     title={c.pay_power?.why ?? PAY_BASIS_TITLE[c.pay_basis ?? "none"]}
                   >
-                    {c.pay_power?.band
-                      ? `${c.pay_power.score} · ${PP_SHORT[c.pay_power.band] ?? c.pay_power.band}`
-                      : (c.ppo_lpa ? `₹${Math.round(c.ppo_lpa)}L stated` : PAY_BASIS_SHORT[c.pay_basis ?? "none"])}
+                    {(c.pay_power?.score ?? 0) >= 65
+                      ? `${c.pay_power!.score} · ${PP_SHORT[c.pay_power!.band ?? ""] ?? c.pay_power!.band}`
+                      : fundingLine(c.funding) ?? PAY_BASIS_SHORT[c.pay_basis ?? "none"]}
                   </span>
                 </button>
 
