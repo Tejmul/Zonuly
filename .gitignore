@@ -12,3 +12,5 @@ outbox/
 secrets/
 logs/
 data/tick.lock
+jobhunter.db
+jobhunter.db-*
