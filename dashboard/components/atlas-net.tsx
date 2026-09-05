@@ -36,7 +36,7 @@ type Seg = { segment: string; label: string; heat: number; n: number };
 const W = 1200;
 const COLS = [210, 470, 730, 1000];
 const TOP = 64;
-const GAP = 30;
+const GAP = 38;   // room for a label to sit above its node without touching the row above
 
 export function AtlasNet({
   inputs, segments, ranked, weights, fields, onPick, picked,
@@ -57,7 +57,7 @@ export function AtlasNet({
   const ins = inputs.slice(0, 4);
 
   const rows = Math.max(ins.length, TERMS.length, segs.length, outs.length);
-  const H = TOP + rows * GAP + 40;
+  const H = TOP + rows * GAP + 16;
 
   const y = (i: number, n: number) => TOP + (rows - n) * (GAP / 2) + i * GAP;
 
@@ -140,7 +140,7 @@ export function AtlasNet({
         {TERMS.map((t, j) => (
           <Node
             key={t.key} x={COLS[1]} y={y(j, TERMS.length)}
-            r={3 + weights[t.key] * 5} anchor="middle"
+            r={3 + weights[t.key] * 5} anchor="middle" above
             label={t.label}
             opacity={dim(!focus || focus.terms.has(t.key))}
           />
@@ -149,7 +149,7 @@ export function AtlasNet({
         {segs.map((s, k) => (
           <Node
             key={s.segment} x={COLS[2]} y={y(k, segs.length)}
-            r={3 + s.heat * 6} anchor="middle"
+            r={3 + s.heat * 6} anchor="middle" above
             label={s.label}
             opacity={dim(!focus || focus.segment === s.segment)}
           />
@@ -236,29 +236,39 @@ function Wire({
 }
 
 function Node({
-  x, y, r, label, sub, value, valueX, anchor, opacity, strong = false,
+  x, y, r, label, sub, value, valueX, anchor, opacity, strong = false, above = false,
 }: {
   x: number; y: number; r: number; label: string; sub?: string; value?: string;
+  /** Put the label over the node instead of beside it. The first and last columns
+   *  only have wires on one side, so their labels sit safely in the clear space on
+   *  the other. A middle column has wires on both sides and no clear side at all —
+   *  the only space a wire never occupies is directly above the node. */
+  above?: boolean;
   /** Absolute x for the number, so scores line up in one column instead of
    *  floating beside nodes of different sizes and colliding with the wires. */
   valueX?: number;
   anchor: "start" | "middle" | "end"; opacity: number; strong?: boolean;
 }) {
   const pad = r + 8;
-  const tx = anchor === "end" ? x - pad : anchor === "start" ? x + pad : x + pad;
-  const textAnchor = anchor === "end" ? "end" : "start";
+  const tx = above ? x : anchor === "end" ? x - pad : x + pad;
+  const textAnchor = above ? "middle" : anchor === "end" ? "end" : "start";
+  const ty = above ? y - r - 7 : y - (sub ? 2 : -3.5);
+  /* A stroke of the surface colour painted under the glyphs. Wires pass behind the
+     labels already, but "behind" is not "legible" when thirty of them cross at
+     once, so the text carries its own clearance. */
+  const halo = { paintOrder: "stroke fill", stroke: "var(--surface)", strokeWidth: 3.5, strokeLinejoin: "round" } as const;
   return (
     <g style={{ opacity }}>
       <circle cx={x} cy={y} r={r} fill={strong ? "var(--data-1)" : "var(--data-2)"} />
       <circle cx={x} cy={y} r={r + 3} fill="none" stroke="var(--surface)" strokeWidth={2} />
       <text
-        x={tx} y={y - (sub ? 2 : -3.5)} textAnchor={textAnchor}
-        className="fill-[var(--ink)]" style={{ fontSize: 11.5 }}
+        x={tx} y={ty} textAnchor={textAnchor}
+        className="fill-[var(--ink)]" style={{ fontSize: 11.5, ...halo }}
       >
-        {label.length > 26 ? label.slice(0, 25) + "…" : label}
+        {label.length > 34 ? label.slice(0, 33) + "…" : label}
       </text>
       {sub && (
-        <text x={tx} y={y + 10} textAnchor={textAnchor} className="fill-[var(--ink-3)]" style={{ fontSize: 9.5 }}>
+        <text x={tx} y={y + 10} textAnchor={textAnchor} className="fill-[var(--ink-3)]" style={{ fontSize: 9.5, ...halo }}>
           {sub.length > 34 ? sub.slice(0, 33) + "…" : sub}
         </text>
       )}
