@@ -480,6 +480,9 @@ def company_list(*, include_rejects: bool = False) -> dict:
             "team_size": c.team_size,
             "pay_power": {"score": c.pay_power, "band": c.pay_power_band, "why": c.pay_power_why,
                           "per_head_usd_k": c.money_per_head_usd_k},
+            # funding shown as the pay fallback: round + how much + when
+            "funding": {"stage": c.funding_stage, "amount_usd_m": c.funding_amount_usd_m,
+                        "announced": c.funding_announced} if (c.funding_stage or c.funding_announced) else None,
             "description": c.description,
             "website": c.website,
             "region": c.hq_region,

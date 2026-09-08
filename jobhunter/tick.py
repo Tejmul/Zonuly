@@ -48,6 +48,7 @@ L = {
     "story": int(_T.get("story_per_tick", 40)),
     "facts": int(_T.get("facts_per_tick", 90)),
     "levels": int(_T.get("levels_per_tick", 60)),
+    "linkedin": int(_T.get("linkedin_per_tick", 15)),
     "exa_queries": int(_T.get("exa_discovery_queries_per_day", 6)),
 }
 
@@ -109,7 +110,15 @@ def run_free(budget_s: int = 1800) -> dict:
 
     s: dict = {"kind": "free", "started": datetime.now().isoformat(timespec="seconds")}
     t0 = time.time()
+    # free discovery: funding-news RSS (amounts + dates, no Exa) then its boards/roles
+    _step(s, "funding_rss", harvest.admit_funding_rss)
+    _step(s, "probe", harvest.probe_ats)
+    _step(s, "roles", harvest.scrape_roles)
     _step(s, "people", harvest.find_people, limit=L["people"])
+    # public-LinkedIn leads for the companies GitHub can't cover — free, gapped, no login
+    from jobhunter.contacts import linkedin_public
+
+    _step(s, "linkedin", linkedin_public.find_pending, limit=L.get("linkedin", 15))
     if time.time() - t0 < budget_s:
         _step(s, "verify", lambda: {"checked": len(hiring_verify.verify_pending(limit=L["verify"], tiers=("tier1", "tier2", "prospect", "unknown")))})
     if time.time() - t0 < budget_s:

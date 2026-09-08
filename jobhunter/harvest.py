@@ -131,15 +131,49 @@ def _first_sentence(text: str | None, limit: int = 300) -> str | None:
     return first[:limit] or None
 
 
+_NAME_SUFFIX = re.compile(r"\b(inc|llc|ltd|labs?|technologies|technology|ai|io|corp|gmbh|the|co)\b", re.I)
+
+
+def _norm_name(name: str) -> str:
+    """A company's identity key: lowercase, no punctuation, no corporate suffix. So
+    'RevenueCat', 'Revenuecat' and 'RevenueCat, Inc.' are one company, not three."""
+    n = re.sub(r"[^a-z0-9 ]", " ", (name or "").lower())
+    n = _NAME_SUFFIX.sub(" ", n)
+    return re.sub(r"\s+", " ", n).strip()
+
+
+# cache the normalized index once per _upsert batch, rebuilt lazily when it goes stale
+_NORM_INDEX: dict[str, int] | None = None
+
+
+def _find_company(session, name: str) -> Company | None:
+    """Exact-name first, then a normalized-name match — the anti-duplicate gate."""
+    exact = session.exec(select(Company).where(Company.name == name)).first()
+    if exact:
+        return exact
+    key = _norm_name(name)
+    if not key:
+        return None
+    global _NORM_INDEX
+    if _NORM_INDEX is None:
+        _NORM_INDEX = {}
+        for cid, cname in session.exec(select(Company.id, Company.name)).all():
+            _NORM_INDEX.setdefault(_norm_name(cname), cid)
+    cid = _NORM_INDEX.get(key)
+    return session.get(Company, cid) if cid else None
+
+
 def _upsert(session, *, name: str, website: str | None, source: str, description: str | None,
             region: str | None, note: str, funding: dict | None = None,
             claim: dict | None = None, story: str | None = None, story_evidence: str | None = None,
             team_size: int | None = None, stats: HarvestStats) -> Company:
     """Create or fill-in-the-blanks. Never overwrites something already known."""
-    company = session.exec(select(Company).where(Company.name == name)).first()
+    company = _find_company(session, name)
     new = company is None
     if new:
         company = Company(name=name)
+        if _NORM_INDEX is not None:
+            _NORM_INDEX[_norm_name(name)] = -1   # reserve the key so a twin in the same batch matches
     company.website = company.website or website
     company.domain = company.domain or pipeline._domain_of(website)
     company.description = company.description or description
@@ -713,6 +747,111 @@ _NEWS_REGIONS = [
 _NEWS_TOPICS = ["AI", "developer tools", "fintech", "infrastructure", "data", "healthtech", "cybersecurity", "SaaS"]
 
 
+# Directory / archive pages that list funded startups but block a plain datacenter fetch —
+# scrape.do gets through. More entries than the RSS feeds, and rotated so a run sees fresh ones.
+_SCRAPEDO_DIRECTORIES = [
+    ("https://www.finsmes.com/category/usa", "us"),
+    ("https://www.finsmes.com/category/uk", "uk"),
+    ("https://www.finsmes.com/category/europe", "eu"),
+    ("https://tech.eu/category/deals/", "eu"),
+    ("https://www.eu-startups.com/category/deals/", "eu"),
+    ("https://inc42.com/tag/funding/", "india"),
+    ("https://yourstory.com/tag/funding", "india"),
+    ("https://www.finsmes.com/category/india", "india"),
+]
+
+
+def admit_scrapedo_directories(*, pages: int = 3) -> HarvestStats:
+    """New funded startups from directory/archive pages read through scrape.do (the pages
+    block a plain fetch). Same headline parser as the RSS feeds; each round is admitted
+    with its amount and date. A separate discovery branch from Exa and RSS."""
+    import re
+
+    from jobhunter.research import web
+    from jobhunter.scrapers import funding_rss
+
+    init_db()
+    stats = HarvestStats("scrapedo-dir")
+    day = datetime.now().timetuple().tm_yday
+    picks = [_SCRAPEDO_DIRECTORIES[(day + i) % len(_SCRAPEDO_DIRECTORIES)] for i in range(pages)]
+    _A = re.compile(r"<a[^>]+href=\"([^\"]+)\"[^>]*>(.*?)</a>", re.I | re.S)
+    with get_session() as session:
+        for url, region in picks:
+            if web.scrapedo_budget()["daily_left"] <= 0:
+                stats.skip("scrape.do budget reached")
+                break
+            html = web.fetch_html_scrapedo(url, timeout=45)
+            if not html:
+                stats.skip(f"no html: {url}")
+                continue
+            # headlines are <a> link texts; reuse the RSS name/amount/stage parsers
+            seen_here: set[str] = set()
+            for _, inner in _A.findall(html):
+                title = re.sub(r"<[^>]+>", " ", inner)
+                title = re.sub(r"\s+", " ", title).strip()
+                name = funding_rss._name(title)
+                if not name:
+                    continue
+                stats.seen += 1
+                name = _clean_name(name) or name
+                if not name or len(name) < 2:
+                    continue
+                key = name.lower()
+                if key in seen_here:
+                    continue
+                seen_here.add(key)
+                if not targeting.hype_check(name)[0]:
+                    stats.skip("hyped name")
+                    continue
+                amt = funding_rss._amount_usd_m(title)
+                sm = funding_rss._STAGE.search(title)
+                fund = {"stage": sm.group(1).lower() if sm else None, "amount_usd_m": amt,
+                        "announced": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "evidence": title[:200]}
+                stats.candidates += 1
+                _upsert(session, name=name, website=None, source="scrapedo-dir",
+                        description=None, region=region, note=f"funding directory: {title[:100]}",
+                        funding=fund, claim={"text": title[:200], "url": url, "by": None}, stats=stats)
+            session.commit()
+    log.info("admit_scrapedo_directories: %s", stats.as_dict())
+    return stats
+
+
+def admit_funding_rss() -> HarvestStats:
+    """Funded startups from the funding-news RSS feeds (TechCrunch, EU-Startups, Sifted,
+    YourStory, Finsmes…) — the amount and the date, free, no Exa. Each fitting round is
+    admitted with its funding, then flows into probe → roles → people like any other source.
+    """
+    from jobhunter.scrapers import funding_rss
+
+    init_db()
+    stats = HarvestStats("funding-rss")
+    rows = funding_rss.fetch()
+    stats.seen = len(rows)
+    with get_session() as session:
+        for r in rows:
+            name = _clean_name(r["name"]) or r["name"]
+            if not name or len(name) < 2:
+                stats.skip("no usable name")
+                continue
+            if not targeting.hype_check(name)[0]:
+                stats.skip("hyped name")
+                continue
+            region = r.get("region") or targeting.region_of(r.get("title"))
+            if region and region not in REGIONS_OK:
+                stats.skip("region outside targets")
+                continue
+            fund = {"stage": r.get("stage"), "amount_usd_m": r.get("amount_usd_m"),
+                    "announced": r.get("announced"), "evidence": r.get("title")}
+            stats.candidates += 1
+            _upsert(session, name=name, website=None, source="funding-rss",
+                    description=None, region=region or "remote",
+                    note=f"funding press (RSS): {(r.get('title') or '')[:100]}", funding=fund,
+                    claim={"text": r.get("title", "")[:200], "url": r.get("url"), "by": None}, stats=stats)
+        session.commit()
+    log.info("admit_funding_rss: %s", stats.as_dict())
+    return stats
+
+
 def discover_funded(*, topics: list[str] | None = None, per_topic: int = 8, max_searches: int = 30) -> HarvestStats:
     """Admit new companies that the existing funding-press scraper (research.find_startups)
     turns up. That scraper searches TechCrunch / EU-Startups / Sifted / YourStory etc. via
@@ -767,6 +906,65 @@ def discover_funded(*, topics: list[str] | None = None, per_topic: int = 8, max_
     return stats
 
 
+# ------------------------------------------------------------------ three discovery branches in parallel
+
+def discover_parallel(minutes: int = 20) -> dict:
+    """Three independent discovery branches at once, each finding NEW companies from a
+    different source (Tejmul, 2026-09-04 — "run all three branches to 3x the outcome"):
+
+      exa       funding-press + company search via Exa (+ model extraction)   (Exa cap)
+      agentreach  funding-news RSS feeds — TechCrunch, EU-Startups, Sifted…    (free)
+      scrapedo  funding directory/archive pages fetched through scrape.do       (scrape.do cap)
+
+    They admit to the same registry; the admission gate and _upsert dedupe by name, so a
+    company found by two branches is one row. After discovery, the new companies are probed
+    for boards, their roles scraped, graded, and their people found — all shared.
+    """
+    import concurrent.futures as cf
+
+    from jobhunter.research import web
+
+    before = status()["companies"]
+    out: dict = {"minutes": minutes, "before": before, "branches": {}}
+
+    def exa_branch() -> dict:
+        if web.exa_budget()["left"] <= 3:
+            return {"skip": "exa budget spent for today"}
+        return discover_funded(max_searches=20).as_dict()
+
+    def agentreach_branch() -> dict:
+        return admit_funding_rss().as_dict()
+
+    def scrapedo_branch() -> dict:
+        if web.scrapedo_budget()["daily_left"] <= 0:
+            return {"skip": "scrape.do budget spent for today"}
+        return admit_scrapedo_directories(pages=4).as_dict()
+
+    with cf.ThreadPoolExecutor(max_workers=3) as ex:
+        futs = {ex.submit(fn): n for n, fn in
+                {"exa": exa_branch, "agentreach": agentreach_branch, "scrapedo": scrapedo_branch}.items()}
+        for fut in cf.as_completed(futs):
+            n = futs[fut]
+            try:
+                out["branches"][n] = fut.result()
+            except Exception as e:  # noqa: BLE001
+                log.exception("discovery branch %s failed", n)
+                out["branches"][n] = {"error": str(e)[:200]}
+
+    # shared completion for every newly admitted company
+    out["probe"] = probe_ats()
+    out["roles"] = scrape_roles()
+    from jobhunter import targeting
+
+    out["grade"] = targeting.grade_companies(regrade=False)
+    out["people"] = find_people(limit=80, require_roles=False)
+    after = status()
+    out["after"] = after["companies"]
+    out["new_companies"] = after["companies"] - before
+    out["status"] = after
+    return out
+
+
 # ------------------------------------------------------------------ four channels in parallel
 
 def parallel_run(minutes: int = 30) -> dict:
@@ -793,6 +991,21 @@ def parallel_run(minutes: int = 30) -> dict:
 
     def keyless() -> dict:
         s = {"people": 0, "verified": 0, "roles": 0, "boards": 0}
+        # free discovery first: the funding-news RSS feeds (no Exa, amounts + dates)
+        try:
+            s["rss_admitted"] = admit_funding_rss().admitted
+            probe_ats(limit=40)
+            scrape_roles(limit=40)
+        except Exception as e:  # noqa: BLE001
+            s["rss_error"] = str(e)[:120]
+        # public-LinkedIn leads for companies with no GitHub — free, gapped, no login
+        try:
+            from jobhunter.contacts import linkedin_public
+
+            li = linkedin_public.find_pending(limit=20)
+            s["linkedin_leads"] = li.get("found_people", 0)
+        except Exception as e:  # noqa: BLE001
+            s["linkedin_error"] = str(e)[:120]
         while _t.time() < deadline:
             p = find_people(limit=20)
             s["people"] += p.get("with_people", 0)

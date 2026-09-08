@@ -206,6 +206,9 @@ harvest:
 
 contacts:
   max_per_company: 20
+  # public-LinkedIn lead search (no login): DuckDuckGo throttles by IP, so keep a wide gap
+  linkedin_min_gap_seconds: 35
+  linkedin_max_per_company: 8
   github_token: ""        # optional: personal access token raises rate limits 60/hr -> 5000/hr
   hunter_api_key: ""      # optional: hunter.io free tier (25 searches/mo)
   # MX lookup always runs. The SMTP RCPT probe is OFF by default and should stay off:
