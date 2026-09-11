@@ -104,12 +104,48 @@ def _step(summary: dict, name: str, fn, *args, **kw) -> None:
     summary.setdefault("_seconds", {})[name] = round(time.time() - t)
 
 
+FULL_SCRAPE_KEY = "tick.full_scrape_day"
+
+
+def full_scrape_if_due() -> dict:
+    """The once-a-day refresh of every known board, owned by the tick rather than by the
+    API's 08:00 cron.
+
+    The 08:00 job lives in APScheduler inside the API process, and APScheduler freezes
+    while the laptop sleeps. Seven mornings running the lid was shut at 08:00; on each
+    the job came due, the machine woke after 09:00, the one-hour misfire grace had
+    expired, and the job was skipped until the next day. Zero runs in a week with the
+    API up the whole time. The tick's other roles step only ever reads a board once, so
+    nothing was refreshing existing boards at all.
+
+    launchd fires this tick hourly AND on wake, so the first tick after the lid opens
+    does the refresh - whatever the hour. Keyed by local date, so it runs once a day
+    however many ticks follow it."""
+    from jobhunter import pipeline
+    from jobhunter.db import get_session, get_setting, set_setting, init_db
+
+    init_db()
+    today = datetime.now().strftime("%Y-%m-%d")
+    with get_session() as session:
+        if get_setting(session, FULL_SCRAPE_KEY) == today:
+            return {"skipped": "already scraped today"}
+    out = pipeline.scrape().as_dict()
+    with get_session() as session:
+        set_setting(session, FULL_SCRAPE_KEY, today)
+        session.commit()
+    out["day"] = today
+    return out
+
+
 def run_free(budget_s: int = 1800) -> dict:
     """Keyless work, in the order the 2,000-target needs it: leads, then proof, then fresh companies."""
     from jobhunter import harvest, hiring_verify, targeting
 
     s: dict = {"kind": "free", "started": datetime.now().isoformat(timespec="seconds")}
     t0 = time.time()
+    # the daily refresh of every board goes first: it is the one thing that must happen
+    # today, and the budget checks below would otherwise let a slow tick starve it
+    _step(s, "full_scrape", full_scrape_if_due)
     # free discovery: funding-news RSS (amounts + dates, no Exa) then its boards/roles
     _step(s, "funding_rss", harvest.admit_funding_rss)
     _step(s, "probe", harvest.probe_ats)

@@ -40,7 +40,15 @@ def daily_cycle() -> dict:
 
     summary: dict = {}
     try:
-        summary["scrape"] = pipeline.scrape().as_dict()
+        # The launchd tick now owns the daily board refresh, because it survives sleep and
+        # this scheduler does not. If it has already scraped today, do not do it again -
+        # the scoring half below is what this job still uniquely provides.
+        from jobhunter.db import get_session, get_setting
+        from jobhunter.tick import FULL_SCRAPE_KEY
+
+        with get_session() as session:
+            done_today = get_setting(session, FULL_SCRAPE_KEY) == datetime.now().strftime("%Y-%m-%d")
+        summary["scrape"] = {"skipped": "tick already scraped today"} if done_today else pipeline.scrape().as_dict()
         summary["salaries"] = pipeline.extract_salaries(limit=40)
         summary["embedded"] = matcher.prefilter(limit=2000)
         summary["scored"] = matcher.score_pending(limit=SCORE_BATCH)
@@ -96,8 +104,13 @@ def start() -> BackgroundScheduler:
     _scheduler = BackgroundScheduler(
         job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 3600},
     )
+    # Ten hours of grace, not one. This process freezes while the laptop sleeps; with
+    # the lid shut at 08:00 and opened at 10:00 the job was two hours late, past the
+    # default grace, and skipped - seven days in a row. Now a lid opened any time
+    # before 18:00 still runs today's scoring. coalesce=True keeps it to one run.
     _scheduler.add_job(
-        daily_cycle, CronTrigger(hour=SCRAPE_HOUR, minute=0), id="daily_cycle", name="Daily scrape + score"
+        daily_cycle, CronTrigger(hour=SCRAPE_HOUR, minute=0), id="daily_cycle", name="Daily scrape + score",
+        misfire_grace_time=10 * 3600,
     )
     _scheduler.add_job(
         reply_cycle,
