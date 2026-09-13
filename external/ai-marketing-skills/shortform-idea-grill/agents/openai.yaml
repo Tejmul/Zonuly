@@ -1,0 +1,4 @@
+interface:
+  display_name: "Shortform Idea Grill"
+  short_description: "Build and score proof-led short-form ideas"
+  default_prompt: "Use $shortform-idea-grill to interview me one question at a time, then rank net-new video ideas in the exact hook, score, three-bullet, payoff, and CTA table."

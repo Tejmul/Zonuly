@@ -1,0 +1,4 @@
+interface:
+  display_name: "Show-and-Tell Video Slate"
+  short_description: "Turn real builds into proof-led video slates"
+  default_prompt: "Use $show-and-tell-video-slate to turn my current builds into a ranked, proof-led 15-minute video slate."

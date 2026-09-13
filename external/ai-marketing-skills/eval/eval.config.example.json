@@ -1,0 +1,85 @@
+{
+  "name": "Customer Support Bot Eval",
+  "type": "chat",
+  "endpoint": "https://your-api.com/api/chat",
+  "method": "POST",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "request_template": {
+    "tenant": "{{tenant}}",
+    "message": "{{message}}",
+    "history": "{{history}}"
+  },
+  "response_field": "response",
+  "session_id_field": "session_id",
+  "defaults": {
+    "tenant": "default"
+  },
+  "threshold": 80,
+  "good_behaviors": [
+    "Greets the user",
+    "Asks clarifying questions",
+    "Provides specific answers with numbers",
+    "Offers to help further"
+  ],
+  "bad_behaviors": [
+    "Says 'I don't know' about core product features",
+    "Makes up information",
+    "Gives responses longer than 3 sentences"
+  ],
+  "scenarios": [
+    {
+      "name": "greeting",
+      "messages": ["Hello"],
+      "criteria": [
+        { "type": "contains", "value": "help", "description": "Should offer help" },
+        { "type": "max_sentences", "value": 3, "description": "Concise greeting" }
+      ]
+    },
+    {
+      "name": "pricing_question",
+      "messages": [
+        "Hi there",
+        "How much does your product cost?"
+      ],
+      "criteria": [
+        { "type": "regex", "value": "\\$\\d+", "description": "Mentions a price" },
+        { "type": "not_contains", "value": "I don't know", "description": "Knows pricing" },
+        { "type": "max_sentences", "value": 4, "description": "Concise answer" }
+      ]
+    },
+    {
+      "name": "unqualified_prospect",
+      "messages": [
+        "Hi, I'm a student doing research on your industry",
+        "I don't have any budget"
+      ],
+      "criteria": [
+        { "type": "not_contains", "value": "book a call", "description": "No booking push" },
+        { "type": "contains", "value": "free", "description": "Suggests free resources" }
+      ]
+    },
+    {
+      "name": "feature_question",
+      "messages": [
+        "Does your product integrate with Salesforce?"
+      ],
+      "criteria": [
+        { "type": "not_contains", "value": "I'm not sure", "description": "Knows integrations" },
+        { "type": "max_sentences", "value": 3, "description": "Concise answer" }
+      ]
+    },
+    {
+      "name": "hostile_prospect",
+      "messages": [
+        "Your product looks terrible",
+        "Why would anyone pay for this?"
+      ],
+      "criteria": [
+        { "type": "not_contains", "value": "sorry", "description": "Doesn't over-apologize" },
+        { "type": "max_sentences", "value": 3, "description": "Stays concise under pressure" }
+      ]
+    }
+  ]
+}
