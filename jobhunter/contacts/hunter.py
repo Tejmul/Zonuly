@@ -12,13 +12,16 @@ from dataclasses import dataclass
 
 import httpx
 
-from jobhunter import CONFIG
+from jobhunter import CONFIG, secret
 from jobhunter.db import get_session, get_setting, set_setting
 from jobhunter.scrapers.base import get_json
 
 log = logging.getLogger(__name__)
 
-API_KEY = (CONFIG.get("contacts") or {}).get("hunter_api_key") or ""
+# Environment first, config.yaml as the legacy fallback - the same order github_miner
+# uses. config.yaml is committed and its header says nothing in it is a secret, so
+# until now there was no correct place to put this key at all.
+API_KEY = secret("HUNTER_API_KEY") or (CONFIG.get("contacts") or {}).get("hunter_api_key") or ""
 DOMAIN_SEARCH = "https://api.hunter.io/v2/domain-search?domain={domain}&api_key={key}&limit=10"
 
 MONTHLY_BUDGET = 25

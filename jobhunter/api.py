@@ -265,6 +265,7 @@ def _json_or(raw: str | None, default):
 def health() -> dict:
     from jobhunter import llm, matcher, scheduler
     from jobhunter.contacts import hunter
+    from jobhunter.research import backends
     from jobhunter.outreach import gmail, sender
 
     profile_path = ROOT / CONFIG["profile_path"]
@@ -274,7 +275,10 @@ def health() -> dict:
         "gmail": gmail.status(),
         "quota": sender.quota(),
         "hunter": {"configured": hunter.available(), "lookups_left": hunter.budget_left()},
-        "github_token": bool((CONFIG.get("contacts") or {}).get("github_token")),
+        # Resolved the way the callers resolve it (env first, then config). Reading
+        # config alone here reported "60 requests/hour" on Settings while the people
+        # hunter was in fact authenticated from .env.
+        "github_token": bool(backends.github_token()),
         "profile": {"exists": profile_path.exists(), "path": str(profile_path)},
         "counts": matcher.counts(),
         "scheduler": scheduler.status(),
