@@ -162,7 +162,7 @@ export type Overview = {
 
 export type Health = {
   ok: boolean;
-  llm: { ok: boolean; model: string; model_present: boolean; embed_present: boolean; error?: string };
+  llm: { ok: boolean; model: string; model_present: boolean; embed_present: boolean; error?: string; hint?: string };
   gmail: { configured: boolean; authorized: boolean; hint: string };
   quota: Quota;
   hunter: { configured: boolean; lookups_left: number };
@@ -176,6 +176,33 @@ export type Health = {
   };
   /** Absent on older backends, so every read of it is optional. */
   access?: { public: boolean; read_only: boolean; operator_key_set: boolean };
+};
+
+export type GmailStep = {
+  id: "project" | "consent" | "client" | "authorize" | "mode";
+  done: boolean;
+  label: string;
+  problem?: string | null;
+};
+
+/** GET /api/gmail/status — the whole Settings → Email setup flow. */
+export type GmailSetup = {
+  configured: boolean;
+  authorized: boolean;
+  credentials_file: string;
+  token_file: string;
+  client_present: boolean;
+  client_problem: string | null;
+  client_id_hint: string | null;
+  token_present: boolean;
+  token_stale: boolean;
+  address: string | null;
+  reply_to: string | null;
+  send_mode: "dryrun" | "gmail";
+  calendar_enabled: boolean;
+  steps: GmailStep[];
+  next_step: GmailStep["id"] | null;
+  quota: Quota;
 };
 
 export type Task = {

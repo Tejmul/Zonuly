@@ -1047,7 +1047,21 @@ def patch_config(payload: ConfigPatch) -> dict:
             current[section][key] = value
 
     path.write_text(yaml.safe_dump(current, sort_keys=False, allow_unicode=True), encoding="utf-8")
-    return {"ok": True, "restart_required": True, "config": current}
+
+    # send_mode is the one switch the Settings → Email flow flips; make it live now
+    # rather than after a restart, in both the in-memory config and the sender gate.
+    restart_required = True
+    mode = (updates.get("outreach") or {}).get("send_mode")
+    if mode is not None:
+        from jobhunter.outreach import sender
+
+        mode = str(mode).lower()
+        if mode not in ("dryrun", "gmail"):
+            raise HTTPException(status_code=422, detail="send_mode must be 'dryrun' or 'gmail'")
+        CONFIG.setdefault("outreach", {})["send_mode"] = mode
+        sender.SEND_MODE = mode
+        restart_required = set(updates) != {"outreach"} or set(updates["outreach"]) != {"send_mode"}
+    return {"ok": True, "restart_required": restart_required, "config": current}
 
 
 @app.post("/api/gmail/authorize")
@@ -1060,10 +1074,35 @@ def gmail_authorize() -> dict:
 
 @app.get("/api/gmail/status")
 def gmail_status() -> dict:
+    """The whole setup flow for Settings → Email: each step, what is done, what is next."""
     from jobhunter.outreach import gmail
-    from jobhunter.outreach import sender
 
-    return {**gmail.status(), "quota": sender.quota(), "address": gmail.my_address()}
+    return gmail.setup_status()
+
+
+class GmailClientUpload(BaseModel):
+    """The OAuth *desktop app* client JSON downloaded from Google Cloud Console."""
+
+    client: dict[str, Any]
+
+
+@app.post("/api/gmail/credentials")
+def gmail_install_credentials(payload: GmailClientUpload) -> dict:
+    """Store the uploaded client JSON at gmail.credentials_file. Never echoed back."""
+    from jobhunter.outreach import gmail
+
+    try:
+        return gmail.install_credentials(payload.client)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@app.post("/api/gmail/disconnect")
+def gmail_disconnect(remove_client: bool = False) -> dict:
+    """Forget the token (and optionally the client) so a different account can be connected."""
+    from jobhunter.outreach import gmail
+
+    return gmail.disconnect(remove_client=remove_client)
 
 
 # ---------------------------------------------------------------- knowledge graph

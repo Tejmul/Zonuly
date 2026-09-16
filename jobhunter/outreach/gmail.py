@@ -109,3 +109,99 @@ def my_address() -> str | None:
     except Exception as e:  # noqa: BLE001 — surfaced in the dashboard, not fatal
         log.debug("could not read Gmail profile: %s", e)
         return None
+
+
+# ---------------------------------------------------------------- setup flow (Settings → Email)
+
+def _client_json() -> dict | None:
+    """The OAuth client file as parsed JSON, or None when missing or unreadable."""
+    import json
+
+    if not CREDENTIALS_FILE.exists():
+        return None
+    try:
+        return json.loads(CREDENTIALS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def validate_client_json(data: object) -> str | None:
+    """Why this is not a usable *desktop app* OAuth client — None when it is."""
+    if not isinstance(data, dict):
+        return "Not a JSON object."
+    if "web" in data and "installed" not in data:
+        return "This is a *Web application* client. Create one with type *Desktop app* instead."
+    installed = data.get("installed")
+    if not isinstance(installed, dict):
+        return "No `installed` section — not an OAuth client JSON downloaded from Google Cloud."
+    for key in ("client_id", "client_secret"):
+        if not installed.get(key):
+            return f"`installed.{key}` is missing."
+    return None
+
+
+def install_credentials(data: dict) -> dict:
+    """Write the uploaded OAuth client JSON to CREDENTIALS_FILE (mode 600)."""
+    import json
+
+    problem = validate_client_json(data)
+    if problem:
+        raise ValueError(problem)
+    if TOKEN_FILE.exists():
+        # A token minted by the old client is useless with a new one.
+        TOKEN_FILE.unlink()
+    CREDENTIALS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CREDENTIALS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    CREDENTIALS_FILE.chmod(0o600)
+    log.info("installed Gmail OAuth client at %s", CREDENTIALS_FILE)
+    return setup_status()
+
+
+def disconnect(*, remove_client: bool = False) -> dict:
+    """Forget the authorization (and optionally the client) so a different account can be used."""
+    if TOKEN_FILE.exists():
+        TOKEN_FILE.unlink()
+    if remove_client and CREDENTIALS_FILE.exists():
+        CREDENTIALS_FILE.unlink()
+    return setup_status()
+
+
+def setup_status() -> dict:
+    """Everything the Settings → Email panel shows: each step, what is done, what is next."""
+    from jobhunter.outreach import sender
+
+    outreach = CONFIG.get("outreach") or {}
+    client = _client_json()
+    client_problem = validate_client_json(client) if client is not None else None
+    client_ok = client is not None and client_problem is None
+    client_id = (client or {}).get("installed", {}).get("client_id", "") if client_ok else ""
+    token_present = TOKEN_FILE.exists()
+    address = my_address() if token_present else None
+
+    steps = [
+        {"id": "project", "done": client_ok, "label": "Google Cloud project with the Gmail and Calendar APIs enabled"},
+        {"id": "consent", "done": client_ok, "label": "Consent screen, with the sending address added as a test user"},
+        {"id": "client", "done": client_ok, "label": "Desktop-app OAuth client JSON installed",
+         "problem": client_problem},
+        {"id": "authorize", "done": bool(address), "label": "Signed in and consent granted"},
+        {"id": "mode", "done": sender.SEND_MODE == "gmail", "label": "Send mode switched from dry-run to Gmail"},
+    ]
+    next_step = next((s["id"] for s in steps if not s["done"]), None)
+    return {
+        "configured": client_ok,
+        "authorized": bool(address),
+        "credentials_file": str(CREDENTIALS_FILE),
+        "token_file": str(TOKEN_FILE),
+        "client_present": client is not None,
+        "client_problem": client_problem,
+        "client_id_hint": f"…{client_id[-24:]}" if client_id else None,
+        "token_present": token_present,
+        "token_stale": token_present and not address,
+        "address": address,
+        "reply_to": outreach.get("user_email"),
+        "send_mode": sender.SEND_MODE,
+        "calendar_enabled": bool((CONFIG.get("calendar") or {}).get("enabled")),
+        "steps": steps,
+        "next_step": next_step,
+        "quota": sender.quota(),
+    }

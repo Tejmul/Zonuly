@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, KeyRound, Save } from "lucide-react";
+import { FileText, Save } from "lucide-react";
 import { api, useApi, useTaskWatcher, type Health } from "@/lib/api";
 import { relTime } from "@/lib/utils";
 import { PageHead, TaskStrip } from "@/components/shell";
+import { EmailSetup } from "@/components/email-setup";
 import { StatusDot } from "@/components/signals";
 import {
   Badge,
@@ -107,16 +108,14 @@ export default function SettingsPage() {
           <PanelHead eyebrow="Connections" title="What's wired up" />
           <div className="flex flex-col gap-3 p-4">
             <Row
-              label="Local model"
+              label="Models (OpenRouter)"
               value={h?.llm.model}
               ok={!!h?.llm.ok && !!h?.llm.model_present}
-              hint={h?.llm.ok ? undefined : "Run `ollama serve`, then `ollama pull qwen3:4b`."}
-            />
-            <Row
-              label="Embeddings"
-              value="nomic-embed-text"
-              ok={!!h?.llm.embed_present}
-              hint={h?.llm.embed_present ? undefined : "Run `ollama pull nomic-embed-text`."}
+              hint={
+                h?.llm.ok
+                  ? undefined
+                  : h?.llm.hint ?? "Set OPENROUTER_API_KEY in .env and restart the API. No local model, ever."
+              }
             />
             <Row
               label="Resume parsed"
@@ -146,9 +145,9 @@ export default function SettingsPage() {
             />
             <Row
               label="Gmail"
-              value={h?.gmail.authorized ? "connected" : h?.gmail.configured ? "not authorized" : "no client JSON"}
+              value={h?.gmail.authorized ? "connected" : h?.gmail.configured ? "not authorized" : "not set up"}
               ok={!!h?.gmail.authorized}
-              hint={h?.gmail.authorized ? undefined : h?.gmail.hint}
+              hint={h?.gmail.authorized ? undefined : "Set up in the Email panel below."}
             />
             <Row
               label="Scheduler"
@@ -157,10 +156,6 @@ export default function SettingsPage() {
             />
 
             <div className="flex flex-wrap gap-2 border-t border-line pt-3">
-              <Button size="sm" variant="quiet" onClick={() => dispatch("/api/gmail/authorize")}>
-                <KeyRound size={12} />
-                Connect Gmail
-              </Button>
               <Button
                 size="sm"
                 variant="quiet"
@@ -174,9 +169,8 @@ export default function SettingsPage() {
               </Button>
             </div>
             <p className="text-xs leading-relaxed text-ink-3">
-              Connect Gmail opens a browser window on the machine running the API. Clearing scores
-              wipes every match so the next scoring run redoes them — do that after changing your
-              resume or the thresholds below.
+              Clearing scores wipes every match so the next scoring run redoes them — do that
+              after changing your resume or the thresholds below.
             </p>
           </div>
         </Panel>
@@ -230,6 +224,8 @@ export default function SettingsPage() {
             </div>
           </div>
         </Panel>
+
+        <EmailSetup watch={watch} />
 
         {form ? (
           <>

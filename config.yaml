@@ -1,269 +1,413 @@
-# JobHunter configuration
 openrouter:
-  # Every model call goes through here. FINAL-PLAN-V3 4.2.
-  # THE KEY IS NOT IN THIS FILE. Put OPENROUTER_API_KEY in .env (gitignored) or the
-  # environment; see .env.example. Nothing in this file is a secret.
   enabled: true
-  base_url: "https://openrouter.ai/api/v1"
-  default_alias: "cheap"
-
-  # Refuse to call anything that is not a `:free` model. This is the guard that makes
-  # a mis-edited alias impossible to pay for -- turn it off deliberately, or not at all.
+  base_url: https://openrouter.ai/api/v1
+  default_alias: cheap
   free_only: true
-
-  # Aliases, not model ids, at call sites. Swapping a model is one line here.
-  # Chosen from the free roster on 2026-09-02 for the thing this pipeline actually
-  # does -- structured JSON out -- so every one of these supports response_format.
-  # Re-check the roster with: python scripts/run.py models list --free
   aliases:
-    # Triage, salary, role classification, company descriptions, parsing.
-    # Was google/gemma-4-26b-a4b-it:free — that endpoint returned a hard rate limit on
-    # every call on 2026-09-03 while judge and writer answered fine, so it is the model
-    # that is saturated, not the account. Swap back if it frees up.
-    cheap: "minimax/minimax-m2.7:free"
-    # 120B hybrid MoE, 12B active: the strongest free reasoner that also does JSON.
-    # The fit rubric and the research hook, where being wrong is expensive.
-    judge: "nvidia/nemotron-3-super-120b-a12b:free"
-    # 1M context, strong long-form generation. Drafts and follow-ups a human will read.
-    writer: "minimax/minimax-m3:free"
-  # Other free options that also support JSON, if one of the above is busy or retired:
-  #   z-ai/glm-5.2:free                 (256k, large reasoner)
-  #   google/gemma-4-31b-it:free        (262k, dense)
-  #   minimax/minimax-m2.7:free         (196k)
-  #   dots-studio/dots-3-note-preview   (512k)
-  #   liquid/lfm-2.5-2.6b:free          (65k, compact extraction)
-  #   openrouter/free                   (routes across free models at random)
-
-  # Free models are rate limited by OpenRouter, not by cost: roughly 20 requests a
-  # minute, and a daily request ceiling that is much higher once the account holds
-  # a few credits. A 429 is that ceiling, not a bug -- the client will say so and stop.
-  requests_per_minute: 18          # client-side spacing, kept just under the limit
-
-  # Budget gate, checked BEFORE each request. Free models cost 0 so it never trips
-  # today; it stays because the day an alias is pointed at a paid model, it should.
+    cheap: minimax/minimax-m2.7:free
+    judge: nvidia/nemotron-3-super-120b-a12b:free
+    writer: minimax/minimax-m3:free
+  requests_per_minute: 18
   daily_inr_cap: 100
   monthly_inr_cap: 2500
   usd_to_inr: 88
-
-  max_tokens: 1200        # per call unless the call site says otherwise
+  max_tokens: 1200
   temperature: 0.3
-  timeout: 180            # seconds; a free endpoint under load can be slow to start
-  app_title: "ZoNuLy JobHunter"
-
+  timeout: 180
+  app_title: ZoNuLy JobHunter
 search:
-  # salary filter, in INR lakhs per annum. Jobs in other currencies are converted (approx).
-  # Tejmul, 2026-09-03: the floor is ₹30 L, remote or on-site, when pay is stated.
-  # Unstated pay is not a rejection (silence is the norm) — it is `unknown`, and the
-  # company shows as "needs research" until its own pages say otherwise.
   min_lpa: 30
-  max_lpa: 200            # keep the MVRX-Labs-style outliers
+  max_lpa: 200
   usd_to_inr: 88
   eur_to_inr: 95
   target_roles:
-    - "AI Engineer"
-    - "ML Engineer"
-    - "Machine Learning Engineer"
-    - "LLM Engineer"
-    - "GenAI Engineer"
-    - "Applied AI"
-    - "Software Engineer"
-    - "SDE"
-    - "Backend Engineer"
-    - "Founding Engineer"
-    - "Research Engineer"
-  locations_ok: ["india", "remote", "bengaluru", "bangalore", "hyderabad", "mumbai", "pune", "delhi", "gurgaon", "gurugram", "noida", "chennai", "worldwide", "anywhere"]
-  # jobs asking for more YOE than this are penalized (user is a fresher / new grad)
+  - AI Engineer
+  - ML Engineer
+  - Machine Learning Engineer
+  - LLM Engineer
+  - GenAI Engineer
+  - Applied AI
+  - Software Engineer
+  - SDE
+  - Backend Engineer
+  - Founding Engineer
+  - Research Engineer
+  locations_ok:
+  - india
+  - remote
+  - bengaluru
+  - bangalore
+  - hyderabad
+  - mumbai
+  - pune
+  - delhi
+  - gurgaon
+  - gurugram
+  - noida
+  - chennai
+  - worldwide
+  - anywhere
   max_yoe: 3
-  # Freshers: Senior / Sr / Lead / Staff / Principal / Architect titles are scraped and
-  # kept but flagged (job.is_senior) and ranked after fresher roles. true drops them
-  # before they are stored instead.
   exclude_senior: false
-
 matching:
-  # The free gate in front of the paid rubric: rare-term-weighted overlap between
-  # the resume and the JD (jobhunter/fit.py). No model, no key, no cost -- OpenRouter
-  # serves no embedding models, so the wide end of the funnel is model-free now.
-  # The absolute floor is a share of the JD's distinctive weight; the percentile
-  # does most of the work, exactly as it did for the old cosine.
-  # Measured over the 1100 postings already scraped: median 0.039, p70 0.047, max 0.171.
-  # A JD has hundreds of distinctive terms and a resume answers a fraction of them, so
-  # the absolute numbers are small and the percentile is what actually gates.
-  fit_prefilter: 0.02              # floor only — below p10, so it almost never binds
-  fit_prefilter_percentile: 70     # only the top 30% of jobs reach the judge model
-  # shortlist_probability >= this -> "high match", triggers notification + contact discovery
+  fit_prefilter: 0.02
+  fit_prefilter_percentile: 70
   high_match_threshold: 65
-
 targeting:
-  # WHAT A TARGET COMPANY LOOKS LIKE. MOTIV §2, refined with Tejmul 2026-09-03.
-  #
-  # Most of these companies run an internship -> PPO model: a paid internship first,
-  # conversion to a full-time offer if the work lands. The stipend is therefore a
-  # *predictor*, not a perk -- a company that will not pay ₹50k/month for an intern
-  # does not turn around and pay ₹30 LPA on conversion. So it is a hard bar.
   stipend_min_inr_month: 50000
-  ppo_tier1_lpa: 30        # PPO / full-time package >= this  -> tier1, the primary queue
-  ppo_tier2_lpa: 30        # was 24; Tejmul set the floor at 30 on 2026-09-03, so tier2 is empty
-  # Below tier2 the company grades `reject` -- kept in the DB, never queued.
-  # Pay we could not find is NOT a rejection: it grades `unknown` and waits for
-  # research, because silence about salary is the norm, not a signal.
-
-  # Recently funded, still small. A mega-round is no longer underrated.
+  ppo_tier1_lpa: 30
+  ppo_tier2_lpa: 30
   funding:
-    stages_ok: ["pre-seed", "seed", "series a", "series b"]
+    stages_ok:
+    - pre-seed
+    - seed
+    - series a
+    - series b
     max_age_months: 30
     max_amount_usd_m: 400
-    # When no pay is stated anywhere, funding is the proxy for ability to pay (Tejmul,
-    # 2026-09-03: "based on valuation we decide"). A US/UK/EU company that raised at
-    # least `strong_min_usd_m` within max_age_months can pay a $40k remote engineer
-    # without noticing; under `weak_max_usd_m` it probably cannot. It is an estimate,
-    # labelled as one on every page — never shown as a figure the company stated.
     strong_min_usd_m: 3
     weak_max_usd_m: 2
-
-  # PAY POWER — the visible benchmark: "how easily can this company pay a fresher
-  # ₹30–40 L?" (Tejmul, 2026-09-03: "based on how much they raised recently, the raise
-  # date, the company's value"). Bands, best first; the first rule that fits decides.
-  #   pays          100  a posting states >= ₹30 L (region floor) — they wrote the number
-  #   deep_pockets   85  >= deep_min_usd_m raised within deep_max_months, OR Series A+
-  #                      within funding.max_age_months, OR stated valuation >= deep_valuation_usd_m
-  #   funded         65  >= funding.strong_min_usd_m within max_age_months, OR a YC batch
-  #                      within max_age_months with team >= yc_min_team
-  #   thin           30  under weak_max_usd_m, pre-seed, or older than max_age_months
-  #   unknown         0  nothing found yet
-  # India never scores above `thin` without a stated number (rupee pay ≠ dollar rounds).
-  # Whether we CHASE them is a separate question: hyped names and teams over
-  # harvest.max_team are still out, whatever their Pay Power.
   pay_power:
     deep_min_usd_m: 10
     deep_max_months: 24
     deep_valuation_usd_m: 50
     yc_min_team: 10
-    # money per head shown beside the score: raised / team size, comfortable at
     per_head_comfortable_usd_k: 200
-
-  # "Open your eyes to the global world" -- the currency gap is the whole thesis.
-  # Every non-India region clears ₹30 LPA automatically in local terms, so their
-  # floor is 0; India carries MOTIV's explicit ₹30 LPA fresher floor.
   regions:
-    - key: us
-      min_lpa: 0
-      match: ["united states", "usa", "u.s.", "san francisco", "bay area", "new york", "nyc", "seattle", "austin", "boston", "los angeles", "chicago", "denver", "palo alto", "mountain view", "california", "texas"]
-    - key: uk
-      min_lpa: 0
-      match: ["united kingdom", "england", "london", "manchester", "oxford", "edinburgh", "bristol", "scotland"]
-    - key: de
-      min_lpa: 0
-      match: ["germany", "deutschland", "berlin", "munich", "münchen", "hamburg", "frankfurt", "cologne", "köln", "stuttgart"]
-    - key: nl
-      min_lpa: 0
-      match: ["netherlands", "holland", "amsterdam", "rotterdam", "utrecht", "eindhoven", "the hague", "den haag"]
-    - key: eu
-      min_lpa: 0
-      match: ["ireland", "dublin", "france", "paris", "spain", "madrid", "barcelona", "portugal", "lisbon", "sweden", "stockholm", "denmark", "copenhagen", "norway", "oslo", "finland", "helsinki", "switzerland", "zurich", "zürich", "austria", "vienna", "belgium", "brussels", "poland", "warsaw", "krakow", "kraków", "czech", "prague", "estonia", "tallinn"]
-    - key: india
-      min_lpa: 30
-      match: ["india", "bengaluru", "bangalore", "hyderabad", "mumbai", "pune", "delhi", "gurgaon", "gurugram", "noida", "chennai", "kolkata", "ahmedabad", "jaipur", "indore", "kochi"]
-    - key: remote
-      min_lpa: 0
-      match: ["remote", "anywhere", "worldwide", "distributed", "work from home"]
-
-  # UNDERRATED ONLY. MOTIV §2: the household names are hyped, oversubscribed and
-  # DSA-gated -- thousands of applications pending, people already selected sitting
-  # on waitlists. Our odds are not there. Matching is word-wise on the company name,
-  # so "Amazon" is excluded but "Amazonia Labs" is not.
+  - key: us
+    min_lpa: 0
+    match:
+    - united states
+    - usa
+    - u.s.
+    - san francisco
+    - bay area
+    - new york
+    - nyc
+    - seattle
+    - austin
+    - boston
+    - los angeles
+    - chicago
+    - denver
+    - palo alto
+    - mountain view
+    - california
+    - texas
+  - key: uk
+    min_lpa: 0
+    match:
+    - united kingdom
+    - england
+    - london
+    - manchester
+    - oxford
+    - edinburgh
+    - bristol
+    - scotland
+  - key: de
+    min_lpa: 0
+    match:
+    - germany
+    - deutschland
+    - berlin
+    - munich
+    - münchen
+    - hamburg
+    - frankfurt
+    - cologne
+    - köln
+    - stuttgart
+  - key: nl
+    min_lpa: 0
+    match:
+    - netherlands
+    - holland
+    - amsterdam
+    - rotterdam
+    - utrecht
+    - eindhoven
+    - the hague
+    - den haag
+  - key: eu
+    min_lpa: 0
+    match:
+    - ireland
+    - dublin
+    - france
+    - paris
+    - spain
+    - madrid
+    - barcelona
+    - portugal
+    - lisbon
+    - sweden
+    - stockholm
+    - denmark
+    - copenhagen
+    - norway
+    - oslo
+    - finland
+    - helsinki
+    - switzerland
+    - zurich
+    - zürich
+    - austria
+    - vienna
+    - belgium
+    - brussels
+    - poland
+    - warsaw
+    - krakow
+    - kraków
+    - czech
+    - prague
+    - estonia
+    - tallinn
+  - key: india
+    min_lpa: 30
+    match:
+    - india
+    - bengaluru
+    - bangalore
+    - hyderabad
+    - mumbai
+    - pune
+    - delhi
+    - gurgaon
+    - gurugram
+    - noida
+    - chennai
+    - kolkata
+    - ahmedabad
+    - jaipur
+    - indore
+    - kochi
+  - key: remote
+    min_lpa: 0
+    match:
+    - remote
+    - anywhere
+    - worldwide
+    - distributed
+    - work from home
   hyped:
-    big_tech: ["google", "alphabet", "youtube", "deepmind", "microsoft", "github", "linkedin", "amazon", "aws", "apple", "meta", "facebook", "instagram", "whatsapp", "netflix", "nvidia", "tesla", "spacex", "openai", "anthropic", "ibm", "intel", "oracle", "salesforce", "adobe", "sap", "cisco", "qualcomm", "samsung", "vmware", "dell", "uber", "lyft", "airbnb", "twitter", "snap", "tiktok", "bytedance", "spotify", "shopify", "paypal", "stripe", "coinbase", "palantir", "databricks", "snowflake", "atlassian", "dropbox", "zoom", "slack", "servicenow", "workday", "twilio", "cloudflare", "datadog", "mongodb", "elastic", "hubspot", "doordash", "instacart", "robinhood", "reddit", "pinterest", "discord", "figma", "canva", "notion", "asana", "gitlab", "docker", "hashicorp", "confluent", "goldman sachs", "jpmorgan", "morgan stanley", "jane street", "citadel", "two sigma", "optiver", "hudson river trading"]
-    india_household: ["tcs", "infosys", "wipro", "hcl", "tech mahindra", "cognizant", "accenture", "capgemini", "deloitte", "kpmg", "mindtree", "ltimindtree", "mphasis", "zoho", "freshworks", "flipkart", "swiggy", "zomato", "paytm", "phonepe", "ola", "oyo", "byju", "unacademy", "razorpay", "zerodha", "cred", "meesho", "nykaa", "dream11", "sharechat", "jio", "reliance", "adani", "tata", "mahindra", "bajaj", "hdfc", "icici", "sbi"]
-
-  # WHO WE ASK FOR A REFERRAL, best first. `rank` orders the outreach queue.
-  # No alumni/college targeting: that network is already known personally and does
-  # not need a machine (Tejmul, 2026-09-03).
+    big_tech:
+    - google
+    - alphabet
+    - youtube
+    - deepmind
+    - microsoft
+    - github
+    - linkedin
+    - amazon
+    - aws
+    - apple
+    - meta
+    - facebook
+    - instagram
+    - whatsapp
+    - netflix
+    - nvidia
+    - tesla
+    - spacex
+    - openai
+    - anthropic
+    - ibm
+    - intel
+    - oracle
+    - salesforce
+    - adobe
+    - sap
+    - cisco
+    - qualcomm
+    - samsung
+    - vmware
+    - dell
+    - uber
+    - lyft
+    - airbnb
+    - twitter
+    - snap
+    - tiktok
+    - bytedance
+    - spotify
+    - shopify
+    - paypal
+    - stripe
+    - coinbase
+    - palantir
+    - databricks
+    - snowflake
+    - atlassian
+    - dropbox
+    - zoom
+    - slack
+    - servicenow
+    - workday
+    - twilio
+    - cloudflare
+    - datadog
+    - mongodb
+    - elastic
+    - hubspot
+    - doordash
+    - instacart
+    - robinhood
+    - reddit
+    - pinterest
+    - discord
+    - figma
+    - canva
+    - notion
+    - asana
+    - gitlab
+    - docker
+    - hashicorp
+    - confluent
+    - goldman sachs
+    - jpmorgan
+    - morgan stanley
+    - jane street
+    - citadel
+    - two sigma
+    - optiver
+    - hudson river trading
+    india_household:
+    - tcs
+    - infosys
+    - wipro
+    - hcl
+    - tech mahindra
+    - cognizant
+    - accenture
+    - capgemini
+    - deloitte
+    - kpmg
+    - mindtree
+    - ltimindtree
+    - mphasis
+    - zoho
+    - freshworks
+    - flipkart
+    - swiggy
+    - zomato
+    - paytm
+    - phonepe
+    - ola
+    - oyo
+    - byju
+    - unacademy
+    - razorpay
+    - zerodha
+    - cred
+    - meesho
+    - nykaa
+    - dream11
+    - sharechat
+    - jio
+    - reliance
+    - adani
+    - tata
+    - mahindra
+    - bajaj
+    - hdfc
+    - icici
+    - sbi
   people:
     max_per_company: 30
     roles:
-      - {key: founder,         rank: 1, refer: true,  label: "Founder / CTO / co-founder"}
-      - {key: senior_engineer, rank: 2, refer: true,  label: "Senior / staff / lead engineer"}
-      - {key: engineer,        rank: 3, refer: true,  label: "Software engineer, SDE 1-3"}
-      - {key: eng_manager,     rank: 4, refer: true,  label: "Engineering manager"}
-      - {key: tech_recruiter,  rank: 5, refer: true,  label: "Technical recruiter / tech HR"}
-      - {key: recruiter,       rank: 6, refer: true,  label: "General HR / talent"}
-      - {key: other,           rank: 9, refer: false, label: "Everyone else"}
-
-  # IS THE HIRING CLAIM REAL? A founder posting "we are hiring" every day on X is
-  # not evidence. The company's own careers page or ATS board is. A claim with no
-  # corroboration there is marked `not_authorized` and never drafted against.
+    - key: founder
+      rank: 1
+      refer: true
+      label: Founder / CTO / co-founder
+    - key: senior_engineer
+      rank: 2
+      refer: true
+      label: Senior / staff / lead engineer
+    - key: engineer
+      rank: 3
+      refer: true
+      label: Software engineer, SDE 1-3
+    - key: eng_manager
+      rank: 4
+      refer: true
+      label: Engineering manager
+    - key: tech_recruiter
+      rank: 5
+      refer: true
+      label: Technical recruiter / tech HR
+    - key: recruiter
+      rank: 6
+      refer: true
+      label: General HR / talent
+    - key: other
+      rank: 9
+      refer: false
+      label: Everyone else
   hiring_verification:
-    careers_paths: ["/careers", "/jobs", "/careers/", "/join-us", "/work-with-us", "/company/careers", "/about/careers", "/open-roles"]
-    max_age_days: 21         # a verification older than this is re-checked
+    careers_paths:
+    - /careers
+    - /jobs
+    - /careers/
+    - /join-us
+    - /work-with-us
+    - /company/careers
+    - /about/careers
+    - /open-roles
+    max_age_days: 21
     timeout: 20
-
 harvest:
-  # Bulk company harvest (jobhunter/harvest.py) — N different companies that fit, then
-  # their boards, roles and grade. Admission happens before a row exists:
-  max_team: 200            # bigger than this is not underrated any more
-  regions: ["us", "uk", "de", "nl", "eu", "india", "remote"]   # keys from targeting.regions
-  # exa_queries: []        # override the default company-search queries (25 sites each)
-
+  max_team: 200
+  regions:
+  - us
+  - uk
+  - de
+  - nl
+  - eu
+  - india
+  - remote
 contacts:
   max_per_company: 20
-  # public-LinkedIn lead search (no login): DuckDuckGo throttles by IP, so keep a wide gap
   linkedin_min_gap_seconds: 35
   linkedin_max_per_company: 8
-  github_token: ""        # optional: personal access token raises rate limits 60/hr -> 5000/hr
-  hunter_api_key: ""      # optional: hunter.io free tier (25 searches/mo)
-  # MX lookup always runs. The SMTP RCPT probe is OFF by default and should stay off:
-  # residential ISPs block outbound port 25, and Google/Microsoft accept every recipient
-  # at the edge, so a 250 proves nothing. It also risks getting your IP listed.
-  # Turn it on only from a host with clean port-25 egress.
+  github_token: ''
+  hunter_api_key: ''
   smtp_verify: false
-
 outreach:
   daily_send_cap: 25
   followup_after_days: 5
   max_followups: 1
-  # HOW SENDS LEAVE THE MACHINE. `dryrun` performs the whole loop — ledger, cap, window,
-  # status changes — but writes the mail to outbox/ instead of Gmail, so the pipeline can
-  # be exercised end to end before the OAuth client exists. Switch to `gmail` once
-  # `python scripts/run.py gmail-auth` has run. Nothing else changes.
-  send_mode: dryrun
-  guessed_daily_cap: 5        # pattern-guessed addresses bounce; they get their own, smaller cap
-  draft_expiry_days: 7        # a draft older than this is stale: re-draft, never approve
-  contact_cooldown_days: 30   # neither of us writes to the same person twice in this window
-  company_cooldown_days: 30   # one ask per company per candidate in this window
-  # The review gate: proper nouns and numbers in a draft must appear in the facts it was
-  # given (profile, the person's own evidence, the company's own pages). Unsupported ones
-  # are flagged for the reviewer, never silently published.
+  send_mode: yolo
+  guessed_daily_cap: 5
+  draft_expiry_days: 7
+  contact_cooldown_days: 30
+  company_cooldown_days: 30
   gate:
     min_words: 70
     max_words: 160
-  send_window: [10, 19]   # local hours between which sends happen
-  user_name: "Tejmul Movin"
-  user_headline: "AI/ML Engineer • B.Tech CS+AI '27, Newton School of Technology"
+  send_window:
+  - 10
+  - 19
+  user_name: Tejmul Movin
+  user_headline: AI/ML Engineer • B.Tech CS+AI '27, Newton School of Technology
   user_links:
-    - "github.com/Tejmul"
-    - "linkedin.com/in/tejmulmovin-softwareengineer"
-    - "spylook.vercel.app"
-  # reply-to shown in drafts; the Gmail account you OAuth with is the actual sender
-  user_email: "sansar.t23csai@nst.rishihood.edu.in"
-
+  - github.com/Tejmul
+  - linkedin.com/in/tejmulmovin-softwareengineer
+  - spylook.vercel.app
+  user_email: tejmulmovin9@gmail.com
 gmail:
-  credentials_file: "secrets/gmail_credentials.json"   # OAuth client from Google Cloud Console
-  token_file: "secrets/gmail_token.json"
-
+  credentials_file: secrets/gmail_credentials.json
+  token_file: secrets/gmail_token.json
 calendar:
-  # Same OAuth client and token as Gmail (the consent screen asks for calendar.events too).
-  # A "yes" with a time lands on this calendar; a clash drafts the reschedule for review.
   enabled: true
-  calendar_id: "primary"
-  timezone: "Asia/Kolkata"
-  default_minutes: 30         # when the reply names a start but no length
-  conflict_window_minutes: 45 # two events closer than this are a conflict
-
+  calendar_id: primary
+  timezone: Asia/Kolkata
+  default_minutes: 30
+  conflict_window_minutes: 45
 notifications:
   macos: true
-
 sources:
-  # toggle individual scrapers; Playwright ones are off by default (slowest + most fragile)
   greenhouse: true
   lever: true
   ashby: true
@@ -274,21 +418,14 @@ sources:
   wellfound: false
   cutshort: false
   instahyre: false
-  # polite scraping
   request_timeout: 25
   concurrency: 8
-  user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
-
+  user_agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML,
+    like Gecko) Chrome/125.0 Safari/537.36
 scheduler:
-  scrape_hour: 8          # daily full scrape+score at this local hour
-  reply_poll_minutes: 60  # how often to poll Gmail for replies
-
+  scrape_hour: 8
+  reply_poll_minutes: 60
 tick:
-  # The unattended pipeline (jobhunter/tick.py) under launchd — `python scripts/run.py tick install`.
-  #   free  every hour and on wake: people hunt, hiring verification, YC/boards/roles, pay, grade
-  #   paid  daily after the caps reset and on login: Exa discovery + company facts, X posts,
-  #         the model passes (descriptions, origin stories), grade, knowledge-graph sync
-  # Each stage is bounded so a tick ends inside its interval; each reads its budget first.
   free_interval_seconds: 3600
   paid_hour: 6
   paid_minute: 15
@@ -299,46 +436,40 @@ tick:
   facts_per_tick: 90
   levels_per_tick: 60
   exa_discovery_queries_per_day: 6
-
 api:
-  host: "127.0.0.1"
+  host: 127.0.0.1
   port: 8000
-  # Next dev falls back to 3001/3002 when 3000 is taken, so allow the neighbours too
-  cors_origins: ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://127.0.0.1:3000"]
-
+  cors_origins:
+  - http://localhost:3000
+  - http://localhost:3001
+  - http://localhost:3002
+  - http://127.0.0.1:3000
 research:
-  # Web research / data-acquisition layer. Backends are the upstream tools Agent
-  # Reach installs (mcporter+Exa, Jina Reader, gh, yt-dlp, rdt) -- see
-  # `system docs/AGENT-REACH-INTEGRATION.md`.
-  # NO SECRETS HERE. Keys live in the environment or a gitignored .env:
-  #   EXA_API_KEY (optional, only for the exa-api fallback), GITHUB_TOKEN (optional).
-  timeout: 90              # seconds per backend call
-  cache_ttl_hours: 24      # 0 disables the research cache entirely
-  max_chars: 12000         # per fetched page
-  mcporter_server: "exa"   # the mcporter server name holding the Exa MCP
-  # scrape.do — proxy fetcher for pages that block a datacenter read (careers pages,
-  # levels.fyi, company sites). Token is `Scrape_dog` in .env. 1,000 requests/month free;
-  # used only as a page_read fallback after jina and direct, and by levels.fyi pay lookup.
+  timeout: 90
+  cache_ttl_hours: 24
+  max_chars: 12000
+  mcporter_server: exa
   scrapedo_monthly: 1000
   scrapedo_daily: 120
-  # The Exa key is a $10 free tier with no money behind it. ~1 cent a search, so
-  # ~1,000 searches in total; this caps how many a day, counted before the call,
-  # cache hits excluded. `research doctor` shows today's used/left.
-  # Raised 40 -> 100 on 2026-09-03 for the company-facts pass (one search per company
-  # with roles, ~500 of them, ≈ $3–4 of the $10). Drop back to 40 when that pass is done.
   exa_daily_cap: 100
-  # X search through the THROWAWAY session (X_AUTH_TOKEN / X_CT0 in .env) — the one
-  # login-gated read allowed. Read-only, few, slow; a suspension stops it, never a retry.
   x_daily_searches: 10
   x_min_gap_seconds: 30
-  # Ordered candidates per capability; the first one that returns content wins.
   backends:
-    web_search: ["exa-mcp", "exa-api"]
-    page_read: ["jina", "direct", "scrapedo"]
-    github: ["gh-cli", "github-api"]
-    reddit: ["rdt", "opencli"]
-    youtube: ["yt-dlp"]
-
-db_path: "jobhunter.db"
-profile_path: "profile/profile.json"
-resume_path: "profile/resume.pdf"
+    web_search:
+    - exa-mcp
+    - exa-api
+    page_read:
+    - jina
+    - direct
+    - scrapedo
+    github:
+    - gh-cli
+    - github-api
+    reddit:
+    - rdt
+    - opencli
+    youtube:
+    - yt-dlp
+db_path: jobhunter.db
+profile_path: profile/profile.json
+resume_path: profile/resume.pdf
