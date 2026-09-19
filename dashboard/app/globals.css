@@ -161,11 +161,12 @@ body {
 }
 
 /* ================================================================== landing
-   The landing page runs one section on its own ground: a dark photographic field
-   that stays dark in either theme, because it is a photograph and photographs do
-   not have a light mode. Everything below it follows the reader's choice, so in
-   dark mode the hero dissolves into the page and in light mode it ends on a crisp
-   horizontal edge. Both are deliberate.
+   The hero used to run on its own dark ground whatever the toggle said — the
+   argument was that photographs have no light mode. Tejmul, 2026-09-19: the toggle
+   should change the hero too. So the hero now has a ground of its own that follows
+   the theme: paper-white with faces printed in grey on it, or near-black with faces
+   glowing out of it. The same variables carry both, and the header chrome, which sits
+   outside the section, reads them from :root.
 */
 
 .eyebrow {
@@ -176,26 +177,68 @@ body {
   color: var(--ink-3);
 }
 
-.hero {
+:root {
+  /* Light is not a dimmed copy of dark. On white nothing can "recede into the
+     ground" the way photographs do into black, so the light hero treats the crowd as
+     one object — a framed contact sheet to the right of the copy — on clean white. */
+  --ground: #ffffff;
+  --ground-rgb: 255 255 255;
+  --ground-ink: #09090b;
+  --ground-ink-2: #4b4b53;
+  --ground-ink-3: #7c7c85;
+  --ground-line: #d4d4d8;
+  --ground-tile: #ececef;
+  --ground-glow: rgb(9 9 11 / 0.35);
+}
+:root.dark {
   --ground: #08080a;
+  --ground-rgb: 8 8 10;
   --ground-ink: #fafafa;
   --ground-ink-2: #a3a3ad;
+  --ground-ink-3: #8d8d96;
   --ground-line: #2b2b32;
+  --ground-tile: #121216;
+  --ground-glow: rgb(0 0 0 / 0.95);
+}
+
+.hero {
   position: relative;
   background: var(--ground);
   color: var(--ground-ink);
   isolation: isolate;
+  transition: background 0.3s ease, color 0.3s ease;
 }
-.hero .eyebrow { color: #8d8d96; }
-.hero .marginal { color: #8d8d96; }
+.hero .eyebrow { color: var(--ground-ink-3); }
+.hero .marginal { color: var(--ground-ink-3); }
 
-/* The theme toggle is built for the paper page; over the photographic ground it needs
-   the hero's own values, and a scope beats guessing at utility class order. */
-.hero-chrome button {
-  border-color: var(--ground-line, #2b2b32);
-  color: #a3a3ad;
+/* Light mode: the contact sheet. The mosaic's container becomes a bounded, framed
+   object — white gutters, a hairline frame, a real shadow — instead of a full-bleed
+   wash. The copy keeps the white page to itself: no scrim, no texture over it. */
+:root:not(.dark) .hero [data-parallax] {
+  inset: 68px 16px auto 16px;
+  height: 34svh;
+  border: 1px solid var(--ground-line);
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgb(9 9 11 / 0.05), 0 28px 60px -36px var(--ground-glow);
 }
-.hero-chrome button:hover { background: rgb(255 255 255 / 0.08); color: #fff; }
+@media (min-width: 1024px) {
+  :root:not(.dark) .hero [data-parallax] {
+    inset: 9% 4% 15% max(52%, 620px);
+    height: auto;
+  }
+}
+:root:not(.dark) .hero .hero-scrim,
+:root:not(.dark) .hero .hero-grain { display: none; }
+
+/* The header chrome over the hero takes the hero's ink, in either theme. */
+.hero-chrome button {
+  border-color: var(--ground-line);
+  color: var(--ground-ink-2);
+}
+.hero-chrome button:hover { background: rgb(128 128 128 / 0.14); color: var(--ground-ink); }
+.hero-ghost:hover { background: rgb(128 128 128 / 0.12); }
 
 /* --- the mosaic ----------------------------------------------------------- */
 
@@ -203,7 +246,7 @@ body {
   position: relative;
   overflow: hidden;
   border-radius: 2px;
-  background: #121216;
+  background: var(--ground-tile);
   transform-origin: center;
   transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -212,15 +255,19 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* Grey is the resting state of the whole crowd. Colour means found. */
-  filter: grayscale(1) contrast(1.05) brightness(0.5);
+  /* Grey is the resting state of the whole crowd. Colour means found. On white the
+     crowd is a contact sheet at full strength inside its frame; on the dark ground
+     it is dimmed into it. */
+  filter: grayscale(1) contrast(1.04) brightness(1.02);
   transition: filter 0.75s cubic-bezier(0.16, 1, 0.3, 1);
 }
+:root.dark .tile img { filter: grayscale(1) contrast(1.05) brightness(0.5); }
 .tile[data-on="true"] {
   transform: scale(1.05);
   z-index: 3;
-  box-shadow: 0 20px 60px -18px rgb(0 0 0 / 0.95);
+  box-shadow: 0 20px 60px -18px var(--ground-glow);
 }
+
 .tile[data-on="true"] img { filter: grayscale(0) contrast(1.02) brightness(1.02); }
 
 /* Corner brackets, the plate motif turned on a person. */
@@ -235,7 +282,7 @@ body {
   height: 26%;
   max-width: 20px;
   max-height: 20px;
-  border-color: #fff;
+  border-color: var(--ground-ink);
 }
 .ring::before    { top: 0; left: 0;  border-top: 1.5px solid; border-left: 1.5px solid; }
 .ring::after     { top: 0; right: 0; border-top: 1.5px solid; border-right: 1.5px solid; }
@@ -252,25 +299,25 @@ body {
      the ground at the bottom edge — the crowd can stay bright for most of its height. */
   background: linear-gradient(
     to bottom,
-    rgb(8 8 10 / 0.5) 0%,
-    rgb(8 8 10 / 0.16) 26%,
-    rgb(8 8 10 / 0.2) 58%,
-    rgb(8 8 10 / 0.66) 84%,
-    #08080a 100%
+    rgb(var(--ground-rgb) / 0.5) 0%,
+    rgb(var(--ground-rgb) / 0.16) 26%,
+    rgb(var(--ground-rgb) / 0.2) 58%,
+    rgb(var(--ground-rgb) / 0.66) 84%,
+    var(--ground) 100%
   );
 }
 @media (min-width: 1024px) {
   .hero-scrim {
     background:
-      linear-gradient(to bottom, rgb(8 8 10 / 0.55) 0%, rgb(8 8 10 / 0) 22%, rgb(8 8 10 / 0) 72%, #08080a 100%),
+      linear-gradient(to bottom, rgb(var(--ground-rgb) / 0.55) 0%, rgb(var(--ground-rgb) / 0) 22%, rgb(var(--ground-rgb) / 0) 72%, var(--ground) 100%),
       linear-gradient(
         100deg,
-        #08080a 0%,
-        rgb(8 8 10 / 0.97) 20%,
-        rgb(8 8 10 / 0.9) 38%,
-        rgb(8 8 10 / 0.54) 58%,
-        rgb(8 8 10 / 0.28) 78%,
-        rgb(8 8 10 / 0.44) 100%
+        var(--ground) 0%,
+        rgb(var(--ground-rgb) / 0.97) 20%,
+        rgb(var(--ground-rgb) / 0.9) 38%,
+        rgb(var(--ground-rgb) / 0.54) 58%,
+        rgb(var(--ground-rgb) / 0.28) 78%,
+        rgb(var(--ground-rgb) / 0.44) 100%
       );
   }
 }
@@ -297,7 +344,12 @@ body {
 
 .record {
   border: 1px solid var(--ground-line);
-  background: rgb(12 12 14 / 0.82);
+  background: rgb(var(--ground-rgb) / 0.86);
+  box-shadow: 0 24px 60px -30px var(--ground-glow);
+}
+:root:not(.dark) .record {
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(9 9 11 / 0.06), 0 24px 50px -28px var(--ground-glow);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
@@ -390,6 +442,12 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .atlas-pulse { animation: none; opacity: 0; }
 }
+
+/* ---------------------------------------------------------------- the mark
+   Threshold (components/logo.tsx). A press or hover lifts it a hair — the only motion
+   a mark needs; reduced motion is zeroed by the global rule. */
+.group:hover .logo-mark { transform: translateY(-1px); }
+.logo-mark { transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
 
 /* ------------------------------------------------------------- plate, redone
    The frame used to be --line (1.28:1 on white) with 6px corner ticks in

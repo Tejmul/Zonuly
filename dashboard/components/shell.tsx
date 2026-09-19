@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useApi, type Health } from "@/lib/api";
 import { BudgetMeter, StatusDot } from "@/components/signals";
+import { Mark } from "@/components/logo";
 
 const NAV = [
   { href: "/", label: "Overview", icon: LayoutGrid },
@@ -36,8 +37,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <nav className="sticky top-0 flex h-screen w-52 shrink-0 flex-col border-r border-line bg-surface">
         <Link href="/" className="border-b border-line px-4 py-4">
           <div className="flex items-baseline gap-1.5">
-            <span className="text-base font-semibold tracking-tight text-ink">JobHunter</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-surface-2" />
+            <Mark size={18} />
+            <span className="text-base font-semibold tracking-tight text-ink">ZoNuLy</span>
           </div>
           <div className="eyebrow mt-1">Referral pipeline</div>
         </Link>

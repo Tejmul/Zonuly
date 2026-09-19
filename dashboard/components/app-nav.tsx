@@ -5,12 +5,15 @@ import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/theme";
 import { SearchBox } from "@/components/search-box";
 import { useAccess } from "@/components/access";
+import { Logo } from "@/components/logo";
 
 // The order is the workflow: find companies (list or map) → the people at them →
 // approve the drafts → watch what comes back. Roles live inside each company page.
 const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/companies", label: "Companies" },
+  // The hand-picked list — a page of its own so it is never one filter among seven
+  { href: "/lists/india-star", label: "★ India" },
   { href: "/atlas", label: "Atlas" },
   { href: "/leads", label: "Leads" },
   { href: "/queue", label: "Queue" },
@@ -57,9 +60,7 @@ export function AppNav() {
     <header className="sticky top-0 z-30 border-b border-line bg-paper/85 backdrop-blur-md">
       <div className="mx-auto max-w-[1400px] px-4 sm:px-6">
         <div className="flex h-14 items-center gap-3 sm:gap-6">
-          <Link href="/" className="shrink-0 font-mono text-[13px] font-semibold tracking-tight">
-            ZoNuLy
-          </Link>
+          <Logo size={18} className="shrink-0 text-[13px]" />
           {/* min-w-0 is load-bearing: a flex child defaults to min-width:auto, so
               without it the nav refuses to shrink and the row overflows. */}
           <nav aria-label="Sections" className="scrollbar-none hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto sm:flex">

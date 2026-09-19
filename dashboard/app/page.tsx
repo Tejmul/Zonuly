@@ -16,6 +16,7 @@ import { useGSAP } from "@gsap/react";
 import { ArrowRight, CircleSlash, Network, ShieldCheck } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme";
+import { Logo } from "@/components/logo";
 import { Rights } from "@/components/rights";
 import { FaceMosaic, SAMPLE_LEADS, type Lead } from "@/components/landing/mosaic";
 
@@ -227,14 +228,14 @@ export default function Landing() {
             <div data-hero-follow className="mt-9 flex flex-wrap items-center gap-3">
               <Link
                 href="/dashboard"
-                className="group inline-flex h-11 cursor-pointer items-center gap-2 rounded-md bg-white px-6 text-[13px] font-medium text-[#08080a] transition-transform duration-200 hover:-translate-y-px"
+                className="group inline-flex h-11 cursor-pointer items-center gap-2 rounded-md bg-[var(--ground-ink)] px-6 text-[13px] font-medium text-[var(--ground)] transition-transform duration-200 hover:-translate-y-px"
               >
                 Open the dashboard
                 <ArrowRight size={15} className="transition-transform duration-200 group-hover:translate-x-0.5" />
               </Link>
               <Link
                 href="#sources"
-                className="inline-flex h-11 cursor-pointer items-center rounded-md border border-[var(--ground-line)] px-6 text-[13px] font-medium text-white transition-colors duration-200 hover:bg-white/8"
+                className="inline-flex h-11 cursor-pointer items-center rounded-md hero-ghost border border-[var(--ground-line)] px-6 text-[13px] font-medium text-[var(--ground-ink)] transition-colors duration-200"
               >
                 Where it looks
               </Link>
@@ -247,16 +248,16 @@ export default function Landing() {
             <div data-record className="record plate ml-auto max-w-[19rem] p-4">
               <div className="flex items-baseline justify-between">
                 <span className="eyebrow">Sample record</span>
-                <span className="tnum text-[10px] text-[#9a9aa4]">{String(lead.n).padStart(3, "0")}</span>
+                <span className="tnum text-[10px] text-[var(--ground-ink-3)]">{String(lead.n).padStart(3, "0")}</span>
               </div>
               <p className="mt-3 text-[15px] leading-tight font-medium">{lead.lead.role}</p>
-              <div className="ledger mt-3 text-[#a3a3ad]">
-                <span className="text-[#8d8d96]">tenure</span>
+              <div className="ledger mt-3 text-[var(--ground-ink-2)]">
+                <span className="text-[var(--ground-ink-3)]">tenure</span>
                 <span>{lead.lead.tenure}</span>
-                <span className="text-[#8d8d96]">found on</span>
+                <span className="text-[var(--ground-ink-3)]">found on</span>
                 <span>{lead.lead.source}</span>
-                <span className="text-[#8d8d96]">proof</span>
-                <span className="text-white">{lead.lead.proof}</span>
+                <span className="text-[var(--ground-ink-3)]">proof</span>
+                <span className="text-[var(--ground-ink)]">{lead.lead.proof}</span>
               </div>
             </div>
           </div>
@@ -361,7 +362,7 @@ export default function Landing() {
 
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-10">
-          <span className="font-mono text-[12px] font-semibold tracking-tight">ZoNuLy</span>
+          <Logo href={null} size={16} className="text-[12px]" />
           <p className="max-w-[52ch] text-[11.5px] leading-relaxed text-ink-3">
             Photographs are of engineers at public startup events, shown unnamed. They
             illustrate the crowd the atlas searches, not the people in it.
@@ -393,10 +394,8 @@ function SiteHeader() {
       }`}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <Link href="/" className={`font-mono text-[13px] font-semibold tracking-tight ${solid ? "text-ink" : "text-white"}`}>
-          ZoNuLy
-        </Link>
-        <div className={`flex items-center gap-1 ${solid ? "text-ink" : "hero-chrome text-white"}`}>
+        <Logo size={18} className={`text-[13px] ${solid ? "text-ink" : "text-[var(--ground-ink)]"}`} />
+        <div className={`flex items-center gap-1 ${solid ? "text-ink" : "hero-chrome text-[var(--ground-ink)]"}`}>
           <Link
             href="#sources"
             className="hidden h-9 cursor-pointer items-center rounded-md px-3 text-[13px] font-medium opacity-80 transition-opacity hover:opacity-100 sm:inline-flex"
@@ -440,7 +439,7 @@ function Stat({ label, value }: { label: string; value: number | undefined }) {
   return (
     <div>
       <dd className="tnum text-[24px] leading-none font-medium tracking-[-0.02em] sm:text-[28px]">
-        {value === undefined ? <span className="text-[#5a5a62]">—</span> : <span ref={el}>0</span>}
+        {value === undefined ? <span className="text-[var(--ground-ink-3)]">—</span> : <span ref={el}>0</span>}
       </dd>
       <dt className="marginal mt-2.5">{label}</dt>
     </div>

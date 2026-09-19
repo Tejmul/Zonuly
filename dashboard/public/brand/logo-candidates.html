@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ZoNuLy — mark candidates</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Azeret+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<style>
+  :root { --paper:#fff; --ink:#09090b; --ink2:#52525b; --ink3:#8e8e97; --line:#e3e3e6; }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+  header { padding: 40px 48px 8px; max-width: 1200px; margin: 0 auto; }
+  h1 { font-family: "Bricolage Grotesque", sans-serif; font-size: 28px; letter-spacing: -0.03em; margin: 0 0 6px; }
+  header p { color: var(--ink2); max-width: 70ch; margin: 0; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 48px 80px; display: grid; gap: 28px; }
+  .cand { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: grid; grid-template-columns: 300px 1fr 1fr; }
+  .cand > .about { padding: 22px 24px; border-right: 1px solid var(--line); }
+  .cand h2 { font-family: "Bricolage Grotesque", sans-serif; font-size: 18px; letter-spacing: -0.02em; margin: 0; }
+  .cand .tag { font-family: "Azeret Mono", monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); margin-bottom: 8px; }
+  .cand p { color: var(--ink2); font-size: 13px; margin: 8px 0 0; }
+  .panel { padding: 22px 24px; display: grid; grid-template-rows: auto auto auto; gap: 16px; }
+  .panel.dark { background: #08080a; color: #fafafa; --line:#232327; --ink3:#6b6b75; }
+  .panel .label { font-family: "Azeret Mono", monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); }
+  .sizes { display: flex; align-items: flex-end; gap: 28px; }
+  .sizes figure { margin: 0; display: grid; justify-items: center; gap: 6px; }
+  .sizes figcaption { font-family: "Azeret Mono", monospace; font-size: 10px; color: var(--ink3); }
+  svg { display: block; }
+  .lockup { display: inline-flex; align-items: center; gap: 10px; font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 22px; letter-spacing: -0.03em; }
+  .lockup.mono { font-family: "Azeret Mono", monospace; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+  .tab { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px 0 10px; border: 1px solid var(--line); border-bottom: 0; border-radius: 8px 8px 0 0; font: 12px ui-sans-serif, system-ui; background: rgb(128 128 128 / .06); }
+  .tab span { color: inherit; }
+  .live { font-family: "Azeret Mono", monospace; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; background: var(--ink); color: var(--paper); padding: 3px 7px; border-radius: 4px; margin-left: 8px; }
+  @media (max-width: 900px) { .cand { grid-template-columns: 1fr; } .cand > .about { border-right: 0; border-bottom: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>ZoNuLy — five marks</h1>
+  <p>Every one is a solid form first and a drawing second, so it survives a 16px tab. All use a single colour, so the same file is black on white and white on black. Each row shows the mark at 96 / 32 / 16px, in a browser tab, and locked up with the wordmark — in both themes.</p>
+</header>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- A · Threshold: a solid tile with the route cut through it; the route ends in a person -->
+    <symbol id="m-threshold" viewBox="0 0 32 32">
+      <mask id="mask-threshold"><rect width="32" height="32" fill="#fff"/>
+        <path d="M8.5 9.5H22.5L9.5 22.5H19" fill="none" stroke="#000" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="23.2" cy="22.5" r="4" fill="#000"/><circle cx="23.2" cy="22.5" r="1.7" fill="#fff"/>
+      </mask>
+      <rect width="32" height="32" rx="9" fill="currentColor" mask="url(#mask-threshold)"/>
+    </symbol>
+    <!-- B · Reticle: the viewfinder from the hero, over a crowd of four, one solid -->
+    <symbol id="m-reticle" viewBox="0 0 32 32">
+      <path d="M2.2 9V4.2a2 2 0 0 1 2-2H9M23 2.2h4.8a2 2 0 0 1 2 2V9M29.8 23v4.8a2 2 0 0 1-2 2H23M9 29.8H4.2a2 2 0 0 1-2-2V23" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+      <rect x="9.2" y="9.2" width="6.2" height="6.2" rx="1.3" fill="none" stroke="currentColor" stroke-width="2.2"/>
+      <rect x="16.6" y="9.2" width="6.2" height="6.2" rx="1.3" fill="none" stroke="currentColor" stroke-width="2.2"/>
+      <rect x="9.2" y="16.6" width="6.2" height="6.2" rx="1.3" fill="none" stroke="currentColor" stroke-width="2.2"/>
+      <rect x="16.6" y="16.6" width="6.2" height="6.2" rx="1.3" fill="currentColor"/>
+    </symbol>
+    <!-- C · Seven: a Z as seven people; the last is a target -->
+    <symbol id="m-seven" viewBox="0 0 32 32">
+      <circle cx="6" cy="6" r="2.8" fill="currentColor"/><circle cx="16" cy="6" r="2.8" fill="currentColor"/><circle cx="26" cy="6" r="2.8" fill="currentColor"/>
+      <circle cx="16" cy="16" r="2.8" fill="currentColor"/>
+      <circle cx="6" cy="26" r="2.8" fill="currentColor"/><circle cx="16" cy="26" r="2.8" fill="currentColor"/>
+      <circle cx="26" cy="26" r="4.4" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="26" cy="26" r="1.6" fill="currentColor"/>
+    </symbol>
+    <!-- D · Door: the Z becomes an arrow that walks in through an open door -->
+    <symbol id="m-door" viewBox="0 0 32 32">
+      <path d="M5 7H25L8 24H15.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M13.5 20.2L17.8 24L13.5 27.8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M21 16.5H28.5V29H21" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <!-- E · Bar: a heavy Z whose last stroke is replaced by the one solid tile -->
+    <symbol id="m-bar" viewBox="0 0 32 32">
+      <path d="M4.5 7.5H27L6 24.5H17.5" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="butt" stroke-linejoin="miter"/>
+      <rect x="21" y="19" width="7" height="7" rx="1.6" fill="currentColor"/>
+    </symbol>
+  </defs>
+</svg>
+
+<main>
+  <!-- ---------------------------------------------------------------- A -->
+  <section class="cand">
+    <div class="about">
+      <div class="tag">A · Threshold <span class="live">live on the site</span></div>
+      <h2>The route through the one</h2>
+      <p>A solid tile — the same square the hero's crowd is made of — with the referral's route cut straight through it as a Z. The route ends in a person: the ring is where it lands. Negative space, so it is one shape at any size, and the strongest thing a tab can hold.</p>
+    </div>
+    <div class="panel">
+      <div class="label">White</div>
+      <div class="sizes">
+        <figure><svg width="96" height="96"><use href="#m-threshold"/></svg><figcaption>96</figcaption></figure>
+        <figure><svg width="32" height="32"><use href="#m-threshold"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16"><use href="#m-threshold"/></svg><figcaption>16</figcaption></figure>
+        <figure><div class="tab"><svg width="16" height="16"><use href="#m-threshold"/></svg><span>ZoNuLy — the referral atlas</span></div><figcaption>tab</figcaption></figure>
+      </div>
+      <div><span class="lockup"><svg width="26" height="26"><use href="#m-threshold"/></svg>ZoNuLy</span> &nbsp;&nbsp; <span class="lockup mono"><svg width="18" height="18"><use href="#m-threshold"/></svg>ZoNuLy</span></div>
+    </div>
+    <div class="panel dark">
+      <div class="label">Black</div>
+      <div class="sizes">
+        <figure><svg width="96" height="96"><use href="#m-threshold"/></svg><figcaption>96</figcaption></figure>
+        <figure><svg width="32" height="32"><use href="#m-threshold"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16"><use href="#m-threshold"/></svg><figcaption>16</figcaption></figure>
+        <figure><div class="tab"><svg width="16" height="16"><use href="#m-threshold"/></svg><span>ZoNuLy — the referral atlas</span></div><figcaption>tab</figcaption></figure>
+      </div>
+      <div><span class="lockup"><svg width="26" height="26"><use href="#m-threshold"/></svg>ZoNuLy</span> &nbsp;&nbsp; <span class="lockup mono"><svg width="18" height="18"><use href="#m-threshold"/></svg>ZoNuLy</span></div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------------- B -->
+  <section class="cand">
+    <div class="about">
+      <div class="tag">B · Reticle</div>
+      <h2>The instrument on the crowd</h2>
+      <p>The hero's own viewfinder brackets, closed around four people — three hollow, one solid. The most literal of the five: the product is a lens that finds one person. Reads as a camera-focus mark from a distance, which is both its strength and its risk.</p>
+    </div>
+    <div class="panel">
+      <div class="label">White</div>
+      <div class="sizes">
+        <figure><svg width="96" height="96"><use href="#m-reticle"/></svg><figcaption>96</figcaption></figure>
+        <figure><svg width="32" height="32"><use href="#m-reticle"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16"><use href="#m-reticle"/></svg><figcaption>16</figcaption></figure>
+        <figure><div class="tab"><svg width="16" height="16"><use href="#m-reticle"/></svg><span>ZoNuLy — the referral atlas</span></div><figcaption>tab</figcaption></figure>
+      </div>
+      <div><span class="lockup"><svg width="26" height="26"><use href="#m-reticle"/></svg>ZoNuLy</span> &nbsp;&nbsp; <span class="lockup mono"><svg width="18" height="18"><use href="#m-reticle"/></svg>ZoNuLy</span></div>
+    </div>
+    <div class="panel dark">
+      <div class="label">Black</div>
+      <div class="sizes">
+        <figure><svg width="96" height="96"><use href="#m-reticle"/></svg><figcaption>96</figcaption></figure>
+        <figure><svg width="32" height="32"><use href="#m-reticle"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16"><use href="#m-reticle"/></svg><figcaption>16</figcaption></figure>
+        <figure><div class="tab"><svg width="16" height="16"><use href="#m-reticle"/></svg><span>ZoNuLy — the referral atlas</span></div><figcaption>tab</figcaption></figure>
+      </div>
+      <div><span class="lockup"><svg width="26" height="26"><use href="#m-reticle"/></svg>ZoNuLy</span> &nbsp;&nbsp; <span class="lockup mono"><svg width="18" height="18"><use href="#m-reticle"/></svg>ZoNuLy</span></div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------------- C -->
+  <section class="cand">
+    <div class="about">
+      <div class="tag">C · Seven</div>
+      <h2>A Z made of people</h2>
+      <p>Seven points in the shape of a Z — three, one, three — and the seventh is a target ring: the one we were looking for. Dot-matrix marks are rare and own a lot of character; the diagonal is implied by the centre point, which is what makes it interesting rather than obvious.</p>
+    </div>
+    <div class="panel">
+      <div class="label">White</div>
+      <div class="sizes">
+        <figure><svg width="96" height="96"><use href="#m-seven"/></svg><figcaption>96</figcaption></figure>
+        <figure><svg width="32" height="32"><use href="#m-seven"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16"><use href="#m-seven"/></svg><figcaption>16</figcaption></figure>
+        <figure><div class="tab"><svg width="16" height="16"><use href="#m-seven"/></svg><span>ZoNuLy — the referral atlas</span></div><figcaption>tab</figcaption></figure>
+      </div>
+      <div><span class="lockup"><svg width="26" height="26"><use href="#m-seven"/></svg>ZoNuLy</span> &nbsp;&nbsp; <span class="lockup mono"><svg width="18" height="18"><use href="#m-seven"/></svg>ZoNuLy</span></div>
+    </div>
+    <div class="panel dark">
+      <div class="label">Black</div>
+      <div class="sizes">
+        <figure><svg width="96" height="96"><use href="#m-seven"/></svg><figcaption>96</figcaption></figure>
+        <figure><svg width="32" height="32"><use href="#m-seven"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16"><use href="#m-seven"/></svg><figcaption>16</figcaption></figure>
+        <figure><div class="tab"><svg width="16" height="16"><use href="#m-seven"/></svg><span>ZoNuLy — the referral atlas</span></div><figcaption>tab</figcaption></figure>
+      </div>
+      <div><span class="lockup"><svg width="26" height="26"><use href="#m-seven"/></svg>ZoNuLy</span> &nbsp;&nbsp; <span class="lockup mono"><svg width="18" height="18"><use href="#m-seven"/></svg>ZoNuLy</span></div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------------- D -->
+  <section class="cand">
+    <div class="about">
+      <div class="tag">D · Door</div>
+      <h2>Walks your resume in</h2>
+      <p>The headline, literally: the Z's last stroke becomes an arrow, and it is walking through an open door. The most story-driven of the five and the one with the most personality; it is also the busiest at 16px, where the door and the arrow start to touch.</p>
+    </div>
+    <div class="panel">
+      <div class="label">White</div>
+      <div class="sizes">
+        <figure><svg width="96" height="96"><use href="#m-door"/></svg><figcaption>96</figcaption></figure>
+        <figure><svg width="32" height="32"><use href="#m-door"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16"><use href="#m-door"/></svg><figcaption>16</figcaption></figure>
+        <figure><div class="tab"><svg width="16" height="16"><use href="#m-door"/></svg><span>ZoNuLy — the referral atlas</span></div><figcaption>tab</figcaption></figure>
+      </div>
+      <div><span class="lockup"><svg width="26" height="26"><use href="#m-door"/></svg>ZoNuLy</span> &nbsp;&nbsp; <span class="lockup mono"><svg width="18" height="18"><use href="#m-door"/></svg>ZoNuLy</span></div>
+    </div>
+    <div class="panel dark">
+      <div class="label">Black</div>
+      <div class="sizes">
+        <figure><svg width="96" height="96"><use href="#m-door"/></svg><figcaption>96</figcaption></figure>
+        <figure><svg width="32" height="32"><use href="#m-door"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16"><use href="#m-door"/></svg><figcaption>16</figcaption></figure>
+        <figure><div class="tab"><svg width="16" height="16"><use href="#m-door"/></svg><span>ZoNuLy — the referral atlas</span></div><figcaption>tab</figcaption></figure>
+      </div>
+      <div><span class="lockup"><svg width="26" height="26"><use href="#m-door"/></svg>ZoNuLy</span> &nbsp;&nbsp; <span class="lockup mono"><svg width="18" height="18"><use href="#m-door"/></svg>ZoNuLy</span></div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------------- E -->
+  <section class="cand">
+    <div class="about">
+      <div class="tag">E · Bar</div>
+      <h2>The heavy Z, ending in a tile</h2>
+      <p>A fat, square-cut Z — display-weight, like the headline face — whose final stroke is replaced by the one solid tile. The boldest silhouette of the set and the most "brand" at big sizes; at 16px the tile and the bar nearly merge into a plain Z, which may be exactly right.</p>
+    </div>
+    <div class="panel">
+      <div class="label">White</div>
+      <div class="sizes">
+        <figure><svg width="96" height="96"><use href="#m-bar"/></svg><figcaption>96</figcaption></figure>
+        <figure><svg width="32" height="32"><use href="#m-bar"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16"><use href="#m-bar"/></svg><figcaption>16</figcaption></figure>
+        <figure><div class="tab"><svg width="16" height="16"><use href="#m-bar"/></svg><span>ZoNuLy — the referral atlas</span></div><figcaption>tab</figcaption></figure>
+      </div>
+      <div><span class="lockup"><svg width="26" height="26"><use href="#m-bar"/></svg>ZoNuLy</span> &nbsp;&nbsp; <span class="lockup mono"><svg width="18" height="18"><use href="#m-bar"/></svg>ZoNuLy</span></div>
+    </div>
+    <div class="panel dark">
+      <div class="label">Black</div>
+      <div class="sizes">
+        <figure><svg width="96" height="96"><use href="#m-bar"/></svg><figcaption>96</figcaption></figure>
+        <figure><svg width="32" height="32"><use href="#m-bar"/></svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16"><use href="#m-bar"/></svg><figcaption>16</figcaption></figure>
+        <figure><div class="tab"><svg width="16" height="16"><use href="#m-bar"/></svg><span>ZoNuLy — the referral atlas</span></div><figcaption>tab</figcaption></figure>
+      </div>
+      <div><span class="lockup"><svg width="26" height="26"><use href="#m-bar"/></svg>ZoNuLy</span> &nbsp;&nbsp; <span class="lockup mono"><svg width="18" height="18"><use href="#m-bar"/></svg>ZoNuLy</span></div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

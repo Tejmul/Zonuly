@@ -24,7 +24,7 @@ type Job = {
 type Person = {
   id: number; name: string | null; role: string | null; role_class: string | null; label: string | null;
   rank: number | null; email: string | null; confidence: string | null; evidence: string | null;
-  github: string | null; reachable: boolean; source: string;
+  github: string | null; linkedin?: string | null; x_handle?: string | null; reachable: boolean; source: string;
 };
 type Detail = {
   id: number; name: string; description: string | null; website: string | null;
@@ -240,7 +240,10 @@ export default function CompanyPage() {
                 <span className="tnum text-[12px] text-ink-2">{p.email}</span>
                 <span className="chip">{p.confidence}</span>
                 <span className="ml-auto flex items-center gap-2">
-                  {p.github && <a href={p.github} target="_blank" rel="noreferrer" className="text-ink-3 hover:text-ink"><GitBranch size={13} /></a>}
+                  {p.github && <a href={p.github} target="_blank" rel="noreferrer" title="GitHub" className="text-ink-3 hover:text-ink"><GitBranch size={13} /></a>}
+                  {p.linkedin && <a href={p.linkedin} target="_blank" rel="noreferrer" title="LinkedIn (public profile)" className="font-mono text-[11px] text-ink-3 hover:text-ink">in</a>}
+                  {/* a DM route, found never sent — the ask still goes through the queue */}
+                  {p.x_handle && <a href={`https://x.com/${p.x_handle}`} target="_blank" rel="noreferrer" title="X — a DM route" className="font-mono text-[11px] text-ink-3 hover:text-ink">@{p.x_handle}</a>}
                   <ActionButton
                     busy={busy === `draft:${p.id}`}
                     onClick={() => run(`draft:${p.id}`, "/api/emails/draft", { contact_id: p.id, job_id: fresher[0]?.id ?? data.jobs[0]?.id ?? null })}
