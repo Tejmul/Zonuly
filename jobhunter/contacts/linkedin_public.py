@@ -34,6 +34,11 @@ DDG_HTML = "https://html.duckduckgo.com/html/"
 MIN_GAP_S = float((CONFIG.get("contacts") or {}).get("linkedin_min_gap_seconds", 12))
 MAX_PER_COMPANY = int((CONFIG.get("contacts") or {}).get("linkedin_max_per_company", 8))
 _last_call = 0.0
+# once DuckDuckGo answers with a challenge page it keeps doing so for a while; waiting
+# the full gap before every further attempt would turn a 53-company pass into half an
+# hour of sleeping, so a throttle is remembered and the Exa path is taken directly
+_throttled_until = 0.0
+THROTTLE_BACKOFF_S = float((CONFIG.get("contacts") or {}).get("linkedin_throttle_backoff_seconds", 1800))
 
 _RESULT = re.compile(r'result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', re.S)
 _SNIPPET = re.compile(r'result__snippet"[^>]*>(.*?)</a>', re.S)
@@ -62,7 +67,9 @@ def _ddg(query: str, timeout: int = 25) -> tuple[str | None, str | None]:
         if html and not _CHALLENGE.search(html[:6000]) and "result__a" in html:
             return html, None
 
-    global _last_call
+    global _last_call, _throttled_until
+    if time.monotonic() < _throttled_until:
+        return None, "search rate-limited (backing off); use exa"
     wait = MIN_GAP_S - (time.monotonic() - _last_call)
     if wait > 0:
         time.sleep(wait)
@@ -73,6 +80,7 @@ def _ddg(query: str, timeout: int = 25) -> tuple[str | None, str | None]:
     except Exception as e:  # noqa: BLE001
         return None, f"{type(e).__name__}: {str(e)[:100]}"
     if r.status_code != 200 or _CHALLENGE.search(r.text[:6000]):
+        _throttled_until = time.monotonic() + THROTTLE_BACKOFF_S
         return None, f"search rate-limited (HTTP {r.status_code}); back off"
     return r.text, None
 
@@ -110,30 +118,59 @@ def _people_from(html: str) -> list[dict]:
     return out
 
 
-def find_for_company(company_id: int, *, max_people: int = MAX_PER_COMPANY) -> dict:
-    """Public LinkedIn people at one company, via search, with emails from its pattern."""
-    init_db()
+def _people_from_exa(name: str, limit: int, query: str | None = None) -> tuple[list[dict], str | None]:
+    """The same question through the research layer's web search (Exa MCP — the
+    keyless Agent Reach path — with the keyed API behind it), for the days DuckDuckGo
+    answers with a challenge page. A result is a person only when it is a
+    linkedin.com/in URL whose headline names a referring role and mentions the company."""
+    from jobhunter.research import web
+
+    stem = re.sub(r"[^a-z0-9]", "", name.lower())
+    bare = re.sub(r"(ai|labs?|hq|inc|tech|technologies|app)$", "", stem) or stem
+    out: list[dict] = []
+    seen: set[str] = set()
+    query = query or f'site:linkedin.com/in "{name}" (software engineer OR founding engineer OR CTO OR founder)'
+    res = web.search(query, limit=max(limit, 10))
+    for r in res.get("results") or []:
+        url = (r.get("url") or "").split("?")[0]
+        if not _IN.search(url):
+            continue
+        slug = url.rstrip("/").split("/in/")[-1].lower()
+        if slug in seen:
+            continue
+        person = (r.get("title") or "").split("|")[0].split(" - ")[0].strip(" .")
+        snippet = (r.get("snippet") or "").strip()
+        headline = snippet.splitlines()[0].strip() if snippet else ""
+        blob = re.sub(r"[^a-z0-9]", "", snippet.lower())
+        if not _NAME_OK.match(person) or not _ROLE_HINT.search(headline) or bare not in blob:
+            continue
+        seen.add(slug)
+        out.append({"name": person, "role": headline[:120], "url": url})
+    return out[:limit], res.get("error")
+
+
+def _search(name: str, query: str, max_people: int) -> tuple[list[dict], str, str | None]:
+    """(people, via, error) — DuckDuckGo, then Exa when it is throttled."""
+    html, err = _ddg(query)
+    if not err:
+        return _people_from(html)[:max_people], "ddg", None
+    people, exa_err = _people_from_exa(name, max_people, query)
+    if not people and exa_err:
+        return [], "exa", f"{err}; exa: {exa_err}"
+    return people, "exa", None
+
+
+def _save(company_id: int, people: list[dict], via: str) -> int:
+    """Store found profiles as contacts, resolving each address from the company's
+    pattern when it is known — MX-checked, labelled guessed, never verified."""
     from jobhunter.contacts import patterns, roles as roleclass, verify
 
     with get_session() as session:
         c = session.get(Company, company_id)
-        if c is None:
-            return {"error": f"no company {company_id}"}
-        name, domain, pattern = c.name, c.domain, c.email_pattern
-        existing = {
-            (k.name or "").lower() for k in session.exec(
-                select(Contact).where(Contact.company_id == company_id)).all()
-        }
-    query = f'site:linkedin.com/in "{name}" (software engineer OR founding engineer OR CTO OR founder)'
-    html, err = _ddg(query)
-    if err:
-        return {"company": name, "error": err}
-    people = _people_from(html)[:max_people]
-    if not people:
-        return {"company": name, "found": 0}
-
-    added = 0
-    with get_session() as session:
+        domain, pattern = c.domain, c.email_pattern
+        existing = {(k.name or "").lower() for k in session.exec(
+            select(Contact).where(Contact.company_id == company_id)).all()}
+        added = 0
         for p in people:
             if p["name"].lower() in existing:
                 continue
@@ -141,7 +178,6 @@ def find_for_company(company_id: int, *, max_people: int = MAX_PER_COMPANY) -> d
             verdict = roleclass.classify(p["role"], name=p["name"])
             email = None
             confidence = "scraped"
-            # resolve the email from the company's own pattern, verified by MX like the GitHub path
             if domain and pattern:
                 cands = patterns.candidates(p["name"], domain, pattern)
                 if cands:
@@ -151,6 +187,7 @@ def find_for_company(company_id: int, *, max_people: int = MAX_PER_COMPANY) -> d
             session.add(Contact(
                 company_id=company_id, name=p["name"], role=p["role"], email=email,
                 linkedin=p["url"], source="linkedin-public",
+                research_notes=f"found via {via}",
                 confidence=confidence if email else "scraped",
                 role_class=verdict.role_class, seniority=verdict.seniority,
                 referral_rank=verdict.referral_rank, role_evidence=f"LinkedIn: {p['role']}",
@@ -158,13 +195,48 @@ def find_for_company(company_id: int, *, max_people: int = MAX_PER_COMPANY) -> d
                 classified_at=utcnow(),
             ))
             added += 1
-        c = session.get(Company, company_id)
-        if c:
-            c.contacts_found_at = utcnow()
-            session.add(c)
+        c.contacts_found_at = utcnow()
+        session.add(c)
         session.commit()
-    log.info("linkedin_public: %s -> %d people, %d added", name, len(people), added)
-    return {"company": name, "found": len(people), "added": added}
+    return added
+
+
+def find_for_company(company_id: int, *, max_people: int = MAX_PER_COMPANY) -> dict:
+    """Public LinkedIn people at one company, via search, with emails from its pattern."""
+    init_db()
+    with get_session() as session:
+        c = session.get(Company, company_id)
+        if c is None:
+            return {"error": f"no company {company_id}"}
+        name = c.name
+    query = f'site:linkedin.com/in "{name}" (software engineer OR founding engineer OR CTO OR founder)'
+    people, via, err = _search(name, query, max_people)
+    if err:
+        return {"company": name, "error": err}
+    if not people:
+        return {"company": name, "found": 0, "via": via}
+    added = _save(company_id, people, via)
+    log.info("linkedin_public: %s -> %d people via %s, %d added", name, len(people), via, added)
+    return {"company": name, "found": len(people), "added": added, "via": via}
+
+
+def find_founders(company_id: int, *, max_people: int = 6) -> dict:
+    """The founders and the people who run engineering — the ask of last resort when no
+    engineer has an address, and the people whose address is most often published."""
+    init_db()
+    with get_session() as session:
+        c = session.get(Company, company_id)
+        if c is None:
+            return {"error": f"no company {company_id}"}
+        name = c.name
+    query = (f'site:linkedin.com/in "{name}" (founder OR co-founder OR CEO OR CTO OR '
+             f'"head of engineering" OR "VP engineering" OR "head of talent" OR "HR")')
+    people, via, err = _search(name, query, max_people)
+    if err:
+        return {"company": name, "error": err}
+    added = _save(company_id, people, via) if people else 0
+    log.info("linkedin_public founders: %s -> %d found via %s, %d added", name, len(people), via, added)
+    return {"company": name, "found": len(people), "added": added, "via": via}
 
 
 def find_pending(limit: int = 30, *, tiers: tuple[str, ...] = ("tier1", "tier2", "prospect", "unknown")) -> dict:
@@ -203,4 +275,4 @@ def find_pending(limit: int = 30, *, tiers: tuple[str, ...] = ("tier1", "tier2",
     return out
 
 
-__all__ = ["find_for_company", "find_pending"]
+__all__ = ["find_for_company", "find_founders", "find_pending"]

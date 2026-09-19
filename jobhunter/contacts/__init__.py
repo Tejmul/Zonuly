@@ -5,6 +5,10 @@ Order matters — each step is cheaper or more reliable than the next:
   2. Company website         -> recruiter aliases and public team emails (free)
   3. Pattern inference       -> apply a pattern learned in 1/2 to every other name (free)
   4. Hunter.io              -> only when 1-3 left us without a pattern (25/month)
+  5. The open web           -> any "@their-domain" address a search can find — HR, a
+                               founder, an engineer — when 1-4 left no pattern (free)
+  6. Fill by pattern         -> every named person still without an address gets one
+                               from the company's pattern, MX-checked, labelled guessed
 Everything is stored with its source and confidence so the dashboard can rank.
 """
 
@@ -59,6 +63,7 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                     "email": p.email,
                     "role": (p.bio or "")[:120] or None,
                     "github": f"https://github.com/{p.login}",
+                    "x_handle": p.twitter,
                     "source": "github",
                     "confidence": "verified" if p.email else "scraped",
                     "is_recruiter": _looks_recruiter(p.bio),
@@ -146,6 +151,7 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                     role=p.get("role"),
                     email=email,
                     github=p.get("github"),
+                    x_handle=p.get("x_handle"),
                     source=p["source"],
                     confidence=p["confidence"],
                     is_recruiter=verdict.role_class in ("recruiter", "tech_recruiter") or bool(p.get("is_recruiter")),
@@ -169,8 +175,67 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
             session.add(company)
         session.commit()
 
+    # ---- 6. no pattern and nobody on their domain? ask the open web (contacts/web_emails.py)
+    from jobhunter.contacts import web_emails
+
+    with get_session() as session:
+        company = session.get(Company, company_id)
+        have_pattern = bool(company and company.email_pattern)
+        on_domain = bool(company and company.domain and session.exec(
+            select(Contact.id).where(Contact.company_id == company_id,
+                                     col(Contact.email).like(f"%@{company.domain}"))).first())
+    if not have_pattern and not on_domain:
+        try:
+            w = web_emails.find(company_id)
+            stats["web"] = w.get("addresses", 0)
+            stats["web_people"] = w.get("people", 0) + w.get("attached", 0)
+        except Exception as e:  # noqa: BLE001 — the open web is a bonus, never a blocker
+            log.warning("contacts: web_emails for %s failed: %s", name, e)
+
+    # ---- 7. everyone named and still without an address gets one from the pattern
+    stats["by_pattern"] = fill_by_pattern(company_id)
+
     log.info("contacts: %s", stats)
     return stats
+
+
+def fill_by_pattern(company_id: int) -> int:
+    """Give every named, address-less contact at a company its pattern address.
+
+    The pattern is learned once (from a commit email, a published address, Hunter) and
+    was only ever applied to the people found in that same run — the LinkedIn profiles
+    saved earlier, before the pattern was known, stayed without an address. This closes
+    that gap. Each guess is MX-checked and labelled `pattern-guessed`, never verified,
+    and is skipped if the address already belongs to someone else on record.
+    """
+    init_db()
+    with get_session() as session:
+        company = session.get(Company, company_id)
+        if company is None or not company.email_pattern or not company.domain:
+            return 0
+        pattern, domain, cname = company.email_pattern, company.domain, company.name
+        rows = session.exec(select(Contact).where(Contact.company_id == company_id)).all()
+        taken = {(p.email or "").lower() for p in rows if p.email}
+        filled = 0
+        for p in rows:
+            if p.email or not p.name:
+                continue
+            cands = patterns.candidates(p.name, domain, pattern)
+            if not cands or cands[0] in taken:
+                continue
+            email, verdict = verify.best_candidate(cands)
+            if not email:
+                continue
+            p.email = email
+            p.confidence = verdict.confidence if verdict else "pattern-guessed"
+            p.research_notes = f"{p.research_notes or ''}\nemail by pattern {pattern}".strip()
+            session.add(p)
+            taken.add(email)
+            filled += 1
+        session.commit()
+    if filled:
+        log.info("contacts: %s -> %d addresses by pattern %s", cname, filled, pattern)
+    return filled
 
 
 def discover_for_high_matches(limit: int = 5, *, refresh_days: int = 30,

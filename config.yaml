@@ -415,7 +415,7 @@ sources:
   remoteok: true
   wwr: true
   yc: true
-  wellfound: false
+  wellfound: true
   cutshort: false
   instahyre: false
   request_timeout: 25

@@ -492,20 +492,24 @@ async def _probe_one(http: httpx.AsyncClient, cid: int, name: str, website: str 
     return cid, await discover.find_ats(http, name, website)
 
 
-def probe_ats(limit: int | None = None, *, concurrency: int = 6) -> dict:
+def probe_ats(limit: int | None = None, *, concurrency: int = 6,
+              company_ids: list[int] | None = None) -> dict:
     """Which public board (Greenhouse / Lever / Ashby) each new company uses.
 
     A live board with postings is the company saying "we are hiring" in its own
     machine-readable words, so a hit also sets hiring_status=verified — the same
     verdict hiring_verify would reach, without the careers-page round trip.
+    `company_ids` narrows the probe to those rows (a hand-picked list) and re-probes
+    them even if an earlier pass found nothing.
     """
     init_db()
     with get_session() as session:
-        rows = session.exec(
-            select(Company).where(col(Company.ats).is_(None))
-        ).all()
+        stmt = select(Company).where(col(Company.ats).is_(None))
+        if company_ids:
+            stmt = stmt.where(col(Company.id).in_(company_ids))
+        rows = session.exec(stmt).all()
         pending = [(c.id, c.name, c.website) for c in rows
-                   if (c.website or c.name) and _PROBED_NONE not in (c.notes or "")]
+                   if (c.website or c.name) and (company_ids or _PROBED_NONE not in (c.notes or ""))]
         if limit:
             pending = pending[:limit]
 
@@ -547,13 +551,15 @@ def probe_ats(limit: int | None = None, *, concurrency: int = 6) -> dict:
     return out
 
 
-def scrape_roles(limit: int | None = None, *, only_without_jobs: bool = True, concurrency: int = 6) -> dict:
+def scrape_roles(limit: int | None = None, *, only_without_jobs: bool = True, concurrency: int = 6,
+                 company_ids: list[int] | None = None) -> dict:
     """Every open role from each discovered board, through the normal persist gate."""
     init_db()
     with get_session() as session:
-        rows = session.exec(
-            select(Company).where(col(Company.ats).is_not(None), col(Company.ats_slug).is_not(None))
-        ).all()
+        stmt = select(Company).where(col(Company.ats).is_not(None), col(Company.ats_slug).is_not(None))
+        if company_ids:
+            stmt = stmt.where(col(Company.id).in_(company_ids))
+        rows = session.exec(stmt).all()
         if only_without_jobs:
             # "no jobs" is also what a board full of senior/non-engineering roles looks
             # like after the gates — so a board we already read is marked, not re-read

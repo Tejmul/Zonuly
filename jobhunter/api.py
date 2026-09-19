@@ -210,6 +210,7 @@ def _contact_dict(c: Contact, company_name: str | None = None) -> dict:
         "email": c.email,
         "github": c.github,
         "linkedin": c.linkedin,
+        "x_handle": c.x_handle,
         "source": c.source,
         "confidence": c.confidence,
         "is_recruiter": c.is_recruiter,
@@ -591,6 +592,72 @@ def companies_grouped(include_rejects: bool = False) -> dict:
     from jobhunter import network
 
     return network.company_list(include_rejects=include_rejects)
+
+
+# ---------------------------------------------------------------- hand-picked lists
+
+@app.get("/api/lists")
+def lists_index() -> list[dict]:
+    """Every hand-picked list on disk (data/lists/*.yaml) and how much of it is attached."""
+    from jobhunter import lists
+
+    return lists.available()
+
+
+@app.get("/api/lists/{key}")
+def list_rows(key: str) -> dict:
+    """One list, in its own order: the list's claims next to what the pipeline found."""
+    from jobhunter import lists
+
+    try:
+        return lists.rows(key)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+
+
+@app.post("/api/lists/{key}/sync")
+def list_sync(key: str, verify_sites: bool = True) -> dict:
+    """Re-read the YAML: attach new names, fill blanks, verify guessed websites."""
+    from jobhunter import lists
+
+    if not (lists.LISTS_DIR / f"{key}.yaml").exists():
+        raise HTTPException(404, f"no list '{key}'")
+    return {"task_id": _run_task(f"list-sync:{key}", lists.sync, key, verify_sites=verify_sites)}
+
+
+@app.post("/api/lists/{key}/find-people")
+def list_find_people(key: str, linkedin: bool = True, refresh_days: int = 0,
+                     limit: int | None = None, emails_only: bool = False) -> dict:
+    """Boards, roles and referrers for every company on the list — minutes, so a task.
+    `emails_only` is the address pass (web search, founders/HR, fill by pattern)."""
+    from jobhunter import lists
+
+    if not (lists.LISTS_DIR / f"{key}.yaml").exists():
+        raise HTTPException(404, f"no list '{key}'")
+    return {"task_id": _run_task(f"list-{'emails' if emails_only else 'people'}:{key}", lists.find_people, key,
+                                 linkedin=linkedin, refresh_days=refresh_days, limit=limit,
+                                 emails_only=emails_only)}
+
+
+@app.post("/api/companies/{company_id}/x-handles")
+def find_x_handles(company_id: int, limit: int = 5) -> dict:
+    """X handles for the company's best people — a DM route, found never sent."""
+    from jobhunter.contacts import x_handles
+
+    return {"task_id": _run_task(f"x-handles:{company_id}", x_handles.find_for_company, company_id, limit=limit)}
+
+
+@app.post("/api/companies/{company_id}/find-emails")
+def find_emails(company_id: int) -> dict:
+    """Any real address at one company from the open web, then everyone by pattern."""
+    from jobhunter.contacts import fill_by_pattern, web_emails
+
+    def run() -> dict:
+        out = web_emails.find(company_id)
+        out["by_pattern"] = fill_by_pattern(company_id)
+        return out
+
+    return {"task_id": _run_task(f"find-emails:{company_id}", run)}
 
 
 @app.get("/api/companies/{company_id}/detail")

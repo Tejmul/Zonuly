@@ -397,7 +397,8 @@ def company_detail(company_id: int) -> dict:
                 "id": p.id, "name": p.name, "role": p.role, "role_class": p.role_class,
                 "label": roleclass.LABELS.get(p.role_class or "", p.role_class),
                 "rank": p.referral_rank, "email": p.email, "confidence": p.confidence,
-                "github": p.github, "evidence": p.role_evidence,
+                "github": p.github, "linkedin": p.linkedin, "x_handle": p.x_handle,
+                "evidence": p.role_evidence,
                 "reachable": p.id in reachable_ids,
                 "source": p.source,
             }
@@ -431,7 +432,8 @@ def company_list(*, include_rejects: bool = False) -> dict:
         contacts = session.exec(select(Contact)).all()
 
     if not include_rejects:
-        companies = [c for c in companies if (c.tier or "unknown") != "reject"]
+        # a company on a hand-picked list stays whatever the grade said (lists.py)
+        companies = [c for c in companies if (c.tier or "unknown") != "reject" or c.list_key]
     keep = {c.id for c in companies}
 
     jobs_by: dict[int, list[Job]] = defaultdict(list)
@@ -486,6 +488,10 @@ def company_list(*, include_rejects: bool = False) -> dict:
             "description": c.description,
             "website": c.website,
             "region": c.hq_region,
+            "city": c.city,
+            # the hand-picked list this company is on, if any (jobhunter/lists.py)
+            "list_key": c.list_key,
+            "list_rank": c.list_rank,
             "tier": c.tier,
             "tier_reason": c.tier_reason,
             "underrated": c.underrated,
@@ -548,6 +554,7 @@ def company_list(*, include_rejects: bool = False) -> dict:
             "bare": sum(1 for r in out if r["trust"] == "bare"),
             "with_referrals": sum(1 for r in out if r["referrals"]["reachable"]),
             "ready": sum(1 for r in out if r["ready"]),
+            "on_lists": sum(1 for r in out if r["list_key"]),
         },
     }
 

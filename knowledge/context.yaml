@@ -330,6 +330,22 @@ modules:
     path: jobhunter/hiring_verify.py
     layer_order: 2
     summary: Corroborates a hiring claim against the company's own ATS board or careers page; marks the unbacked ones not_authorized.
+  - id: module:jobhunter.lists
+    label: lists.py
+    path: jobhunter/lists.py
+    layer_order: 2
+    summary: Hand-picked company lists (data/lists/<key>.yaml) — sync to company rows with website verification, rows for the dashboard, the people pass in list order, the GitHub-org audit.
+    depends_on: [module:jobhunter.db, module:jobhunter.contacts]
+  - id: module:jobhunter.contacts.github_miner
+    label: contacts/github_miner.py
+    path: jobhunter/contacts/github_miner.py
+    layer_order: 2
+    summary: Commit-author emails from a company's public repos. The org must match the company exactly by name or by domain (2026-09-19) — no org beats a wrong one.
+  - id: module:jobhunter.contacts.linkedin_public
+    label: contacts/linkedin_public.py
+    path: jobhunter/contacts/linkedin_public.py
+    layer_order: 2
+    summary: Public LinkedIn profiles via web search, never a login — DuckDuckGo first, the Exa MCP (Agent Reach, keyless) when throttled; emails resolved from the company's own pattern.
   - id: module:jobhunter.contacts.roles
     label: contacts/roles.py
     path: jobhunter/contacts/roles.py
@@ -487,6 +503,87 @@ tools:
 # ------------------------------------------------------------------ features: every idea any draft proposed, and its fate
 features:
   # ---- company + people targeting (built 2026-09-03)
+  - id: feature:star-lists
+    label: Hand-picked lists — ★ India (Top 50 Series A/B, Hyderabad & Bengaluru) on a page of its own
+    summary: >
+      Tejmul, 2026-09-19: "make it a special list of companies … when I click on the
+      separate special list of India, I should see these companies, just these companies."
+      A list is data/lists/<key>.yaml (53 rows: the 52 from the report plus Coupang as the
+      one large-tech target). `lists sync` attaches each to a company row — creating what
+      is missing, filling only blanks, verifying a guessed website by fetching it and
+      requiring the page to name the company — and mirrors it as company.list_key /
+      list_rank / city / list_meta. The list is the decision: a listed company is kept
+      whatever the grade says, and the report's stage, raised and CTC are shown as the
+      report's words, never as scored facts. `lists people` runs board → roles → GitHub /
+      site / pattern / Hunter → public LinkedIn over the list in order; `lists audit`
+      re-verifies every GitHub org. Dashboard: /lists/<key> (nav "★ India"), and the
+      Companies page rebuilt as four named views with a table instead of seven unlabelled
+      filters. API: /api/lists, /api/lists/{key}, …/sync, …/find-people.
+    status: built
+    stage: stage:filter
+    serves: [constraint:context-continuity, guarantee:no-fabrication]
+    implemented_in: [module:jobhunter.lists]
+  - id: feature:strict-github-org-match
+    label: A GitHub org is the company's only on an exact name or the same domain — never the first search hit
+    summary: >
+      Found 2026-09-19 while hunting the ★ India list: "Equal AI" resolved to moeru-ai and
+      then equalcollective, and twenty strangers' commit emails were filed as verified
+      Equal engineers; Plazza, Jar, Keka, Infinity Learn and Ozonetel had the same
+      failure. find_org now accepts a login or org name equal to the company's (decoration
+      like -org/-engg/HQ/AI stripped) or an org website on the company's registered
+      domain, and returns nothing otherwise. org_is_theirs() is the same test for an org
+      already on record; `lists audit` clears failures and their GitHub-sourced contacts.
+      Also: the public-LinkedIn channel falls back to the Exa MCP (Agent Reach's keyless
+      path, mcporter) when DuckDuckGo throttles, and remembers the throttle for 30 min.
+    status: built
+    stage: stage:contacts
+    serves: [guarantee:no-fabrication, guarantee:confidence-labels, constraint:no-linkedin-automation]
+    implemented_in: [module:jobhunter.contacts.github_miner, module:jobhunter.contacts.linkedin_public]
+  - id: feature:web-emails
+    label: Any real address at the company from the open web — HR, a founder, an engineer — then everyone by pattern
+    summary: >
+      Tejmul, 2026-09-19: "if you don't find the company emails, find the HR email and the
+      founders' emails, or any other engineers who work there." contacts/web_emails.py searches
+      (Exa MCP, keyless) for anything "@their-domain", reads the pages that carry one (own
+      contact/about/team/privacy pages first, then whatever the search pointed at), stores
+      each same-domain address with the URL it was read from, and attaches a name only when
+      the name agrees with the mailbox (hiring@ never gets the poster's name). One real
+      first.last@ teaches the pattern; contacts.fill_by_pattern then gives every named,
+      address-less person (the LinkedIn profiles) a pattern address, MX-checked and labelled
+      guessed. linkedin_public.find_founders looks up founders/CTO/head of talent on LinkedIn.
+      Waterfall steps 5–6; `lists people --emails-only`; /api/companies/{id}/find-emails.
+    status: built
+    stage: stage:contacts
+    serves: [guarantee:no-fabrication, guarantee:confidence-labels, constraint:free-tier]
+    implemented_in: [module:jobhunter.contacts, module:jobhunter.contacts.linkedin_public]
+  - id: feature:wellfound-source
+    label: Wellfound as a job source — startup roles for India and remote, from its server-rendered landing pages
+    summary: >
+      Tejmul, 2026-09-19: "we have [Wellfound], where you can find a lot of other clients and
+      work — scrape from there." scrapers/wellfound.py reads /role/l/<role>/<location> and
+      /role/r/<role> pages (8 role slugs × india/bangalore/hyderabad/remote × 2 pages) — plain
+      GETs, the whole result set sits in __NEXT_DATA__ as an Apollo cache — and emits a RawJob
+      per (startup, listing) with pay band, remote config, company size and the full
+      description; listings older than 120 days are dropped. First run: 64 pages, 837 roles,
+      635 new (349 remote, 478 with a pay band). Enabled in config sources.wellfound.
+    status: built
+    stage: stage:scrape
+    serves: [constraint:free-tier]
+    implemented_in: [module:jobhunter.scrapers]
+  - id: feature:x-handles
+    label: X handles on contacts — a DM route, found never sent
+    summary: >
+      Tejmul, 2026-09-19: "we are thinking of finding and sending cold DMs on X". Contact.x_handle,
+      read from the GitHub profile's twitter_username (free, github_miner) with a backfill for
+      contacts already on record, and from X's own search through the throwaway session
+      (contacts/x_handles.py, 10 searches/day, author's display name must be the person and
+      their post must name the company). Web search is no use — x.com is not in Exa's index.
+      Shown on the company page next to GitHub and LinkedIn. Sending a DM is not automated:
+      a DM would leave through the review queue like an email, by a human.
+    status: partial
+    stage: stage:contacts
+    serves: [constraint:human-review, guarantee:no-fabrication]
+    implemented_in: [module:jobhunter.contacts.github_miner]
   - id: feature:underrated-only
     label: Underrated companies only — hyped names rejected by name
     summary: >

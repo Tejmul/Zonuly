@@ -30,6 +30,13 @@ class Company(SQLModel, table=True):
     contacts_found_at: Optional[datetime] = None   # last contact-discovery run
     created_at: datetime = Field(default_factory=utcnow)
 
+    # ---- hand-picked lists (jobhunter/lists.py). A company on a list is chased because
+    # the list says so — the grade still runs, but it orders, it never excludes.
+    list_key: Optional[str] = Field(default=None, index=True)   # e.g. "india-star"
+    list_rank: Optional[int] = None                              # position in that list
+    city: Optional[str] = None                                   # "Hyderabad", "Bengaluru"
+    list_meta: Optional[str] = None                              # JSON: the list's own row (stage, funding, ctc, ...)
+
     # ---- targeting (jobhunter/targeting.py). What kind of company is this, and do we chase it?
     tier: Optional[str] = Field(default=None, index=True)  # tier1 | tier2 | reject | unknown
     tier_reason: Optional[str] = None     # one line, human-readable, says which rule decided
@@ -124,7 +131,8 @@ class Contact(SQLModel, table=True):
     email: Optional[str] = Field(default=None, index=True)
     github: Optional[str] = None
     linkedin: Optional[str] = None
-    source: str                           # github | site | hunter | pattern
+    x_handle: Optional[str] = None        # their X handle, when their own profile states it — a DM route
+    source: str                           # github | site | hunter | pattern | linkedin-public | web
     confidence: str = "scraped"           # verified | pattern-guessed | scraped
     is_recruiter: bool = False
     # what their own profile says they work at (GitHub "company" field) — employment

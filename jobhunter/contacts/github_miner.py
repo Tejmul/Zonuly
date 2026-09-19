@@ -50,29 +50,82 @@ class GHPerson:
     bio: str | None = None
     company: str | None = None
     blog: str | None = None
+    twitter: str | None = None     # the X handle on their profile — a DM route, not an address
     source: str = "github"
     confidence: str = "scraped"
 
 
+_DECOR = re.compile(r"(ai|labs?|hq|inc|tech|technologies|app|org|engg|eng|git|github|oss|dev)$")
+
+
+def _norm(text: str | None) -> str:
+    """A name with its decoration stripped: "Edubuk-org", "Swish HQ" and "Sarvam AI"
+    become edubuk, swish, sarvam — the part that has to agree."""
+    stem = re.sub(r"[^a-z0-9]", "", (text or "").lower())
+    bare = _DECOR.sub("", stem)
+    return bare if len(bare) >= 3 else stem
+
+
+def _host(url: str | None) -> str:
+    return (url or "").replace("https://", "").replace("http://", "").split("/")[0].removeprefix("www.")
+
+
+def _sld(host: str) -> str:
+    """The registered label: new.turbohire.co → turbohire, vahan.ai → vahan."""
+    parts = host.split(".")
+    return parts[-2] if len(parts) >= 2 else host
+
+
+def _same(company_name: str, website: str | None, *, login: str | None = None,
+          org_name: str | None = None, blog: str | None = None) -> str | None:
+    """Why this org is the company's — or None. Exact on the normalized name, or the
+    same registered domain; never "contains", which is how Equal AI became moeru-ai
+    and then equalcollective."""
+    want = _norm(company_name)
+    if login and _norm(login) == want:
+        return "login is the company name"
+    if org_name and _norm(org_name) == want:
+        return f"org name is {org_name!r}"
+    host, site = _host(website), _host(blog)
+    if host and site and (site == host or (len(_sld(host)) >= 4 and _sld(site) == _sld(host))):
+        return f"org website is {site}"
+    return None
+
+
 async def find_org(http: httpx.AsyncClient, company_name: str, website: str | None = None) -> str | None:
-    """Resolve a company name to its GitHub org login."""
+    """Resolve a company name to its GitHub org login — or to nothing.
+
+    An org is theirs when its login or display name is the company's name (decoration
+    aside), or its website is the company's domain. A search hit that passes neither
+    is a stranger: "Equal AI" used to come back as moeru-ai, and twenty of its
+    committers were filed as Equal's engineers. No match means no org, never the
+    first result.
+    """
     q = company_name.replace(" ", "+")
     data = await get_json(http, f"{API}/search/users?q={q}+type:org&per_page=5", headers=headers())
     items = (data or {}).get("items") or []
-    if not items:
-        return None
-
-    host = (website or "").replace("https://", "").replace("http://", "").split("/")[0].removeprefix("www.")
-    simple = re.sub(r"[^a-z0-9]", "", company_name.lower())
-
     for it in items:
-        if re.sub(r"[^a-z0-9]", "", it.get("login", "").lower()) == simple:
+        if _same(company_name, website, login=it.get("login")):
             return it["login"]
-    for it in items[:3]:
+    for it in items:
         org = await get_json(http, f"{API}/orgs/{it['login']}", headers=headers())
-        if host and host in ((org or {}).get("blog") or ""):
+        if org and _same(company_name, website, org_name=org.get("name"), blog=org.get("blog")):
             return it["login"]
-    return items[0]["login"]
+    return None
+
+
+async def org_is_theirs(http: httpx.AsyncClient, company_name: str, website: str | None, org: str) -> tuple[bool, str]:
+    """The same test find_org applies, for an org already on record — the audit path."""
+    why = _same(company_name, website, login=org)
+    if why:
+        return True, why
+    data = await get_json(http, f"{API}/orgs/{org}", headers=headers())
+    if not data:
+        return False, "org not found on GitHub"
+    why = _same(company_name, website, org_name=data.get("name"), blog=data.get("blog"))
+    if why:
+        return True, why
+    return False, f"org is {data.get('name')!r} ({_host(data.get('blog')) or 'no website'}) — not {company_name}"
 
 
 async def top_repos(http: httpx.AsyncClient, org: str, limit: int = REPOS_PER_ORG) -> list[str]:
@@ -120,6 +173,7 @@ async def user_profile(http: httpx.AsyncClient, login: str) -> GHPerson | None:
         bio=u.get("bio"),
         company=u.get("company"),
         blog=u.get("blog") or None,
+        twitter=(u.get("twitter_username") or "").lstrip("@") or None,
         confidence="verified" if email else "scraped",
     )
 
@@ -164,6 +218,7 @@ async def mine(
         person.bio = profile.bio
         person.company = profile.company
         person.blog = profile.blog
+        person.twitter = profile.twitter
         if not person.email and profile.email:
             person.email = profile.email
             person.confidence = "verified"

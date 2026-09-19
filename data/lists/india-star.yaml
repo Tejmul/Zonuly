@@ -1,0 +1,77 @@
+# ★ India — the special list. Series A / Series B startups in Hyderabad and Bengaluru,
+# from Tejmul's "Top 50 Series A & Series B Startups" report (2026-09-19), plus Coupang
+# as the one large-tech target in the same two cities.
+#
+# This file is the list; the database only mirrors it (company.list_key = "india-star").
+#   python scripts/run.py lists sync india-star      # create/attach rows, verify websites
+#   python scripts/run.py lists people india-star    # find referrers at every company
+#
+# Every field except `website` is copied from the report. `website` is a best guess and is
+# only written to the database once the site has been fetched and names the company on
+# its own page — a guess that fails that check stays null and is shown as "no website".
+# `website_verified: true` skips that check for a domain that is not in doubt but blocks bots.
+# `ctc_kind`: indicative = a market range, not the company's promise; reported = a
+# publicly posted, role-specific figure. Nothing here is a scored fact; grading still runs.
+key: india-star
+name: "★ India"
+title: "Top 50 Series A & B — Hyderabad & Bengaluru"
+description: >
+  Recently funded (Series A / B) startups in Hyderabad and Bengaluru, picked by hand.
+  Every company here is chased regardless of tier — the list is the decision.
+source: "top_50_series_a_b_startups_hyderabad_bengaluru_UPDATED_with_Coupang.pdf"
+companies:
+  - {rank: 1,  name: "Equal AI",           aliases: ["Equal", "Equal Identity"], city: Hyderabad, stage: "Series B", funding: "$30M", funding_usd_m: 30, size: "51–200", what: "Consumer AI call assistant; AI-native identity/data platform", ctc: "₹10–30L+", ctc_kind: indicative, website: "https://equal.in"}
+  - {rank: 2,  name: "Swish",              city: Bengaluru, stage: "Series B", funding: "$38M reported", funding_usd_m: 38, size: "51–200", what: "10-minute food delivery / quick commerce", ctc: "₹8–25L+", ctc_kind: indicative, website: null, note: "app-only (Play Store / App Store); no website found"}
+  - {rank: 3,  name: "Sarvam AI",          city: Bengaluru, stage: "Series B", funding: "$234M", funding_usd_m: 234, what: "Indian foundation models + enterprise AI", ctc: "₹15–45L+", ctc_kind: indicative, website: "https://sarvam.ai"}
+  - {rank: 4,  name: "Airbound",           city: Bengaluru, stage: "Series A", funding: "$37M", funding_usd_m: 37, what: "Autonomous drone delivery / aerospace", ctc: "₹12–35L+", ctc_kind: indicative, website: "https://airbound.co"}
+  - {rank: 5,  name: "Digantara",          city: Bengaluru, stage: "Series B", funding: "$10M+", funding_usd_m: 10, what: "Space situational awareness + satellite tech", ctc: "₹10–30L+", ctc_kind: indicative, website: "https://digantara.co.in"}
+  - {rank: 6,  name: "Stable Money",       city: Bengaluru, stage: "Series B", funding: "$15M+", funding_usd_m: 15, what: "Digital fixed-income investment platform", ctc: "₹10–30L+", ctc_kind: indicative, website: "https://stablemoney.in"}
+  - {rank: 7,  name: "Scapia",             city: Bengaluru, stage: "Series B", funding: "$23M", funding_usd_m: 23, what: "Travel fintech / credit card", ctc: "₹12–30L+", ctc_kind: indicative, website: "https://scapia.cards"}
+  - {rank: 8,  name: "WizCommerce",        city: Bengaluru, stage: "Series A", funding: "not stated", what: "B2B commerce software / AI", ctc: "₹10–28L+", ctc_kind: indicative, website: "https://wizcommerce.com"}
+  - {rank: 9,  name: "Plazza",             city: Bengaluru, stage: "Series A", funding: "Undisclosed", what: "AI / commerce technology", ctc: "₹10–25L+", ctc_kind: indicative, website: "https://plazza.in"}
+  - {rank: 10, name: "FirstClub",          city: Bengaluru, stage: "Series A", funding: "$10M+", funding_usd_m: 10, what: "Premium quick-commerce", ctc: "₹10–25L+", ctc_kind: indicative, website: "https://www.firstclub.co.in"}
+  - {rank: 11, name: "Oolka",              city: Bengaluru, stage: "Series A", funding: "Undisclosed", what: "Consumer / fintech technology", ctc: "₹10–25L+", ctc_kind: indicative, website: "https://oolka.in"}
+  - {rank: 12, name: "Runable",            city: Bengaluru, stage: "Series A", funding: "$21M", funding_usd_m: 21, what: "AI platform for business operations", ctc: "₹12–35L+", ctc_kind: indicative, website: "https://runable.com"}
+  - {rank: 13, name: "Ringg AI",           aliases: ["Ringg", "India’s Ringg"], city: Bengaluru, stage: "Series A", funding: "$5M+", funding_usd_m: 5, what: "Voice AI agents", ctc: "₹12–35L+", ctc_kind: indicative, website: "https://ringg.ai"}
+  - {rank: 14, name: "Kapture CX",         aliases: ["Kapture"], city: Bengaluru, stage: "Series B / Pre-B", funding: "$10M recent", funding_usd_m: 10, what: "Agentic AI customer-experience platform", ctc: "₹10–30L+", ctc_kind: indicative, website: "https://kapture.cx"}
+  - {rank: 15, name: "Avataar",            city: Bengaluru, stage: "Series B", funding: "$52M total", funding_usd_m: 52, what: "3D/AI commerce visualization", ctc: "₹12–35L+", ctc_kind: indicative, website: "https://avataar.ai"}
+  - {rank: 16, name: "Even Healthcare",    aliases: ["Even"], city: Bengaluru, stage: "Series A", funding: "$15M+", funding_usd_m: 15, what: "Digital healthcare / healthtech", ctc: "₹10–25L+", ctc_kind: indicative, website: "https://even.in"}
+  - {rank: 17, name: "Ultrahuman",         city: Bengaluru, stage: "Series B", funding: "$35M+", funding_usd_m: 35, what: "Wearables + health-tech platform", ctc: "₹12–35L+", ctc_kind: indicative, website: "https://ultrahuman.com"}
+  - {rank: 18, name: "Skylo Technologies", aliases: ["Skylo"], city: Bengaluru, stage: "Series B", funding: "$37M+", funding_usd_m: 37, what: "Satellite connectivity", ctc: "₹12–35L+", ctc_kind: indicative, website: "https://skylo.tech"}
+  - {rank: 19, name: "Jar",                aliases: ["Jar App"], city: Bengaluru, stage: "Series B", funding: "$32M+", funding_usd_m: 32, what: "Consumer fintech / digital gold", ctc: "₹10–30L+", ctc_kind: indicative, website: "https://myjar.app"}
+  - {rank: 20, name: "Mswipe",             city: Bengaluru, stage: "Series B", funding: "$25M+", funding_usd_m: 25, what: "Digital payments / merchant fintech", ctc: "₹8–25L+", ctc_kind: indicative, website: "https://mswipe.com"}
+  - {rank: 21, name: "C2i Semiconductors", aliases: ["C2i"], city: Bengaluru, stage: "Series A", funding: "Undisclosed", what: "Battery / semiconductor technology", ctc: "₹12–35L+", ctc_kind: indicative, website: "https://c2isemi.com"}
+  - {rank: 22, name: "EtherealX",          city: Bengaluru, stage: "Series A", funding: "$5M", funding_usd_m: 5, what: "Reusable launch-vehicle technology", ctc: "₹10–30L+", ctc_kind: indicative, website: "https://etherealx.space"}
+  - {rank: 23, name: "Emversity",          city: Bengaluru, stage: "Series A", funding: "$30M", funding_usd_m: 30, what: "Career education / talent pipelines", ctc: "₹8–22L+", ctc_kind: indicative, website: "https://emversity.com"}
+  - {rank: 24, name: "Peoplebox.ai",       aliases: ["Peoplebox"], city: Bengaluru, stage: "Series A", funding: "$7M+", funding_usd_m: 7, what: "AI-native HR / talent platform", ctc: "₹10–30L+", ctc_kind: indicative, website: "https://www.peoplebox.ai"}
+  - {rank: 25, name: "Morphle Labs",       aliases: ["Morphle"], city: Bengaluru, stage: "Series B", funding: "$31M+", funding_usd_m: 31, what: "AI + robotics for digital pathology", ctc: "₹10–30L+", ctc_kind: indicative, website: "https://morphlelabs.com"}
+  - {rank: 26, name: "Cashfree Payments",  aliases: ["Cashfree"], city: Bengaluru, stage: "Series B", funding: "$41M+", funding_usd_m: 41, what: "Payments and banking infrastructure", ctc: "₹10–30L+", ctc_kind: indicative, website: "https://www.cashfree.com"}
+  - {rank: 27, name: "Vahan",              aliases: ["Vahan.ai"], city: Bengaluru, stage: "Series B", funding: "$10M+", funding_usd_m: 10, what: "AI recruiting for blue-collar workforce", ctc: "₹30–60L (lead AI role)", ctc_kind: reported, website: "https://vahan.ai"}
+  - {rank: 28, name: "Ressl AI",           aliases: ["Ressl"], city: Bengaluru, stage: "Seed / YC", funding: "not stated", what: "Autonomous-agent testing/deployment platform", ctc: "₹10–25L+", ctc_kind: indicative, website: "https://ressl.ai"}
+  - {rank: 29, name: "Retape",             city: Bengaluru, stage: "Seed / YC", funding: "not stated", what: "AI operating system / multi-agent workflows", ctc: "₹10–25L+", ctc_kind: indicative, website: "https://retape.ai"}
+  - {rank: 30, name: "Rivia.AI",           aliases: ["Rivia"], city: Bengaluru, stage: "Seed / YC", funding: "not stated", what: "AI-generated interactive product demos", ctc: "₹8–20L+", ctc_kind: indicative, website: "https://rivia.ai"}
+  - {rank: 31, name: "Landeed",            city: Hyderabad, stage: "Series A", funding: "$8M+", funding_usd_m: 8, what: "AI-native property intelligence", ctc: "₹25–45L (AI/ML role)", ctc_kind: reported, website: "https://www.landeed.com"}
+  - {rank: 32, name: "AlgoUniversity",     city: Hyderabad, stage: "Series A / YC", funding: "Undisclosed", what: "AI/software engineering education", ctc: "₹10–25L (AI role)", ctc_kind: reported, website: "https://algouniversity.com"}
+  - {rank: 33, name: "Keka HR",            aliases: ["Keka"], city: Hyderabad, stage: "Series A", funding: "$57M+", funding_usd_m: 57, what: "HR/payroll SaaS", ctc: "₹10–25L+", ctc_kind: indicative, website: "https://www.keka.com", website_verified: true}
+  - {rank: 34, name: "NxtWave",            aliases: ["NxtWave Disruptive Technologies", "CCBP"], city: Hyderabad, stage: "Series A", funding: "$33M+", funding_usd_m: 33, what: "Edtech / tech-skilling", ctc: "₹7–20L+", ctc_kind: indicative, website: "https://www.ccbp.in"}
+  - {rank: 35, name: "TurboHire",          city: Hyderabad, stage: "Series A", funding: "$5M+", funding_usd_m: 5, what: "AI recruitment / talent intelligence", ctc: "₹8–22L+", ctc_kind: indicative, website: "https://turbohire.co"}
+  - {rank: 36, name: "Enmovil",            city: Hyderabad, stage: "Series A", funding: "Undisclosed", what: "Fleet / logistics optimization software", ctc: "₹8–20L+", ctc_kind: indicative, website: "https://www.enmovil.ai"}
+  - {rank: 37, name: "NowFloats",          city: Hyderabad, stage: "Series B", funding: "$25M+", funding_usd_m: 25, what: "SMB digital presence / SaaS", ctc: "₹8–22L+", ctc_kind: indicative, website: "https://www.nowfloats.com", website_verified: true}
+  - {rank: 38, name: "Dhruva Space",       city: Hyderabad, stage: "Series A/B", funding: "$25M+ incl. recent funding", funding_usd_m: 25, what: "Satellite and space systems", ctc: "₹8–25L+", ctc_kind: indicative, website: "https://dhruvaspace.com"}
+  - {rank: 39, name: "Deccan AI",          city: Hyderabad, stage: "Series A", funding: "Undisclosed", what: "AI data/model-training infrastructure", ctc: "₹10–30L+", ctc_kind: indicative, website: "https://deccan.ai"}
+  - {rank: 40, name: "Keus",               aliases: ["Keus Automation"], city: Hyderabad, stage: "Series B", funding: "$12M", funding_usd_m: 12, what: "Luxury smart-home automation", ctc: "₹8–22L+", ctc_kind: indicative, website: "https://keus.in"}
+  - {rank: 41, name: "Edubuk",             city: Hyderabad, stage: "Series B", funding: "$50M", funding_usd_m: 50, what: "AI-driven education + credentials", ctc: "₹8–20L+", ctc_kind: indicative, website: "https://edubuk.com"}
+  - {rank: 42, name: "Marut Drones",       aliases: ["Marut Dronetech"], city: Hyderabad, stage: "Series A", funding: "$6.2M", funding_usd_m: 6.2, what: "Agricultural drones / deeptech", ctc: "₹8–22L+", ctc_kind: indicative, website: "https://marutdrones.com"}
+  - {rank: 43, name: "JEH Aerospace",      city: Hyderabad, stage: "Series A", funding: "$11M", funding_usd_m: 11, what: "Aerospace / defence technology", ctc: "₹10–30L+", ctc_kind: indicative, website: "https://jeh.aero"}
+  - {rank: 44, name: "Red.Health",         aliases: ["RED.Health", "Red Health", "StanPlus"], city: Hyderabad, stage: "Series B", funding: "$20M+", funding_usd_m: 20, what: "Emergency healthcare logistics platform", ctc: "₹8–25L+", ctc_kind: indicative, website: "https://red.health"}
+  - {rank: 45, name: "Zaggle",             city: Hyderabad, stage: "Series B", funding: "$18M+ historical", funding_usd_m: 18, what: "B2B fintech / spend management", ctc: "₹8–25L+", ctc_kind: indicative, website: "https://www.zaggle.in"}
+  - {rank: 46, name: "Yapan Bio",          city: Hyderabad, stage: "Series A", funding: "Undisclosed", what: "Biopharma CDMO / biotech", ctc: "₹8–22L+", ctc_kind: indicative, website: "https://yapanbio.com"}
+  - {rank: 47, name: "Freyr Energy",       city: Hyderabad, stage: "Series A", funding: "$6M+", funding_usd_m: 6, what: "Residential solar / climate tech", ctc: "₹7–20L+", ctc_kind: indicative, website: "https://freyrenergy.com"}
+  - {rank: 48, name: "Infinity Learn",     city: Hyderabad, stage: "Series A", funding: "$10M+", funding_usd_m: 10, what: "Edtech / K-12 learning", ctc: "₹6–18L+", ctc_kind: indicative, website: "https://infinitylearn.com"}
+  - {rank: 49, name: "Ozonetel",           city: Hyderabad, stage: "Series A", funding: "Undisclosed", what: "Cloud communications / contact-center tech", ctc: "₹8–22L+", ctc_kind: indicative, website: "https://ozonetel.com"}
+  - {rank: 50, name: "StaTwig",            city: Hyderabad, stage: "Series A", funding: "Undisclosed", what: "Blockchain + supply-chain traceability", ctc: "₹8–22L+", ctc_kind: indicative, website: "https://statwig.com"}
+  - {rank: 51, name: "Neeman's",           aliases: ["Neemans"], city: Hyderabad, stage: "Series A", funding: "$3M+", funding_usd_m: 3, what: "Sustainable footwear / D2C", ctc: "₹6–18L+", ctc_kind: indicative, website: "https://neemans.com"}
+  - {rank: 52, name: "Sid's Farm",         aliases: ["Sids Farm"], city: Hyderabad, stage: "Series B", funding: "$10M+", funding_usd_m: 10, what: "D2C dairy / food-tech operations", ctc: "₹6–18L+", ctc_kind: indicative, website: "https://sidsfarm.com"}
+  # Not a Series A/B startup — a mature, listed company, kept as the one large-tech target
+  # in the same cities. Early-career fit is limited; many India roles are senior/staff.
+  - {rank: 53, name: "Coupang",            city: "Bengaluru · Hyderabad", stage: "Public", funding: "listed company", what: "E-commerce, logistics, food delivery, fintech and technology platforms", ctc: "verify on the live JD", ctc_kind: unknown, website: "https://www.coupang.com", website_verified: true, careers: "https://www.coupang.jobs", category: "large-tech"}

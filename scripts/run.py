@@ -1274,6 +1274,96 @@ def outreach_learn(days: int = typer.Option(None, help="Only sends in the last N
 
 # ---------------------------------------------------------------- harvest
 
+# ---------------------------------------------------------------- lists
+
+lists_app = typer.Typer(help="Hand-picked company lists (data/lists/*.yaml) — ★ India and the like.")
+app.add_typer(lists_app, name="lists")
+
+
+@lists_app.command("ls")
+def lists_ls() -> None:
+    """Every list on disk and how much of it is attached to the database."""
+    from jobhunter import lists
+
+    for l in lists.available():
+        typer.echo(f"  {l['key']:14} {l['name']:12} {l['attached']}/{l['companies']} attached — {l['title'] or ''}")
+
+
+@lists_app.command("show")
+def lists_show(key: str = typer.Argument("india-star"), json_: bool = typer.Option(False, "--json")) -> None:
+    """The list in its own order, with roles and people found so far."""
+    from jobhunter import lists
+
+    data = lists.rows(key)
+    if json_:
+        _echo(data)
+        return
+    s = data["stats"]
+    typer.secho(f"{data['name']} — {data['title']}", bold=True)
+    typer.echo(f"  {s['companies']} companies · {s['with_website']} with a site · {s['with_roles']} with roles · "
+               f"{s['with_people']} with people ({s['people']} found, {s['reachable']} could refer) · {s['ready']} ready")
+    for r in data["companies"]:
+        best = r["people"]["best"]
+        ask = f"ask {best['name'] or best['email']} ({best['label']})" if best else "no one yet"
+        site = "" if r["website"] else f"  [no website: {r['website_note']}]"
+        typer.echo(f"  {r['rank']:>2} {r['name']:20} {r['city'] or '':10} {r['stage'] or '':16} "
+                   f"{r['roles']['total']:>3} roles {r['people']['total']:>3} people — {ask}{site}")
+
+
+@lists_app.command("sync")
+def lists_sync(key: str = typer.Argument("india-star"),
+               no_verify: bool = typer.Option(False, "--no-verify", help="Skip fetching guessed websites")) -> None:
+    """Attach the list's companies to database rows; verify guessed websites first."""
+    _setup_logging()
+    from jobhunter import lists
+
+    _echo(lists.sync(key, verify_sites=not no_verify))
+
+
+@lists_app.command("audit")
+def lists_audit(key: str = typer.Argument("india-star"),
+                dry: bool = typer.Option(False, "--dry", help="Report only; clear nothing")) -> None:
+    """Re-verify every GitHub org on the list; a wrong org loses its contacts."""
+    _setup_logging()
+    from jobhunter import lists
+
+    _echo(lists.audit_orgs(key, fix=not dry))
+
+
+@lists_app.command("people")
+def lists_people(
+    key: str = typer.Argument("india-star"),
+    no_linkedin: bool = typer.Option(False, "--no-linkedin", help="Skip the public-LinkedIn search (slow, gapped)"),
+    refresh_days: int = typer.Option(0, help="Skip companies searched within N days; 0 = every company"),
+    limit: int = typer.Option(None, help="Only the first N in list order"),
+    linkedin_only: bool = typer.Option(False, "--linkedin-only", help="Just the public-LinkedIn pass"),
+    emails_only: bool = typer.Option(False, "--emails-only",
+                                     help="The address pass: web search for any @domain address, founders/HR, fill by pattern"),
+    x_handles: bool = typer.Option(False, "--x-handles", help="X handles for each company's best people (DM route)"),
+) -> None:
+    """Boards, roles and referrers for every company on the list, in list order."""
+    _setup_logging()
+    from jobhunter import lists
+
+    out = lists.find_people(key, linkedin=not no_linkedin, refresh_days=refresh_days, limit=limit,
+                            linkedin_only=linkedin_only, emails_only=emails_only, x_handles=x_handles)
+    lines = out.pop("lines", [])
+    for l in lines:
+        if x_handles:
+            typer.echo(f"  {l['name']:22} searched {l.get('searched', 0)}  handles +{l.get('new', 0)} (have {l.get('found', 0)})"
+                       + ("  " + ", ".join("@" + h["handle"] for h in l.get("handles", [])) if l.get("handles") else ""))
+            continue
+        if emails_only:
+            typer.echo(f"  {l['name']:22} addresses {l.get('addresses', '-'):>3}  founders +{l.get('founders', 0)}  "
+                       f"by pattern +{l.get('by_pattern', 0)}  reachable {l.get('reachable_before')} → {l.get('reachable_after')}"
+                       f"{'  pattern ' + l['pattern'] if l.get('pattern') else ''}")
+            continue
+        typer.echo(f"  {l['name']:22} roles +{l.get('roles', 0)}  people +{l.get('people', 0)} "
+                   f"(verified {l.get('verified', 0)})  linkedin +{l.get('linkedin', 0)}"
+                   + (f"  ! {l['linkedin_error']}" if l.get('linkedin_error') else ""))
+    _echo(out)
+
+
 harvest_app = typer.Typer(
     add_completion=False,
     help="Bulk company harvest — N different companies that fit, then their boards, roles and grade",
@@ -1464,6 +1554,44 @@ def people_classify(
     typer.echo(f"  {scanned} contacts, {calls} model call(s)")
     for key in sorted(stats, key=lambda k: roles.RANKS.get(k, 9)):
         typer.echo(f"    {roles.RANKS.get(key, 9)} {key:16} {stats[key]}")
+
+
+@people_app.command("emails")
+def people_emails(company_id: int = typer.Argument(..., help="The company to find addresses at")) -> None:
+    """Any real address at one company from the open web, then fill everyone by pattern."""
+    _setup_logging()
+    from jobhunter.contacts import fill_by_pattern, web_emails
+
+    out = web_emails.find(company_id)
+    out["by_pattern"] = fill_by_pattern(company_id)
+    _echo(out)
+
+
+@people_app.command("x-handles")
+def people_x_handles(company_id: int = typer.Argument(..., help="The company whose people to look up"),
+                     limit: int = typer.Option(5, help="Searches to spend — best referral rank first")) -> None:
+    """X handles for a company's best people — the DM route when there is no address."""
+    _setup_logging()
+    from jobhunter.contacts import x_handles
+
+    _echo(x_handles.find_for_company(company_id, limit=limit))
+
+
+@people_app.command("x-backfill")
+def people_x_backfill(list_key: str = typer.Option(None, "--list", help="Only companies on this list"),
+                      limit: int = typer.Option(400)) -> None:
+    """X handles from the GitHub profiles of contacts already on record."""
+    _setup_logging()
+    from sqlmodel import select
+
+    from jobhunter.contacts import x_handles
+    from jobhunter.db import Company, get_session
+
+    ids = None
+    if list_key:
+        with get_session() as s:
+            ids = list(s.exec(select(Company.id).where(Company.list_key == list_key)).all())
+    _echo(x_handles.backfill_github(ids, limit=limit))
 
 
 @people_app.command("queue")
