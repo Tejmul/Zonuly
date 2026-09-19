@@ -11,7 +11,7 @@
  *
  *    1. one number  — how many companies are actually ready to ask;
  *    2. two funnels — where everything else went, with the loss at each step named;
- *    3. the gates   — why 1,962 companies becomes 63, one test at a time;
+ *    3. the gates   — why thousands of companies become a few dozen, one test at a time;
  *    4. the detail  — where roles come from, whether the hiring is real, where and
  *                     what they pay;
  *    5. the list    — the companies you could write to today.
