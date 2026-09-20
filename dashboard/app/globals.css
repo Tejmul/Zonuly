@@ -24,7 +24,7 @@
 :root {
   color-scheme: light;
 
-  --paper: #ffffff;
+  --paper: #f5f5fa;
   --surface: #ffffff;
   --surface-2: #f4f4f5;
   --surface-3: #e4e4e8;
@@ -44,8 +44,8 @@
 :root.dark {
   color-scheme: dark;
 
-  --paper: #08080a;
-  --surface: #0e0e11;
+  --paper: #0a0a10;
+  --surface: #12121a;
   --surface-2: #161619;
   --surface-3: #1e1e22;
   --line: #232327;
@@ -95,6 +95,69 @@
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 3px);
 }
+
+
+/* ================================================================== colour
+   2026-09-20, Tejmul: the dashboard follows the NextAdmin reference — one accent,
+   one second series, and a reserved status set for pills and deltas. Both palettes
+   were run through the dataviz validator (colour-blind separation and contrast):
+   light  #4338CA / #0E9F8E · dark  #6366F1 / #0D9488 · status green / amber / red.
+   Everything else on the page stays ink and surface; colour means something. */
+:root {
+  --accent: #4338ca;
+  --accent-ink: #3730a3;
+  --accent-wash: #e6e5f9;
+  --accent-wash-2: #d3d1f4;
+  --series-2: #0e9f8e;
+  --series-2-wash: #dcf3ef;
+  --good: #15803d;  --good-wash: #e3f4e8;
+  --warn: #a16207;  --warn-wash: #fbf1d6;
+  --bad:  #b91c1c;  --bad-wash:  #fbe4e4;
+  --shadow-card: 0 1px 2px rgb(14 14 26 / 0.05), 0 0 0 1px var(--line);
+}
+:root.dark {
+  --accent: #6366f1;
+  --accent-ink: #a5b4fc;
+  --accent-wash: #1f1f3d;
+  --accent-wash-2: #2b2b57;
+  --series-2: #0d9488;
+  --series-2-wash: #10302d;
+  --good: #4ade80;  --good-wash: #10281a;
+  --warn: #facc15;  --warn-wash: #2c2410;
+  --bad:  #f87171;  --bad-wash:  #2f1616;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 0 0 1px var(--line);
+}
+@theme inline {
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-wash: var(--accent-wash);
+  --color-accent-wash-2: var(--accent-wash-2);
+  --color-series-2: var(--series-2);
+  --color-series-2-wash: var(--series-2-wash);
+  --color-good: var(--good);
+  --color-good-wash: var(--good-wash);
+  --color-warn: var(--warn);
+  --color-warn-wash: var(--warn-wash);
+  --color-bad: var(--bad);
+  --color-bad-wash: var(--bad-wash);
+}
+
+/* A card: a white object on the soft ground, edged by a hairline ring rather than a
+   border so the radius stays clean. Cards replace plates on the dashboard. */
+.card { background: var(--surface); border-radius: 12px; box-shadow: var(--shadow-card); }
+
+/* Status pills: colour plus a dot plus the word, never colour alone. */
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 24px; padding: 0 9px; border-radius: 7px;
+  font-size: 12px; font-weight: 500; white-space: nowrap;
+}
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.pill-good { background: var(--good-wash); color: var(--good); }
+.pill-warn { background: var(--warn-wash); color: var(--warn); }
+.pill-bad  { background: var(--bad-wash);  color: var(--bad); }
+.pill-note { background: var(--accent-wash); color: var(--accent-ink); }
+.pill-muted { background: var(--surface-2); color: var(--ink-2); }
 
 html, body { background: var(--paper); color: var(--ink); }
 body {

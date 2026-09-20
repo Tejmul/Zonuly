@@ -342,6 +342,88 @@ def overview() -> dict:
                 }
             )
 
+        # ---- what the dashboard's trend, deltas, breakdowns and table are drawn from.
+        # Weeks start on Monday (ISO); the last eight are enough to show the machine's
+        # rhythm without the chart turning into a hairline.
+        now = datetime.utcnow()
+        monday = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        week_starts = [monday - timedelta(weeks=i) for i in range(7, -1, -1)]
+
+        def per_week(stamps: list[datetime | None]) -> list[int]:
+            out = [0] * len(week_starts)
+            first = week_starts[0]
+            for t in stamps:
+                if t is None or t < first:
+                    continue
+                idx = min(len(out) - 1, int((t - first).days // 7))
+                out[idx] += 1
+            return out
+
+        weekly = {
+            "weeks": [w.strftime("%Y-%m-%d") for w in week_starts],
+            "companies": per_week(list(session.exec(select(Company.created_at)).all())),
+            "jobs": per_week(list(session.exec(select(Job.scraped_at)).all())),
+            "contacts": per_week(list(session.exec(select(Contact.created_at)).all())),
+        }
+        two_weeks_ago = week_ago - timedelta(days=7)
+
+        def window(model, column, start, end=None) -> int:
+            stmt = select(func.count()).select_from(model).where(col(column) >= start)
+            if end is not None:
+                stmt = stmt.where(col(column) < end)
+            return session.exec(stmt).one()
+
+        deltas = {
+            "companies": {"this_week": window(Company, Company.created_at, week_ago),
+                          "last_week": window(Company, Company.created_at, two_weeks_ago, week_ago)},
+            "jobs": {"this_week": new_this_week,
+                     "last_week": window(Job, Job.scraped_at, two_weeks_ago, week_ago)},
+            "contacts": {"this_week": window(Contact, Contact.created_at, week_ago),
+                         "last_week": window(Contact, Contact.created_at, two_weeks_ago, week_ago)},
+        }
+        hiring = {
+            (k or "unchecked"): v
+            for k, v in session.exec(select(Company.hiring_status, func.count()).group_by(Company.hiring_status)).all()
+        }
+        regions = {
+            (k or "unknown"): v
+            for k, v in session.exec(select(Company.hq_region, func.count()).group_by(Company.hq_region)).all()
+        }
+        by_confidence = dict(
+            session.exec(select(Contact.confidence, func.count()).group_by(Contact.confidence)).all()
+        )
+        # leads are people (MOTIV: the referrer, not the company): who they are, how we
+        # found them, and how many companies now have someone to ask
+        has_email = col(Contact.email).is_not(None) & (col(Contact.email) != "")
+        leads = {
+            "with_email": session.exec(select(func.count()).select_from(Contact).where(has_email)).one(),
+            "companies_with_lead": session.exec(
+                select(func.count(func.distinct(Contact.company_id))).select_from(Contact).where(has_email)
+            ).one(),
+            "by_role": {
+                (k or "unclassified"): v
+                for k, v in session.exec(select(Contact.role_class, func.count()).group_by(Contact.role_class)).all()
+            },
+            "by_source": dict(session.exec(select(Contact.source, func.count()).group_by(Contact.source)).all()),
+        }
+        # the newest fresher roles at companies whose hiring is proven on their own site
+        latest = session.exec(
+            select(Job, Company)
+            .join(Company, Company.id == Job.company_id)
+            .where(Job.is_senior == False, Company.hiring_status == "verified")  # noqa: E712
+            .order_by(col(Job.scraped_at).desc())
+            .limit(10)
+        ).all()
+        latest_roles = [
+            {
+                "id": j.id, "company_id": c.id, "company_name": c.name, "title": j.title,
+                "location": j.location, "source": j.source, "remote_anywhere": bool(j.remote_anywhere),
+                "hiring_status": c.hiring_status, "region": c.hq_region,
+                "scraped_at": j.scraped_at.isoformat() if j.scraped_at else None,
+            }
+            for j, c in latest
+        ]
+
     return {
         "jobs": matcher.counts(),
         "funnel": tracker.funnel(),
@@ -349,9 +431,16 @@ def overview() -> dict:
         "by_source": by_source,
         "new_this_week": new_this_week,
         "companies": companies,
-        "contacts": {"total": contacts, "verified": verified},
+        "contacts": {"total": contacts, "verified": verified, "by_confidence": by_confidence},
         "top_matches": [_job_dict(j) for j in top],
         "recent_replies": reply_rows,
+        "weekly": weekly,
+        "deltas": deltas,
+        "hiring": hiring,
+        "regions": regions,
+        "latest_roles": latest_roles,
+        "leads": leads,
+        "as_of": now.isoformat(),
     }
 
 

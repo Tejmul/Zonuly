@@ -333,3 +333,247 @@ function Nothing() {
 
 /** Kept so older imports keep working; new code should use `Bars`. */
 export const BarList = Bars;
+
+/* ================================================================== 2026-09-20
+ *  The dashboard follows the NextAdmin reference: a two-series trend, a tick gauge,
+ *  label-inside ranked bars, an emphasis stack and status pills. Colour arrives
+ *  here for the first time — the accent and the second series were validated for
+ *  colour-blind separation (see globals.css). Text never wears a series colour.
+ */
+
+/* ------------------------------------------------------------------ trend */
+
+export type Series = { name: string; data: number[]; color: string };
+
+/** Two (or one) series over the same weeks, one axis, a crosshair that finds the
+ *  nearest week and reads every series out at once. The end value of each series
+ *  is labelled directly; the axis carries the rest. */
+export function Trend({
+  labels,
+  series,
+  ariaLabel,
+}: {
+  labels: string[];
+  series: Series[];
+  ariaLabel: string;
+}) {
+  const [at, setAt] = useState<number | null>(null);
+  const W = 1200, H = 320, L = 56, R = 24, T = 18, B = 34;
+  const raw = Math.max(1, ...series.flatMap((s) => s.data));
+  const step = niceStep(raw);
+  const max = Math.ceil(raw / step) * step;
+  const ticks = Array.from({ length: max / step + 1 }, (_, i) => i * step);
+  const n = Math.max(2, labels.length);
+  const x = (i: number) => L + (i * (W - L - R)) / (n - 1);
+  const y = (v: number) => T + (H - T - B) * (1 - v / max);
+
+  // Catmull-Rom → cubic Bézier; control points clamped to the baseline so a run of
+  // zeros never dips below it.
+  const smooth = (pts: [number, number][]) => {
+    let d = `M ${pts[0][0]} ${pts[0][1]}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(i - 1, 0)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(i + 2, pts.length - 1)];
+      const c1y = Math.min(y(0), p1[1] + (p2[1] - p0[1]) / 6);
+      const c2y = Math.min(y(0), p2[1] - (p3[1] - p1[1]) / 6);
+      d += ` C ${p1[0] + (p2[0] - p0[0]) / 6} ${c1y}, ${p2[0] - (p3[0] - p1[0]) / 6} ${c2y}, ${p2[0]} ${p2[1]}`;
+    }
+    return d;
+  };
+
+  const onMove = (e: React.PointerEvent<SVGRectElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const px = L + ((e.clientX - box.left) / box.width) * (W - L - R);
+    let best = 0, dist = Infinity;
+    labels.forEach((_, i) => { const d = Math.abs(x(i) - px); if (d < dist) { dist = d; best = i; } });
+    setAt(best);
+  };
+  const onKey = (e: React.KeyboardEvent<SVGRectElement>) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    setAt((cur) => {
+      const c = cur ?? labels.length - 1;
+      return e.key === "ArrowLeft" ? Math.max(0, c - 1) : Math.min(labels.length - 1, c + 1);
+    });
+  };
+
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={ariaLabel}>
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="var(--grid)" strokeWidth={1} />
+            <text x={L - 10} y={y(t) + 4} textAnchor="end" fill="var(--ink-3)" fontSize={12} fontFamily="var(--font-mono)">
+              {nf.format(t)}
+            </text>
+          </g>
+        ))}
+        {labels.map((l, i) => (
+          <text key={l + i} x={x(i)} y={H - 10} textAnchor="middle" fill="var(--ink-3)" fontSize={12} fontFamily="var(--font-sans)">
+            {l}
+          </text>
+        ))}
+        {series.map((s, si) => {
+          const pts = s.data.map((v, i) => [x(i), y(v)] as [number, number]);
+          const line = smooth(pts);
+          const last = pts[pts.length - 1];
+          // the lower series labels below its end dot, the upper above, so two ends
+          // that finish close together never overprint
+          const lowest = series.every((o) => o.data[o.data.length - 1] >= s.data[s.data.length - 1]);
+          return (
+            <g key={s.name}>
+              <path d={`${line} L ${x(n - 1)} ${y(0)} L ${x(0)} ${y(0)} Z`} fill={s.color} fillOpacity={0.1} />
+              <path d={line} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+              <circle cx={last[0]} cy={last[1]} r={5} fill={s.color} stroke="var(--surface)" strokeWidth={2} />
+              <text x={last[0] - 8} y={lowest && series.length > 1 ? last[1] + 20 : last[1] - 12} textAnchor="end" fill="var(--ink)" fontSize={12} fontWeight={600} fontFamily="var(--font-mono)">
+                {nf.format(s.data[s.data.length - 1])}
+              </text>
+              {at !== null ? (
+                <circle cx={x(at)} cy={y(s.data[at] ?? 0)} r={5} fill={s.color} stroke="var(--surface)" strokeWidth={2} />
+              ) : null}
+              {si === 0 && at !== null ? (
+                <line x1={x(at)} x2={x(at)} y1={T} y2={y(0)} stroke="var(--line-strong)" strokeWidth={1} />
+              ) : null}
+            </g>
+          );
+        })}
+        <rect
+          x={L} y={T} width={W - L - R} height={H - T - B} fill="transparent" tabIndex={0}
+          onPointerMove={onMove} onPointerLeave={() => setAt(null)}
+          onFocus={() => setAt(labels.length - 1)} onBlur={() => setAt(null)} onKeyDown={onKey}
+        />
+      </svg>
+      {at !== null ? (
+        <div
+          role="status"
+          className="card pointer-events-none absolute top-2 min-w-[160px] px-2.5 py-2 text-[12.5px]"
+          style={{ left: `min(calc(${(x(at) / W) * 100}% + 14px), calc(100% - 172px))` }}
+        >
+          <div className="mb-1 text-[11.5px] text-ink-3">Week of {labels[at]}</div>
+          {series.map((s) => (
+            <div key={s.name} className="flex items-center gap-2">
+              <span className="h-[2px] w-3 rounded-full" style={{ background: s.color }} />
+              <span className="text-ink-2">{s.name}</span>
+              <span className="tnum ml-auto font-semibold text-ink">{nf.format(s.data[at] ?? 0)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function niceStep(max: number): number {
+  const rough = max / 4;
+  const mag = 10 ** Math.floor(Math.log10(Math.max(1, rough)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * mag >= rough) return m * mag;
+  return 10 * mag;
+}
+
+/* ------------------------------------------------------------------ gauge */
+
+/** A single ratio, drawn as a half-ring of ticks. The centre carries the number in
+ *  text, so the ring is never the only way to read it. */
+export function Gauge({ ratio, label, ariaLabel }: { ratio: number; label: string; ariaLabel: string }) {
+  const N = 40, filled = Math.round(Math.max(0, Math.min(1, ratio)) * N);
+  const cx = 150, cy = 150, r1 = 100, r2 = 138;
+  return (
+    <div className="relative grid place-items-center pt-2">
+      <svg viewBox="0 0 300 162" className="h-auto w-full max-w-[300px]" role="img" aria-label={ariaLabel}>
+        {Array.from({ length: N }, (_, i) => {
+          const a = Math.PI - (i / (N - 1)) * Math.PI, ca = Math.cos(a), sa = Math.sin(a);
+          return (
+            <line
+              key={i}
+              x1={cx + r1 * ca} y1={cy - r1 * sa} x2={cx + r2 * ca} y2={cy - r2 * sa}
+              stroke={i < filled ? "var(--accent)" : "var(--surface-3)"} strokeWidth={6} strokeLinecap="round"
+            />
+          );
+        })}
+      </svg>
+      <div className="absolute inset-x-0 bottom-1.5 text-center">
+        <div className="tnum font-[family-name:var(--font-display)] text-[34px] font-semibold leading-none tracking-[-0.03em]">
+          {Math.round(ratio * 100)}%
+        </div>
+        <div className="mt-1 text-ink-2">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------- ribbon */
+
+/** Ranked bars with the label inside the bar, as in the reference's traffic-sources
+ *  panel. One wash for every bar: the length is the only encoding. */
+export function Ribbon({ rows, head }: { rows: Row[]; head: [string, string] }) {
+  if (!rows.length) return <Nothing />;
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="mb-0.5 flex justify-between text-[12.5px] text-ink-3">
+        <span>{head[0]}</span><span>{head[1]}</span>
+      </div>
+      {rows.map((r) => (
+        <div key={r.label} className="grid grid-cols-[minmax(0,1fr)_56px] items-center gap-3">
+          <div className="h-6 min-w-0">
+            <div
+              className="flex h-full min-w-fit items-center rounded-md bg-accent-wash px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors hover:bg-accent-wash-2"
+              style={{ width: `${Math.max(8, (r.value / max) * 100)}%` }}
+              title={`${r.label}: ${nf.format(r.value)}`}
+            >
+              {r.label}
+            </div>
+          </div>
+          <div className="tnum text-right font-semibold">{nf.format(r.value)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ stack */
+
+export type Segment = { label: string; value: number; color: string };
+
+/** Part-to-whole with one segment emphasised: the one the story is about takes the
+ *  accent, the rest step down through the greys. 2px surface gaps, no strokes. */
+export function Stack({ segments, ariaLabel }: { segments: Segment[]; ariaLabel: string }) {
+  const total = Math.max(1, segments.reduce((a, s) => a + s.value, 0));
+  return (
+    <div>
+      <div className="mt-1 flex h-[22px] gap-[2px] overflow-hidden rounded-md" role="img" aria-label={ariaLabel}>
+        {segments.map((s) => (
+          <span key={s.label} className="block h-full" style={{ width: `${(s.value / total) * 100}%`, background: s.color }} title={`${s.label}: ${nf.format(s.value)}`} />
+        ))}
+      </div>
+      <ul className="mt-3 flex flex-col gap-2">
+        {segments.map((s) => (
+          <li key={s.label} className="grid grid-cols-[10px_1fr_auto_36px] items-center gap-2.5 text-[12.5px]">
+            <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: s.color }} />
+            <span className="text-ink-2">{s.label}</span>
+            <span className="tnum font-semibold">{nf.format(s.value)}</span>
+            <span className="tnum text-right text-ink-3">{Math.round((s.value / total) * 100)}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ delta */
+
+/** Signed change against a named period. Direction is carried by the arrow and the
+ *  words as well as the colour. */
+export function Delta({ now, before, unit = "this week" }: { now: number; before: number; unit?: string }) {
+  if (!now && !before) return <span className="text-[12.5px] text-ink-3">no change</span>;
+  const up = now >= before;
+  const ratio = before > 0 ? now / before : null;
+  return (
+    <span className={`inline-flex items-center gap-1 text-[12.5px] font-medium whitespace-nowrap ${up ? "text-good" : "text-bad"}`}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {up ? <path d="M12 19V5M6 11l6-6 6 6" /> : <path d="M12 5v14M6 13l6 6 6-6" />}
+      </svg>
+      {nf.format(now)} {unit}
+      {ratio !== null && ratio !== 1 ? <span className="text-ink-3">· {ratio >= 10 ? Math.round(ratio) : ratio.toFixed(1)}× last</span> : null}
+    </span>
+  );
+}
