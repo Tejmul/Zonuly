@@ -343,7 +343,7 @@ export const BarList = Bars;
 
 /* ------------------------------------------------------------------ trend */
 
-export type Series = { name: string; data: number[]; color: string };
+export type Series = { name: string; data: number[]; color: string; /** dashed line, no fill: the second series in a monochrome pair */ dashed?: boolean };
 
 /** Two (or one) series over the same weeks, one axis, a crosshair that finds the
  *  nearest week and reads every series out at once. The end value of each series
@@ -421,8 +421,8 @@ export function Trend({
           const lowest = series.every((o) => o.data[o.data.length - 1] >= s.data[s.data.length - 1]);
           return (
             <g key={s.name}>
-              <path d={`${line} L ${x(n - 1)} ${y(0)} L ${x(0)} ${y(0)} Z`} fill={s.color} fillOpacity={0.1} />
-              <path d={line} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+              {s.dashed ? null : <path d={`${line} L ${x(n - 1)} ${y(0)} L ${x(0)} ${y(0)} Z`} fill={s.color} fillOpacity={0.07} />}
+              <path d={line} fill="none" stroke={s.color} strokeWidth={s.dashed ? 1.5 : 2} strokeDasharray={s.dashed ? "5 4" : undefined} strokeLinejoin="round" strokeLinecap="round" />
               <circle cx={last[0]} cy={last[1]} r={5} fill={s.color} stroke="var(--surface)" strokeWidth={2} />
               <text x={last[0] - 8} y={lowest && series.length > 1 ? last[1] + 20 : last[1] - 12} textAnchor="end" fill="var(--ink)" fontSize={12} fontWeight={600} fontFamily="var(--font-mono)">
                 {nf.format(s.data[s.data.length - 1])}
@@ -451,7 +451,7 @@ export function Trend({
           <div className="mb-1 text-[11.5px] text-ink-3">Week of {labels[at]}</div>
           {series.map((s) => (
             <div key={s.name} className="flex items-center gap-2">
-              <span className="h-[2px] w-3 rounded-full" style={{ background: s.color }} />
+              <span className="h-[2px] w-3 rounded-full" style={{ background: s.color, opacity: s.dashed ? 0.6 : 1 }} />
               <span className="text-ink-2">{s.name}</span>
               <span className="tnum ml-auto font-semibold text-ink">{nf.format(s.data[at] ?? 0)}</span>
             </div>
@@ -485,7 +485,7 @@ export function Gauge({ ratio, label, ariaLabel }: { ratio: number; label: strin
             <line
               key={i}
               x1={cx + r1 * ca} y1={cy - r1 * sa} x2={cx + r2 * ca} y2={cy - r2 * sa}
-              stroke={i < filled ? "var(--accent)" : "var(--surface-3)"} strokeWidth={6} strokeLinecap="round"
+              stroke={i < filled ? "var(--series-1)" : "var(--surface-3)"} strokeWidth={6} strokeLinecap="round"
             />
           );
         })}
@@ -516,7 +516,7 @@ export function Ribbon({ rows, head }: { rows: Row[]; head: [string, string] }) 
         <div key={r.label} className="grid grid-cols-[minmax(0,1fr)_56px] items-center gap-3">
           <div className="h-6 min-w-0">
             <div
-              className="flex h-full min-w-fit items-center rounded-md bg-accent-wash px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors hover:bg-accent-wash-2"
+              className="flex h-full min-w-fit items-center rounded-md bg-surface-2 px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors hover:bg-surface-3"
               style={{ width: `${Math.max(8, (r.value / max) * 100)}%` }}
               title={`${r.label}: ${nf.format(r.value)}`}
             >
@@ -568,7 +568,7 @@ export function Delta({ now, before, unit = "this week" }: { now: number; before
   const up = now >= before;
   const ratio = before > 0 ? now / before : null;
   return (
-    <span className={`inline-flex items-center gap-1 text-[12.5px] font-medium whitespace-nowrap ${up ? "text-good" : "text-bad"}`}>
+    <span className={`inline-flex items-center gap-1 text-[12.5px] font-medium whitespace-nowrap ${up ? "text-ink" : "text-ink-2"}`}>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         {up ? <path d="M12 19V5M6 11l6-6 6 6" /> : <path d="M12 5v14M6 13l6 6 6-6" />}
       </svg>

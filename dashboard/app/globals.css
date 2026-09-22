@@ -24,13 +24,15 @@
 :root {
   color-scheme: light;
 
-  --paper: #f5f5fa;
+  /* A soft grey ground so a white card reads as an object on it; everything else
+     is the original zinc scale. */
+  --paper: #f4f4f5;
   --surface: #ffffff;
   --surface-2: #f4f4f5;
   --surface-3: #e4e4e8;
   --line: #e3e3e6;
   --line-strong: #c9c9cd;
-  --grid: #f0f0f2;
+  --grid: #ececef;
 
   --ink: #09090b;
   --ink-2: #52525b;
@@ -44,19 +46,19 @@
 :root.dark {
   color-scheme: dark;
 
-  --paper: #0a0a10;
-  --surface: #12121a;
-  --surface-2: #161619;
-  --surface-3: #1e1e22;
+  --paper: #0a0a0b;
+  --surface: #131316;
+  --surface-2: #1a1a1e;
+  --surface-3: #232328;
   --line: #232327;
   --line-strong: #3a3a41;
-  --grid: #121215;
+  --grid: #18181c;
 
   --ink: #fafafa;
   --ink-2: #a1a1aa;
   --ink-3: #6b6b75;
 
-  --on-ink: #08080a;
+  --on-ink: #0a0a0b;
   --shadow-plate: 0 1px 2px rgb(0 0 0 / 0.5);
 }
 
@@ -97,66 +99,81 @@
 }
 
 
-/* ================================================================== colour
-   2026-09-20, Tejmul: the dashboard follows the NextAdmin reference — one accent,
-   one second series, and a reserved status set for pills and deltas. Both palettes
-   were run through the dataviz validator (colour-blind separation and contrast):
-   light  #4338CA / #0E9F8E · dark  #6366F1 / #0D9488 · status green / amber / red.
-   Everything else on the page stays ink and surface; colour means something. */
+/* ================================================================== mono
+   2026-09-22, Tejmul: black and white only. No accent, no hue. The two chart series
+   are ink and grey and are told apart by weight and dash as well as tone; state on a
+   pill is carried by fill (solid / tinted / outlined) plus the word, never by colour.
+   The names below stay so the components need not change when the rule does. */
 :root {
-  --accent: #4338ca;
-  --accent-ink: #3730a3;
-  --accent-wash: #e6e5f9;
-  --accent-wash-2: #d3d1f4;
-  --series-2: #0e9f8e;
-  --series-2-wash: #dcf3ef;
-  --good: #15803d;  --good-wash: #e3f4e8;
-  --warn: #a16207;  --warn-wash: #fbf1d6;
-  --bad:  #b91c1c;  --bad-wash:  #fbe4e4;
-  --shadow-card: 0 1px 2px rgb(14 14 26 / 0.05), 0 0 0 1px var(--line);
+  --series-1: var(--ink);
+  --series-1-wash: var(--surface-3);
+  --series-2: var(--ink-3);
+  --series-2-wash: var(--surface-2);
+  --highlight: var(--ink);
+  --highlight-ink: var(--on-ink);
+  --good: var(--ink);   --good-ink: var(--on-ink); --good-wash: var(--ink);
+  --warn: var(--ink);   --warn-ink: var(--ink);    --warn-wash: var(--surface-3);
+  --bad:  var(--ink-2); --bad-ink:  var(--ink-2);  --bad-wash:  transparent;
+  --shadow-card: 0 1px 2px rgb(9 9 11 / 0.04), 0 0 0 1px var(--line);
+  --accent: var(--ink);
+  --accent-ink: var(--ink);
+  --accent-wash: var(--surface-2);
+  --accent-wash-2: var(--surface-3);
 }
 :root.dark {
-  --accent: #6366f1;
-  --accent-ink: #a5b4fc;
-  --accent-wash: #1f1f3d;
-  --accent-wash-2: #2b2b57;
-  --series-2: #0d9488;
-  --series-2-wash: #10302d;
-  --good: #4ade80;  --good-wash: #10281a;
-  --warn: #facc15;  --warn-wash: #2c2410;
-  --bad:  #f87171;  --bad-wash:  #2f1616;
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 0 0 1px var(--line);
 }
 @theme inline {
+  --color-series-1: var(--series-1);
+  --color-series-1-wash: var(--series-1-wash);
+  --color-series-2: var(--series-2);
+  --color-series-2-wash: var(--series-2-wash);
+  --color-highlight: var(--highlight);
+  --color-highlight-ink: var(--highlight-ink);
+  --color-good: var(--good);
+  --color-good-ink: var(--good-ink);
+  --color-good-wash: var(--good-wash);
+  --color-warn: var(--warn);
+  --color-warn-ink: var(--warn-ink);
+  --color-warn-wash: var(--warn-wash);
+  --color-bad: var(--bad);
+  --color-bad-ink: var(--bad-ink);
+  --color-bad-wash: var(--bad-wash);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
   --color-accent-wash: var(--accent-wash);
   --color-accent-wash-2: var(--accent-wash-2);
-  --color-series-2: var(--series-2);
-  --color-series-2-wash: var(--series-2-wash);
-  --color-good: var(--good);
-  --color-good-wash: var(--good-wash);
-  --color-warn: var(--warn);
-  --color-warn-wash: var(--warn-wash);
-  --color-bad: var(--bad);
-  --color-bad-wash: var(--bad-wash);
 }
 
-/* A card: a white object on the soft ground, edged by a hairline ring rather than a
-   border so the radius stays clean. Cards replace plates on the dashboard. */
+/* A card: a white object on the grey ground, edged by a hairline ring rather than a
+   border so the radius stays clean. */
 .card { background: var(--surface); border-radius: 12px; box-shadow: var(--shadow-card); }
 
-/* Status pills: colour plus a dot plus the word, never colour alone. */
+/* The one button style: ink. */
+.btn-ink {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 36px; padding: 0 14px; border-radius: 9px;
+  background: var(--ink); color: var(--on-ink);
+  font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.btn-ink:hover { opacity: 0.88; }
+.btn-ink:active { transform: translateY(0.5px); }
+
+/* Pills: state by fill, with the word always present.
+     good  solid ink        warn  grey tint        bad   outlined, struck
+     note  grey tint with an ink dot               muted grey tint, grey text */
 .pill {
-  display: inline-flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; gap: 6px;
   height: 24px; padding: 0 9px; border-radius: 7px;
   font-size: 12px; font-weight: 500; white-space: nowrap;
+  border: 1px solid transparent;
 }
 .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
-.pill-good { background: var(--good-wash); color: var(--good); }
-.pill-warn { background: var(--warn-wash); color: var(--warn); }
-.pill-bad  { background: var(--bad-wash);  color: var(--bad); }
-.pill-note { background: var(--accent-wash); color: var(--accent-ink); }
+.pill-good { background: var(--ink); color: var(--on-ink); }
+.pill-warn { background: var(--surface-3); color: var(--ink); }
+.pill-bad  { background: transparent; border-color: var(--line-strong); color: var(--ink-2); text-decoration: line-through; }
+.pill-note { background: var(--surface-2); color: var(--ink); }
 .pill-muted { background: var(--surface-2); color: var(--ink-2); }
 
 html, body { background: var(--paper); color: var(--ink); }

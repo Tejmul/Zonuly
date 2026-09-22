@@ -37,7 +37,10 @@ type Net = {
 type Overview = {
   jobs: { jobs: number; embedded: number; scored: number; high_match: number };
   funnel: Record<string, number>;
-  quota: { daily_cap: number; sent_today: number; remaining_today: number; send_window: [number, number]; in_window: boolean; send_mode: string };
+  quota: {
+    daily_cap: number; sent_today: number; remaining_today: number; send_window: [number, number];
+    in_window: boolean; send_mode: string; sender_name?: string | null; sender_address?: string | null;
+  };
   by_source: Record<string, number>;
   new_this_week: number;
   companies: number;
@@ -65,7 +68,7 @@ const REGION_LABEL: Record<string, string> = {
   de: "Germany", nl: "Netherlands", unknown: "Not stated",
 };
 const HIRING: { key: string; label: string; color: string }[] = [
-  { key: "verified", label: "Proven on their own site", color: "var(--accent)" },
+  { key: "verified", label: "Proven on their own site", color: "var(--series-1)" },
   { key: "not_authorized", label: "Board says so, their site does not", color: "var(--line-strong)" },
   { key: "unchecked", label: "Not checked yet", color: "var(--surface-3)" },
   { key: "role_missing", label: "Hiring, but not this kind of role", color: "var(--ink-3)" },
@@ -104,6 +107,7 @@ export default function Dashboard() {
   const d = o.deltas;
   const f = o.funnel;
   const q = o.quota;
+  const senderLine = q.sender_name && q.sender_address ? `${q.sender_name} <${q.sender_address}>` : q.sender_address ?? null;
   const asOf = o.as_of ? new Date(o.as_of + "Z") : null;
 
   const bySource: Row[] = rank(o.by_source, SOURCE_LABEL);
@@ -132,7 +136,7 @@ export default function Dashboard() {
         <div className="flex flex-col items-end gap-1.5">
           <Link
             href="/companies"
-            className="group inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-accent px-3.5 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
+            className="btn-ink group"
           >
             Browse all companies
             <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
@@ -146,28 +150,28 @@ export default function Dashboard() {
         <Kpi
           hero
           icon={<Flag size={20} />}
-          tint="accent"
+          tint="highlight"
           value={readyCount}
           label="Ready to ask today"
           trail={<span className="text-[12.5px] text-ink-3">{nf(stats.near ?? 0)} one check away</span>}
         />
         <Kpi
           icon={<Building2 size={20} />}
-          tint="accent"
+          tint="stone"
           value={o.companies}
           label="Companies mapped"
           trail={d ? <Delta now={d.companies.this_week} before={d.companies.last_week} /> : null}
         />
         <Kpi
           icon={<Briefcase size={20} />}
-          tint="series"
+          tint="stone"
           value={o.jobs.jobs}
           label="Roles collected"
           trail={d ? <Delta now={d.jobs.this_week} before={d.jobs.last_week} /> : null}
         />
         <Kpi
           icon={<Users size={20} />}
-          tint="good"
+          tint="stone"
           value={o.contacts.total}
           label="People who could refer you"
           trail={d ? <Delta now={d.contacts.this_week} before={d.contacts.last_week} /> : null}
@@ -178,8 +182,8 @@ export default function Dashboard() {
       <Card>
         <div className="mb-3 flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-wrap gap-7">
-            <SeriesHead color="var(--accent)" name="Companies added" now={weekly ? last(weekly.companies) : o.companies} delta={d?.companies} />
-            <SeriesHead color="var(--series-2)" name="Roles collected" now={weekly ? last(weekly.jobs) : o.new_this_week} delta={d?.jobs} />
+            <SeriesHead color="var(--series-1)" name="Companies added" now={weekly ? last(weekly.companies) : o.companies} delta={d?.companies} />
+            <SeriesHead color="var(--series-2)" dashed name="Roles collected" now={weekly ? last(weekly.jobs) : o.new_this_week} delta={d?.jobs} />
           </div>
           <span className="inline-flex h-9 items-center rounded-lg bg-surface-2 px-3 text-[12.5px] font-medium text-ink-2">Weekly · last 8 weeks</span>
         </div>
@@ -187,8 +191,8 @@ export default function Dashboard() {
           <Trend
             labels={weekLabels}
             series={[
-              { name: "Companies added", data: weekly.companies, color: "var(--accent)" },
-              { name: "Roles collected", data: weekly.jobs, color: "var(--series-2)" },
+              { name: "Companies added", data: weekly.companies, color: "var(--series-1)" },
+              { name: "Roles collected", data: weekly.jobs, color: "var(--series-2)", dashed: true },
             ]}
             ariaLabel="Companies added and roles collected per week, last eight weeks"
           />
@@ -224,7 +228,7 @@ export default function Dashboard() {
             <ul className="flex flex-col">
               {ready.slice(0, 5).map((c, i) => (
                 <li key={c.id} className={`grid grid-cols-[40px_1fr_auto] items-center gap-3.5 py-3 ${i ? "border-t border-line" : "pt-1"}`}>
-                  <span className={`grid h-10 w-10 place-items-center rounded-full text-[13px] font-semibold ${i === 0 ? "bg-accent-wash text-accent-ink" : "bg-surface-2 text-ink-2"}`}>
+                  <span className={`grid h-10 w-10 place-items-center rounded-full text-[13px] font-semibold ${i === 0 ? "bg-highlight text-highlight-ink" : "bg-surface-2 text-ink-2"}`}>
                     {c.name.slice(0, 2)}
                   </span>
                   <div className="min-w-0">
@@ -238,7 +242,7 @@ export default function Dashboard() {
                   </div>
                   <div className="text-right">
                     <div className="tnum text-[14px] font-semibold">{c.leads}</div>
-                    <div className="text-[12px] text-good">leads</div>
+                    <div className="text-[12px] text-ink-3">leads</div>
                   </div>
                 </li>
               ))}
@@ -247,7 +251,7 @@ export default function Dashboard() {
           {ready.length > 5 ? (
             <p className="mt-3 text-[12.5px] text-ink-3">
               {nf(ready.length - 5)} more ·{" "}
-              <Link href="/companies" className="font-medium text-accent-ink hover:underline">Open all {nf(readyCount)} in Companies →</Link>
+              <Link href="/companies" className="font-medium text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">Open all {nf(readyCount)} in Companies →</Link>
             </p>
           ) : null}
         </Card>
@@ -291,7 +295,7 @@ export default function Dashboard() {
                   <dd className="tnum mt-0.5 text-[18px] font-semibold">{nf(leads.companies_with_lead)}</dd>
                 </div>
               </dl>
-              <Link href="/leads" className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-accent-ink hover:underline">
+              <Link href="/leads" className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">
                 Open all leads <ArrowRight size={13} />
               </Link>
             </>
@@ -315,6 +319,7 @@ export default function Dashboard() {
             <p className="mt-1 max-w-[60ch] text-[12.5px] text-ink-3">
               Nothing moves right without you clicking approve. Replies are read back from the same Gmail thread and classified.
             </p>
+            {senderLine ? <p className="mt-1 text-[12.5px] text-ink-2">Sends as <span className="font-medium text-ink">{senderLine}</span></p> : null}
           </div>
           {q.send_mode === "gmail" ? <span className="pill pill-good">Sending live</span> : <span className="pill pill-warn">Dry run</span>}
         </div>
@@ -332,11 +337,11 @@ export default function Dashboard() {
               <span><b className="font-semibold text-ink">{nf(q.sent_today)}</b> of {q.daily_cap} sent today</span>
               <span>Window {hour(q.send_window[0])} – {hour(q.send_window[1])}{q.in_window ? " · open now" : ""}</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-accent-wash">
-              <div className="h-full rounded-full bg-accent" style={{ width: `${q.daily_cap ? Math.min(100, (q.sent_today / q.daily_cap) * 100) : 0}%` }} />
+            <div className="h-2 overflow-hidden rounded-full bg-surface-3">
+              <div className="h-full rounded-full bg-ink" style={{ width: `${q.daily_cap ? Math.min(100, (q.sent_today / q.daily_cap) * 100) : 0}%` }} />
             </div>
           </div>
-          <Link href="/queue" className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-accent px-4 text-[13px] font-medium text-white transition-opacity hover:opacity-90">
+          <Link href="/queue" className="btn-ink">
             Review the queue
           </Link>
         </div>
@@ -410,9 +415,8 @@ function CardHead({ title, sub }: { title: string; sub?: string }) {
 }
 
 const TINT: Record<string, string> = {
-  accent: "bg-accent-wash text-accent-ink",
-  series: "bg-series-2-wash text-series-2",
-  good: "bg-good-wash text-good",
+  highlight: "bg-highlight text-highlight-ink",
+  stone: "bg-surface-2 text-ink-2",
 };
 
 function Kpi({ icon, tint, value, label, trail, hero = false }: {
@@ -434,11 +438,11 @@ function Kpi({ icon, tint, value, label, trail, hero = false }: {
   );
 }
 
-function SeriesHead({ color, name, now, delta }: { color: string; name: string; now: number; delta?: { this_week: number; last_week: number } }) {
+function SeriesHead({ color, name, now, delta, dashed = false }: { color: string; name: string; now: number; delta?: { this_week: number; last_week: number }; dashed?: boolean }) {
   return (
     <div>
       <div className="flex items-center gap-2 font-medium text-ink-2">
-        <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: color }} />
+        <span className="h-2.5 w-2.5 rounded-[3px]" style={dashed ? { border: `2px dashed ${color}` } : { background: color }} />
         {name}
       </div>
       <div className="mt-1 flex items-baseline gap-2.5">
@@ -460,7 +464,7 @@ function Triple({ label, value, divider = false }: { label: string; value: numbe
 
 function Chip({ children, accent = false }: { children: React.ReactNode; accent?: boolean }) {
   return (
-    <span className={`inline-flex h-[18px] items-center rounded-[5px] px-1.5 font-mono text-[10.5px] tracking-[0.03em] whitespace-nowrap ${accent ? "bg-accent-wash text-accent-ink" : "bg-surface-2 text-ink-2"}`}>
+    <span className={`inline-flex h-[18px] items-center rounded-[5px] px-1.5 font-mono text-[10.5px] tracking-[0.03em] whitespace-nowrap ${accent ? "bg-series-1-wash text-ink" : "bg-surface-2 text-ink-2"}`}>
       {children}
     </span>
   );
@@ -469,7 +473,7 @@ function Chip({ children, accent = false }: { children: React.ReactNode; accent?
 function Stage({ n, label, explain, first = false, accent = false }: { n: number; label: string; explain: string; first?: boolean; accent?: boolean }) {
   return (
     <div className={`py-2 ${first ? "" : "border-l border-line pl-3.5"}`}>
-      <div className={`tnum font-[family-name:var(--font-display)] text-[26px] font-semibold leading-none tracking-[-0.03em] ${accent ? "text-accent-ink" : ""}`}>{nf(n)}</div>
+      <div className={`tnum font-[family-name:var(--font-display)] text-[26px] font-semibold leading-none tracking-[-0.03em] ${accent ? "text-series-1" : ""}`}>{nf(n)}</div>
       <div className="mt-1.5 font-medium">{label}</div>
       <div className="mt-0.5 text-[12px] text-ink-3">{explain}</div>
     </div>
