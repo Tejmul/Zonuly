@@ -43,6 +43,8 @@ def push(event_id: int) -> dict:
     """Create (or update) the calendar entry for one Event. Never raises."""
     if not ENABLED:
         return {"skipped": "calendar disabled in config"}
+    if gmail.AUTH != "oauth":
+        return {"skipped": "Google Calendar needs the OAuth client; sending uses an app password. The event is on the Calendar page."}
     init_db()
     with get_session() as session:
         ev = session.get(Event, event_id)

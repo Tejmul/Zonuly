@@ -7,7 +7,7 @@
     python scripts/run.py score          # lexical gate + rubric-score
     python scripts/run.py find-contacts  # discover contacts at high-match companies
     python scripts/run.py draft          # queue referral drafts for review
-    python scripts/run.py gmail-auth     # one-time OAuth consent
+    python scripts/run.py gmail-verify   # check the app password signs in (gmail-auth for OAuth)
     python scripts/run.py send           # send approved drafts (respects cap + window)
     python scripts/run.py poll           # check Gmail for replies
     python scripts/run.py daily          # the whole ingestion cycle
@@ -75,7 +75,8 @@ def doctor() -> None:
     init_db()
     health = llm.health()
     profile_path = ROOT / CONFIG["profile_path"]
-    gh_token = bool((CONFIG.get("contacts") or {}).get("github_token"))
+    from jobhunter import secret
+    gh_token = bool(secret("GITHUB_TOKEN") or (CONFIG.get("contacts") or {}).get("github_token"))
 
     budget = health["budget"]
     checks = [
@@ -88,10 +89,11 @@ def doctor() -> None:
             "raise openrouter.daily_inr_cap / monthly_inr_cap in config.yaml",
         ),
         ("Resume parsed", profile_path.exists(), "run `python scripts/run.py profile`"),
-        ("GitHub token", gh_token, "optional: set contacts.github_token (60/hr -> 5000/hr)"),
+        ("GitHub token", gh_token, "optional: set GITHUB_TOKEN in .env (60/hr -> 5000/hr)"),
         ("Hunter.io key", hunter.available(), "optional: set contacts.hunter_api_key (25 lookups/mo)"),
-        ("Gmail client JSON", gmail.configured(), gmail.status()["hint"]),
-        ("Gmail authorized", gmail.authorized(), "run `python scripts/run.py gmail-auth`"),
+        (f"Gmail credentials ({gmail.AUTH})", gmail.configured(), gmail.status()["hint"]),
+        (f"Gmail sign-in as {gmail.ADDRESS or '?'}", gmail.authorized(),
+         "run `python scripts/run.py gmail-verify`" if gmail.AUTH == "app_password" else "run `python scripts/run.py gmail-auth`"),
     ]
     for name, ok, hint in checks:
         mark = "OK  " if ok else "MISS"
@@ -172,6 +174,14 @@ def draft(
         _echo(drafter.draft_for(contact, job))
     else:
         _echo(drafter.draft_for_high_matches(limit=limit, per_company=per_company))
+
+
+@app.command(name="gmail-verify")
+def gmail_verify() -> None:
+    """Sign in to Gmail with the app password and report whether Google accepts it."""
+    from jobhunter.outreach import gmail
+
+    _echo({"from": gmail.from_header(), **gmail.verify(force=True)})
 
 
 @app.command(name="gmail-auth")

@@ -179,7 +179,7 @@ export type Health = {
 };
 
 export type GmailStep = {
-  id: "project" | "consent" | "client" | "authorize" | "mode";
+  id: "address" | "twostep" | "password" | "verify" | "project" | "consent" | "client" | "authorize" | "mode";
   done: boolean;
   label: string;
   problem?: string | null;
@@ -187,15 +187,22 @@ export type GmailStep = {
 
 /** GET /api/gmail/status — the whole Settings → Email setup flow. */
 export type GmailSetup = {
+  /** app_password: SMTP/IMAP with a Gmail app password; oauth: the Gmail API client. */
+  auth: "app_password" | "oauth";
   configured: boolean;
   authorized: boolean;
-  credentials_file: string;
-  token_file: string;
-  client_present: boolean;
-  client_problem: string | null;
-  client_id_hint: string | null;
-  token_present: boolean;
-  token_stale: boolean;
+  /** outreach.user_name / user_email from config.yaml — what the mail says it is from */
+  display_name: string | null;
+  address_configured: string | null;
+  password_present?: boolean;
+  credentials_file?: string;
+  token_file?: string;
+  client_present?: boolean;
+  client_problem?: string | null;
+  client_id_hint?: string | null;
+  token_present?: boolean;
+  token_stale?: boolean;
+  /** the address Google actually accepted, once it has */
   address: string | null;
   reply_to: string | null;
   send_mode: "dryrun" | "gmail";

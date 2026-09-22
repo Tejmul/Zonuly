@@ -148,7 +148,10 @@ def record_reply(email_id: int, body: str, *, sender: str, message_id: str | Non
 def poll(limit: int = 50) -> dict:
     """Check every sent thread for new inbound messages."""
     init_db()
-    stats = {"threads_checked": 0, "new_replies": 0, "positive": 0, "negative": 0, "closed": 0, "neutral": 0}
+    stats = {"threads_checked": 0, "new_replies": 0, "bounced": 0, "positive": 0, "negative": 0, "closed": 0, "neutral": 0}
+
+    if gmail.AUTH == "app_password":
+        return _poll_imap(stats, limit)
 
     try:
         svc = gmail.service()
@@ -199,6 +202,66 @@ def poll(limit: int = 50) -> dict:
             stats["new_replies"] += 1
             stats[sentiment] += 1
             log.info("reply on thread %s from %s -> %s", thread_id, sender, sentiment)
+
+    log.info("reply poll: %s", stats)
+    return stats
+
+
+def _poll_imap(stats: dict, limit: int) -> dict:
+    """The same walk over IMAP: every sent thread, every message in it that is not ours.
+    A bounce marks the email failed (the address is dead) and is never classified —
+    a mailer-daemon is not a person saying no."""
+    if not gmail.configured():
+        return {**stats, "error": gmail.status()["hint"]}
+
+    with get_session() as session:
+        sent = session.exec(
+            select(Email).where(
+                col(Email.status).in_(["sent", "replied"]), col(Email.gmail_thread_id).is_not(None)
+            ).limit(limit)
+        ).all()
+        threads = [(e.id, e.gmail_thread_id, e.to_email) for e in sent]
+        known = {
+            r.gmail_message_id for r in session.exec(
+                select(Reply).where(col(Reply.gmail_message_id).is_not(None))
+            ).all()
+        }
+
+    for email_id, thread_id, to_email in threads:
+        if str(thread_id).startswith("dryrun:"):
+            continue
+        stats["threads_checked"] += 1
+        try:
+            messages = gmail.thread_messages(str(thread_id))
+        except gmail.GmailNotConfigured as e:
+            return {**stats, "error": str(e)}
+        except Exception as e:  # noqa: BLE001 — transient IMAP error; next poll retries
+            log.debug("thread %s unreadable: %s", thread_id, e)
+            continue
+
+        for msg in messages:
+            if msg["is_ours"] or msg["id"] in known:
+                continue
+            if msg["is_bounce"]:
+                with get_session() as session:
+                    email = session.get(Email, email_id)
+                    if email and email.status == "sent":
+                        email.status = "failed"
+                        email.error = f"bounced: {msg['text'][:200]}"
+                        session.add(email)
+                        session.commit()
+                known.add(msg["id"])
+                stats["bounced"] += 1
+                log.warning("bounce on thread %s (%s)", thread_id, to_email)
+                continue
+            body = _strip_quoted(msg["text"])
+            if not body:
+                continue
+            sentiment = record_reply(email_id, body, sender=msg["from"] or to_email, message_id=msg["id"])["sentiment"]
+            known.add(msg["id"])
+            stats["new_replies"] += 1
+            stats[sentiment] += 1
+            log.info("reply on thread %s from %s -> %s", thread_id, msg["from"], sentiment)
 
     log.info("reply poll: %s", stats)
     return stats

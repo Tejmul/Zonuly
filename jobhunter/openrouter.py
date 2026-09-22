@@ -361,6 +361,12 @@ def complete(
         # ask OpenRouter to return what the call actually cost rather than
         # estimating it from a price table that goes stale
         "usage": {"include": True},
+        # 2026-09-22: most of the free roster now "thinks" first, and the thinking is
+        # billed against max_tokens — nex-n2.5 spent 527 of 600 tokens reasoning and
+        # returned empty content on every draft. Every call here wants an answer, not
+        # a chain of thought, so reasoning is switched off at the request; models
+        # that cannot switch it off ignore the field.
+        "reasoning": {"enabled": False},
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}

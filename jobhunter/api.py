@@ -1257,6 +1257,29 @@ def gmail_install_credentials(payload: GmailClientUpload) -> dict:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
 
+class GmailAppPasswordIn(BaseModel):
+    password: str
+
+
+@app.post("/api/gmail/app-password")
+def gmail_install_app_password(payload: GmailAppPasswordIn) -> dict:
+    """Store the app password in .env (mode 600). Never echoed back."""
+    from jobhunter.outreach import gmail
+
+    try:
+        return gmail.install_app_password(payload.password)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@app.post("/api/gmail/verify")
+def gmail_verify() -> dict:
+    """Sign in over IMAP and SMTP now and report whether Google accepted it."""
+    from jobhunter.outreach import gmail
+
+    return {**gmail.verify(force=True), "setup": gmail.setup_status()}
+
+
 @app.post("/api/gmail/disconnect")
 def gmail_disconnect(remove_client: bool = False) -> dict:
     """Forget the token (and optionally the client) so a different account can be connected."""

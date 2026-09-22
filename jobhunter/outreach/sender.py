@@ -53,6 +53,7 @@ def _dryrun_send(email_id: int, to: str, subject: str, body: str) -> dict:
     OUTBOX.mkdir(exist_ok=True)
     path = OUTBOX / f"{email_id:05d}.eml"
     msg = EmailMessage()
+    msg["From"] = gmail.from_header()   # the rehearsal shows the same identity the real send will
     msg["To"] = to
     msg["Subject"] = subject
     msg["X-ZoNuLy-Mode"] = "dryrun"
@@ -95,6 +96,9 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
         thread_id = email.gmail_thread_id
         candidate_id = email.candidate_id
         guessed = (email.address_confidence or "verified") != "verified"
+        # a follow-up or reschedule threads under the mail it answers
+        parent = session.get(Email, email.parent_email_id) if email.parent_email_id else None
+        in_reply_to = parent.gmail_message_id if parent and (parent.gmail_message_id or "").startswith("<") else None
 
     if not ignore_window and not in_send_window():
         return {"error": f"outside send window {SEND_WINDOW[0]}:00-{SEND_WINDOW[1]}:00 local"}
@@ -105,7 +109,9 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
         return {"error": why}
 
     try:
-        if SEND_MODE == "gmail":
+        if SEND_MODE == "gmail" and gmail.AUTH == "app_password":
+            result = gmail.send(to, subject, body, in_reply_to=in_reply_to)
+        elif SEND_MODE == "gmail":
             svc = gmail.service()
             result = svc.users().messages().send(userId="me", body=_build_message(to, subject, body, thread_id)).execute()
         else:
@@ -214,6 +220,8 @@ def quota() -> dict:
         "send_window": SEND_WINDOW,
         "in_window": in_send_window(),
         "send_mode": SEND_MODE,
+        "sender_name": gmail.DISPLAY_NAME or None,
+        "sender_address": gmail.ADDRESS or None,
         "ledger": ledger.status(),
         "gmail": gmail.status(),
     }

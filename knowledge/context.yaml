@@ -1404,8 +1404,8 @@ features:
     serves: [constraint:send-cap-25]
     implemented_in: [module:jobhunter.outreach]
   - id: feature:gmail-api-own-account
-    label: Gmail API (OAuth) from the user's own account — needed for threading and reply reads
-    summary: Not SMTP, not Resend/SendGrid. Built; untested end to end because OAuth credentials don't exist yet.
+    label: The user's own Gmail, by app password — SMTP to send as "Tejmul Movin <tejmulmovin9@gmail.com>", IMAP (X-GM-THRID) to read the thread back
+    summary: 2026-09-22 — the OAuth route needed a Google Cloud project, verification of the restricted gmail.readonly scope and re-consent every 7 days, and never got done; an app password needs none of that, threads follow-ups by In-Reply-To, and bounces are detected from the mailer-daemon report. OAuth kept only for the Calendar push (gmail.auth: oauth). Built; awaiting the app password to run end to end.
     status: partial
     stage: stage:send
     proposed_by: [arch:plan, arch:architecture, arch:tools, arch:orchestration]

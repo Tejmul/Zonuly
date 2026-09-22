@@ -3,10 +3,14 @@ openrouter:
   base_url: https://openrouter.ai/api/v1
   default_alias: cheap
   free_only: true
+  # 2026-09-22: both MiniMax free ids vanished from the roster and nemotron-3-super spends
+  # its 500 output tokens thinking, so research JSON came back truncated. nex-n2.5 answered
+  # clean JSON in ~3s; gemma/qwen were at the free daily ceiling. Re-check with
+  # `python scripts/run.py models list --free` when a stage starts failing.
   aliases:
-    cheap: minimax/minimax-m2.7:free
-    judge: nvidia/nemotron-3-super-120b-a12b:free
-    writer: minimax/minimax-m3:free
+    cheap: nex-agi/nex-n2.5-mini:free
+    judge: nex-agi/nex-n2.5-pro:free
+    writer: nex-agi/nex-n2.5-pro:free
   requests_per_minute: 18
   daily_inr_cap: 100
   monthly_inr_cap: 2500
@@ -378,7 +382,7 @@ outreach:
   daily_send_cap: 25
   followup_after_days: 5
   max_followups: 1
-  send_mode: yolo
+  send_mode: dryrun
   guessed_daily_cap: 5
   draft_expiry_days: 7
   contact_cooldown_days: 30
@@ -397,6 +401,9 @@ outreach:
   - spylook.vercel.app
   user_email: tejmulmovin9@gmail.com
 gmail:
+  # app_password: SMTP + IMAP with a Gmail app password in .env (GMAIL_APP_PASSWORD).
+  # oauth: the Gmail API through a desktop-app client (needed only for the Calendar push).
+  auth: app_password
   credentials_file: secrets/gmail_credentials.json
   token_file: secrets/gmail_token.json
 calendar:

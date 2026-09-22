@@ -111,6 +111,25 @@ _EM_DASH = re.compile(r"\s*[—–]\s*")
 _GREETING_DUP = re.compile(r"^(hi|hey|hello|dear)\b", re.I)
 
 
+_HANDLE = re.compile(r"[\d_@]|^[a-z]+(?:-[a-z]+)+$")   # "kbysani-affirm", "jdoe_42": a login, not a name
+
+
+def greeting_name(name: str | None, email: str | None = None) -> str:
+    """The word after "Hi". A real name gives its first word; a GitHub handle or an
+    empty name falls back to the address ("kailash.bysani@affirm.com" -> "Kailash"),
+    and "there" when neither is usable. 2026-09-22: a draft opened "Hi kbysani"."""
+    raw = (name or "").strip()
+    if raw and " " in raw and not _HANDLE.search(raw.split()[0].lower()):
+        return raw.split()[0]
+    if raw and raw.isalpha() and not _HANDLE.search(raw.lower()) and len(raw) >= 3:
+        return raw
+    local = (email or "").split("@")[0].lower()
+    for token in re.split(r"[._\-+]", local):
+        if token.isalpha() and len(token) >= 3:
+            return token.capitalize()
+    return "there"
+
+
 def _clean_body(body: str, contact_name: str | None) -> str:
     body = _EM_DASH.sub(", ", body or "").strip()
     # models like to append their own sign-off; we add a real one
@@ -227,6 +246,7 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
                 return {"error": why}
 
         contact_name, contact_role, contact_email = contact.name, contact.role, contact.email
+        contact_name = greeting_name(contact_name, contact_email) if contact_name is None or _HANDLE.search(contact_name.lower()) else contact_name
         contact_evidence = contact.role_evidence or ""
         contact_conf = contact.confidence
         company_name = company.name if company else "your company"
@@ -371,7 +391,7 @@ def draft_followup(email_id: int) -> dict:
         contact = session.get(Contact, parent.contact_id)
         company = session.get(Company, parent.company_id)
         days = (utcnow() - (parent.sent_at or parent.created_at)).days
-        contact_name = contact.name if contact else None
+        contact_name = greeting_name(contact.name, contact.email) if contact else None
         payload = {
             "user_name": USER_NAME,
             "days": days,
