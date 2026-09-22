@@ -436,6 +436,10 @@ tick:
   facts_per_tick: 90
   levels_per_tick: 60
   exa_discovery_queries_per_day: 6
+# n8n Cloud runs the campaign email automation; Zonuly only fires its webhook.
+# The webhook URL is a credential and lives in .env (N8N_CAMPAIGN_WEBHOOK_URL).
+n8n:
+  timeout_seconds: 15
 api:
   host: 127.0.0.1
   port: 8000

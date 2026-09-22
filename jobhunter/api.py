@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from sqlmodel import col, func, select
 
 from jobhunter import CONFIG, ROOT, access
+from jobhunter.campaigns import router as campaigns_router
 from jobhunter.db import Company, Contact, Email, Job, Reply, get_session, init_db
 from jobhunter.research.routes import router as research_router
 
@@ -99,6 +100,8 @@ app.add_middleware(
 
 # Web research / data acquisition (Agent Reach backends) -> /api/research/*
 app.include_router(research_router)
+# Campaign start -> n8n webhook (the email automation lives there) -> /api/campaigns/*
+app.include_router(campaigns_router)
 
 
 # ---------------------------------------------------------------- task registry
@@ -264,7 +267,7 @@ def _json_or(raw: str | None, default):
 
 @app.get("/api/health")
 def health() -> dict:
-    from jobhunter import llm, matcher, scheduler
+    from jobhunter import llm, matcher, n8n, scheduler
     from jobhunter.contacts import hunter
     from jobhunter.research import backends
     from jobhunter.outreach import gmail, sender
@@ -274,6 +277,7 @@ def health() -> dict:
         "ok": True,
         "llm": llm.health(),
         "gmail": gmail.status(),
+        "n8n": n8n.status(),
         "quota": sender.quota(),
         "hunter": {"configured": hunter.available(), "lookups_left": hunter.budget_left()},
         # Resolved the way the callers resolve it (env first, then config). Reading
