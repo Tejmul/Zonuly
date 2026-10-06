@@ -14,6 +14,7 @@ import yaml
 from sqlmodel import Session, select
 
 from jobhunter import CONFIG, ROOT
+from jobhunter import admission
 from jobhunter import normalize as norm
 from jobhunter.db import Company, Job, get_session, init_db
 from jobhunter.scrapers import get_fetcher
@@ -32,6 +33,8 @@ class ScrapeStats:
     updated: int = 0
     per_source: dict[str, int] = field(default_factory=dict)
     errors: dict[str, str] = field(default_factory=dict)
+    # postings dropped because their company did not pass the admission gate, by reason
+    rejected: dict[str, int] = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         return {
@@ -41,6 +44,7 @@ class ScrapeStats:
             "updated": self.updated,
             "per_source": self.per_source,
             "errors": self.errors,
+            "rejected": self.rejected,
         }
 
 
@@ -58,24 +62,33 @@ def sync_companies() -> int:
     The ATS scrapers only know a board slug, not a website — but contact discovery
     needs the domain to scrape the team page and to guess email patterns. The seed
     file has both, so it gets written into the DB before any scraping happens.
+    A seed entry goes through the admission gate like any other source: a famous name
+    (OpenAI, Stripe, Databricks…) is not re-created every morning.
     """
     init_db()
-    seeded = 0
+    seeded = skipped = 0
     with get_session() as session:
         for entry in load_companies():
-            name = str(entry["name"]).strip()
-            company = session.exec(select(Company).where(Company.name == name)).first()
+            verdict = admission.admit(admission.Candidate(
+                name=str(entry["name"]).strip(), source="companies.yaml", website=entry.get("website")), session)
+            if not verdict.ok:
+                skipped += 1
+                log.debug("companies.yaml: %s skipped — %s", entry["name"], verdict.reason)
+                continue
+            company = verdict.existing
             if company is None:
-                company = Company(name=name)
+                company = Company(name=verdict.name)
                 seeded += 1
+            admission.stamp(company)
             company.website = company.website or entry.get("website")
             company.domain = company.domain or entry.get("domain") or _domain_of(entry.get("website"))
             company.ats = company.ats or entry.get("ats")
             company.ats_slug = company.ats_slug or entry.get("ats_slug")
             company.github_org = company.github_org or entry.get("github_org")
             session.add(company)
+            admission.remember(session, company)
         session.commit()
-    log.info("companies.yaml synced: %d new company rows", seeded)
+    log.info("companies.yaml synced: %d new company rows, %d not admitted (overrated / junk)", seeded, skipped)
     return seeded
 
 
@@ -89,7 +102,8 @@ def enabled_sources() -> list[str]:
 # ---------------------------------------------------------------- scrape
 
 async def scrape_async(sources: list[str] | None = None) -> tuple[list[RawJob], ScrapeStats]:
-    companies = load_companies()
+    # a famous company's board is not read at all: its postings would be dropped anyway
+    companies = [c for c in load_companies() if not admission.famous(str(c["name"]))]
     names = sources or enabled_sources()
     stats = ScrapeStats()
     jobs: list[RawJob] = []
@@ -132,16 +146,29 @@ def keep(job: RawJob) -> bool:
     return True
 
 
-def upsert_company(session: Session, job: RawJob) -> Company:
-    name = job.company_name.strip()
-    company = session.exec(select(Company).where(Company.name == name)).first()
+def upsert_company(session: Session, job: RawJob, *, open_roles: int = 1) -> tuple[Company | None, str]:
+    """(the company row, why) — or (None, why not) when the admission gate turns the
+    company away; its postings are then not stored. `open_roles` is how many postings
+    this batch carries for it, which counts as hiring evidence for a borderline company."""
+    trusted = job.ats or job.source in ("greenhouse", "lever", "ashby", "yc", "wellfound")
+    verdict = admission.admit(admission.Candidate(
+        name=job.company_name.strip(), source="ats" if trusted else job.source,
+        website=job.company_website,
+        # an HN post's first link is an apply link, not "their website"
+        website_is_link=job.source == "hn" or bool(job.extra.get("apply_url")),
+        open_roles=open_roles,
+    ), session)
+    if not verdict.ok:
+        return None, verdict.reason
+    company = verdict.existing
     if company is None:
-        company = Company(name=name)
+        company = Company(name=verdict.name)
         session.add(company)
+    admission.stamp(company, verdict if company.id is None else None)
 
-    if job.company_website and not company.website:
-        company.website = job.company_website
-        company.domain = _domain_of(job.company_website)
+    if verdict.website and not company.website:
+        company.website = verdict.website
+        company.domain = verdict.domain
     if job.ats and not company.ats:
         company.ats = job.ats
         company.ats_slug = job.ats_slug
@@ -157,15 +184,14 @@ def upsert_company(session: Session, job: RawJob) -> Company:
         company.hiring_claim_source = source
         company.hiring_claim_at = job.posted_at
     session.flush()
-    return company
+    admission.remember(session, company)
+    return company, verdict.reason
 
 
 def _domain_of(url: str | None) -> str | None:
-    if not url:
-        return None
-    host = url.split("//")[-1].split("/")[0].split("?")[0].lower()
-    host = host.removeprefix("www.")
-    return host or None
+    """The host of a company website — None for a job board, form, shortener or social
+    host, which is never the company's own site (admission.bogus_host)."""
+    return admission.domain_of(url)
 
 
 def persist(jobs: list[RawJob], stats: ScrapeStats) -> ScrapeStats:
@@ -183,18 +209,28 @@ def persist(jobs: list[RawJob], stats: ScrapeStats) -> ScrapeStats:
         if prior is None or len(j.description or "") > len(prior.description or ""):
             by_fp[fp] = j
 
+    per_company: dict[str, int] = {}
+    for j in by_fp.values():
+        per_company[j.company_name.strip()] = per_company.get(j.company_name.strip(), 0) + 1
+
     with get_session() as session:
-        seen_companies: dict[str, Company] = {}
+        seen_companies: dict[str, Company | None] = {}
         for fp, j in by_fp.items():
             cname = j.company_name.strip()
             if cname not in seen_companies:
-                seen_companies[cname] = upsert_company(session, j)
+                seen_companies[cname], why = upsert_company(session, j, open_roles=per_company.get(cname, 1))
+                if seen_companies[cname] is None:
+                    key = why.split(":")[0]
+                    stats.rejected[key] = stats.rejected.get(key, 0) + 1
             company = seen_companies[cname]
+            if company is None:
+                continue   # the gate turned the company away: its postings are not stored
+            cname = company.name
 
             existing = session.exec(select(Job).where(Job.url == j.url)).first()
             if existing is None:
                 existing = session.exec(
-                    select(Job).where(Job.fingerprint == fp, Job.company_name == cname)
+                    select(Job).where(Job.fingerprint == fp, (Job.company_name == cname) | (Job.company_id == company.id))
                 ).first()
 
             sal = norm.parse_salary(j.salary_raw, j.description)

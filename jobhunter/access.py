@@ -73,6 +73,11 @@ def _unrestricted() -> bool:
     return not PUBLIC or _operator.get()
 
 
+def can_read_private() -> bool:
+    """For a public route that carries an operator-only part (names, bodies)."""
+    return _unrestricted()
+
+
 def is_operator(headers) -> bool:
     """True when the caller presented the operator key.
 

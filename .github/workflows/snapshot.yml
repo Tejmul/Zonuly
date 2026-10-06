@@ -1,0 +1,19 @@
+# The public instance serves demo.db.gz. This fails the push when that snapshot no longer
+# matches the code (a new column, a new list, a list short of companies) — the way the
+# ★ India page went empty in production without anyone being told.
+name: snapshot
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen --no-dev
+      - run: gunzip -k demo.db.gz
+      - run: uv run python scripts/smoke.py --db demo.db

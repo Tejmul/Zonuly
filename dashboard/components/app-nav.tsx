@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Building2, Calendar, Globe, Inbox, LayoutGrid, Mail, MessageSquare, PanelLeft, Send, Settings, Star, Users,
+  Building2, Calendar, Globe, Inbox, LayoutGrid, Mail, MessageSquare, PanelLeft, Send, Settings, Star, Users, Workflow,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme";
 import { SearchBox } from "@/components/search-box";
@@ -22,6 +22,8 @@ const LINKS = [
   { href: "/atlas", label: "Atlas", icon: Globe },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/queue", label: "Queue", icon: Inbox },
+  // The send pipeline end to end — counts are public, so it is offered everywhere
+  { href: "/outreach", label: "Outreach", icon: Workflow },
   // Replies is real inbound mail from real people; the public instance refuses it, so
   // the tab is not offered there rather than leading to a 403.
   { href: "/replies", label: "Replies", icon: MessageSquare, operatorOnly: true },

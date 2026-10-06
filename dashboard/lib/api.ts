@@ -176,6 +176,29 @@ export type Health = {
   };
   /** Absent on older backends, so every read of it is optional. */
   access?: { public: boolean; read_only: boolean; operator_key_set: boolean };
+  /** Which database build the API is serving. Newer backends only; tolerate absence. */
+  snapshot?: {
+    built_at?: string | null;
+    git_sha?: string | null;
+    schema_ok?: boolean;
+    lists?: Record<string, number>;
+  } | null;
+};
+
+/** GET /api/outreach/pipeline — the send pipeline end to end, counts first. On the
+ *  public instance `recent` is empty: the counts are public, the people are not. */
+export type OutreachPipeline = {
+  stages: Partial<Record<"drafted" | "in_review" | "approved" | "rejected" | "sent" | "failed" | "bounced" | "replied", number>>;
+  sentiment: Partial<Record<"positive" | "neutral" | "negative" | "closed", number>>;
+  meetings?: number;
+  today?: { cap?: number; used?: number; guessed_cap?: number | null; guessed_used?: number | null };
+  send_mode: string;
+  gmail?: { connected: boolean; method: string | null; last_poll_at: string | null; last_poll_error: string | null };
+  n8n?: { configured: boolean };
+  recent?: {
+    email_id: number; company_name: string | null; contact_name: string | null; status: string;
+    sent_at: string | null; reply_sentiment: string | null; reply_at: string | null;
+  }[];
 };
 
 export type GmailStep = {
@@ -278,39 +301,63 @@ export const api = {
 
 /* ---------------------------------------------------------------- hooks */
 
-export function useApi<T>(path: string | null, deps: unknown[] = []) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const alive = useRef(true);
+type Slot<T> = { key: string | null; data: T | null; error: string | null; status: number | null };
 
-  const reload = useCallback(async () => {
-    if (!path) return;
-    setLoading(true);
-    try {
-      const result = await api.get<T>(path);
-      if (alive.current) {
-        setData(result);
-        setError(null);
-      }
-    } catch (e) {
-      if (alive.current) setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      if (alive.current) setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path]);
+/** GET a path and keep it fresh.
+ *
+ *  Two things this used to get wrong. A slow response for an old path could land after
+ *  a fast one for the new path and overwrite it — the table showed the previous filter's
+ *  rows under the new filter's heading. And it set loading state synchronously inside an
+ *  effect, which React 19 flags as a cascading render. Now every request is numbered and
+ *  aborted when superseded, only the latest may write, and "loading" is derived: the
+ *  page is loading whenever the result it holds is not for the request it last made. */
+export function useApi<T>(path: string | null, deps: unknown[] = []) {
+  const key = path === null ? null : [path, ...deps.map(String)].join("\u0000");
+  const [slot, setSlot] = useState<Slot<T>>({ key: null, data: null, error: null, status: null });
+  const [refreshing, setRefreshing] = useState(false);
+  const seq = useRef(0);
+  const inflight = useRef<AbortController | null>(null);
+
+  const run = useCallback((p: string, k: string): Promise<void> => {
+    inflight.current?.abort();
+    const ctrl = new AbortController();
+    inflight.current = ctrl;
+    const id = ++seq.current;
+    return request<T>(p, { signal: ctrl.signal })
+      .then(
+        (data) => {
+          if (id === seq.current) setSlot({ key: k, data, error: null, status: 200 });
+        },
+        (e: unknown) => {
+          // A superseded or unmounted request says nothing about the current one.
+          if (id !== seq.current || ctrl.signal.aborted) return;
+          setSlot((prev) => ({
+            key: k,
+            data: prev.data,
+            error: e instanceof Error ? e.message : String(e),
+            status: e instanceof ApiError ? e.status : 0,
+          }));
+        },
+      )
+      .finally(() => {
+        if (id === seq.current) setRefreshing(false);
+      });
+  }, []);
 
   useEffect(() => {
-    alive.current = true;
-    void reload();
-    return () => {
-      alive.current = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, ...deps]);
+    if (path === null || key === null) return;
+    void run(path, key);
+    return () => inflight.current?.abort();
+  }, [path, key, run]);
 
-  return { data, error, loading, reload };
+  const reload = useCallback(() => {
+    if (path === null || key === null) return Promise.resolve();
+    setRefreshing(true);
+    return run(path, key);
+  }, [path, key, run]);
+
+  const loading = key !== null && (slot.key !== key || refreshing);
+  return { data: slot.data, error: slot.key === key ? slot.error : null, status: slot.status, loading, reload };
 }
 
 /**

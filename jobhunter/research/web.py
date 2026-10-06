@@ -256,8 +256,12 @@ def search(
     category: str | None = None,
     days: int | None = None,
     include_domains: list[str] | None = None,
+    only: tuple[str, ...] | None = None,
 ) -> dict:
     """Semantic web search. Returns {query, backend, results: [...], error?}.
+
+    `only` restricts the backends tried (e.g. ("exa-mcp",) — the keyless hosted MCP —
+    so an hourly free job never falls through to the metered Exa API).
 
     `include_domains` restricts hits to those hosts (e.g. ["reddit.com"] to read what
     people say rather than what companies say). Exa-API only, like the two below.
@@ -286,6 +290,8 @@ def search(
     _errors.clear()
     timeout = timeout or backends.TIMEOUT
     for backend in backends.candidates("web_search"):
+        if only and backend not in only:
+            continue
         results: list[SearchResult] = []
         if backend == "exa-mcp":
             if category or days or include_domains:

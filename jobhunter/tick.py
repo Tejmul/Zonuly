@@ -4,10 +4,13 @@ FINAL-PLAN-V3 §6 / CHOKEPOINTS §9.1.8: an hourly job that takes a lock, does t
 useful bounded piece of work it can inside the day's budgets, and exits. Two kinds:
 
     free   keyless and unmetered — YC directory, job boards, roles, hiring verification,
-           the people hunt, pay re-read, grading. Hourly, and on wake.
+           website-finding for name-only companies, the dedup gate, the people hunt,
+           reply polling, pay re-read, grading and the priority regrade. Hourly, and on wake.
     paid   the capped channels — Exa (company facts, discovery), X (posts), and the model
-           passes (descriptions, origin stories). Daily just after the caps reset, and on
-           login. Every step reads its budget first and spends only what is left.
+           passes (descriptions, origin stories). The full run is daily just after the caps
+           reset; with `tick.paid_hourly` a smaller slice also runs at the end of every free
+           tick. Every capped channel is PACED: by hour h (0–23) it may have spent at most
+           cap × (h+1)/24 of its daily cap — the daily caps are spread, never raised.
 
 Every stage commits per item; a tick that is killed loses nothing and the next one
 resumes. Two ticks never overlap: an fcntl lock on data/tick.lock. Progress is written to
@@ -50,7 +53,13 @@ L = {
     "levels": int(_T.get("levels_per_tick", 60)),
     "linkedin": int(_T.get("linkedin_per_tick", 15)),
     "exa_queries": int(_T.get("exa_discovery_queries_per_day", 6)),
+    "websites": int(_T.get("websites_per_tick", 30)),
+    "facts_keyless": int(_T.get("facts_keyless_per_tick", 20)),
 }
+PAID_HOURLY = bool(_T.get("paid_hourly", True))
+# the one-off cleanup's merge/quarantine pass, hourly. Off until the first
+# `scripts/cleanup_companies.py --apply` has been reviewed and run by hand.
+HYGIENE_HOURLY = bool(_T.get("company_hygiene", False))
 
 
 # ------------------------------------------------------------------ bookkeeping
@@ -137,17 +146,69 @@ def full_scrape_if_due() -> dict:
     return out
 
 
+def poll_replies() -> dict:
+    """Read Gmail for replies — hourly, so replies land even when the API (and its
+    APScheduler) is not running. A no-op with an error dict when Gmail is not configured;
+    never raises. The time and the error go to the `setting` table for the dashboard."""
+    from jobhunter.db import get_session, set_setting
+
+    try:
+        from jobhunter.outreach import tracker
+
+        out = tracker.poll()
+    except Exception as e:  # noqa: BLE001 — a mailbox problem must not end the tick
+        log.warning("reply poll failed: %s", e)
+        out = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+    try:
+        with get_session() as session:
+            set_setting(session, "outreach:last_poll_at", datetime.now().isoformat(timespec="seconds"))
+            set_setting(session, "outreach:last_poll_error", str(out.get("error") or ""))
+    except Exception as e:  # noqa: BLE001
+        log.warning("reply poll: could not record the poll time: %s", e)
+    return out
+
+
+def hygiene_step() -> dict:
+    """The dedup gate, hourly: name keys for new rows always; the full merge/quarantine
+    pass only once `tick.company_hygiene` is switched on."""
+    from jobhunter import hygiene
+
+    out: dict = {"name_keys": hygiene.backfill_keys()}
+    if HYGIENE_HOURLY:
+        res = hygiene.run(dry_run=False)
+        out["applied"] = {k: v for k, v in (res.get("applied") or {}).items() if k != "regrade"}
+    return out
+
+
+def _mark_empty() -> dict:
+    from jobhunter import hygiene
+
+    return hygiene.mark_empty()
+
+
 def run_free(budget_s: int = 1800) -> dict:
     """Keyless work, in the order the 2,000-target needs it: leads, then proof, then fresh companies."""
-    from jobhunter import harvest, hiring_verify, targeting
+    from jobhunter import enrich, harvest, hiring_verify, targeting
 
     s: dict = {"kind": "free", "started": datetime.now().isoformat(timespec="seconds")}
     t0 = time.time()
+    # replies first: cheap, and a "yes" should never wait behind a scrape
+    _step(s, "poll_replies", poll_replies)
     # the daily refresh of every board goes first: it is the one thing that must happen
     # today, and the budget checks below would otherwise let a slow tick starve it
     _step(s, "full_scrape", full_scrape_if_due)
+    _step(s, "hygiene", hygiene_step)
+    # the companies we hold nothing about go to the front of every queue below
+    _step(s, "scrape_first", _mark_empty)
+    # priority before the queues read it: overrated, priority score, city for every row
+    _step(s, "priority", targeting.refresh_priority)
     # free discovery: funding-news RSS (amounts + dates, no Exa) then its boards/roles
     _step(s, "funding_rss", harvest.admit_funding_rss)
+    # name-only companies (funding feeds, X, directories) get a verified website, keyless:
+    # the hosted Exa MCP search + a direct fetch that must name the company
+    _step(s, "websites", enrich.find_websites, limit=L["websites"], keyless=True)
+    if L["facts_keyless"]:
+        _step(s, "facts_keyless", lambda: _count(enrich.facts_pending(limit=L["facts_keyless"], keyless=True)))
     _step(s, "probe", harvest.probe_ats)
     _step(s, "roles", harvest.scrape_roles)
     _step(s, "people", harvest.find_people, limit=L["people"])
@@ -165,43 +226,109 @@ def run_free(budget_s: int = 1800) -> dict:
         _step(s, "people_no_roles", harvest.find_people, limit=L["people"] // 2, require_roles=False)
     _step(s, "pay", targeting.extract_job_pay, only_missing=True)
     _step(s, "grade", targeting.grade_companies, regrade=False)
+    _step(s, "priority_after", targeting.refresh_priority)
+    if PAID_HOURLY and time.time() - t0 < budget_s:
+        s["paid_slice"] = run_paid(hourly=True)
     s["status"] = harvest.status()
     return s
 
 
-def run_paid() -> dict:
-    """The capped channels, each reading its budget first."""
-    from jobhunter import enrich, harvest
+# ------------------------------------------------------------------ pacing the capped channels
+
+PACE_KEY = "tick:paid_used"
+
+
+def paced(cap: int, used: int, *, hour: int | None = None) -> int:
+    """How much of a daily cap may be spent now: by hour h, at most cap × (h+1)/24 in
+    total. A tick that missed hours catches up; nothing ever exceeds the daily cap."""
+    import math
+
+    h = datetime.now().hour if hour is None else hour
+    return max(0, min(cap, math.ceil(cap * (h + 1) / 24)) - used)
+
+
+def _used_today() -> dict:
+    from jobhunter.db import get_session, get_setting
+
+    with get_session() as s:
+        raw = get_setting(s, PACE_KEY, "")
+    try:
+        data = json.loads(raw) if raw else {}
+    except json.JSONDecodeError:
+        data = {}
+    today = datetime.now().strftime("%Y-%m-%d")
+    return data if data.get("day") == today else {"day": today}
+
+
+def _spend(key: str, n: int) -> None:
+    from jobhunter.db import get_session, set_setting
+
+    data = _used_today()
+    data[key] = int(data.get(key, 0)) + int(n)
+    with get_session() as s:
+        set_setting(s, PACE_KEY, json.dumps(data))
+
+
+def run_paid(hourly: bool = False) -> dict:
+    """The capped channels, each reading its budget first and spending only its paced share.
+
+    The daily run (06:15) also does discovery (Exa queries, X posts), the full regrade and
+    the graph sync; an hourly slice does only the paced per-company passes."""
+    from jobhunter import enrich, harvest, targeting
     from jobhunter.research import web, x_search
 
-    s: dict = {"kind": "paid", "started": datetime.now().isoformat(timespec="seconds"),
-               "budgets_before": {"exa": web.exa_budget(), "x": x_search.budget()}}
-    # discovery first: a handful of rotating Exa queries a day keeps new companies arriving
-    day = datetime.now().timetuple().tm_yday
-    pool = harvest.DEFAULT_EXA_QUERIES
-    todays = [pool[(day * L["exa_queries"] + i) % len(pool)] for i in range(L["exa_queries"])]
-    _step(s, "exa_discovery", harvest.admit_exa, todays)
-    if x_search.session_present():
-        _step(s, "x_posts", harvest.admit_x)
-    _step(s, "probe", harvest.probe_ats)
-    _step(s, "roles", harvest.scrape_roles)
-    # the company card (headcount, HQ, round) for companies with roles — the pay bottleneck
-    facts_n = min(L["facts"], max(0, web.exa_budget()["left"] - 5))
+    s: dict = {"kind": "paid-slice" if hourly else "paid", "started": datetime.now().isoformat(timespec="seconds"),
+               "budgets_before": {"exa": web.exa_budget(), "x": x_search.budget(), "scrapedo": web.scrapedo_budget()}}
+    used = _used_today()
+    # paced only when slices run hourly; otherwise the one daily run may use the whole day
+    pace = paced if (PAID_HOURLY or hourly) else (lambda cap, spent: max(0, cap - spent))
+    if not hourly:
+        # discovery first: a handful of rotating Exa queries a day keeps new companies arriving
+        day = datetime.now().timetuple().tm_yday
+        pool = harvest.DEFAULT_EXA_QUERIES
+        todays = [pool[(day * L["exa_queries"] + i) % len(pool)] for i in range(L["exa_queries"])]
+        if not used.get("discovery"):
+            _step(s, "exa_discovery", harvest.admit_exa, todays)
+            if x_search.session_present():
+                _step(s, "x_posts", harvest.admit_x)
+            _spend("discovery", 1)
+        _step(s, "probe", harvest.probe_ats)
+        _step(s, "roles", harvest.scrape_roles)
+    # the company card (round, amount, date, HQ, website) — Exa's metered company index,
+    # inside the paced share of exa_daily_cap
+    exa = web.exa_budget()
+    # a lookup can cost two searches (domain-filtered, then open), so half the Exa share
+    facts_n = min(pace(L["facts"], int(used.get("facts", 0))), pace(exa["cap"], exa["used"]) // 2)
     if facts_n:
-        _step(s, "facts", lambda: {"companies": len(enrich.facts_pending(limit=facts_n))})
-    # the model passes: descriptions for bare sites, then origin stories
-    _step(s, "describe", lambda: _count(enrich.enrich_pending(limit=L["describe"], use_search=False, missing="description")))
-    _step(s, "story", lambda: _count(enrich.enrich_pending(limit=L["story"], use_search=False, missing="story")))
-    # levels.fyi pay via scrape.do — the fix for "pay unknown" on mid-size companies
+        res = enrich.facts_pending(limit=facts_n)
+        _spend("facts", len(res))
+        s["facts"] = _count(res)
+    # the model passes: descriptions for bare sites, then origin stories (free models,
+    # capped in INR by the OpenRouter ledger; paced here so 18 rpm is never the wall)
+    n = pace(L["describe"], int(used.get("describe", 0)))
+    if n:
+        res = enrich.enrich_pending(limit=n, use_search=False, missing="description")
+        _spend("describe", len(res))
+        s["describe"] = _count(res)
+    n = pace(L["story"], int(used.get("story", 0)))
+    if n:
+        res = enrich.enrich_pending(limit=n, use_search=False, missing="story")
+        _spend("story", len(res))
+        s["story"] = _count(res)
+    # levels.fyi pay via scrape.do — inside the paced share of scrapedo_daily
     from jobhunter import levels
 
-    _step(s, "levels", lambda: levels.lookup_pending(limit=L["levels"]))
-    from jobhunter import targeting
-
-    _step(s, "grade", targeting.grade_companies, regrade=True)
-    _step(s, "kg", _kg_sync)
-    s["budgets_after"] = {"exa": web.exa_budget(), "x": x_search.budget()}
-    s["status"] = harvest.status()
+    sd = web.scrapedo_budget()
+    n = min(pace(L["levels"], int(used.get("levels", 0))),
+            pace(sd["daily_cap"], sd["daily_cap"] - sd["daily_left"]))
+    if n:
+        _step(s, "levels", lambda: levels.lookup_pending(limit=n))
+        _spend("levels", n)
+    if not hourly:
+        _step(s, "grade", targeting.grade_companies, regrade=True)
+        _step(s, "kg", _kg_sync)
+        s["status"] = harvest.status()
+    s["budgets_after"] = {"exa": web.exa_budget(), "x": x_search.budget(), "scrapedo": web.scrapedo_budget()}
     return s
 
 
@@ -286,6 +413,8 @@ def status() -> dict:
     out = {"lock": LOCK.read_text().strip() if LOCK.exists() else None, "python": PYTHON}
     r = subprocess.run(["launchctl", "list"], capture_output=True, text=True)
     loaded = {ln.split("\t")[-1]: ln.split("\t")[0] for ln in r.stdout.splitlines() if LABEL in ln}
+    out["pacing"] = {"paid_hourly": PAID_HOURLY, "used_today": _used_today(),
+                     "per_day": {k: L[k] for k in ("facts", "describe", "story", "levels")}}
     for kind in ("free", "paid"):
         label = f"{LABEL}.{kind}"
         out[kind] = {

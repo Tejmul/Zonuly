@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Check, Send, Sparkles, X } from "lucide-react";
 import { api, useApi, useTaskWatcher, type Email, type Quota } from "@/lib/api";
 import { relTime } from "@/lib/utils";
@@ -40,12 +40,15 @@ export default function QueuePage() {
   const list = drafts.data ?? [];
   const active = list.find((e) => e.id === activeId) ?? list[0] ?? null;
 
-  useEffect(() => {
-    if (active) {
-      setSubject(active.subject);
-      setBody(active.body);
-    }
-  }, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A different draft selected: load its text into the editor. Adjusted during
+  // render against the last id seen rather than in an effect, so the editor never
+  // shows the previous draft's text for a frame.
+  const [loadedId, setLoadedId] = useState<number | null>(null);
+  if (active && active.id !== loadedId) {
+    setLoadedId(active.id);
+    setSubject(active.subject);
+    setBody(active.body);
+  }
 
   async function act(kind: "approve" | "reject") {
     if (!active) return;

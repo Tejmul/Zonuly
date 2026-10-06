@@ -9,12 +9,14 @@ MOTIV §4 step 1 at volume. Three keyless-or-cheap sources feed one admission ga
         research.exa_daily_cap (the key is a $10 free tier with nothing behind it)
   x     posts already found by `research x` — claims for hiring_verify, never evidence
 
-Admission is targeting's rules applied *before* a row exists: a hyped name is skipped,
-a region outside the configured ones is skipped, a team above `max_team` is skipped
-(not underrated any more). What gets in becomes a Company row carrying the evidence it
-arrived with — nothing is stated more firmly than the source said it. funding_stage is
-set to "seed" only for a YC batch inside targeting.funding.max_age_months; an older
-batch is just a note, because the company may have raised three rounds since.
+Admission is admission.admit() applied *before* a row exists: a junk or headline name is
+cleaned or refused, a famous / listed / mega-funded company is refused (overrated), a
+twin of an existing row is merged into it, and a region outside the configured ones is
+skipped. Headcount is never a gate (2026-10-06). What gets in becomes a Company row
+carrying the evidence it arrived with — nothing is stated more firmly than the source said
+it. funding_stage is set to "Seed" only for a YC batch inside
+targeting.funding.max_age_months; an older batch is just a note, because the company may
+have raised three rounds since.
 
 Then, per company and in cost order: ATS probe (free JSON, and the strongest possible
 hiring proof — their own live board) → roles from that board through pipeline.persist,
@@ -39,6 +41,8 @@ import httpx
 from sqlmodel import col, select
 
 from jobhunter import CONFIG
+from jobhunter import admission
+from jobhunter import backoff
 from jobhunter import pipeline
 from jobhunter import targeting
 from jobhunter.db import Company, Contact, Job, get_session, init_db, utcnow
@@ -51,7 +55,6 @@ log = logging.getLogger(__name__)
 
 _H = CONFIG.get("harvest") or {}
 YC_DIRECTORY = "https://yc-oss.github.io/api/companies/all.json"
-MAX_TEAM = int(_H.get("max_team", 200))
 REGIONS_OK: set[str] = set(_H.get("regions") or ["us", "uk", "de", "nl", "eu", "india", "remote"])
 FUNDING_MAX_MONTHS = int(((CONFIG.get("targeting") or {}).get("funding") or {}).get("max_age_months", 30))
 
@@ -131,51 +134,47 @@ def _first_sentence(text: str | None, limit: int = 300) -> str | None:
     return first[:limit] or None
 
 
-_NAME_SUFFIX = re.compile(r"\b(inc|llc|ltd|labs?|technologies|technology|ai|io|corp|gmbh|the|co)\b", re.I)
-
-
 def _norm_name(name: str) -> str:
-    """A company's identity key: lowercase, no punctuation, no corporate suffix. So
-    'RevenueCat', 'Revenuecat' and 'RevenueCat, Inc.' are one company, not three."""
-    n = re.sub(r"[^a-z0-9 ]", " ", (name or "").lower())
-    n = _NAME_SUFFIX.sub(" ", n)
-    return re.sub(r"\s+", " ", n).strip()
-
-
-# cache the normalized index once per _upsert batch, rebuilt lazily when it goes stale
-_NORM_INDEX: dict[str, int] | None = None
+    """A company's identity key — admission.name_key, kept under its old name."""
+    return admission.name_key(name)
 
 
 def _find_company(session, name: str) -> Company | None:
-    """Exact-name first, then a normalized-name match — the anti-duplicate gate."""
-    exact = session.exec(select(Company).where(Company.name == name)).first()
-    if exact:
-        return exact
-    key = _norm_name(name)
-    if not key:
-        return None
-    global _NORM_INDEX
-    if _NORM_INDEX is None:
-        _NORM_INDEX = {}
-        for cid, cname in session.exec(select(Company.id, Company.name)).all():
-            _NORM_INDEX.setdefault(_norm_name(cname), cid)
-    cid = _NORM_INDEX.get(key)
-    return session.get(Company, cid) if cid else None
+    """Exact name, then the normalized name key — the anti-duplicate gate. The index
+    lives on the session (admission._index), so threads never share a stale copy."""
+    return admission.find_existing(session, name)
+
+
+def _skip_key(reason: str) -> str:
+    return "junk name" if reason.startswith("junk name") else reason.split(":")[0].split(" — ")[0]
 
 
 def _upsert(session, *, name: str, website: str | None, source: str, description: str | None,
             region: str | None, note: str, funding: dict | None = None,
             claim: dict | None = None, story: str | None = None, story_evidence: str | None = None,
-            team_size: int | None = None, stats: HarvestStats) -> Company:
-    """Create or fill-in-the-blanks. Never overwrites something already known."""
-    company = _find_company(session, name)
+            team_size: int | None = None, stats: HarvestStats, headline: bool = False,
+            website_is_link: bool = False) -> Company | None:
+    """Create or fill-in-the-blanks through the admission gate. None when the gate says
+    no (junk name, overrated, quarantined) — the reason is counted in stats.skipped.
+    Never overwrites something already known, except that a newer round replaces an
+    older one."""
+    fund = funding or {}
+    verdict = admission.admit(admission.Candidate(
+        name=name, source=source, website=website, website_is_link=website_is_link, headline=headline,
+        stage=fund.get("stage"), amount_usd_m=fund.get("amount_usd_m"), total_usd_m=fund.get("total_usd_m"),
+        valuation_usd_m=fund.get("valuation_usd_m"), announced=fund.get("announced"),
+        evidence=fund.get("evidence"),
+    ), session)
+    if not verdict.ok:
+        stats.skip(_skip_key(verdict.reason))
+        return None
+    company = verdict.existing
     new = company is None
     if new:
-        company = Company(name=name)
-        if _NORM_INDEX is not None:
-            _NORM_INDEX[_norm_name(name)] = -1   # reserve the key so a twin in the same batch matches
-    company.website = company.website or website
-    company.domain = company.domain or pipeline._domain_of(website)
+        company = Company(name=verdict.name)
+    admission.stamp(company, verdict if new else None)
+    company.website = company.website or verdict.website
+    company.domain = company.domain or verdict.domain
     company.description = company.description or description
     company.hq_region = company.hq_region or region
     if story and not company.story:
@@ -184,9 +183,7 @@ def _upsert(session, *, name: str, website: str | None, source: str, description
     if team_size and not company.team_size:
         company.team_size = int(team_size)
     if funding:
-        company.funding_stage = company.funding_stage or funding.get("stage")
-        company.funding_announced = company.funding_announced or funding.get("announced")
-        company.funding_evidence = company.funding_evidence or funding.get("evidence")
+        _apply_funding(company, funding)
     if claim and not company.hiring_claim_url:
         # the hiring post on record: who said they are hiring, and where
         company.hiring_claim = claim.get("text")
@@ -197,11 +194,37 @@ def _upsert(session, *, name: str, website: str | None, source: str, description
     if tag not in (company.notes or ""):
         company.notes = f"{company.notes}\n{tag}".strip() if company.notes else tag
     session.add(company)
+    session.flush()
+    admission.remember(session, company)
     if new:
         stats.admitted += 1
     else:
         stats.updated += 1
     return company
+
+
+def _apply_funding(company: Company, funding: dict) -> None:
+    """Write a round onto a row: the stage in the one vocabulary, the amount (feeds carry
+    it — it used to be dropped here), the date, the quote. Blanks are filled; a round
+    announced later than the one on record replaces it."""
+    stage = admission.normalize_stage(funding.get("stage"))
+    announced = funding.get("announced")
+    newer = bool(announced and company.funding_announced and str(announced) > str(company.funding_announced))
+    if newer or not (company.funding_stage or company.funding_amount_usd_m):
+        company.funding_stage = stage or (None if newer else company.funding_stage)
+        amt = funding.get("amount_usd_m")
+        company.funding_amount_usd_m = float(amt) if amt else (None if newer else company.funding_amount_usd_m)
+        company.funding_announced = announced or company.funding_announced
+        company.funding_evidence = funding.get("evidence") or company.funding_evidence
+    else:
+        company.funding_stage = company.funding_stage or stage
+        company.funding_announced = company.funding_announced or announced
+        company.funding_evidence = company.funding_evidence or funding.get("evidence")
+    if funding.get("total_usd_m") and not company.funding_total_usd_m:
+        company.funding_total_usd_m = float(funding["total_usd_m"])
+    if funding.get("valuation_usd_m") and not company.valuation_usd_m:
+        company.valuation_usd_m = float(funding["valuation_usd_m"])
+        company.valuation_evidence = company.valuation_evidence or funding.get("evidence")
 
 
 # ------------------------------------------------------------------ source: YC directory
@@ -212,11 +235,7 @@ def _yc_fits(c: dict, stats: HarvestStats) -> tuple[str | None, str | None]:
         return None, "not hiring / inactive"
     if (c.get("stage") or "").lower() in ("public", "acquired"):
         return None, "public or acquired"
-    if (c.get("team_size") or 0) > MAX_TEAM:
-        return None, f"team > {MAX_TEAM}"
-    underrated, _ = targeting.hype_check(c.get("name") or "")
-    if not underrated:
-        return None, "hyped name"
+    # headcount is not a gate any more (2026-10-06); fame is, and admit() checks it
     region = targeting.region_of(" ".join(c.get("regions") or []), " ".join(c.get("all_locations") or []))
     if region not in REGIONS_OK:
         return None, "region outside targets"
@@ -258,7 +277,7 @@ def admit_yc(limit: int | None = None, *, timeout: int = 90) -> HarvestStats:
             age = _months_since(announced)
             funding = None
             if age is not None and age <= FUNDING_MAX_MONTHS:
-                funding = {"stage": "seed", "announced": announced,
+                funding = {"stage": "Seed", "announced": announced,
                            "evidence": f"YC {c.get('batch')} (yc-oss directory) — batch investment, seed-stage"}
             note = (f"YC {c.get('batch')}; team {c.get('team_size') or '?'}; "
                     f"{', '.join((c.get('industries') or [])[:3])}; regions {', '.join((c.get('regions') or [])[:3])}")
@@ -322,16 +341,12 @@ def admit_exa(queries: list[str] | None = None, *, per_query: int = 25, fresh: b
                 stats.seen += 1
                 url = r.get("url") or ""
                 host = (urlparse(url).hostname or "").lower()
-                if not host or _NOT_A_SITE.search(host):
+                if not host or _NOT_A_SITE.search(host) or admission.bogus_host(host.removeprefix("www.")):
                     stats.skip("not the company's own site")
                     continue
                 name = _clean_name(r.get("title") or "")
                 if not name:
                     stats.skip("no usable name in title")
-                    continue
-                underrated, _ = targeting.hype_check(name)
-                if not underrated:
-                    stats.skip("hyped name")
                     continue
                 snippet = r.get("snippet") or ""
                 region = targeting.region_of(snippet, q)
@@ -394,7 +409,7 @@ def _x_extract(post: dict) -> dict | None:
             _X_SYSTEM, temperature=0.0, alias="cheap", purpose="x-hiring-post", default=None,
         )
     except Exception as e:  # noqa: BLE001
-        log.debug("x extract failed: %s", e)
+        log.warning("x extract failed (model error, not an empty post): %s", e)
         return None
     if not isinstance(data, dict) or not data.get("is_hiring_post"):
         return None
@@ -451,10 +466,6 @@ def admit_x(queries: list[str] | None = None, *, per_query: int = 20, fresh: boo
                 if name.startswith("@") or name.lower().lstrip("@") == (post.get("handle") or "").lower():
                     stats.skip("company is the poster's own handle")
                     continue
-                underrated, _ = targeting.hype_check(name)
-                if not underrated:
-                    stats.skip("hyped name")
-                    continue
                 region = "remote" if data.get("remote") else targeting.region_of(
                     data.get("location"), post.get("text"))
                 if region not in REGIONS_OK:
@@ -469,6 +480,8 @@ def admit_x(queries: list[str] | None = None, *, per_query: int = 20, fresh: boo
                          f"evidence: {str(data.get('evidence') or '')[:120]}",
                     claim=claim, stats=stats,
                 )
+                if company is None:
+                    continue
                 if company.hiring_claim_source == "x" and not company.hiring_claim_at:
                     company.hiring_claim_at = _x_published(post.get("published"))
                 if roles and not company.hiring_claim:
@@ -488,8 +501,9 @@ _PROBED_NONE = "[ats] probed: no public board"
 _ROLES_READ = "[roles] board read"
 
 
-async def _probe_one(http: httpx.AsyncClient, cid: int, name: str, website: str | None) -> tuple[int, tuple | None]:
-    return cid, await discover.find_ats(http, name, website)
+async def _probe_one(http: httpx.AsyncClient, cid: int, name: str, website: str | None) -> tuple[int, tuple | None, int]:
+    hit, errors = await discover.find_ats_status(http, name, website)
+    return cid, hit, errors
 
 
 def probe_ats(limit: int | None = None, *, concurrency: int = 6,
@@ -504,12 +518,16 @@ def probe_ats(limit: int | None = None, *, concurrency: int = 6,
     """
     init_db()
     with get_session() as session:
-        stmt = select(Company).where(col(Company.ats).is_(None))
+        stmt = select(Company).where(col(Company.ats).is_(None), col(Company.status).is_(None))
         if company_ids:
             stmt = stmt.where(col(Company.id).in_(company_ids))
+        else:
+            stmt = stmt.where(col(Company.overrated).is_not(True))
         rows = session.exec(stmt).all()
+        rows.sort(key=lambda c: -(c.priority_score or 0))
         pending = [(c.id, c.name, c.website) for c in rows
-                   if (c.website or c.name) and (company_ids or _PROBED_NONE not in (c.notes or ""))]
+                   if (c.website or c.name) and (company_ids or (
+                       _PROBED_NONE not in (c.notes or "") and backoff.due(c, "ats-probe")))]
         if limit:
             pending = pending[:limit]
 
@@ -518,12 +536,12 @@ def probe_ats(limit: int | None = None, *, concurrency: int = 6,
             return await gather_limited([_probe_one(http, *p) for p in pending], limit=concurrency)
 
     results = asyncio.run(run()) if pending else []
-    found = 0
+    found = retry = 0
     with get_session() as session:
         for item in results:
             if not item:
                 continue
-            cid, hit = item
+            cid, hit, errors = item
             company = session.get(Company, cid)
             if company is None:
                 continue
@@ -542,11 +560,17 @@ def probe_ats(limit: int | None = None, *, concurrency: int = 6,
                     company.hiring_claim_source = "ats"
                     company.hiring_claim_at = utcnow()
                 found += 1
+                backoff.ok(company, "ats-probe")
+            elif errors:
+                # timeouts / 429 / 5xx: we could not tell, so it is not "no board" — retry later
+                backoff.fail(company, "ats-probe", f"{errors} probe(s) errored")
+                retry += 1
             else:
                 company.notes = f"{company.notes}\n{_PROBED_NONE}".strip() if company.notes else _PROBED_NONE
             session.add(company)
         session.commit()
-    out = {"probed": len(pending), "boards_found": found, "no_board": len(pending) - found}
+    out = {"probed": len(pending), "boards_found": found, "no_board": len(pending) - found - retry,
+           "retry_later": retry}
     log.info("harvest probe: %s", out)
     return out
 
@@ -615,23 +639,26 @@ def find_people(limit: int = 200, *, tiers: tuple[str, ...] = ("tier1", "tier2",
     init_db()
     cutoff = utcnow() - timedelta(days=refresh_days)
     with get_session() as session:
-        rows = session.exec(select(Company)).all()
+        rows = session.exec(select(Company).where(col(Company.status).is_(None))).all()
         with_jobs = set(session.exec(select(Job.company_id).distinct()).all())
         pending = [
             c for c in rows
             if (c.tier or "unknown") in tiers
             and c.underrated is not False
-            and c.hq_region in REGIONS_OK
-            and (c.website or c.github_org)
+            and not c.overrated
+            # an unknown region is not a no: funding-feed rows often carry none until facts run
+            and (c.hq_region in REGIONS_OK or c.hq_region is None)
+            and (c.website or c.domain or c.github_org)
             and (not require_roles or c.id in with_jobs)
             and (c.contacts_found_at is None or c.contacts_found_at < cutoff)
         ]
-        # fresher roles first: a company hiring only seniors is still worth a referral
-        # ask, but not before the ones hiring people like us
+        # best priority first (recently funded, hiring freshers, can pay); then fresher
+        # roles, verified hiring and tier as before
         with_fresher = set(session.exec(
             select(Job.company_id).where(Job.is_senior == False).distinct()  # noqa: E712
         ).all())
-        pending.sort(key=lambda c: (targeting.TIER_ORDER.get(c.tier or "unknown", 9),
+        pending.sort(key=lambda c: (0 if c.scrape_first else 1, -(c.priority_score or 0),
+                                    targeting.TIER_ORDER.get(c.tier or "unknown", 9),
                                     0 if c.id in with_fresher else 1,
                                     0 if c.hiring_status == VERIFIED else 1, c.name))
         ids = [c.id for c in pending[:limit]]
@@ -668,7 +695,8 @@ def status() -> dict:
             select(Job.company_id).where(Job.remote_anywhere == True).distinct()  # noqa: E712
         ).all())
         fit = [c for c in rows if c.underrated is not False and c.tier != "reject"
-               and (c.hq_region in REGIONS_OK)]
+               and not c.overrated and c.status is None
+               and (c.hq_region in REGIONS_OK or c.hq_region is None)]
         tiers: dict[str, int] = {}
         for c in rows:
             tiers[c.tier or "ungraded"] = tiers.get(c.tier or "ungraded", 0) + 1
@@ -689,6 +717,10 @@ def status() -> dict:
             "fit_hiring_from_anywhere": sum(1 for c in fit if c.id in with_anywhere),
             "fit_with_people": sum(1 for c in fit if c.contacts_found_at),
             "tiers": tiers,
+            "overrated": sum(1 for c in rows if c.overrated),
+            "quarantined": sum(1 for c in rows if c.status == "quarantined"),
+            "fit_with_website": sum(1 for c in fit if c.website or c.domain),
+            "fit_priority_50plus": sum(1 for c in fit if (c.priority_score or 0) >= 50),
             "by_region": _count(c.hq_region for c in fit),
         }
 
@@ -799,24 +831,19 @@ def admit_scrapedo_directories(*, pages: int = 3) -> HarvestStats:
                 if not name:
                     continue
                 stats.seen += 1
-                name = _clean_name(name) or name
-                if not name or len(name) < 2:
-                    continue
-                key = name.lower()
-                if key in seen_here:
+                key = admission.name_key(name)
+                if not key or key in seen_here:
                     continue
                 seen_here.add(key)
-                if not targeting.hype_check(name)[0]:
-                    stats.skip("hyped name")
-                    continue
                 amt = funding_rss._amount_usd_m(title)
                 sm = funding_rss._STAGE.search(title)
-                fund = {"stage": sm.group(1).lower() if sm else None, "amount_usd_m": amt,
+                fund = {"stage": sm.group(1) if sm else None, "amount_usd_m": amt,
                         "announced": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "evidence": title[:200]}
                 stats.candidates += 1
                 _upsert(session, name=name, website=None, source="scrapedo-dir",
                         description=None, region=region, note=f"funding directory: {title[:100]}",
-                        funding=fund, claim={"text": title[:200], "url": url, "by": None}, stats=stats)
+                        funding=fund, claim={"text": title[:200], "url": url, "by": None}, stats=stats,
+                        headline=True)
             session.commit()
     log.info("admit_scrapedo_directories: %s", stats.as_dict())
     return stats
@@ -835,12 +862,9 @@ def admit_funding_rss() -> HarvestStats:
     stats.seen = len(rows)
     with get_session() as session:
         for r in rows:
-            name = _clean_name(r["name"]) or r["name"]
-            if not name or len(name) < 2:
+            name = r.get("name") or ""
+            if len(name.strip()) < 2:
                 stats.skip("no usable name")
-                continue
-            if not targeting.hype_check(name)[0]:
-                stats.skip("hyped name")
                 continue
             region = r.get("region") or targeting.region_of(r.get("title"))
             if region and region not in REGIONS_OK:
@@ -849,10 +873,13 @@ def admit_funding_rss() -> HarvestStats:
             fund = {"stage": r.get("stage"), "amount_usd_m": r.get("amount_usd_m"),
                     "announced": r.get("announced"), "evidence": r.get("title")}
             stats.candidates += 1
+            # an unknown region stays unknown (it used to be written "remote", which put
+            # every US/EU round in the remote-anywhere bucket); facts fill it in later
             _upsert(session, name=name, website=None, source="funding-rss",
-                    description=None, region=region or "remote",
+                    description=None, region=region,
                     note=f"funding press (RSS): {(r.get('title') or '')[:100]}", funding=fund,
-                    claim={"text": r.get("title", "")[:200], "url": r.get("url"), "by": None}, stats=stats)
+                    claim={"text": r.get("title", "")[:200], "url": r.get("url"), "by": None}, stats=stats,
+                    headline=True)
         session.commit()
     log.info("admit_funding_rss: %s", stats.as_dict())
     return stats
@@ -885,12 +912,9 @@ def discover_funded(*, topics: list[str] | None = None, per_topic: int = 8, max_
                                          limit=budget * 4, per_query=per_topic, enrich=0)
             for c in res.get("companies") or []:
                 stats.seen += 1
-                name = _clean_name(c.get("name") or "") or ""
-                if not name or len(name) < 2:
+                name = c.get("name") or ""
+                if len(name.strip()) < 2:
                     stats.skip("no usable name")
-                    continue
-                if not targeting.hype_check(name)[0]:
-                    stats.skip("hyped name")
                     continue
                 region = key_of.get(c.get("region"), targeting.region_of(c.get("region")))
                 if region not in REGIONS_OK:
@@ -898,15 +922,16 @@ def discover_funded(*, topics: list[str] | None = None, per_topic: int = 8, max_
                     continue
                 fd = c.get("funding") or {}
                 amt = fd.get("amount_usd_m")
-                fund = {"stage": (fd.get("stage") or "").lower() or None, "announced": fd.get("announced"),
+                fund = {"stage": fd.get("stage"), "announced": fd.get("announced"),
                         "amount_usd_m": amt if (amt and amt <= 2000) else None,
+                        "valuation_usd_m": fd.get("valuation_usd_m"),
                         "evidence": (fd.get("evidence_quote") or c.get("announcement_title") or "")[:300]} if fd else None
                 stats.candidates += 1
                 _upsert(session, name=name, website=None, source="funding-news",
                         description=_first_sentence(c.get("announcement_title")), region=region,
                         note=f"funding press: {(c.get('announcement_title') or '')[:100]}", funding=fund,
                         claim={"text": c.get("announcement_title", "")[:200], "url": c.get("announcement_url"), "by": None},
-                        stats=stats)
+                        stats=stats, headline=True)
             session.commit()
     log.info("discover_funded: %s", stats.as_dict())
     return stats

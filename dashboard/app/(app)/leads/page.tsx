@@ -5,7 +5,6 @@ import { useState } from "react";
 import { GitBranch, Mail, UserSearch } from "lucide-react";
 import { api, useApi, useTaskWatcher, type Company, type Contact } from "@/lib/api";
 import { OperatorOnly } from "@/components/access";
-import { relTime } from "@/lib/utils";
 import { PageHead, TaskStrip } from "@/components/shell";
 import { ConfidenceBadge, Odds } from "@/components/signals";
 import {
@@ -171,7 +170,7 @@ export default function LeadsPage() {
                       <div className="mt-1 line-clamp-2 text-xs text-ink-3">{contact.role}</div>
                     ) : null}
                     {hookOf(contact.research) ? (
-                      <div className="mt-2 border-l-2 border-line pl-2.5 text-xs italic text-ink-3">
+                      <div className="mt-2 border-l-2 border-line pl-2.5 text-xs italic text-ink-3 [overflow-wrap:anywhere]">
                         {hookOf(contact.research)}
                       </div>
                     ) : null}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ArrowLeft, ExternalLink, GitBranch, Mail, UserSearch } from "lucide-react";
 import { api, useApi, useTaskWatcher, type Job } from "@/lib/api";
 import { lpa, relTime } from "@/lib/utils";
@@ -49,7 +49,7 @@ function parseNotes(raw: string | null): CompanyNotes {
         headcount: parsed.headcount || "",
       };
     }
-  } catch (e) {
+  } catch {
     return { type: "", text: raw, funding_tier: "", lead_investors: "", runway: "", headcount: "" };
   }
   return { type: "", text: "", funding_tier: "", lead_investors: "", runway: "", headcount: "" };
@@ -58,7 +58,7 @@ function parseNotes(raw: string | null): CompanyNotes {
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
-  const { data: job, error, loading, reload } = useApi<Job>(id ? `/api/jobs/${id}` : null);
+  const { data: job, error, reload } = useApi<Job>(id ? `/api/jobs/${id}` : null);
   const { tasks, watch, dismiss } = useTaskWatcher();
 
   const [companyType, setCompanyType] = useState("");
@@ -69,7 +69,13 @@ export default function JobDetailPage() {
   const [headcount, setHeadcount] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
 
-  useEffect(() => {
+  // Re-seed the form when a different company (or a freshly saved note) arrives.
+  // Done during render against the last key seen, not in an effect, so the form never
+  // paints one frame with the previous company's notes in it.
+  const notesKey = job?.company ? `${job.company.id}:${job.company.notes ?? ""}` : null;
+  const [seenNotes, setSeenNotes] = useState<string | null>(null);
+  if (notesKey !== seenNotes) {
+    setSeenNotes(notesKey);
     if (job?.company) {
       const parsed = parseNotes(job.company.notes ?? null);
       setCompanyType(parsed.type || "");
@@ -79,7 +85,7 @@ export default function JobDetailPage() {
       setRunway(parsed.runway || "");
       setHeadcount(parsed.headcount || "");
     }
-  }, [job?.company?.id, job?.company?.notes]);
+  }
 
   async function saveCompanyNotes() {
     if (!job?.company_id) return;
@@ -128,8 +134,8 @@ export default function JobDetailPage() {
     void reload();
   }
 
-  if (loading && !job) return <Loading label="Loading job" />;
-  if (error) return <ErrorNote message={error} onRetry={reload} />;
+  if (error && !job) return <ErrorNote message={error} onRetry={reload} />;
+  if (!job) return <Loading label="Loading job" rows={8} />;
   if (!job) return null;
 
   const pay = lpa(job.salary_min_lpa, job.salary_max_lpa);
@@ -160,17 +166,17 @@ export default function JobDetailPage() {
             ) : null}
             <Badge>{job.source}</Badge>
             {companyNotes.type ? (
-              <span className="inline-flex items-center rounded-sm border border-violet-800/60 bg-violet-950/30 px-2 py-0.5 text-xs font-medium text-violet-300">
+              <span className="inline-flex items-center rounded-sm border border-line-strong bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink">
                 {companyNotes.type}
               </span>
             ) : null}
             {companyNotes.funding_tier ? (
-              <span className="inline-flex items-center rounded-sm border border-fuchsia-800/60 bg-fuchsia-950/30 px-2 py-0.5 text-xs font-medium text-fuchsia-300">
+              <span className="inline-flex items-center rounded-sm border border-line-strong bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink">
                 {companyNotes.funding_tier}
               </span>
             ) : null}
             {companyNotes.runway ? (
-              <span className="inline-flex items-center rounded-sm border border-purple-800/60 bg-purple-950/30 px-2 py-0.5 text-xs font-medium text-purple-300">
+              <span className="inline-flex items-center rounded-sm border border-line-strong bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink">
                 Runway: {companyNotes.runway}
               </span>
             ) : null}
@@ -331,19 +337,19 @@ export default function JobDetailPage() {
           {/* An editable panel of the operator's own private notes. Not shown at all
               on a public instance: it cannot save there, and it is labelled private. */}
           <OperatorOnly>
-            <Panel className="border-violet-900/50">
+            <Panel className="border-line-strong">
               <PanelHead 
                 eyebrow="Strategic Chokepoint (Human-in-the-Loop)" 
-                title={<span className="text-violet-300 font-semibold flex items-center gap-1.5">Company Context & VC Tracker</span>} 
+                title={<span className="text-ink font-semibold flex items-center gap-1.5">Company Context & VC Tracker</span>} 
               />
               <div className="flex flex-col gap-3.5 p-4 text-xs">
                 <div className="grid grid-cols-2 gap-3">
                   <label className="flex flex-col gap-1.5">
-                    <span className="eyebrow text-[10px] text-violet-400">Classification</span>
+                    <span className="eyebrow text-[10px] text-ink-3">Classification</span>
                     <select
                       value={companyType}
                       onChange={(e) => setCompanyType(e.target.value)}
-                      className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-violet-500 outline-none cursor-pointer"
+                      className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-ink outline-none cursor-pointer"
                     >
                       <option value="">Unclassified</option>
                       <option value="Series A AI Startup">Series A AI Startup</option>
@@ -355,11 +361,11 @@ export default function JobDetailPage() {
                   </label>
 
                   <label className="flex flex-col gap-1.5">
-                    <span className="eyebrow text-[10px] text-violet-400">Funding Tier</span>
+                    <span className="eyebrow text-[10px] text-ink-3">Funding Tier</span>
                     <select
                       value={fundingTier}
                       onChange={(e) => setFundingTier(e.target.value)}
-                      className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-violet-500 outline-none cursor-pointer"
+                      className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-ink outline-none cursor-pointer"
                     >
                       <option value="">Unspecified</option>
                       <option value="Seed">Seed Stage</option>
@@ -374,11 +380,11 @@ export default function JobDetailPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <label className="flex flex-col gap-1.5">
-                    <span className="eyebrow text-[10px] text-violet-400">Runway Runway</span>
+                    <span className="eyebrow text-[10px] text-ink-3">Runway</span>
                     <select
                       value={runway}
                       onChange={(e) => setRunway(e.target.value)}
-                      className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-violet-500 outline-none cursor-pointer"
+                      className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-ink outline-none cursor-pointer"
                     >
                       <option value="">Unspecified</option>
                       <option value="Critical (<6mo)">{"Critical (<6mo)"}</option>
@@ -389,11 +395,11 @@ export default function JobDetailPage() {
                   </label>
 
                   <label className="flex flex-col gap-1.5">
-                    <span className="eyebrow text-[10px] text-violet-400">Headcount scale</span>
+                    <span className="eyebrow text-[10px] text-ink-3">Headcount scale</span>
                     <select
                       value={headcount}
                       onChange={(e) => setHeadcount(e.target.value)}
-                      className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-violet-500 outline-none cursor-pointer"
+                      className="rounded-sm border border-line bg-paper px-2 py-1.5 text-xs text-ink focus:border-ink outline-none cursor-pointer"
                     >
                       <option value="">Unspecified</option>
                       <option value="1-10 (Founding)">1-10 (Founding)</option>
@@ -405,24 +411,24 @@ export default function JobDetailPage() {
                 </div>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow text-[10px] text-violet-400">Lead Investors</span>
+                  <span className="eyebrow text-[10px] text-ink-3">Lead Investors</span>
                   <input
                     type="text"
                     value={leadInvestors}
                     onChange={(e) => setLeadInvestors(e.target.value)}
                     placeholder="Sequoia, Founders Fund, Y Combinator, etc."
-                    className="rounded-sm border border-line bg-paper px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-3 focus:border-violet-500 outline-none"
+                    className="rounded-sm border border-line bg-paper px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-3 focus:border-ink outline-none"
                   />
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow text-[10px] text-violet-400">Private Notes & Strategic Insights</span>
+                  <span className="eyebrow text-[10px] text-ink-3">Private Notes & Strategic Insights</span>
                   <textarea
                     value={notesText}
                     onChange={(e) => setNotesText(e.target.value)}
                     placeholder="Enter custom context, scheduled interviews, specific contact instructions, or shared connections..."
                     rows={4}
-                    className="rounded-sm border border-line bg-paper p-2 text-xs text-ink placeholder:text-ink-3 focus:border-violet-500 outline-none resize-none"
+                    className="rounded-sm border border-line bg-paper p-2 text-xs text-ink placeholder:text-ink-3 focus:border-ink outline-none resize-none"
                   />
                 </label>
 
@@ -431,7 +437,7 @@ export default function JobDetailPage() {
                   variant="primary"
                   onClick={saveCompanyNotes}
                   disabled={savingNotes}
-                  className="mt-1 font-medium bg-violet-600 border-violet-500 text-white hover:bg-violet-500"
+                  className="mt-1 font-medium"
                 >
                   {savingNotes ? "Saving Profile..." : "Save Strategic Context"}
                 </Button>

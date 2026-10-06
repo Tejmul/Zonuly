@@ -10,6 +10,9 @@ import {
 } from "lucide-react";
 import { api, useApi, useTaskWatcher } from "@/lib/api";
 import { TierPill } from "@/components/ui/tier";
+import { ErrorNote, Loading } from "@/components/ui/primitives";
+import { FundingCell } from "@/components/funding";
+import { fundingOf, money, roundWhen } from "@/lib/funding";
 
 /* One page per company, in the order you read it: who they are → the hiring post →
    the roles → the people to ask → the money. Every number sits next to the sentence
@@ -40,6 +43,9 @@ type Detail = {
   tier: string | null; tier_reason: string | null; underrated: boolean | null; hype_reason: string | null;
   pay: { stipend_inr_month: number | null; stipend_evidence: string | null; ppo_lpa: number | null; ppo_evidence: string | null };
   funding: { stage: string | null; amount_usd_m: number | null; announced: string | null; investors: string[]; evidence: string | null };
+  // newer backends only
+  funding_round_label?: string | null; overrated?: boolean | null; city?: string | null;
+  priority_score?: number | null; priority_why?: string | null;
   hiring: { status: string | null; evidence: string | null; careers_url: string | null; roles_on_their_page: string[]; checked_at: string | null };
   jobs: Job[];
   people: Person[];
@@ -97,9 +103,27 @@ export default function CompanyPage() {
     }
   }
 
-  if (error) return <p className="text-[13px] text-ink-3">{error}</p>;
-  if (loading && !data) return <p className="text-sm text-ink-3">Reading the file…</p>;
+  if (error && !data) {
+    return (
+      <div className="mx-auto max-w-4xl">
+        <Link href="/companies" className="inline-flex cursor-pointer items-center gap-1.5 text-[13px] text-ink-2 hover:text-ink">
+          <ArrowLeft size={14} /> Companies
+        </Link>
+        <div className="plate mt-5">
+          <ErrorNote
+            title={error.includes("not found") || error.includes("404") ? "No company with this number" : undefined}
+            message={error}
+            onRetry={reload}
+          />
+        </div>
+      </div>
+    );
+  }
+  if (loading && !data) return <div className="plate mx-auto max-w-4xl"><Loading label="Reading the file" rows={8} /></div>;
   if (!data) return null;
+
+  const fund = fundingOf({ funding: data.funding, funding_round_label: data.funding_round_label, valuation_usd_m: data.valuation_usd_m });
+  const fundWhen = roundWhen(fund.announced);
 
   const fresher = data.jobs.filter((j) => !j.is_senior);
   const senior = data.jobs.filter((j) => j.is_senior);
@@ -123,15 +147,31 @@ export default function CompanyPage() {
         <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-2">
           <span className="inline-flex items-center gap-1.5">
             <MapPin size={13} className="text-ink-3" />
-            {data.region ? REGION_LABEL[data.region] ?? data.region.toUpperCase() : "Location unstated"}
+            {data.city ?? (data.region ? REGION_LABEL[data.region] ?? data.region.toUpperCase() : "Location unstated")}
             {data.locations.length > 0 && <span className="text-ink-3"> · roles in {data.locations.slice(0, 3).join(", ")}</span>}
           </span>
           <span className="text-ink-3">{data.segment.label}</span>
-          {data.funding.stage && <span className="text-ink-3">{data.funding.stage}{data.funding.amount_usd_m ? ` · $${data.funding.amount_usd_m}M` : ""}</span>}
+          {data.overrated && <span className="chip chip-strike" title={data.hype_reason ?? undefined}>overrated</span>}
         </p>
         <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-ink-2">
           {data.description ?? "No description yet."}
         </p>
+        {/* The money, at a glance — the full evidence is in the last section. */}
+        <dl className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-4">
+          <Fact label="Last round">{fund.stage ?? <span className="text-ink-3">—</span>}</Fact>
+          <Fact label="Raised">{money(fund.amountUsdM) ?? <span className="text-ink-3">—</span>}</Fact>
+          <Fact label="Announced">
+            {fundWhen ? (
+              <span className={fundWhen.recent ? "" : "text-ink-2"}>
+                {fundWhen.label}
+                <span className={`ml-1.5 text-[11px] ${fundWhen.recent ? "font-medium" : "font-normal text-ink-3"}`}>
+                  {fundWhen.recent ? "recent" : fundWhen.ago}
+                </span>
+              </span>
+            ) : <span className="text-ink-3">—</span>}
+          </Fact>
+          <Fact label="Valuation">{money(fund.valuationUsdM) ?? <span className="text-ink-3">not stated</span>}</Fact>
+        </dl>
         <div className="mt-4 flex flex-wrap gap-2">
           {data.website && <OutLink href={data.website} icon={<ExternalLink size={13} />}>Website</OutLink>}
           {data.hiring.careers_url && <OutLink href={data.hiring.careers_url} icon={<ExternalLink size={13} />}>Careers</OutLink>}
@@ -300,7 +340,7 @@ export default function CompanyPage() {
         )}
         <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2">
           <div><dt className="marginal">team</dt><dd className="tnum mt-0.5 text-[12.5px]">{data.team_size ? `${data.team_size} people` : "—"}</dd></div>
-          <div><dt className="marginal">valuation</dt><dd className="tnum mt-0.5 text-[12.5px]">{data.valuation_usd_m ? `$${data.valuation_usd_m}M (stated)` : "not stated anywhere we read"}</dd></div>
+          <div><dt className="marginal">valuation</dt><dd className="tnum mt-0.5 text-[12.5px]">{money(fund.valuationUsdM) ? `${money(fund.valuationUsdM)} (stated)` : "not stated anywhere we read"}</dd></div>
           <div><dt className="marginal">investors</dt><dd className="mt-0.5 text-[12.5px]">{data.funding.investors.length ? data.funding.investors.join(", ") : "—"}</dd></div>
         </dl>
         {data.valuation_evidence && <Quote>{data.valuation_evidence}</Quote>}
@@ -334,7 +374,12 @@ export default function CompanyPage() {
             <li className="text-ink-3">India needs the stated number to go above Thin. Hyped names and teams over 200 are out regardless.</li>
           </ul>
         </details>
-        <dl className="grid gap-5 sm:grid-cols-3">
+        {data.pay_basis && PAY_BASIS_LABEL[data.pay_basis] && (
+          <p className="mb-4 text-[12.5px] text-ink-2">
+            <span className="font-medium text-ink">Can they pay? </span>{PAY_BASIS_LABEL[data.pay_basis]}
+          </p>
+        )}
+        <dl className="grid gap-5 sm:grid-cols-3 [&>*]:min-w-0">
           <Evidence
             label="Full-time package"
             value={data.pay.ppo_lpa ? `₹${data.pay.ppo_lpa} LPA` : "Not stated"}
@@ -345,11 +390,17 @@ export default function CompanyPage() {
             value={data.pay.stipend_inr_month ? `₹${data.pay.stipend_inr_month.toLocaleString()} / month` : "Not stated"}
             quote={data.pay.stipend_evidence}
           />
-          <Evidence
-            label="Funding"
-            value={data.funding.stage ? `${data.funding.stage}${data.funding.amount_usd_m ? ` · $${data.funding.amount_usd_m}M` : ""}` : "Not stated"}
-            quote={data.funding.evidence}
-          />
+          <div>
+            <dt className="text-[12px] text-ink-3">Funding</dt>
+            <dd className="mt-1">
+              {fund.stage || fund.amountUsdM || fund.announced ? (
+                <FundingCell row={{ funding: data.funding, funding_round_label: data.funding_round_label, valuation_usd_m: data.valuation_usd_m }} />
+              ) : (
+                <span className="text-[15px] font-medium">Not stated</span>
+              )}
+            </dd>
+            {data.funding.evidence && <Quote>{data.funding.evidence}</Quote>}
+          </div>
         </dl>
         {data.underrated === false && data.hype_reason && (
           <p className="mt-4 rounded-md border border-line px-3 py-2 text-[12px] text-ink-2">{data.hype_reason}</p>
@@ -394,6 +445,15 @@ function Section({
   );
 }
 
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-surface px-3 py-2.5">
+      <dt className="marginal">{label}</dt>
+      <dd className="tnum mt-1 text-[14px] font-medium">{children}</dd>
+    </div>
+  );
+}
+
 function Evidence({ label, value, quote }: { label: string; value: string; quote: string | null }) {
   return (
     <div>
@@ -407,7 +467,7 @@ function Evidence({ label, value, quote }: { label: string; value: string; quote
 /** Every number on this page can be traced to a sentence someone actually wrote. */
 function Quote({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mt-2 border-l-2 border-line pl-3 text-[12px] leading-relaxed text-ink-3 italic">{children}</p>
+    <p className="mt-2 border-l-2 border-line pl-3 text-[12px] leading-relaxed text-ink-3 italic [overflow-wrap:anywhere]">{children}</p>
   );
 }
 

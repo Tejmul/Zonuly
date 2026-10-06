@@ -12,7 +12,7 @@ type ButtonSize = "sm" | "md";
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   // amber is reserved for actions that spend something irreversible
   primary:
-    "bg-surface-2 text-on-ink hover:bg-surface-2/90 border-line-strong font-medium disabled:bg-surface-3 disabled:text-ink-3 disabled:border-line",
+    "bg-ink text-on-ink hover:opacity-90 border-ink font-medium disabled:bg-surface-3 disabled:text-ink-3 disabled:border-line",
   default: "bg-surface-3 text-ink hover:bg-surface-3 border-line-strong",
   ghost: "bg-transparent text-ink hover:bg-surface-2 hover:text-ink border-transparent",
   quiet: "bg-transparent text-ink-2 hover:text-ink border-line hover:border-line-strong",
@@ -189,21 +189,52 @@ export function Empty({
   );
 }
 
-export function Loading({ label = "Loading" }: { label?: string }) {
+/** Loading is drawn as the shape of what is coming — a few grey rows — rather than a
+ *  word on an empty page, so the layout does not jump when the data lands. */
+export function Loading({ label = "Loading", rows = 5 }: { label?: string; rows?: number }) {
   return (
-    <div className="flex items-center justify-center gap-2 px-6 py-16">
-      <span className="h-1.5 w-1.5 rounded-full bg-surface-2 pulse-soft" />
-      <span className="eyebrow">{label}</span>
+    <div role="status" aria-live="polite" className="px-4 py-5">
+      <span className="sr-only">{label}</span>
+      <Skeleton rows={rows} />
     </div>
   );
 }
 
-export function ErrorNote({ message, onRetry }: { message: string; onRetry?: () => void }) {
+export function Skeleton({ rows = 5, className }: { rows?: number; className?: string }) {
   return (
-    <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-      <div className="text-sm text-ink">{message}</div>
+    <div aria-hidden className={cn("flex flex-col gap-3", className)}>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center gap-3">
+          <span className="h-3 w-8 shrink-0 animate-pulse rounded-sm bg-surface-3" />
+          <span
+            className="h-3 animate-pulse rounded-sm bg-surface-3"
+            style={{ width: `${[62, 48, 71, 55, 40, 66, 52][i % 7]}%` }}
+          />
+          <span className="ml-auto h-3 w-14 shrink-0 animate-pulse rounded-sm bg-surface-3" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A failed request, said calmly. The headline is the same whatever went wrong — the
+ *  page is not broken, the data is just not here yet — and the specific reason sits
+ *  underneath in small type for whoever has to fix it. */
+export function ErrorNote({
+  message,
+  onRetry,
+  title = "This can\u2019t be loaded right now",
+}: {
+  message: string;
+  onRetry?: () => void;
+  title?: string;
+}) {
+  return (
+    <div role="status" className="flex flex-col items-center gap-2 px-6 py-14 text-center">
+      <div className="text-[13.5px] font-medium text-ink">{title}</div>
+      <div className="max-w-[56ch] text-[12px] leading-relaxed text-ink-3">{message}</div>
       {onRetry ? (
-        <Button size="sm" variant="quiet" onClick={onRetry}>
+        <Button size="sm" variant="quiet" className="mt-2" onClick={onRetry}>
           Try again
         </Button>
       ) : null}

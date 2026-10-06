@@ -7,10 +7,27 @@ openrouter:
   # its 500 output tokens thinking, so research JSON came back truncated. nex-n2.5 answered
   # clean JSON in ~3s; gemma/qwen were at the free daily ceiling. Re-check with
   # `python scripts/run.py models list --free` when a stage starts failing.
+  # 2026-10-06: nex-n2.5 went paid-only and every stage failed at once. Each alias is now
+  # a ranked chain; a call moves down it when a model is gone or rate-limited. Probed that
+  # day for clean JSON: laguna-s-2.1 and nemotron-3-super ~4s, dots-3-note ~8s; gemma-4
+  # and apodex were at their free ceiling, inkling is gated (403).
   aliases:
-    cheap: nex-agi/nex-n2.5-mini:free
-    judge: nex-agi/nex-n2.5-pro:free
-    writer: nex-agi/nex-n2.5-pro:free
+    cheap:
+    - poolside/laguna-s-2.1:free
+    - nvidia/nemotron-3-super-120b-a12b:free
+    - dots-studio/dots-3-note-preview:free
+    - google/gemma-4-31b-it:free
+    - apodex/apodex-1.1-mini:free
+    judge:
+    - nvidia/nemotron-3-super-120b-a12b:free
+    - poolside/laguna-s-2.1:free
+    - google/gemma-4-31b-it:free
+    - dots-studio/dots-3-note-preview:free
+    writer:
+    - nvidia/nemotron-3-super-120b-a12b:free
+    - google/gemma-4-31b-it:free
+    - poolside/laguna-s-2.1:free
+    - dots-studio/dots-3-note-preview:free
   requests_per_minute: 18
   daily_inr_cap: 100
   monthly_inr_cap: 2500
@@ -36,21 +53,54 @@ search:
   - Backend Engineer
   - Founding Engineer
   - Research Engineer
+  # India means Bengaluru and Hyderabad only (Tejmul, 2026-10-06). "india" stays so a
+  # posting that names no city is kept; a posting in another Indian city is dropped by
+  # india_blocked_cities below unless it is remote or also names a target city.
   locations_ok:
   - india
   - remote
   - bengaluru
   - bangalore
   - hyderabad
-  - mumbai
-  - pune
+  - secunderabad
+  - worldwide
+  - anywhere
+  india_blocked_cities:
   - delhi
+  - new delhi
+  - ncr
   - gurgaon
   - gurugram
   - noida
+  - greater noida
+  - faridabad
+  - ghaziabad
+  - mumbai
+  - navi mumbai
+  - thane
+  - pune
   - chennai
-  - worldwide
-  - anywhere
+  - kolkata
+  - ahmedabad
+  - jaipur
+  - indore
+  - kochi
+  - cochin
+  - chandigarh
+  - mohali
+  - coimbatore
+  - lucknow
+  - bhubaneswar
+  - trivandrum
+  - thiruvananthapuram
+  - vadodara
+  - surat
+  - nagpur
+  - mysore
+  - mysuru
+  - goa
+  - visakhapatnam
+  - vizag
   max_yoe: 3
   exclude_senior: false
 matching:
@@ -75,7 +125,6 @@ targeting:
     deep_min_usd_m: 10
     deep_max_months: 24
     deep_valuation_usd_m: 50
-    yc_min_team: 10
     per_head_comfortable_usd_k: 200
   regions:
   - key: us
@@ -170,23 +219,14 @@ targeting:
     - tallinn
   - key: india
     min_lpa: 30
+    # only Bengaluru and Hyderabad are India targets; "india" alone (no city) still
+    # counts, but text that names only another Indian city does not (targeting.region_of)
     match:
     - india
     - bengaluru
     - bangalore
     - hyderabad
-    - mumbai
-    - pune
-    - delhi
-    - gurgaon
-    - gurugram
-    - noida
-    - chennai
-    - kolkata
-    - ahmedabad
-    - jaipur
-    - indore
-    - kochi
+    - secunderabad
   - key: remote
     min_lpa: 0
     match:
@@ -195,129 +235,352 @@ targeting:
     - worldwide
     - distributed
     - work from home
-  hyped:
-    big_tech:
-    - google
-    - alphabet
-    - youtube
-    - deepmind
-    - microsoft
-    - github
-    - linkedin
-    - amazon
-    - aws
-    - apple
-    - meta
-    - facebook
-    - instagram
-    - whatsapp
-    - netflix
-    - nvidia
-    - tesla
-    - spacex
-    - openai
-    - anthropic
-    - ibm
-    - intel
-    - oracle
-    - salesforce
-    - adobe
-    - sap
-    - cisco
-    - qualcomm
-    - samsung
-    - vmware
-    - dell
-    - uber
-    - lyft
-    - airbnb
-    - twitter
-    - snap
-    - tiktok
-    - bytedance
-    - spotify
-    - shopify
-    - paypal
-    - stripe
-    - coinbase
-    - palantir
-    - databricks
-    - snowflake
-    - atlassian
-    - dropbox
-    - zoom
-    - slack
-    - servicenow
-    - workday
-    - twilio
-    - cloudflare
-    - datadog
-    - mongodb
-    - elastic
-    - hubspot
-    - doordash
-    - instacart
-    - robinhood
-    - reddit
-    - pinterest
-    - discord
-    - figma
-    - canva
-    - notion
-    - asana
-    - gitlab
-    - docker
-    - hashicorp
-    - confluent
-    - goldman sachs
-    - jpmorgan
-    - morgan stanley
-    - jane street
-    - citadel
-    - two sigma
-    - optiver
-    - hudson river trading
-    india_household:
-    - tcs
-    - infosys
-    - wipro
-    - hcl
-    - tech mahindra
-    - cognizant
-    - accenture
-    - capgemini
-    - deloitte
-    - kpmg
-    - mindtree
-    - ltimindtree
-    - mphasis
-    - zoho
-    - freshworks
-    - flipkart
-    - swiggy
-    - zomato
-    - paytm
-    - phonepe
-    - ola
-    - oyo
-    - byju
-    - unacademy
-    - razorpay
-    - zerodha
-    - cred
-    - meesho
-    - nykaa
-    - dream11
-    - sharechat
-    - jio
-    - reliance
-    - adani
-    - tata
-    - mahindra
-    - bajaj
-    - hdfc
-    - icici
-    - sbi
+  # OVERRATED — excluded outright (Tejmul, 2026-10-06): "everyone in the world knows the
+  # company, thousands of resumes already waiting". Judged on fame, listing, valuation and
+  # money raised; NEVER on headcount. Unknown funding is not disqualifying. admission.py.
+  overrated:
+    max_valuation_usd_m: 5000        # valued at or above this -> overrated
+    max_total_raised_usd_m: 1000     # raised at or above this -> overrated
+    # borderline: raised $400M-$1B or valued $2-5B -> kept only while actively hiring
+    # (hiring verified, or this many open roles) AND pay power is in a high band
+    borderline_raised_usd_m: 400
+    borderline_valuation_usd_m: 2000
+    borderline_min_open_roles: 3
+    borderline_pay_bands:
+    - pays
+    - deep_pockets
+    # famous names. An entry matches the leading words of a name ("google" hits "Google
+    # DeepMind"); "=name" must be the whole name ("=ramp" is Ramp, not Ramp Network).
+    famous:
+      big_tech:
+      - google
+      - alphabet
+      - youtube
+      - deepmind
+      - microsoft
+      - github
+      - linkedin
+      - amazon
+      - aws
+      - apple
+      - meta
+      - facebook
+      - instagram
+      - whatsapp
+      - netflix
+      - nvidia
+      - tesla
+      - spacex
+      - openai
+      - anthropic
+      - ibm
+      - intel
+      - oracle
+      - salesforce
+      - adobe
+      - sap
+      - cisco
+      - qualcomm
+      - samsung
+      - vmware
+      - dell
+      - uber
+      - lyft
+      - airbnb
+      - twitter
+      - snap
+      - tiktok
+      - bytedance
+      - spotify
+      - shopify
+      - paypal
+      - stripe
+      - coinbase
+      - palantir
+      - databricks
+      - snowflake
+      - atlassian
+      - dropbox
+      - zoom
+      - slack
+      - servicenow
+      - workday
+      - twilio
+      - cloudflare
+      - datadog
+      - mongodb
+      - elastic
+      - hubspot
+      - doordash
+      - instacart
+      - robinhood
+      - reddit
+      - pinterest
+      - discord
+      - figma
+      - canva
+      - notion
+      - asana
+      - gitlab
+      - docker
+      - hashicorp
+      - confluent
+      - goldman sachs
+      - jpmorgan
+      - morgan stanley
+      - jane street
+      - citadel
+      - two sigma
+      - optiver
+      - hudson river trading
+      - maang
+      - faang
+      - amazon web services
+      - meta platforms
+      - walmart
+      - cvs
+      - mastercard
+      - =visa
+      - capital one
+      - american express
+      - bank of america
+      - wells fargo
+      - ebay
+      - intuit
+      - autodesk
+      - expedia
+      - booking com
+      ai_labs:
+      - openai
+      - anthropic
+      - =xai
+      - mistral
+      - hugging face
+      - groq
+      - =cohere
+      - perplexity
+      - =cursor
+      - anysphere
+      - elevenlabs
+      - scale ai
+      - =replit
+      - supabase
+      - vercel
+      - character ai
+      - stability ai
+      - midjourney
+      - =runway
+      - inflection ai
+      - deepmind
+      - =glean
+      - =harvey
+      - anduril
+      - safe superintelligence
+      - thinking machines lab
+      - crusoe
+      - coreweave
+      - cerebras
+      - together ai
+      - fireworks ai
+      - =cognition
+      - =sierra
+      - polymarket
+      - kalshi
+      - =poolside
+      unicorns:
+      - zapier
+      - gusto
+      - airtable
+      - =mercury
+      - =sentry
+      - =ramp
+      - brex
+      - plaid
+      - rippling
+      - deel
+      - revolut
+      - monzo
+      - =wise
+      - klarna
+      - chime
+      - retool
+      - postman
+      - browserstack
+      - miro
+      - grammarly
+      - duolingo
+      - wiz
+      - snyk
+      - okta
+      - crowdstrike
+      - palo alto networks
+      - zscaler
+      - =unity
+      - roblox
+      - epic games
+      - checkout com
+      - gitlab
+      - =linear
+      - posthog
+      - clickhouse
+      - fivetran
+      - dbt labs
+      - =hex
+      - navan
+      - flexport
+      - =faire
+      - gopuff
+      - nubank
+      india_household:
+      - zoho
+      - freshworks
+      - flipkart
+      - swiggy
+      - zomato
+      - paytm
+      - phonepe
+      - ola
+      - oyo
+      - byju
+      - unacademy
+      - razorpay
+      - zerodha
+      - cred
+      - meesho
+      - nykaa
+      - dream11
+      - sharechat
+      - jio
+      - reliance
+      - adani
+      - tata
+      - mahindra
+      - bajaj
+      - hdfc
+      - icici
+      - sbi
+      - zepto
+      - groww
+      - myntra
+      - bigbasket
+      - udaan
+      - policybazaar
+      - pb fintech
+      - delhivery
+      - urban company
+      - lenskart
+      - upgrad
+      - inmobi
+      - ather
+      - =eternal
+      - blinkit
+      - physicswallah
+      - =polygon
+      - bharatpe
+      - mobikwik
+      - makemytrip
+      - naukri
+      - info edge
+      - juspay
+      - licious
+      - dunzo
+      - =nse
+      - =bse
+      - lic
+      - ongc
+      - infosys bpm
+      it_services:
+      - tcs
+      - tata consultancy
+      - infosys
+      - wipro
+      - hcl
+      - tech mahindra
+      - cognizant
+      - accenture
+      - capgemini
+      - deloitte
+      - kpmg
+      - mindtree
+      - ltimindtree
+      - mphasis
+      - hexaware
+      - persistent systems
+      - genpact
+      - l&t technology
+      - larsen
+      - mu sigma
+      - pwc
+      - =ey
+      - ernst young
+      - ibm consulting
+      - virtusa
+      - coforge
+      - sasken
+      - cyient
+      - birlasoft
+      - zensar
+      - ust global
+      - =ust
+  # India: only these two cities count; the rest are never India targets
+  india:
+    cities:
+      Bengaluru:
+      - bengaluru
+      - bangalore
+      - blr
+      Hyderabad:
+      - hyderabad
+      - secunderabad
+    other_cities:
+    - delhi
+    - new delhi
+    - gurgaon
+    - gurugram
+    - noida
+    - faridabad
+    - ghaziabad
+    - mumbai
+    - navi mumbai
+    - thane
+    - pune
+    - chennai
+    - kolkata
+    - ahmedabad
+    - jaipur
+    - indore
+    - kochi
+    - chandigarh
+    - coimbatore
+    - lucknow
+    - trivandrum
+    - nagpur
+    - mysuru
+    - goa
+  # PRIORITY 0-100, stored on company.priority_score with the sentence in priority_why.
+  # The four parts add up to 100; tune the weights here (targeting.priority).
+  priority:
+    stages:              # recently funded at one of these rounds scores
+    - Pre-seed
+    - Seed
+    - Series A
+    - Series B
+    - Series C
+    fresh_months: 6      # announced within this -> the full funding score
+    recent_months: 18    # within this -> most of it
+    weights:
+      funding: 35        # recently funded at an early round
+      hiring: 35         # verified hiring, open roles; fresher and remote-anywhere weigh most
+      pay: 20            # pay power band
+      valuation: 10      # valuation (or round size) sane for the stage
+    # the most a round of this stage is usually valued at, $M — above it, the company is
+    # priced like a later one (hype), and the valuation part scores low
+    stage_valuation_max_usd_m:
+      Pre-seed: 30
+      Seed: 80
+      Series A: 300
+      Series B: 1000
+      Series C: 3000
   people:
     max_per_company: 30
     roles:
@@ -362,7 +625,7 @@ targeting:
     max_age_days: 21
     timeout: 20
 harvest:
-  max_team: 200
+  # no headcount ceiling any more: admission judges fame, listing, valuation and money
   regions:
   - us
   - uk
@@ -443,6 +706,16 @@ tick:
   facts_per_tick: 90
   levels_per_tick: 60
   exa_discovery_queries_per_day: 6
+  # 2026-10-06: hourly free-tick additions (keyless) and the paced paid slice.
+  websites_per_tick: 30        # name-only companies -> verified website (hosted Exa MCP + direct fetch)
+  facts_keyless_per_tick: 10   # funding/HQ/website via the hosted Exa MCP (rate-limited; stops at the first 429)
+  # The paid per-day totals above (facts/describe/story/levels) and the research caps
+  # (exa_daily_cap, scrapedo_daily) are spread across the day: by hour h at most
+  # total * (h+1)/24 is spent. paid_hourly runs that slice at the end of each free tick.
+  paid_hourly: true            # 2026-10-06: on — the daily caps are spread across the hours, not raised
+  # the cleanup's merge/quarantine pass every hour — switch on only after the first
+  # `python scripts/cleanup_companies.py --apply` has been reviewed
+  company_hygiene: true
 # n8n Cloud runs the campaign email automation; Zonuly only fires its webhook.
 # The webhook URL is a credential and lives in .env (N8N_CAMPAIGN_WEBHOOK_URL).
 n8n:

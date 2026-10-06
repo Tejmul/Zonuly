@@ -99,9 +99,12 @@ export default function Landing() {
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    let raf = 0;
     let cancelled = false;
     let lenis: Lenis | null = null;
+    // Lenis rides GSAP's ticker instead of a requestAnimationFrame loop of its own:
+    // two loops meant the scroll position and every scrubbed tween were computed on
+    // different beats, which shows as a one-frame shimmer on the parallax.
+    const tick = (time: number) => lenis?.raf(time * 1000);
 
     import("lenis").then(({ default: Ctor }) => {
       if (cancelled) return;
@@ -109,16 +112,15 @@ export default function Landing() {
       // ScrollTrigger reads the scroll position itself, so it has to be told when
       // Lenis moves it rather than waiting for a native scroll event.
       lenis.on("scroll", ScrollTrigger.update);
-      const loop = (t: number) => {
-        lenis?.raf(t);
-        raf = requestAnimationFrame(loop);
-      };
-      raf = requestAnimationFrame(loop);
+      gsap.ticker.add(tick);
+      // no catch-up jumps after a dropped frame — smooth scroll must stay smooth
+      gsap.ticker.lagSmoothing(0);
     });
 
     return () => {
       cancelled = true;
-      cancelAnimationFrame(raf);
+      gsap.ticker.remove(tick);
+      gsap.ticker.lagSmoothing(500, 33);
       lenis?.destroy();
     };
   }, []);

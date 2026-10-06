@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { cn, scoreTone, sentimentTone, confidenceTone } from "@/lib/utils";
+import { cn, scoreTone, confidenceTone } from "@/lib/utils";
 import { Badge } from "@/components/ui/primitives";
 
 /**
@@ -76,7 +76,8 @@ export function BudgetMeter({
             key={i}
             className={cn(
               "h-3.5 w-[2px] rounded-[1px]",
-              i < sent ? "bg-surface-3" : inWindow ? "bg-surface-2" : "bg-surface-2/40",
+              // spent ticks fade out; the ones left are drawn in ink
+              i < sent ? "bg-data-5" : inWindow ? "bg-data-1" : "bg-data-3",
             )}
           />
         ))}
@@ -126,9 +127,11 @@ export function Funnel({ stages }: { stages: { label: string; value: number; ton
       {stages.map((stage) => (
         <div key={stage.label} className="flex items-center gap-3">
           <div className="w-24 shrink-0 text-right text-xs text-ink-2">{stage.label}</div>
-          <div className="h-5 flex-1 overflow-hidden rounded-[2px] bg-surface-2">
+          {/* The track and the default fill used to be the same grey — a bar you could
+              not see. The fill is now the data ramp, on the data track. */}
+          <div className="bar-track h-5 flex-1 overflow-hidden">
             <div
-              className={cn("h-full transition-all", stage.tone ?? "bg-surface-2")}
+              className={cn("bar-mark h-full", stage.tone ?? "bg-data-2")}
               style={{ width: `${Math.max(stage.value === 0 ? 0 : 2, (stage.value / max) * 100)}%` }}
             />
           </div>
@@ -139,11 +142,18 @@ export function Funnel({ stages }: { stages: { label: string; value: number; ton
   );
 }
 
+/** A reply's sentiment, in black and white. The word is always printed; the fill
+ *  only reinforces it — positive solid ink, neutral an outline, negative struck
+ *  through, closed a muted grey. */
+const SENTIMENT_CHIP: Record<string, string> = {
+  positive: "chip chip-solid",
+  neutral: "chip text-ink",
+  negative: "chip chip-strike",
+  closed: "chip border-line bg-surface-2 text-ink-3",
+};
 export function SentimentBadge({ sentiment }: { sentiment: string | null | undefined }) {
-  const tone = sentimentTone(sentiment);
-  return (
-    <Badge className={cn(tone.text, tone.ring, tone.bg)}>{sentiment ?? "unread"}</Badge>
-  );
+  const key = sentiment && SENTIMENT_CHIP[sentiment] ? sentiment : null;
+  return <span className={key ? SENTIMENT_CHIP[key] : "chip text-ink-3"}>{key ?? sentiment ?? "unread"}</span>;
 }
 
 export function ConfidenceBadge({ confidence }: { confidence: string | null | undefined }) {
@@ -155,7 +165,7 @@ export function ConfidenceBadge({ confidence }: { confidence: string | null | un
 export function StatusDot({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-ink-2">
-      <span className={cn("h-1.5 w-1.5 rounded-full", ok ? "bg-surface-2" : "bg-surface-2")} />
+      <span className={cn("h-1.5 w-1.5 rounded-full border", ok ? "border-ink bg-ink" : "border-ink-3 bg-transparent")} />
       {label}
     </span>
   );

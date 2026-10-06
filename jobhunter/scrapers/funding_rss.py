@@ -96,7 +96,7 @@ def _read(url: str, timeout: float) -> bytes | None:
         r.raise_for_status()
         return r.content
     except Exception as e:  # noqa: BLE001 — one bad feed must not sink the pass
-        log.debug("feed %s failed: %s", url, e)
+        log.warning("funding_rss: feed %s failed: %s: %s", url, type(e).__name__, str(e)[:160])
         return None
 
 
@@ -115,8 +115,10 @@ def fetch() -> list[dict]:
         try:
             d = feedparser.parse(raw)
         except Exception as e:  # noqa: BLE001
-            log.debug("feed %s did not parse: %s", url, e)
+            log.warning("funding_rss: feed %s did not parse: %s", url, e)
             continue
+        if not d.entries:
+            log.info("funding_rss: feed %s answered with no items", url)
         for e in d.entries:
             title = e.get("title", "")
             summary = re.sub(r"<[^>]+>", " ", e.get("summary", ""))

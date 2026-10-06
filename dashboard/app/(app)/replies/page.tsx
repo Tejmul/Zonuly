@@ -1,11 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { api, useApi, useTaskWatcher, type Reply } from "@/lib/api";
+import { api, useApi, useTaskWatcher, type OutreachPipeline, type Reply } from "@/lib/api";
 import { cn, relTime } from "@/lib/utils";
 import { PageHead, TaskStrip } from "@/components/shell";
 import { SentimentBadge } from "@/components/signals";
+import { OperatorOnly, useAccess } from "@/components/access";
+import { SENTIMENTS, SentimentSplit, count, type SentimentKey } from "@/components/outreach";
 import {
   Button,
   Empty,
@@ -15,77 +18,121 @@ import {
   PanelHead,
 } from "@/components/ui/primitives";
 
-const TABS = [
-  { key: "", label: "Everything" },
-  { key: "positive", label: "Positive" },
-  { key: "negative,closed", label: "Declined & closed" },
-  { key: "neutral", label: "Neutral" },
-] as const;
+/* Tabs filter on the server (/api/replies?sentiment=), and their counts come from the
+   pipeline summary — so a tab's number is right before its list has been fetched, and
+   on the public instance, where the replies themselves are private, the counts still
+   show instead of an error. */
+const TABS: { key: SentimentKey | ""; label: string }[] = [
+  ...SENTIMENTS.map((s) => ({ key: s.key, label: s.label })),
+  { key: "", label: "All" },
+];
 
 export default function RepliesPage() {
-  const [tab, setTab] = useState<string>("");
-  const { data, error, loading, reload } = useApi<Reply[]>("/api/replies?limit=300");
+  const { publicInstance, ready } = useAccess();
+  const [tab, setTab] = useState<SentimentKey | "">("");
+  const pipe = useApi<OutreachPipeline>("/api/outreach/pipeline");
+  const list = useApi<Reply[]>(
+    !ready || publicInstance ? null : `/api/replies?limit=300${tab ? `&sentiment=${tab}` : ""}`,
+  );
   const { tasks, watch, dismiss } = useTaskWatcher();
 
   async function poll() {
     const { task_id } = await api.post<{ task_id: string }>("/api/replies/poll");
-    watch(task_id, () => void reload());
+    watch(task_id, () => {
+      void list.reload();
+      void pipe.reload();
+    });
   }
 
-  const wanted = tab ? tab.split(",") : null;
-  const rows = (data ?? []).filter((r) => !wanted || wanted.includes(r.sentiment ?? "neutral"));
+  const sentiment = pipe.data?.sentiment;
+  const total = SENTIMENTS.reduce((n, s) => n + count(sentiment?.[s.key]), 0);
+  const tabCount = (k: SentimentKey | "") => (pipe.data ? (k ? count(sentiment?.[k]) : total) : null);
 
-  const counts = (data ?? []).reduce<Record<string, number>>((acc, r) => {
-    const key = r.sentiment ?? "neutral";
-    acc[key] = (acc[key] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  return (
-    <>
-      <PageHead
-        title="Replies"
-        description="What came back, sorted by what it means for you. Classification is deliberately cautious — anything ambiguous lands in Neutral."
-        action={
+  const head = (
+    <PageHead
+      title="Replies"
+      description="What came back, sorted by what it means for you. Classification is deliberately cautious — anything ambiguous lands in Neutral."
+      action={
+        <OperatorOnly>
           <Button variant="quiet" size="sm" onClick={poll}>
             <RefreshCw size={13} />
             Check now
           </Button>
-        }
-      />
+        </OperatorOnly>
+      }
+    />
+  );
+
+  /* Public instance: the messages are private, the tally is not. */
+  if (publicInstance) {
+    return (
+      <>
+        {head}
+        <Panel className="p-4">
+          {pipe.data ? (
+            <SentimentSplit sentiment={sentiment} />
+          ) : pipe.error ? (
+            <ErrorNote message={pipe.error} onRetry={pipe.reload} />
+          ) : (
+            <Loading label="Counting replies" rows={3} />
+          )}
+          <p className="mt-4 border-t border-line pt-3 text-[12px] text-ink-3">
+            The replies themselves are private on this public copy — these are the live counts.{" "}
+            <Link href="/outreach" className="underline decoration-line underline-offset-2 hover:text-ink">See the whole pipeline</Link>.
+          </p>
+        </Panel>
+      </>
+    );
+  }
+
+  const rows = list.data ?? [];
+
+  return (
+    <>
+      {head}
 
       <div className="mb-4 flex flex-wrap gap-1 border-b border-line">
         {TABS.map((t) => {
-          const n = t.key
-            ? t.key.split(",").reduce((sum, k) => sum + (counts[k] ?? 0), 0)
-            : (data?.length ?? 0);
+          const n = tabCount(t.key);
           return (
             <button
-              key={t.key}
+              key={t.key || "all"}
               onClick={() => setTab(t.key)}
+              aria-pressed={tab === t.key}
               className={cn(
-                "-mb-px border-b-2 px-3 py-2 text-sm transition-colors",
-                tab === t.key
-                  ? "border-line-strong text-ink"
-                  : "border-transparent text-ink-3 hover:text-ink",
+                "-mb-px cursor-pointer border-b-2 px-3 py-2 text-sm transition-colors",
+                tab === t.key ? "border-ink font-medium text-ink" : "border-transparent text-ink-3 hover:text-ink",
               )}
             >
               {t.label}
-              <span className="tnum ml-2 text-xs text-ink-3">{n}</span>
+              <span className="tnum ml-2 text-xs text-ink-3">{n ?? "—"}</span>
             </button>
           );
         })}
       </div>
 
-      {loading && !data ? (
-        <Loading label="Loading replies" />
-      ) : error ? (
-        <ErrorNote message={error} onRetry={reload} />
+      {list.error && !list.loading ? (
+        <Panel>
+          <ErrorNote message={list.error} onRetry={list.reload} />
+        </Panel>
+      ) : !ready || list.loading ? (
+        <Panel>
+          <Loading label="Loading replies" />
+        </Panel>
       ) : !rows.length ? (
         <Panel>
           <Empty
-            title={tab ? "Nothing in this bucket" : "No replies yet"}
-            hint="The tracker polls your Gmail threads every hour and classifies each new inbound message. Anything it can't read confidently is filed as Neutral for you to judge."
+            title={tab ? `No ${tab} replies yet` : "No replies yet"}
+            hint={
+              count(pipe.data?.stages?.sent)
+                ? "Your inbox is checked every hour and each new reply is classified. Anything it can't read confidently is filed as Neutral for you to judge."
+                : "Nothing has been sent yet. Approve a draft in the review queue; replies appear here once people write back."
+            }
+            action={
+              <Button asChild size="sm" variant="quiet">
+                <Link href="/outreach">See the whole pipeline</Link>
+              </Button>
+            }
           />
         </Panel>
       ) : (

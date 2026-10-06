@@ -15,7 +15,10 @@ import { useMemo, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import { ArrowRight, ChevronRight, Loader2, Search, UserSearch } from "lucide-react";
 import { api, useApi, useTaskWatcher } from "@/lib/api";
+import { fundingOf, inCity, type City } from "@/lib/funding";
 import { rise } from "@/components/anim";
+import { CityFilter, FundingCell, HiringCell, PayCell, cityCounts } from "@/components/funding";
+import { ErrorNote, Loading } from "@/components/ui/primitives";
 import { OperatorOnly } from "@/components/access";
 import { TaskStrip } from "@/components/shell";
 
@@ -33,6 +36,13 @@ type Row = {
   };
   searched_at: string | null;
   ready: boolean;
+  // What the pipeline itself has read, next to the report's claims. Newer backends
+  // only — every one of these may be missing.
+  funding_stage?: string | null; funding_round_label?: string | null; funding_amount_usd_m?: number | null;
+  funding_announced?: string | null; funding_investors?: string[] | string | null; valuation_usd_m?: number | null;
+  pay_power?: number | { score: number | null; band: string | null; why: string | null } | null;
+  pay_power_band?: string | null; hiring_roles?: string[] | string | null;
+  priority_score?: number | null; priority_why?: string | null; overrated?: boolean | null; hype_reason?: string | null;
 };
 type Payload = {
   key: string; name: string; title: string | null; description: string; source: string | null;
@@ -43,10 +53,13 @@ type Payload = {
   };
 };
 
-const HIRING: Record<string, string> = {
-  verified: "proven", role_missing: "hiring, not our role", not_authorized: "unproven",
-  unreachable: "site unreadable", unchecked: "not checked",
-};
+const COLS = "grid grid-cols-[2rem_1.25rem_minmax(14rem,2fr)_6rem_9.5rem_7rem_7rem_5rem_7rem_7.5rem_5.5rem] items-center gap-3";
+
+function payOf(c: Row) {
+  const pp = c.pay_power;
+  if (pp && typeof pp === "object") return pp;
+  return { score: typeof pp === "number" ? pp : null, band: c.pay_power_band ?? null, why: null };
+}
 const SOURCE: Record<string, string> = {
   github: "GitHub", site: "their site", pattern: "email pattern", hunter: "Hunter", "linkedin-public": "LinkedIn (public)",
 };
@@ -54,26 +67,26 @@ const SOURCE: Record<string, string> = {
 export default function ListPage() {
   const { key } = useParams<{ key: string }>();
   const root = useRef<HTMLDivElement>(null);
-  const { data, loading, error, reload } = useApi<Payload>(`/api/lists/${key}`);
+  const { data, error, status, reload } = useApi<Payload>(`/api/lists/${key}`);
   const { tasks, watch, dismiss } = useTaskWatcher();
   const [q, setQ] = useState("");
-  const [city, setCity] = useState<string>("all");
+  const [city, setCity] = useState<City | "all">("all");
   const [open, setOpen] = useState<number | null>(null);
   const [busy, setBusy] = useState<Set<number | "all">>(new Set());
 
-  const cities = useMemo(() => Object.keys(data?.stats.by_city ?? {}).sort(), [data]);
+  const counts = useMemo(() => cityCounts(data?.companies ?? [], (c) => c.city), [data]);
   const rows = useMemo(() => {
     if (!data) return [];
     const needle = q.trim().toLowerCase();
     return data.companies.filter((c) => {
-      if (city !== "all" && !(c.city ?? "").includes(city)) return false;
+      if (!inCity(c.city, city)) return false;
       if (needle && !`${c.name} ${c.what ?? ""}`.toLowerCase().includes(needle)) return false;
       return true;
     });
   }, [data, q, city]);
 
   useGSAP(() => { if (data) rise("[data-row]", { stagger: 0.012, y: 6 }); },
-    { scope: root, dependencies: [!!data, city] });
+    { scope: root, dependencies: [!!data] });
 
   function mark(id: number | "all", on: boolean) {
     setBusy((prev) => { const n = new Set(prev); if (on) n.add(id); else n.delete(id); return n; });
@@ -93,10 +106,28 @@ export default function ListPage() {
     watch(task_id, () => void reload());
   }
 
-  if (error) return <p className="py-8 text-[13px] text-ink-3">{error}</p>;
-  if (loading && !data) return <p className="py-8 text-[13px] text-ink-3">Reading the list…</p>;
-  if (!data) return null;
-  const s = data.stats;
+  // A list the server does not have yet is not an error — it has not been published.
+  if (status === 404 || (data && !data.companies?.length)) {
+    return (
+      <div className="plate px-6 py-14 text-center">
+        <p className="marginal">Special list</p>
+        <p className="mt-3 text-[14px] font-medium">This list hasn&rsquo;t been published to the server yet</p>
+        <p className="mx-auto mt-2 max-w-[56ch] text-[12.5px] leading-relaxed text-ink-3">
+          The companies are picked by hand in a list file and appear here once that file is on the server
+          the dashboard reads from. Everything the scrapers found is already under{" "}
+          <Link href="/companies?view=india" className="underline decoration-line underline-offset-2 hover:text-ink">
+            Companies → India — all
+          </Link>.
+        </p>
+      </div>
+    );
+  }
+  if (error && !data) return <div className="plate"><ErrorNote message={error} onRetry={reload} /></div>;
+  if (!data) return <div className="plate"><Loading label="Reading the list" rows={10} /></div>;
+  const s: Payload["stats"] = data.stats ?? {
+    companies: data.companies.length, with_website: 0, with_roles: 0, hiring_proven: 0, people: 0,
+    with_people: 0, reachable: 0, ready: 0, by_city: {},
+  };
 
   return (
     <div ref={root} className="space-y-5">
@@ -138,7 +169,7 @@ export default function ListPage() {
 
       {/* ------------------------------------------------------------ the numbers */}
       <section className="plate grid grid-cols-2 divide-line sm:grid-cols-3 lg:grid-cols-6 lg:divide-x">
-        <Num label="Companies" n={s.companies} hint={Object.entries(s.by_city).map(([c, n]) => `${n} ${c}`).join(" · ")} />
+        <Num label="Companies" n={s.companies} hint={`${counts.Bengaluru} Bengaluru · ${counts.Hyderabad} Hyderabad`} />
         <Num label="Roles found" n={s.with_roles} hint="companies with a role on their board" />
         <Num label="Hiring proven" n={s.hiring_proven} hint="on their own board or careers page" />
         <Num label="People found" n={s.people} hint={`at ${s.with_people} companies`} />
@@ -148,20 +179,7 @@ export default function ListPage() {
 
       {/* ------------------------------------------------------------ controls */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-md border border-line p-px">
-          {["all", ...cities].map((c) => (
-            <button
-              key={c}
-              onClick={() => setCity(c)}
-              className={`cursor-pointer rounded-[5px] px-3 py-1.5 text-[12px] transition-colors ${
-                city === c ? "bg-ink font-medium" : "text-ink-2 hover:text-ink"
-              }`}
-              style={city === c ? { color: "var(--on-ink)" } : undefined}
-            >
-              {c === "all" ? `All ${s.companies}` : `${c} ${s.by_city[c] ?? ""}`}
-            </button>
-          ))}
-        </div>
+        <CityFilter value={city} onChange={setCity} counts={counts} />
         <label className="relative min-w-0 flex-1 sm:max-w-xs">
           <Search size={13} className="absolute top-1/2 left-2.5 -translate-y-1/2 text-ink-3" />
           <input
@@ -176,14 +194,14 @@ export default function ListPage() {
 
       {/* ------------------------------------------------------------ the table */}
       <div className="plate overflow-x-auto">
-        <div className="min-w-[880px]">
-          <div className="grid grid-cols-[2rem_1.25rem_minmax(14rem,2fr)_5.5rem_6.5rem_6rem_7.5rem_5rem_7rem_6rem_5.5rem] items-center gap-3 border-b border-line px-4 py-2">
+        <div className="min-w-[1080px]">
+          <div className={`${COLS} border-b border-line px-4 py-2`}>
             <span className="marginal">#</span>
             <span />
             <span className="marginal">Company</span>
             <span className="marginal">City</span>
-            <span className="marginal" title="From the report">Stage</span>
-            <span className="marginal" title="From the report">Raised</span>
+            <span className="marginal" title="Round · amount · when · valuation. Read by the pipeline where it could; otherwise the report's words, marked 'report'.">Funding</span>
+            <span className="marginal text-right" title="unknown → thin → funded → deep pockets → pays">Pay power</span>
             <span className="marginal" title="From the report — a market range, not an offer">CTC</span>
             <span className="marginal text-right">Roles</span>
             <span className="marginal text-right">People</span>
@@ -198,9 +216,7 @@ export default function ListPage() {
                 const isOpen = open === c.id;
                 return (
                   <li key={c.id} data-row>
-                    <div
-                      className="grid grid-cols-[2rem_1.25rem_minmax(14rem,2fr)_5.5rem_6.5rem_6rem_7.5rem_5rem_7rem_6rem_5.5rem] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-2"
-                    >
+                    <div className={`${COLS} px-4 py-2.5 transition-colors hover:bg-surface-2`}>
                       <span className="tnum text-right text-[11px] text-ink-3">{c.rank}</span>
                       <button onClick={() => setOpen(isOpen ? null : c.id)} aria-expanded={isOpen} aria-label="Details" className="cursor-pointer">
                         <ChevronRight size={13} className={`text-ink-3 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
@@ -211,12 +227,16 @@ export default function ListPage() {
                           {c.ready && <span className="chip chip-solid">ready</span>}
                           {c.category === "large-tech" && <span className="chip">large tech</span>}
                           {!c.website && <span className="chip" title={c.website_note ?? ""}>no website</span>}
+                          {c.overrated && <span className="chip chip-strike" title={c.hype_reason ?? "Too well known to be underrated"}>overrated</span>}
+                          {typeof c.priority_score === "number" && Number.isFinite(c.priority_score) && (
+                            <span className="chip tnum" title={c.priority_why ?? "Priority score"}>P{Math.round(c.priority_score)}</span>
+                          )}
                         </span>
                         <span className="block truncate text-[11.5px] text-ink-3">{c.what ?? "—"}</span>
                       </button>
                       <span className="truncate text-[12px] text-ink-2">{c.city ?? "—"}</span>
-                      <span className="truncate text-[12px] text-ink-2">{c.stage ?? "—"}</span>
-                      <span className="tnum truncate text-[11.5px] text-ink-2">{c.funding ?? "—"}</span>
+                      <span className="min-w-0"><ListFunding c={c} /></span>
+                      <span className="text-right"><PayCell {...payOf(c)} /></span>
                       <span
                         className="tnum truncate text-[11.5px] text-ink-2"
                         title={c.ctc_kind === "reported" ? "A publicly posted, role-specific figure" : c.ctc_kind === "indicative" ? "Indicative market range from the report — not the company's promise" : ""}
@@ -229,9 +249,7 @@ export default function ListPage() {
                       <span className={`tnum text-right text-[12px] ${c.people.total ? "" : "text-ink-3"}`}>
                         {c.people.total ? `${c.people.total} · ${c.people.reachable} ask` : "—"}
                       </span>
-                      <span className={`text-[11.5px] ${c.hiring_status === "verified" ? "font-medium" : "text-ink-3"}`}>
-                        {HIRING[c.hiring_status ?? "unchecked"] ?? c.hiring_status}
-                      </span>
+                      <span className="min-w-0"><HiringCell status={c.hiring_status} roles={c.hiring_roles} /></span>
                       <OperatorOnly>
                         <button
                           onClick={() => findOne(c.id)}
@@ -285,7 +303,7 @@ export default function ListPage() {
                             </p>
                           )}
                           {c.hiring_evidence && (
-                            <p className="mt-3 border-l-2 border-line pl-2.5 text-[11.5px] leading-relaxed text-ink-3 italic">{c.hiring_evidence}</p>
+                            <p className="mt-3 border-l-2 border-line pl-2.5 text-[11.5px] leading-relaxed text-ink-3 italic [overflow-wrap:anywhere]">{c.hiring_evidence}</p>
                           )}
                         </div>
                         <div>
@@ -336,11 +354,29 @@ export default function ListPage() {
   );
 }
 
+/** The pipeline's own reading when it has one; the report's words, labelled, when not. */
+function ListFunding({ c }: { c: Row }) {
+  // `funding` on a list row is the report's sentence, not the structured round
+  const src = { ...c, funding: null };
+  const f = fundingOf(src);
+  if (f.stage || f.amountUsdM || f.announced || f.valuationUsdM) return <FundingCell row={src} />;
+  if (!c.stage && !c.funding) return <span className="text-ink-3">—</span>;
+  return (
+    <span className="flex min-w-0 flex-col gap-0.5" title="From the report, not yet read by the pipeline">
+      <span className="flex min-w-0 items-center gap-1.5">
+        {c.stage ? <span className="chip shrink-0 !h-[17px] !px-1.5 text-ink">{c.stage}</span> : null}
+        {c.funding ? <span className="tnum truncate text-[12px] font-semibold">{c.funding}</span> : null}
+      </span>
+      <span className="text-[10.5px] text-ink-3">report</span>
+    </span>
+  );
+}
+
 function Num({ label, n, hint, hero = false }: { label: string; n: number; hint?: string; hero?: boolean }) {
   return (
     <div className="p-4">
       <p className="marginal">{label}</p>
-      <p className={`tnum mt-1.5 leading-none font-medium tracking-[-0.02em] ${hero ? "text-[34px]" : "text-[24px]"}`}>{n.toLocaleString()}</p>
+      <p className={`tnum mt-1.5 leading-none font-medium tracking-[-0.02em] ${hero ? "text-[34px]" : "text-[24px]"}`}>{Number.isFinite(n) ? n.toLocaleString() : "—"}</p>
       {hint ? <p className="mt-1.5 text-[11px] leading-snug text-ink-3">{hint}</p> : null}
     </div>
   );

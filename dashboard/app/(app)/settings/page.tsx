@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FileText, Save } from "lucide-react";
 import { api, useApi, useTaskWatcher, type Health } from "@/lib/api";
 import { relTime } from "@/lib/utils";
@@ -42,9 +42,13 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (config.data) setForm(structuredClone(config.data));
-  }, [config.data]);
+  // A fresh config from the server replaces the form — adjusted during render
+  // against the last object seen, not in an effect.
+  const [seenConfig, setSeenConfig] = useState<Config | null>(null);
+  if (config.data && config.data !== seenConfig) {
+    setSeenConfig(config.data);
+    setForm(structuredClone(config.data));
+  }
 
   function set<K extends keyof Config>(section: K, key: string, value: unknown) {
     setForm((prev) =>

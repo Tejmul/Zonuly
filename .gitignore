@@ -14,3 +14,6 @@ logs/
 data/tick.lock
 jobhunter.db
 jobhunter.db-*
+
+# The snapshot is committed gzipped (demo.db.gz); the unpacked file is a local by-product.
+demo.db

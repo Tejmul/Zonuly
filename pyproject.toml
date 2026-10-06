@@ -33,6 +33,9 @@ dependencies = [
 research = [
     "agent-reach @ https://github.com/Panniantong/Agent-Reach/archive/refs/heads/main.zip",
 ]
+dev = [
+    "pytest>=8",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -46,3 +49,6 @@ packages = ["jobhunter"]
 # release). Hatchling rejects direct URLs in package metadata by default; this only
 # lets the project build, it does not install the extra.
 allow-direct-references = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

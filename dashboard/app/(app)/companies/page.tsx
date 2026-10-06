@@ -18,7 +18,10 @@ import { Suspense, useMemo, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import { ArrowRight, ChevronRight, Search, Star } from "lucide-react";
 import { useApi } from "@/lib/api";
+import { inCity, type City } from "@/lib/funding";
 import { rise } from "@/components/anim";
+import { CityFilter, FundingCell, HiringCell, PayCell, cityCounts } from "@/components/funding";
+import { ErrorNote, Loading } from "@/components/ui/primitives";
 import { TierPill } from "@/components/ui/tier";
 import { AddCompany } from "@/components/add-company";
 import { OperatorOnly } from "@/components/access";
@@ -34,6 +37,11 @@ type Row = {
   ppo_lpa: number | null; stipend_inr_month: number | null;
   funding_stage: string | null; hiring_status: string | null; hiring_evidence: string | null;
   funding?: { stage: string | null; amount_usd_m: number | null; announced: string | null } | null;
+  // newer backends: flat funding columns, a normalised round label, a priority
+  // ranking and a hype flag. All optional — older APIs simply leave them out.
+  funding_round_label?: string | null; funding_amount_usd_m?: number | null; funding_announced?: string | null;
+  valuation_usd_m?: number | null; hiring_roles?: string[] | string | null; underrated?: boolean | null;
+  overrated?: boolean | null; hype_reason?: string | null; priority_score?: number | null; priority_why?: string | null;
   hiring_post: { text: string | null; url: string; by: string | null; source: string | null; at: string | null } | null;
   roles: { total: number; fresher: number; anywhere: number; internships: number; families: Family[] };
   referrals: {
@@ -57,11 +65,7 @@ const VIEWS = [
 ] as const;
 type View = (typeof VIEWS)[number]["key"];
 
-const HIRING: Record<string, string> = {
-  verified: "proven", role_missing: "not our role", not_authorized: "unproven", unreachable: "unreadable", unchecked: "—",
-};
 const REGION: Record<string, string> = { us: "US", uk: "UK", de: "DE", nl: "NL", eu: "EU", india: "India", remote: "Remote" };
-const PP_BAND: Record<string, string> = { pays: "pays", deep_pockets: "deep pockets", funded: "funded", thin: "thin", unknown: "unknown" };
 const PP_RULES =
   "Pay 100 · pays: a posting states ≥ ₹30 L.\n" +
   "85 · deep pockets: $10M+ in 24 months, Series A+ in 30 months, or valued ≥ $50M.\n" +
@@ -74,20 +78,11 @@ const SOURCE_LABEL: Record<string, string> = {
   ashby: "their Ashby board", remoteok: "RemoteOK", wwr: "We Work Remotely",
 };
 
-function fundingLine(f?: Row["funding"]): string | null {
-  if (!f || (!f.stage && !f.announced)) return null;
-  const parts: string[] = [];
-  if (f.stage) parts.push(f.stage.replace(/\b\w/g, (m) => m.toUpperCase()));
-  if (f.amount_usd_m) parts.push(`$${f.amount_usd_m}M`);
-  if (f.announced) parts.push(f.announced.slice(0, 7));
-  return parts.join(" · ") || null;
-}
-
-const GRID = "grid grid-cols-[2rem_1.25rem_2.25rem_minmax(14rem,2fr)_4rem_4.5rem_6rem_5.5rem_7.5rem] items-center gap-3";
+const GRID = "grid grid-cols-[2rem_1.25rem_2.25rem_minmax(14rem,2fr)_5.5rem_4.5rem_5rem_7.5rem_8rem_9.5rem] items-center gap-3";
 
 export default function CompaniesPage() {
   return (
-    <Suspense fallback={<p className="py-8 text-[13px] text-ink-3">Reading the registry…</p>}>
+    <Suspense fallback={<Loading label="Reading the registry" rows={8} />}>
       <Companies />
     </Suspense>
   );
@@ -95,7 +90,7 @@ export default function CompaniesPage() {
 
 function Companies() {
   const root = useRef<HTMLDivElement>(null);
-  const { data, loading, error, reload } = useApi<Payload>("/api/companies/grouped");
+  const { data, error, reload } = useApi<Payload>("/api/companies/grouped");
   const [q, setQ] = useState("");
   // /companies?view=india opens straight on a view — the ★ page links here that way
   const wanted = useSearchParams().get("view");
@@ -103,6 +98,7 @@ function Companies() {
     (VIEWS.some((v) => v.key === wanted) ? (wanted as View) : "ready"),
   );
   const [open, setOpen] = useState<number | null>(null);
+  const [city, setCity] = useState<City | "all">("all");
 
   const counts = useMemo(() => {
     const cs = data?.companies ?? [];
@@ -123,17 +119,24 @@ function Companies() {
       if (view === "targets" && !["tier1", "tier2", "prospect"].includes(c.tier ?? "")) return false;
       if (view === "anywhere" && !(c.roles.anywhere > 0)) return false;
       if (view === "india" && c.region !== "india") return false;
+      if (view === "india" && !inCity(c.city, city)) return false;
       if (needle && !`${c.name} ${c.description ?? ""}`.toLowerCase().includes(needle)) return false;
       return true;
     });
-  }, [data, q, view]);
+  }, [data, q, view, city]);
 
+  const indiaCounts = useMemo(
+    () => cityCounts((data?.companies ?? []).filter((c) => c.region === "india"), (c) => c.city),
+    [data],
+  );
+
+  // Once, when the data first lands — a filter change over thousands of rows must
+  // not replay an entrance.
   useGSAP(() => { if (data) rise("[data-row]", { stagger: 0.012, y: 6 }); },
-    { scope: root, dependencies: [!!data, view] });
+    { scope: root, dependencies: [!!data] });
 
-  if (error) return <p className="py-8 text-[13px] text-ink-3">{error}</p>;
-  if (loading && !data) return <p className="py-8 text-[13px] text-ink-3">Reading the registry…</p>;
-  if (!data) return null;
+  if (error && !data) return <div className="plate"><ErrorNote message={error} onRetry={reload} /></div>;
+  if (!data) return <div className="plate"><Loading label="Reading the registry" rows={10} /></div>;
   const meaning = VIEWS.find((v) => v.key === view)!.meaning;
 
   return (
@@ -142,7 +145,7 @@ function Companies() {
         <div>
           <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-[-0.02em]">Companies</h1>
           <p className="mt-1 max-w-[62ch] text-[12.5px] leading-relaxed text-ink-2">
-            {data.stats.companies.toLocaleString()} companies, one row each. Pick a view; the line under it says what
+            {(data.stats?.companies ?? data.companies.length).toLocaleString()} companies, one row each. Pick a view; the line under it says what
             the view means.
           </p>
         </div>
@@ -153,7 +156,7 @@ function Companies() {
           >
             <Star size={13} />
             India — the special list
-            {data.stats.on_lists ? <span className="tnum text-ink-3">{data.stats.on_lists}</span> : null}
+            {data.stats?.on_lists ? <span className="tnum text-ink-3">{data.stats.on_lists}</span> : null}
             <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
           </Link>
           <OperatorOnly><AddCompany onAdded={reload} /></OperatorOnly>
@@ -187,6 +190,7 @@ function Companies() {
               className="h-8 w-full rounded-md border border-line bg-surface pr-2 pl-7 text-[12px] placeholder:text-ink-3 focus:border-line-strong focus:outline-none"
             />
           </label>
+          {view === "india" && <CityFilter value={city} onChange={setCity} counts={indiaCounts} />}
           <span className="marginal ml-auto">{rows.length.toLocaleString()} shown</span>
         </div>
         <p className="mt-2 text-[12px] text-ink-3">{meaning}</p>
@@ -194,7 +198,7 @@ function Companies() {
 
       {/* ------------------------------------------------------------ the table */}
       <div className="plate overflow-x-auto">
-        <div className="min-w-[860px]">
+        <div className="min-w-[1040px]">
           <div className={`${GRID} border-b border-line px-4 py-2`}>
             <span className="marginal">#</span>
             <span />
@@ -204,7 +208,8 @@ function Companies() {
             <span className="marginal text-right" title="open roles · fresher roles">Roles</span>
             <span className="marginal text-right" title="people found · people who could refer">People</span>
             <span className="marginal" title="Proven means their own board or careers page lists open roles">Hiring</span>
-            <span className="marginal text-right" title={PP_RULES}>Pay</span>
+            <span className="marginal text-right" title={PP_RULES}>Pay power</span>
+            <span className="marginal" title="Last round · amount · when · valuation if stated. Hover a cell for investors.">Funding</span>
           </div>
           {rows.length === 0 ? (
             <p className="px-4 py-8 text-[13px] text-ink-3">
@@ -214,9 +219,10 @@ function Companies() {
             <ul className="divide-y divide-line">
               {rows.map((c, i) => {
                 const isOpen = open === c.id;
-                const pp = c.pay_power?.score ?? 0;
                 return (
-                  <li key={c.id} data-row>
+                  // content-visibility: rows far below the fold are not laid out or painted
+                  // until scrolled near — four thousand rows cost about a screenful.
+                  <li key={c.id} data-row className="[contain-intrinsic-size:auto_52px] [content-visibility:auto]">
                     <button
                       onClick={() => setOpen(isOpen ? null : c.id)}
                       aria-expanded={isOpen}
@@ -231,6 +237,10 @@ function Companies() {
                           {c.list_key && <span className="chip" title="On the ★ India list">★</span>}
                           {c.ready && <span className="chip chip-solid">ready</span>}
                           {c.trust === "bare" && <span className="chip">name only</span>}
+                          {c.overrated && <span className="chip chip-strike" title={c.hype_reason ?? "Too well known to be underrated"}>overrated</span>}
+                          {typeof c.priority_score === "number" && Number.isFinite(c.priority_score) && (
+                            <span className="chip tnum" title={c.priority_why ?? "Priority score"}>P{Math.round(c.priority_score)}</span>
+                          )}
                         </span>
                         <span className="block truncate text-[11.5px] text-ink-3">{c.description ?? "—"}</span>
                       </span>
@@ -241,15 +251,11 @@ function Companies() {
                       <span className={`tnum text-right text-[12px] ${c.referrals.total ? "" : "text-ink-3"}`}>
                         {c.referrals.total ? `${c.referrals.total} · ${c.referrals.reachable}` : "—"}
                       </span>
-                      <span className={`text-[11.5px] ${c.hiring_status === "verified" ? "font-medium" : "text-ink-3"}`}>
-                        {HIRING[c.hiring_status ?? "unchecked"] ?? c.hiring_status}
+                      <span className="min-w-0"><HiringCell status={c.hiring_status} roles={c.hiring_roles} /></span>
+                      <span className="text-right">
+                        <PayCell score={c.pay_power?.score} band={c.pay_power?.band} why={c.pay_power?.why ?? PP_RULES} />
                       </span>
-                      <span
-                        className={`tnum truncate text-right text-[11.5px] ${pp >= 65 ? "" : "text-ink-3"}`}
-                        title={c.pay_power?.why ?? PP_RULES}
-                      >
-                        {pp >= 65 ? `${pp} · ${PP_BAND[c.pay_power!.band ?? ""] ?? c.pay_power!.band}` : fundingLine(c.funding) ?? "unknown"}
-                      </span>
+                      <span className="min-w-0"><FundingCell row={c} /></span>
                     </button>
 
                     {isOpen && (
@@ -290,7 +296,7 @@ function Companies() {
                               <p className="mt-2 text-[12px] text-ink-3">Nobody to ask yet.</p>
                             )}
                             {c.hiring_evidence && (
-                              <p className="mt-3 border-l-2 border-line pl-2.5 text-[11.5px] leading-relaxed text-ink-3 italic">{c.hiring_evidence}</p>
+                              <p className="mt-3 border-l-2 border-line pl-2.5 text-[11.5px] leading-relaxed text-ink-3 italic [overflow-wrap:anywhere]">{c.hiring_evidence}</p>
                             )}
                           </div>
                           <div>
@@ -332,8 +338,8 @@ function Companies() {
 
       <p className="max-w-[80ch] text-[11.5px] leading-relaxed text-ink-3">
         Roles is open roles · fresher roles. People is people found · people who could refer (engineer, EM or founder
-        with a usable address). Pay shows the Pay Power score when we can judge it (hover for the rules) and the last
-        funding round when we cannot. India needs a stated number to go above Thin — rupee pay does not follow dollar rounds.
+        with a usable address). Pay power is the five-step ladder from unknown to pays (hover for the rules). Funding is
+        the last round, its amount and when — printed in ink as recent when it is twelve months old or less. India needs a stated number to go above Thin — rupee pay does not follow dollar rounds.
       </p>
     </div>
   );

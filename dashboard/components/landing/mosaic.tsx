@@ -28,7 +28,9 @@ function mulberry32(seed: number) {
   };
 }
 
-const COLUMNS = 8;
+/* 2026-10-06, Tejmul: the faces read too small. Six wider columns instead of eight —
+   each face about a third larger at every width — with the same drift. */
+const COLUMNS = 6;
 const PER_COLUMN = 9;
 
 const grid = (() => {
@@ -43,10 +45,10 @@ const grid = (() => {
   );
 })();
 
-/** Only the last four columns are wide enough to matter on a phone. */
+/** Three columns on a phone, growing to six on a wide screen. */
 const COLUMN_VISIBILITY = [
-  "flex", "flex", "flex", "flex",
-  "hidden sm:flex", "hidden sm:flex", "hidden xl:flex", "hidden xl:flex",
+  "flex", "flex", "flex",
+  "hidden sm:flex", "hidden lg:flex", "hidden xl:flex",
 ];
 
 export type Lead = {
@@ -112,7 +114,8 @@ export function FaceMosaic({
             { yPercent: up ? 0 : -50 },
             {
               yPercent: up ? -50 : 0,
-              duration: 52 + (i % 4) * 11,
+              // a touch quicker than it was: the larger faces carry the motion further
+              duration: 46 + (i % 4) * 10,
               ease: "none",
               repeat: -1,
             },
@@ -121,7 +124,11 @@ export function FaceMosaic({
           return tween;
         });
 
-        /* Entrance: the field assembles out of nothing, from the middle outwards. */
+        /* Entrance: the field assembles out of nothing, from the middle outwards.
+           clearProps hands the tiles back to the stylesheet when it ends — without it the
+           inline scale(1) outlived the intro and quietly overrode the lit tile's
+           scale(1.05). The safety call below covers the other failure: an intro cut
+           short (a resize, a fast navigation) must never leave a face at opacity 0. */
         const intro = gsap.timeline({ delay: 0.15 });
         intro.fromTo(
           tiles,
@@ -131,9 +138,13 @@ export function FaceMosaic({
             scale: 1,
             duration: 0.9,
             ease: "expo.out",
-            stagger: { each: 0.007, from: "random" },
+            stagger: { each: 0.009, from: "random" },
+            clearProps: "opacity,scale",
           },
         );
+        const safety = gsap.delayedCall(3, () => {
+          if (intro.progress() < 1) intro.progress(1);
+        });
 
         /* The hunt. Every beat it re-measures which faces are actually on screen and
            clear of the headline, then locks onto one of them. */
@@ -251,7 +262,8 @@ export function FaceMosaic({
 
         return () => {
           drifts.forEach((d) => d.kill());
-          intro.kill();
+          intro.progress(1).kill();
+          safety.kill();
           pending?.kill();
           scan.kill();
         };
@@ -277,10 +289,23 @@ export function FaceMosaic({
                 >
                   {/* Decorative: the crowd is the message, no single photograph is.
                       Plain <img> on purpose — these are already WebP cropped to exactly
-                      the size they render at, so next/image would optimise nothing and
-                      add 126 wrappers to the hero's critical path. */}
+                      the size they render at, so next/image would optimise nothing.
+                      Eager, never lazy: a lazy image inside a track GSAP is translating
+                      is judged "off screen" by the browser and sometimes never fetched,
+                      which is the grey hole that made the hero look broken. The whole
+                      set is under a megabyte and decodes off the main thread. A file
+                      that fails leaves the tile's plain ground, not a broken-image icon. */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/faces/${face}.webp`} alt="" loading={c < 4 ? "eager" : "lazy"} width={360} height={360} />
+                  <img
+                    src={`/faces/${face}.webp`}
+                    alt=""
+                    loading="eager"
+                    decoding="async"
+                    fetchPriority={c < 3 ? "auto" : "low"}
+                    width={360}
+                    height={360}
+                    onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+                  />
                   <span data-ring className="ring">
                     <i />
                   </span>

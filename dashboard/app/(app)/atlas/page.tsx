@@ -23,6 +23,7 @@ import { useMemo, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { AtlasNet } from "@/components/atlas-net";
+import { ErrorNote, Loading } from "@/components/ui/primitives";
 import {
   DEFAULT_WEIGHTS, FIELDS, TERMS, rank, resumeSignals, segmentHeat, suggestedFields,
   type Company, type FieldKey, type Profile, type TermKey, type Weights,
@@ -59,8 +60,8 @@ export default function AtlasPage() {
     );
   }, [ranked, q]);
 
-  if (net.error) return <p className="py-8 text-[13px] text-ink-3">{net.error}</p>;
-  if (!net.data) return <p className="py-8 text-[13px] text-ink-3">Reading the atlas…</p>;
+  if (net.error && !net.data) return <div className="plate"><ErrorNote message={net.error} onRetry={net.reload} /></div>;
+  if (!net.data) return <div className="plate"><Loading label="Reading the atlas" rows={10} /></div>;
 
   const toggleField = (k: FieldKey) =>
     setFields((cur) => {

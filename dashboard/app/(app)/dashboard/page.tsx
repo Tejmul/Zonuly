@@ -23,6 +23,7 @@ import { useGSAP } from "@gsap/react";
 import { ArrowRight, Briefcase, Building2, Download, Flag, Filter, MoreHorizontal, Search, Users } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { rise } from "@/components/anim";
+import { ErrorNote, Loading } from "@/components/ui/primitives";
 import { Delta, Gauge, Ribbon, Stack, Trend, type Row } from "@/components/charts";
 
 type Net = {
@@ -92,8 +93,8 @@ export default function Dashboard() {
   useGSAP(() => { if (ov.data) rise("[data-card]", { stagger: 0.04 }); },
     { scope: root, dependencies: [!!ov.data] });
 
-  if (ov.error) return <p className="py-8 text-[13px] text-ink-3">{ov.error}</p>;
-  if (!ov.data) return <p className="py-8 text-[13px] text-ink-3">Reading the pipeline…</p>;
+  if (ov.error && !ov.data) return <div className="plate"><ErrorNote message={ov.error} onRetry={ov.reload} /></div>;
+  if (!ov.data) return <div className="plate"><Loading label="Reading the pipeline" rows={8} /></div>;
 
   const o = ov.data;
   const stats = net.data?.stats ?? {};

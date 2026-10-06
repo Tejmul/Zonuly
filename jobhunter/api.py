@@ -288,7 +288,18 @@ def health() -> dict:
         "counts": matcher.counts(),
         "scheduler": scheduler.status(),
         "access": access.status(),
+        "snapshot": _snapshot_status(),
     }
+
+
+def _snapshot_status() -> dict | None:
+    from jobhunter import snapshot
+
+    try:
+        return snapshot.status()
+    except Exception as e:  # noqa: BLE001 — health must answer even when the stamp is unreadable
+        log.warning("snapshot status unreadable: %s", e)
+        return {"schema_ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
 @app.get("/api/models")
@@ -564,35 +575,60 @@ def sources() -> dict:
 
 # ---------------------------------------------------------------- companies & contacts
 
+def _funding_dict(c: Company) -> dict:
+    """The round as the dashboard shows it: stage in the one vocabulary, amount, total,
+    date, valuation, and the sentence it came from."""
+    from jobhunter import admission
+
+    return {
+        "stage": admission.normalize_stage(c.funding_stage) or c.funding_stage,
+        "amount_usd_m": c.funding_amount_usd_m,
+        "total_usd_m": c.funding_total_usd_m,
+        "announced": c.funding_announced,
+        "valuation_usd_m": c.valuation_usd_m,
+        "evidence": c.funding_evidence,
+    }
+
+
+def _hidden(c: Company, include_overrated: bool) -> bool:
+    """Hidden by default: overrated, quarantined and merged rows. A hand-picked list row
+    is never hidden — the list is the decision."""
+    if c.list_key:
+        return False
+    if c.status in ("quarantined", "merged"):
+        return not include_overrated
+    return bool(c.overrated) and not include_overrated
+
+
 @app.get("/api/companies")
 def list_companies(
     has_contacts: bool | None = None,
     tier: str | None = Query(None, description="tier1 | tier2 | prospect | unknown | reject"),
     hiring: str | None = Query(None, description="verified | role_missing | not_authorized | unreachable"),
-    sort: str = Query("score", description="score | tier | pay | name"),
-    limit: int = Query(200, le=1000),
+    sort: str = Query("priority", description="priority | score | tier | pay | name"),
+    include_overrated: bool = Query(False, description="also list overrated, quarantined and merged companies"),
+    limit: int = Query(200, le=5000),
 ) -> list[dict]:
+    from jobhunter import admission
+
     with get_session() as session:
-        companies = session.exec(select(Company).order_by(col(Company.name)).limit(limit)).all()
+        companies = session.exec(select(Company)).all()
+        n_contacts = dict(session.exec(select(Contact.company_id, func.count()).group_by(Contact.company_id)).all())
+        n_jobs = dict(session.exec(select(Job.company_id, func.count()).group_by(Job.company_id)).all())
+        best_scores = dict(session.exec(select(Job.company_id, func.max(Job.match_score)).group_by(Job.company_id)).all())
         out = []
         for c in companies:
-            n_contacts = session.exec(
-                select(func.count()).select_from(Contact).where(Contact.company_id == c.id)
-            ).one()
-            if has_contacts is True and n_contacts == 0:
+            if _hidden(c, include_overrated):
                 continue
-            if has_contacts is False and n_contacts > 0:
+            contacts_n = n_contacts.get(c.id, 0)
+            if has_contacts is True and contacts_n == 0:
+                continue
+            if has_contacts is False and contacts_n > 0:
                 continue
             if tier and (c.tier or "unknown") != tier:
                 continue
             if hiring and (c.hiring_status or "unchecked") != hiring:
                 continue
-            n_jobs = session.exec(
-                select(func.count()).select_from(Job).where(Job.company_id == c.id)
-            ).one()
-            best = session.exec(
-                select(func.max(Job.match_score)).where(Job.company_id == c.id)
-            ).one()
             out.append(
                 {
                     "id": c.id,
@@ -602,20 +638,33 @@ def list_companies(
                     "github_org": c.github_org,
                     "email_pattern": c.email_pattern,
                     "ats": c.ats,
-                    "jobs": n_jobs,
-                    "contacts": n_contacts,
-                    "best_score": best,
+                    "jobs": n_jobs.get(c.id, 0),
+                    "contacts": contacts_n,
+                    "best_score": best_scores.get(c.id),
                     "contacts_found_at": c.contacts_found_at.isoformat() if c.contacts_found_at else None,
                     # --- targeting (jobhunter/targeting.py): why this company, or why not
                     "tier": c.tier,
                     "tier_reason": c.tier_reason,
                     "description": c.description,
                     "region": c.hq_region,
+                    "city": c.city,
                     "underrated": c.underrated,
+                    "overrated": c.overrated,
+                    "overrated_reason": c.overrated_reason,
+                    "priority_score": c.priority_score,
+                    "priority_why": c.priority_why,
+                    "status": c.status,
+                    "status_reason": c.status_reason,
+                    "list_key": c.list_key,
                     "stipend_inr_month": c.stipend_inr_month,
                     "ppo_lpa": c.ppo_lpa,
-                    "funding_stage": c.funding_stage,
+                    "pay_power_band": c.pay_power_band,
+                    "funding_stage": admission.normalize_stage(c.funding_stage) or c.funding_stage,
                     "funding_amount_usd_m": c.funding_amount_usd_m,
+                    "funding_total_usd_m": c.funding_total_usd_m,
+                    "funding_announced": c.funding_announced,
+                    "valuation_usd_m": c.valuation_usd_m,
+                    "funding": _funding_dict(c),
                     # --- hiring authenticity (jobhunter/hiring_verify.py)
                     "hiring_status": c.hiring_status,
                     "hiring_evidence": c.hiring_evidence,
@@ -624,12 +673,13 @@ def list_companies(
             )
         tier_rank = {"tier1": 0, "tier2": 1, "prospect": 2, "unknown": 3, "reject": 4}
         sorters = {
+            "priority": lambda c: (-(c["priority_score"] or 0), tier_rank.get(c["tier"] or "unknown", 9), c["name"].lower()),
             "score": lambda c: (c["best_score"] is None, -(c["best_score"] or 0)),
             "tier": lambda c: (tier_rank.get(c["tier"] or "unknown", 9), -(c["ppo_lpa"] or 0), c["name"]),
             "pay": lambda c: (-(c["ppo_lpa"] or 0), c["name"]),
             "name": lambda c: c["name"].lower(),
         }
-        return sorted(out, key=sorters.get(sort, sorters["score"]))
+        return sorted(out, key=sorters.get(sort, sorters["priority"]))[:limit]
 
 
 @app.get("/api/network")
@@ -676,7 +726,7 @@ def add_company(body: NewCompany) -> dict:
 
 
 @app.get("/api/companies/grouped")
-def companies_grouped(include_rejects: bool = False) -> dict:
+def companies_grouped(include_rejects: bool = False, include_overrated: bool = False) -> dict:
     """One row per company, with its roles grouped by family and its referrers attached.
 
     Distinct from /api/network, which is a map: there a company legitimately appears in
@@ -684,7 +734,7 @@ def companies_grouped(include_rejects: bool = False) -> dict:
     """
     from jobhunter import network
 
-    return network.company_list(include_rejects=include_rejects)
+    return network.company_list(include_rejects=include_rejects, include_overrated=include_overrated)
 
 
 # ---------------------------------------------------------------- hand-picked lists
@@ -1109,6 +1159,82 @@ def poll_replies() -> dict:
     from jobhunter.outreach import tracker
 
     return {"task_id": _run_task("poll-replies", tracker.poll)}
+
+
+@app.get("/api/outreach/pipeline")
+def outreach_pipeline() -> dict:
+    """The send pipeline in one read: every stage's count, reply sentiment, today's cap,
+    and whether mail can actually leave and be read back.
+
+    Counts are public — they say nothing about anyone. `recent` names people, so the
+    public instance gets an empty list, the same rule /api/replies follows."""
+    from jobhunter import n8n
+    from jobhunter.db import Event, get_setting
+    from jobhunter.outreach import gmail, ledger, sender
+
+    with get_session() as session:
+        by_status = dict(session.exec(select(Email.status, func.count()).group_by(Email.status)).all())
+        by_sentiment = dict(session.exec(select(Reply.sentiment, func.count()).group_by(Reply.sentiment)).all())
+        replied_emails = session.exec(select(func.count(func.distinct(Reply.email_id)))).one()
+        meetings = session.exec(
+            select(func.count()).select_from(Event).where(col(Event.status).in_(["proposed", "confirmed", "done"]))
+        ).one()
+        last_poll_at = get_setting(session, "outreach:last_poll_at") or None
+        last_poll_error = get_setting(session, "outreach:last_poll_error") or None
+
+        recent: list[dict] = []
+        if access.can_read_private():
+            emails = session.exec(
+                select(Email).where(col(Email.status).in_(["approved", "sent", "replied", "failed"]))
+                .order_by(col(Email.sent_at).desc().nulls_last(), col(Email.id).desc()).limit(25)
+            ).all()
+            for e in emails:
+                contact = session.get(Contact, e.contact_id)
+                company = session.get(Company, e.company_id)
+                last = session.exec(
+                    select(Reply).where(Reply.email_id == e.id).order_by(col(Reply.received_at).desc())
+                ).first()
+                recent.append({
+                    "email_id": e.id,
+                    "company_name": company.name if company else None,
+                    "contact_name": contact.name if contact else None,
+                    "status": e.status,
+                    "sent_at": e.sent_at.isoformat() if e.sent_at else None,
+                    "reply_sentiment": last.sentiment if last else None,
+                    "reply_at": last.received_at.isoformat() if last and last.received_at else None,
+                })
+
+    sent = sum(by_status.get(s, 0) for s in ("sent", "replied"))
+    led = ledger.status()
+    return {
+        "stages": {
+            "drafted": sum(by_status.values()),
+            "in_review": by_status.get("draft", 0),
+            "approved": by_status.get("approved", 0),
+            "rejected": by_status.get("rejected", 0),
+            "sent": sent,
+            "failed": by_status.get("failed", 0),
+            "replied": replied_emails,
+        },
+        "sentiment": {k: by_sentiment.get(k, 0) for k in ("positive", "neutral", "negative", "closed")},
+        "meetings": meetings,
+        "today": {
+            "cap": sender.DAILY_CAP,
+            "used": sender.sent_today(),
+            "guessed_cap": led.get("guessed_cap"),
+            "guessed_used": led.get("guessed_used"),
+        },
+        "send_mode": sender.SEND_MODE,
+        # configured() only: status() signs in to SMTP, too slow and too noisy for a page load
+        "gmail": {
+            "connected": gmail.configured(),
+            "method": gmail.AUTH,
+            "last_poll_at": last_poll_at,
+            "last_poll_error": last_poll_error,
+        },
+        "n8n": {"configured": n8n.configured()},
+        "recent": recent,
+    }
 
 
 # ---------------------------------------------------------------- pipeline actions

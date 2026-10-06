@@ -332,7 +332,7 @@ function Detail({ e, busy, onAct }: { e: EventRow; busy: number | null; onAct: (
       </Link>
       {e.contact && <p className="text-[11.5px] text-ink-3">{e.contact}</p>}
       {(e.quote || e.needs_action) && (
-        <p className="mt-1.5 border-l-2 border-line pl-2.5 text-[11.5px] leading-relaxed text-ink-3 italic">
+        <p className="mt-1.5 border-l-2 border-line pl-2.5 text-[11.5px] leading-relaxed text-ink-3 italic [overflow-wrap:anywhere]">
           {e.quote ?? e.needs_action}
         </p>
       )}

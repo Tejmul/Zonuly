@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 
 from sqlmodel import select
 
+from jobhunter import admission
 from jobhunter import normalize as norm
 from jobhunter.contacts import roles as roleclass
 from jobhunter.db import Company, Contact, Job, get_session, init_db
@@ -136,7 +137,8 @@ def _build_funnel(*, include_rejects: bool = False) -> dict:
         contacts = session.exec(select(Contact)).all()
 
     if not include_rejects:
-        companies = [c for c in companies if (c.tier or "unknown") != "reject"]
+        companies = [c for c in companies if (c.tier or "unknown") != "reject"
+                     and not c.overrated and c.status is None]
     keep_ids = {c.id for c in companies}
     by_id = {c.id: c for c in companies}
 
@@ -355,6 +357,14 @@ def company_detail(company_id: int) -> dict:
         "tier_reason": c.tier_reason,
         "underrated": c.underrated,
         "hype_reason": c.hype_reason,
+        "overrated": c.overrated,
+        "overrated_reason": c.overrated_reason,
+        "priority_score": c.priority_score,
+        "priority_why": c.priority_why,
+        "status": c.status,
+        "status_reason": c.status_reason,
+        "merged_into": c.merged_into,
+        "city": c.city,
         "pay": {
             "stipend_inr_month": c.stipend_inr_month,
             "stipend_evidence": c.stipend_evidence,
@@ -362,8 +372,10 @@ def company_detail(company_id: int) -> dict:
             "ppo_evidence": c.ppo_evidence,
         },
         "funding": {
-            "stage": c.funding_stage,
+            "stage": admission.normalize_stage(c.funding_stage) or c.funding_stage,
             "amount_usd_m": c.funding_amount_usd_m,
+            "total_usd_m": c.funding_total_usd_m,
+            "valuation_usd_m": c.valuation_usd_m,
             "announced": c.funding_announced,
             "investors": json.loads(c.funding_investors) if c.funding_investors else [],
             "evidence": c.funding_evidence,
@@ -416,7 +428,7 @@ def company_detail(company_id: int) -> dict:
 
 # ------------------------------------------------------------------ company-first
 
-def company_list(*, include_rejects: bool = False) -> dict:
+def company_list(*, include_rejects: bool = False, include_overrated: bool = False) -> dict:
     """One row per company — never one per role.
 
     The atlas answers "which companies are in this stage", which necessarily places a
@@ -434,6 +446,9 @@ def company_list(*, include_rejects: bool = False) -> dict:
     if not include_rejects:
         # a company on a hand-picked list stays whatever the grade said (lists.py)
         companies = [c for c in companies if (c.tier or "unknown") != "reject" or c.list_key]
+    if not include_overrated:
+        # overrated, quarantined and merged rows are hidden unless asked for; list rows never
+        companies = [c for c in companies if c.list_key or (not c.overrated and c.status is None)]
     keep = {c.id for c in companies}
 
     jobs_by: dict[int, list[Job]] = defaultdict(list)
@@ -482,9 +497,16 @@ def company_list(*, include_rejects: bool = False) -> dict:
             "team_size": c.team_size,
             "pay_power": {"score": c.pay_power, "band": c.pay_power_band, "why": c.pay_power_why,
                           "per_head_usd_k": c.money_per_head_usd_k},
-            # funding shown as the pay fallback: round + how much + when
-            "funding": {"stage": c.funding_stage, "amount_usd_m": c.funding_amount_usd_m,
-                        "announced": c.funding_announced} if (c.funding_stage or c.funding_announced) else None,
+            # funding shown as the pay fallback: round + how much + when (+ total, valuation)
+            "funding": {"stage": admission.normalize_stage(c.funding_stage) or c.funding_stage,
+                        "amount_usd_m": c.funding_amount_usd_m, "announced": c.funding_announced,
+                        "total_usd_m": c.funding_total_usd_m, "valuation_usd_m": c.valuation_usd_m,
+                        } if (c.funding_stage or c.funding_announced or c.funding_amount_usd_m) else None,
+            "overrated": c.overrated,
+            "overrated_reason": c.overrated_reason,
+            "priority_score": c.priority_score,
+            "priority_why": c.priority_why,
+            "status": c.status,
             "description": c.description,
             "website": c.website,
             "region": c.hq_region,
@@ -497,7 +519,7 @@ def company_list(*, include_rejects: bool = False) -> dict:
             "underrated": c.underrated,
             "ppo_lpa": c.ppo_lpa,
             "stipend_inr_month": c.stipend_inr_month,
-            "funding_stage": c.funding_stage,
+            "funding_stage": admission.normalize_stage(c.funding_stage) or c.funding_stage,
             "hiring_status": c.hiring_status,
             "hiring_evidence": c.hiring_evidence,
             "careers_url": c.careers_url,
@@ -529,7 +551,11 @@ def company_list(*, include_rejects: bool = False) -> dict:
 
     # what we can trust first, then remote-from-anywhere (the currency-gap thesis only
     # pays there), then fresher roles
+    # best priority first (recently funded, hiring people like us, can pay); then what we
+    # can trust, then remote-from-anywhere (the currency-gap thesis only pays there),
+    # then fresher roles
     out.sort(key=lambda r: (
+        -(r["priority_score"] or 0),
         _TRUST_ORDER.get(r["trust"], 9),
         -(r["pay_power"]["score"] or 0),
         TIER_ORDER.get(r["tier"] or "unknown", 9),
@@ -659,7 +685,8 @@ def build(*, include_rejects: bool = False) -> dict:
         contacts = session.exec(select(Contact)).all()
 
     if not include_rejects:
-        companies = [c for c in companies if (c.tier or "unknown") != "reject"]
+        companies = [c for c in companies if (c.tier or "unknown") != "reject"
+                     and not c.overrated and c.status is None]
     keep_ids = {c.id for c in companies}
 
     jobs_by: dict[int, list[Job]] = defaultdict(list)

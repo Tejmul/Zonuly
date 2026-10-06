@@ -40,12 +40,17 @@ COPY jobhunter ./jobhunter
 COPY scripts ./scripts
 COPY config.yaml companies.yaml ./
 COPY knowledge ./knowledge
+# The hand-picked lists (★ India). /api/lists reads these files, not the database; an
+# image without them serves an empty list page whatever the snapshot holds.
+COPY data/lists ./data/lists
 
 # The read-only snapshot the public instance serves (scripts/make_demo_db.py builds it).
 # Baking it in is what lets the deployment run with no volume and no writable disk:
 # nothing on a public instance writes, so nothing needs to persist. An operator
 # instance overrides ZONULY_DB_PATH to point at a mounted volume instead.
-COPY demo.db ./demo.db
+# It travels gzipped (GitHub's 100 MB file limit) and is unpacked here.
+COPY demo.db.gz ./demo.db.gz
+RUN gunzip demo.db.gz
 ENV ZONULY_DB_PATH=/app/demo.db
 
 RUN --mount=type=cache,id=s/c0e9a8a4-adb4-43f3-b4b2-4d88d6623a08-/root/.cache/uv,target=/root/.cache/uv \

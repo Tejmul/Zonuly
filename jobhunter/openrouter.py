@@ -42,7 +42,11 @@ log = logging.getLogger(__name__)
 _OR = CONFIG.get("openrouter") or {}
 
 BASE_URL = str(_OR.get("base_url", "https://openrouter.ai/api/v1")).rstrip("/")
-ALIASES: dict[str, str] = dict(_OR.get("aliases") or {})
+# An alias is one model id or a ranked list of them. The free roster churns — two ids
+# vanished on 2026-09-22 and nex-n2.5 went paid-only on 2026-10-06, each time taking every
+# stage down at once — so each alias names fallbacks, and a call moves down the list
+# when a model is gone (404/403/400), busy (429/503) or answers nothing.
+ALIASES: dict[str, str | list[str]] = dict(_OR.get("aliases") or {})
 DEFAULT_ALIAS = str(_OR.get("default_alias", "cheap"))
 ENABLED = bool(_OR.get("enabled", True))
 FREE_ONLY = bool(_OR.get("free_only", True))
@@ -269,12 +273,28 @@ def configured() -> bool:
     return bool(api_key())
 
 
-def model_for(alias: str) -> str:
-    """Resolve an alias to a model id. An unknown alias is a config error, not a guess."""
+#: Models that answered "gone" in this process; skipped until the process restarts.
+_DEAD: set[str] = set()
+
+
+def models_for(alias: str) -> list[str]:
+    """The alias's ranked models, the ones known dead in this process moved last."""
     if alias in ALIASES:
-        return str(ALIASES[alias])
+        raw = ALIASES[alias]
+        chain = [str(m) for m in (raw if isinstance(raw, list) else [raw])]
+        return [m for m in chain if m not in _DEAD] + [m for m in chain if m in _DEAD]
     if "/" in alias:
-        return alias  # an explicit model id passed through
+        return [alias]  # an explicit model id passed through
+    raise LLMUnavailable(
+        f"unknown model alias '{alias}'. Known: {', '.join(sorted(ALIASES)) or '(none configured)'}"
+        " — see the `openrouter.aliases` block in config.yaml"
+    )
+
+
+def model_for(alias: str) -> str:
+    """Resolve an alias to its first-choice model id. An unknown alias is a config error, not a guess."""
+    if alias in ALIASES or "/" in alias:
+        return models_for(alias)[0]
     raise LLMUnavailable(
         f"unknown model alias '{alias}'. Known: {', '.join(sorted(ALIASES)) or '(none configured)'}"
         " — see the `openrouter.aliases` block in config.yaml"
@@ -323,12 +343,47 @@ def complete(
     purpose: str = "",
     today_iso: bool = True,
 ) -> Answer:
-    """One completion. Never retries; raises on failure so the caller decides."""
+    """One completion, down the alias's fallback chain. A model that is gone or busy
+    hands over to the next; the last failure is raised so the caller decides. Never
+    retries the same model."""
+    chain = [model] if model else models_for(alias)
+    last: Exception | None = None
+    for i, model_id in enumerate(chain):
+        try:
+            return _complete_one(prompt, system, alias=alias, model_id=model_id, json_mode=json_mode,
+                                 temperature=temperature, max_tokens=max_tokens, purpose=purpose,
+                                 today_iso=today_iso)
+        except (RateLimited, _ModelGone) as e:
+            if isinstance(e, _ModelGone):
+                _DEAD.add(model_id)
+            last = e
+            if i + 1 < len(chain):
+                log.info("%s on %s — falling back to %s", type(e).__name__, model_id, chain[i + 1])
+    if isinstance(last, _ModelGone):
+        raise LLMUnavailable(f"every model for '{alias}' is unavailable — last: {last}") from last
+    raise last  # type: ignore[misc]
+
+
+class _ModelGone(LLMUnavailable):
+    """This model id cannot serve the call (retired, gated, provider down) — try the next."""
+
+
+def _complete_one(
+    prompt: str,
+    system: str | None,
+    *,
+    alias: str,
+    model_id: str,
+    json_mode: bool,
+    temperature: float | None,
+    max_tokens: int | None,
+    purpose: str,
+    today_iso: bool,
+) -> Answer:
     if not ENABLED:
         raise LLMUnavailable("openrouter.enabled is false in config.yaml — no model call was made")
     # Config first, credentials second: "that alias points at a paid model" is a more
     # useful thing to hear than "no key", and it is knowable without one.
-    model_id = model or model_for(alias)
     enforce_free(model_id)
 
     key = api_key()
@@ -397,10 +452,10 @@ def complete(
             raise LLMUnavailable(f"OpenRouter rejected {KEY_ENV} (401). Check the key at https://openrouter.ai/keys") from e
         if code == 402:
             raise BudgetExceeded(f"OpenRouter account is out of credit (402): {detail}") from e
-        if code == 404:
-            raise LLMUnavailable(
-                f"model '{model_id}' not found on OpenRouter — the free roster changes, "
-                "re-check with `python scripts/run.py models list --free`"
+        if code in (400, 403, 404):
+            raise _ModelGone(
+                f"model '{model_id}' cannot serve this call ({code}: {detail}) — the free roster "
+                "changes, re-check with `python scripts/run.py models list --free`"
             ) from e
         if code == 429:
             raise RateLimited(
@@ -409,7 +464,7 @@ def complete(
                 f"credits. Wait and re-run the stage — the client does not retry. ({detail})"
             ) from e
         if code == 503:
-            raise LLMUnavailable(
+            raise _ModelGone(
                 f"no free provider available for {model_id} right now (503) — try another "
                 "free alias from the list in config.yaml"
             ) from e
@@ -497,7 +552,7 @@ def _clean(text: str) -> str:
 def health() -> dict:
     """Key, aliases, caps and today's spend. Never raises; never echoes the key."""
     key_present = configured()
-    paid = sorted(a for a, m in ALIASES.items() if not is_free(str(m)))
+    paid = sorted(a for a in ALIASES if not all(is_free(m) for m in models_for(a)))
     out: dict[str, Any] = {
         "provider": "openrouter",
         "base_url": BASE_URL,
@@ -593,12 +648,15 @@ def resolve_aliases() -> dict:
         return {"error": listed["error"], "aliases": dict(ALIASES)}
     known = {m["id"]: m for m in listed.get("models", [])}
     return {
-        alias: {
-            "model": mid,
-            "available": mid in known,
-            "free": is_free(str(mid)),
-            "json_mode": (known.get(mid) or {}).get("json_mode"),
-            "context": (known.get(mid) or {}).get("context"),
-        }
-        for alias, mid in ALIASES.items()
+        alias: [
+            {
+                "model": mid,
+                "available": mid in known,
+                "free": is_free(mid),
+                "json_mode": (known.get(mid) or {}).get("json_mode"),
+                "context": (known.get(mid) or {}).get("context"),
+            }
+            for mid in models_for(alias)
+        ]
+        for alias in ALIASES
     }

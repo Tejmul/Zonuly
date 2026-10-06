@@ -1,6 +1,6 @@
 {
   "name": "Tejmul Movin",
-  "email": "tejmulmovin9@gmail.com",
+  "email": "sansar.t23csai@nst.rishihood.edu.in",
   "phone": "+919390296953",
   "links": [
     "https://www.linkedin.com/in/tejmulmovin-softwareengineer/",
@@ -8,89 +8,78 @@
     "https://codeforces.com/",
     "https://leetcode.com/u/tejmulmovin/",
     "https://spylook.vercel.app/",
-    "https://github.com/Tejmul/Assuredgig_node",
-    "https://frontend-assuredgig.vercel.app/"
+    "https://github.com/Tejmul/Zonuly",
+    "https://dashboard-blue-eight-86.vercel.app/",
+    "https://www.morethanme.in/"
   ],
-  "headline": "Software Lead and AI/ML Engineer with 1+ year of US startup experience building production AI systems",
-  "summary": "Software Lead and AI/ML Engineer with 1+ year of US startup experience building production AI systems. Fine-tuned LLMs, engineered serverless pipelines, and shipped scalable full-stack AI products. Solved problems via Freelancing with a passion for building AI solutions.",
-  "years_experience": 1,
+  "headline": "AI/ML Engineer & Agentic Systems Builder | Full-Stack + Serverless",
+  "summary": "Final-year Computer Science and AI student at Newton School of Technology with extensive internship experience building agentic AI systems, fine-tuning LLMs, and deploying serverless architectures. Has shipped multiple production agentic systems for YC-backed companies, reduced infrastructure costs by up to 95%, and improved AI response accuracy from 20% to 92%. Skilled in Python, JavaScript, AWS, Hugging Face, LangChain, and computer vision pipelines.",
+  "years_experience": 2.0,
   "education": [
     {
       "degree": "Bachelor of Technology (Computer Science and AI)",
       "institution": "Newton School of Technology, Rishihood University",
-      "years": "2023 - 2027",
-      "grade": "7.0/10.0"
-    },
-    {
-      "degree": "Intermediate (Class XII)",
-      "institution": "Nano junior college",
-      "years": "2022 - 2023",
-      "grade": "77.5%"
-    },
-    {
-      "degree": "Matriculation (Class X)",
-      "institution": "SRI CHAITANYA TECHNO SCHOOL",
-      "years": "2016 - 2021",
-      "grade": "99.98%"
+      "years": "2023-2027",
+      "grade": "7.1/10.0"
     }
   ],
   "experience": [
     {
-      "title": "AI Product Engineer",
-      "company": "eWealth Tech LLC",
-      "dates": "May 2026 - Present",
+      "title": "AI Product Engineer Intern",
+      "company": "MVRX Labs (YC-P26)",
+      "dates": "August 2026 - September 2026",
       "highlights": [
-        "Managed DNS configurations for 8 company websites, led infrastructure troubleshooting, mentored interns, and conducted technical interviews as Software Lead.",
-        "Redesigned PostgreSQL schema and system architecture from scratch for metaboliqos.com , reducing infrastructure and deployment costs by 95% through an AWS Lambda serverless migration.",
-        "Fine-tuned Mistral 7B (REV A) using LoRA/QLoRA on 2,000+ curated Q&A pairs with system prompt injection, improving response accuracy from 20% to 92%; deployed on RunPod Serverless with Qdrant for per-user vector memory.",
-        "Reduced end-to-end AI response latency by 88% by implementing Server-Sent Events (SSE) streaming and optimizing a Vercel - AWS Lambda - Railway - RunPod production pipeline."
+        "Built agentic lead-gen pipeline (Apify scraping + ICP filtering); migrated Trigger.dev to Temporal, cutting infra cost 95%",
+        "Built GTM OS, an agentic system scraping high-engagement CEO and CTO posts + leads for 10+ YC clients, auto-routed to Slack, drove 85% rise in client engagement",
+        "Architected ChokePoints guardrailed pipeline tracking 27,000+ public companies, flags stock-momentum signals, OpenRouter LLMs auto-draft newsletters, human-reviewed, auto-published to Substack and Beehive",
+        "Shipped 3 production agentic systems solo (lead-gen, GTM OS, Choke Points) for a live GTM agency serving 10+ YC clients"
       ]
     },
     {
-      "title": "Software Engineer",
+      "title": "AI Lead Intern",
+      "company": "eWealth Tech LLC",
+      "dates": "June 2026 - September 2026",
+      "highlights": [
+        "Managed DNS configurations for 8 company websites, led infrastructure troubleshooting, mentored interns, and conducted technical interviews as AI and Software Lead",
+        "Redesigned PostgreSQL schema and system architecture from scratch for metaboliqos.com, reducing infrastructure and deployment costs by 95% through an AWS Lambda serverless migration",
+        "Fine-tuned Mistral 7B (REV A) using LoRA/QLoRA on 2,000+ curated Q&A pairs with system prompt injection, improving response accuracy from 20% to 92%; deployed on RunPod Serverless with Qdrant for per-user vector memory",
+        "Reduced end-to-end AI response latency by 88% by implementing Server-Sent Events (SSE) streaming and optimizing a Vercel to AWS Lambda to Railway to RunPod production pipeline"
+      ]
+    },
+    {
+      "title": "Software Engineer Intern",
       "company": "Maverick Secure LLC",
       "dates": "January 2026 - March 2026",
       "highlights": [
-        "As part of the founding team at Maverick, Deployed serverless microservices on AWS (Lambda, Cognito, DynamoDB), led the GCP - AWS migration, and established CI/CD pipelines to support infrastructure scaling.",
-        "Annotated 800+ images and trained a semantic segmentation model achieving 96% accuracy using Roboflow.",
-        "Researched and solved an NP-hard 2D-to-3D room measurement problem, engineering a computer vision pipeline that improved YOLOv11 detection accuracy from 20% to 88%."
+        "As part of the founding team at Maverick, deployed serverless microservices on AWS (Lambda, Cognito, DynamoDB), led the GCP to AWS migration, and established CI/CD pipelines to support infrastructure scaling",
+        "Annotated 800+ images and trained a semantic segmentation model achieving 96% accuracy using Roboflow",
+        "Researched and solved an NP-hard 2D-to-3D room measurement problem, engineering a computer vision pipeline that improved YOLOv11 detection accuracy from 20% to 88%"
       ]
     },
     {
-      "title": "AIML Engineer",
+      "title": "AIML Intern",
       "company": "TheSmartBridge",
-      "dates": "December 2024 - June 2026",
+      "dates": "January 2025 - June 2025",
       "highlights": [
-        "Built an end-to-end Random Forest pipeline for student performance prediction, achieving 90% model accuracy.",
-        "Engineered data pipelines using Python, Pandas, AWS (S3, Lambda), reducing manual processing time by 70%.",
-        "Built a RAG-powered chatbot using vector embeddings, FAISS, and LoRA fine-tuning, reducing support queries by 50%.",
-        "Delivered hands-on AWS training to 70+ learners, mentored 100+ students in AI/ML, and earned a 5-Star Trainer recognition."
+        "Built an end-to-end Random Forest pipeline for student performance prediction, achieving 90% model accuracy",
+        "Engineered data pipelines using Python, Pandas, AWS (S3, Lambda), reducing manual processing time by 70%",
+        "Built a RAG-powered chatbot using vector embeddings, FAISS, and LoRA fine-tuning, reducing support queries by 50%",
+        "Delivered hands-on AWS training to 70+ learners, mentored 100+ students in AI/ML, and earned a 5-Star Trainer recognition"
       ]
     }
   ],
   "projects": [
     {
-      "name": "Assuredgig",
-      "description": "Founded and engineered a scalable freelance marketplace featuring escrow payments, milestone-based contracts, and OTP authentication; architected the system and grew the community to 1,000+ Discord members and 10+ paying clients.",
+      "name": "Zonuly",
+      "description": "Built a multi-agent system that scraped 3,528 global companies and 19,159 referrers with resume-to-role matching. Engineered scraping agents on cron schedules (ATS boards, X, Levels.fyi, GitHub, YC, RSS) using Exa, Jina Reader, scrape.do, with cost-aware LLM orchestration failing over to Agent Reach at the daily cap. Built an outreach agent (500 emails/day, OpenRouter drafting, human approval) and a reply-tracking agent for positive replies, calendar sync and deferred follow-ups.",
       "tech": [
-        "JavaScript",
-        "Python",
-        "SQL",
-        "TypeScript",
-        "PostgreSQL",
-        "Docker",
-        "AWS EC2",
-        "Amazon S3",
-        "Zod",
-        "JWT",
-        "bcrypt",
-        "Prisma ORM",
-        "Vercel",
-        "GitHub Actions",
-        "Winston",
-        "Morgan"
+        "Exa",
+        "Jina Reader",
+        "scrape.do",
+        "OpenRouter",
+        "Agent Reach"
       ],
-      "url": "https://frontend-assuredgig.vercel.app/"
+      "url": "https://github.com/Tejmul/Zonuly"
     }
   ],
   "skills": {
@@ -110,54 +99,78 @@
       "LLM",
       "TensorFlow",
       "RAG",
+      "LoRA",
+      "QLoRA",
+      "Fine-tuning",
+      "Computer Vision",
+      "OpenCV",
+      "YOLOv11",
+      "Semantic Segmentation",
+      "Random Forest",
       "FAISS",
-      "LoRA"
+      "Vector Embeddings",
+      "Server-Sent Events (SSE)"
     ],
     "backend": [
-      "Express JS",
       "Node.js",
+      "Express JS",
       "FastAPI",
-      "Pandas",
-      "OpenCV",
+      "Next.js",
       "Prisma ORM",
-      "AWS Lambda",
-      "DynamoDB",
-      "Cognito"
+      "React",
+      "Distributed Systems"
     ],
     "cloud_devops": [
       "AWS",
       "Docker",
+      "Git",
       "GitHub",
       "GitHub Actions",
-      "Nginx"
+      "Nginx",
+      "Lambda",
+      "Cognito",
+      "DynamoDB",
+      "S3",
+      "Vercel",
+      "Railway",
+      "RunPod",
+      "Apify",
+      "Trigger.dev",
+      "Temporal"
     ],
     "databases": [
       "MySQL",
-      "PostgreSQL"
+      "PostgreSQL",
+      "NoSQL",
+      "Qdrant",
+      "DynamoDB"
     ],
     "other": [
-      "Distributed Systems",
       "SEO/SEM marketing",
+      "Data Structures and Algorithms",
       "Computer Networks",
       "DBMS",
       "Machine Learning",
-      "Deep Learning (DL)",
+      "Deep Learning",
       "DevOps"
     ]
   },
   "strengths": [
-    "AI/ML engineering",
-    "Serverless infrastructure",
-    "Full-stack product development",
-    "Mentorship and training",
-    "Cross-border collaboration"
+    "Agentic AI systems development",
+    "LLM fine-tuning (LoRA/QLoRA)",
+    "Serverless architecture (AWS Lambda, RunPod)",
+    "Computer vision pipelines",
+    "Full-stack development (Next.js, FastAPI, Node.js)",
+    "Cost optimization (95% infra cost reduction)"
   ],
   "target_titles": [
+    "AI Product Engineer",
     "AI/ML Engineer",
+    "Machine Learning Engineer",
     "Software Engineer",
-    "Product Engineer",
-    "Technical Lead"
+    "Backend Engineer",
+    "Generative AI Engineer"
   ],
-  "_resume_text": "Tejmul Movin\nPhone: +919390296953\nEmail: sansar.t23csai@nst.rishihood.edu.in\nLinkedIn • Github • Codeforces • Leetcode • Personal Portfolio\nPROFESSIONAL SUMMAR Y\nSoftware Lead and AI/ML Engineer with 1+ year of US startup experience building production AI systems. Fine-tuned LLMs, engineered\nserverless pipelines, and shipped scalable full-stack AI products. Solved problems via Freelancing with a passion for building AI solutions.\nEDUCA TION\nBachelor of T echnology(Computer Science and AI) 2023 - 2027\nNewton School of Technology, Rishihood University Grade: 7.0/10.0\nIntermediate (Class XII) 2022 - 2023\nNano junior college Grade: 77.5%\nMatriculation (Class X) 2016 - 2021\nSRI CHAITANYA TECHNO SCHOOL Grade: 99.98%\nINTERNSHIPS\nAI Product Engineer May 2026 - Present\neWealth Tech LLC Sheridan, Wyoming, United States· Remote\n Managed DNS configurations for 8 company websites, led infrastructure troubleshooting, mentored interns, and conducted\ntechnical interviews as Software Lead.\n Redesigned PostgreSQL schema and system architecture from scratch for metaboliqos.com , reducing infrastructure and\ndeployment costs by 95% through an A WS Lambda serverless migration.\n Fine-tuned Mistral 7B (REV A)using LoRA/QLoRA on 2,000+ curated Q&A pairs with system prompt injection, improving\nresponse accuracy from 20% \u0019 92%; deployed on RunPod Serverless with Qdrant for per-user vector memory.\n Reduced end-to-end AI response latency by 88% by implementing Server-Sent Events (SSE) streaming and optimizing a\nVercel \u0019 A WS Lambda\u0019 Railway \u0019 RunPod production pipeline.\nSoftware Engineer January 2026 - March 2026\nMaverick Secure LLC Loxahatchee Groves, FL, USA· Remote\n As part of the founding team at Maverick , Deployed serverless microservices on A WS (Lambda, Cognito, DynamoDB), led\nthe GCP \u0019 A WS migration, and established CI/CD pipelines to support infrastructure scaling.\n Annotated 800+ images and trained a semantic segmentation model achieving 96% accuracy using Roboflow.\n Researched and solved an NP-hard 2D-to-3D room measurement problem , engineering a computer vision pipeline that\nimproved YOLOv11 detection accuracy from 20% \u0019 88%.\nAIML Engineer December 2024 - June 2026\nTheSmartBridge Hyderabad, Telangana\n Built an end-to-end Random F orest pipelinefor student performance prediction, achieving 90% model accuracy .\n Engineered data pipelines using Python, Pandas, A WS (S3, Lambda), reducing manual processing time by 70%.\n Built a RAG-powered chatbot using vector embeddings, F AISS, and LoRA fine-tuning, reducing support queries by 50%.\n Delivered hands-on A WStraining to 70+ learners, mentored 100+ students in AI/ML, and earned a 5-Star T rainerrecognition.\nPROJECTS\nAssuredgig ( Github) ( Demo) May 2024\n Founded and engineered a scalable freelance marketplace featuring escrow payments, milestone-based contracts, and OTP\nauthentication; architected the system and grew the community to 1,000+ Discord members and 10+ paying clients.\n Built REST APIs with JWT, bcrypt, and Zod , implemented real-time W ebSocket chat, a CRUD portfolio system, and\nCI/CD pipelines on V ercelusing GitHub Actions.\n Designed the PostgreSQL database with Prisma ORM, containerized development using Docker Compose, and deployed the\nbackend on A WS EC2 with Amazon S3 for storage; strengthened backend security and observability with rate limiting,\nCORS, and structured logging (Winston, Morgan) .\nSKILLS\nCourses: Data Structures and Algorithms, Computer Networks, DBMS, Machine Learning, Deep Learning (DL), DevOps\nComputer Language: JavaScript, Python, SQL, TypeScript\nDatabases & Data T ools: MySQL, PostgreSQL\nAI / ML: GenAI, Generative AI, Hugging Face, LangChain, LangGraph, LangSmith, LLM, TensorFlow, RAG\nAPIs & T esting: Distributed Systems\nCloud & DevOps: A WS, Docker, Git and Github, GitHub Actions, Nginx\nDomain & Business Skills: SEO/SEM marketing\nF rameworks & Libraries: Express JS, Node.js, NumPy, OpenCV, React, Pandas, Prisma ORM, FastAPI, Next.js, CSS, HTML, NoSQL\nEXTRA-CURRICULAR ACTIVITIES\n F ounder, AssuredGig: Launched a freelance marketplace + global developer community , enabling cross-border\ncollaboration and talent discovery.\n F reelancing:Executed 10+ production-grade projects in web development and AI/ML for diverse clients.\n Content & Growth: Built a 75K+ Views on Instagram , creating tech/productivity content and scaling reach via a “build in\npublic” strategy.\n Open Source & DSA: Contributed 50+ public repositories and completed 100 Days of Code , demonstrating consistency and\nproblem-solving skills.\n Leadership & Sports: 2 Ö national-level football athlete and former U-14 state team captain , showcasing leadership and\ndiscipline.\nLINKS FOUND IN DOCUMENT:\nhttps://www.linkedin.com/in/tejmulmovin-softwareengineer/\nhttps://github.com/Tejmul\nhttps://codeforces.com/\nhttps://leetcode.com/u/tejmulmovin/\nhttps://spylook.vercel.app/\nhttps://github.com/Tejmul/Assuredgig_node\nhttps://frontend-assuredgig.vercel.app/",
+  "_resume_text": "Tejmul Movin\nPhone: +919390296953\nEmail: sansar.t23csai@nst.rishihood.edu.in\nLinkedIn • Github • Codeforces • Leetcode • Personal Portfolio\nINTERNSHIPS\nAI Product Engineer Intern August 2026 - September 2026\nMVRX Labs (YC-P26) Buckingham , London , UK· Remote\n Built agentic lead-gen pipeline (Apify scraping + ICP filtering ); migrated Trigger.dev \u0019 Temporal, cutting infra cost 95%\n Built GTM OS, an agentic system scraping high-engagement/CEO and CTO posts + leads for 10+ YC clients , auto-routed to\nSlack drove 85% rise in client engagement.\n Architected ChokePoints guardrailed pipeline tracking 27,000+ public companie s, flags stock-momentum signals, OpenRouter\nLLMs auto-draft newsletters, human-reviewed, auto-published to Substack and Beehive.\n Shipped 3 production agentic systems solo (lead-gen, GTM OS, Choke Points) for a live GTM agency serving 10+ YC clients .\nAI Lead Intern June 2026 - September 2026\neWealth Tech LLC Sheridan, Wyoming, United States· Remote\n Managed DNS configurations for 8 company websites, led infrastructure troubleshooting, mentored interns, and conducted\ntechnical interviews as AI and Software Lead.\n Redesigned PostgreSQL schema and system architecture from scratch for metaboliqos.com , reducing infrastructure and\ndeployment costs by 95% through an A WS Lambda serverless migration.\n Fine-tuned Mistral 7B (REV A)using LoRA/QLoRA on 2,000+ curated Q&A pairs with system prompt injection, improving\nresponse accuracy from 20% \u0019 92%; deployed on RunPod Serverless with Qdrant for per-user vector memory.\n Reduced end-to-end AI response latency by 88% by implementing Server-Sent Events (SSE) streaming and optimizing a\nVercel \u0019 A WS Lambda\u0019 Railway \u0019 RunPod production pipeline.\nSoftware Engineer Intern January 2026 - March 2026\nMaverick Secure LLC Loxahatchee Groves, FL, USA· Remote\n As part of the founding team at Maverick , Deployed serverless microservices on A WS (Lambda, Cognito, DynamoDB), led\nthe GCP \u0019 A WS migration, and established CI/CD pipelines to support infrastructure scaling.\n Annotated 800+ images and trained a semantic segmentation model achieving 96% accuracy using Roboflow.\n Researched and solved an NP-hard 2D-to-3D room measurement problem , engineering a computer vision pipeline that\nimproved YOLOv11 detection accuracy from 20% \u0019 88%.\nAIML Intern January 2025 - June 2025\nTheSmartBridge Hyderabad, Telangana\n Built an end-to-end Random F orest pipelinefor student performance prediction, achieving 90% model accuracy .\n Engineered data pipelines using Python, Pandas, A WS (S3, Lambda), reducing manual processing time by 70%.\n Built a RAG-powered chatbot using vector embeddings, F AISS, and LoRA fine-tuning, reducing support queries by 50%.\n Delivered hands-on A WStraining to 70+ learners, mentored 100+ students in AI/ML, and earned a 5-Star T rainerrecognition.\nPROJECTS\nZonuly ( Github) ( Demo) September 2026\n Built a multi-agent system that scraped 3,528 global companies and 19,159 referrers with resume-to-role matching.\n Engineered scraping agents on cron schedules (A TS boards, X, Levels.fyi, GitHub, YC, RSS) using Exa, Jina Reader,\nscrape.do, with cost-aware LLM orchestration failing over to Agent Reach at the daily cap.\n Built an outreach agent (500 emails/day, OpenRouter drafting, human approval) and a reply-tracking agent for positive\nreplies, calendar sync and deferred follow-ups.\nSKILLS\n Computer Language: JavaScript, Python, SQL, TypeScript\n Databases & Data T ools: MySQL, PostgreSQL\n AI / ML: GenAI, Generative AI, Hugging Face, LangChain, LangGraph, LangSmith, LLM, TensorFlow, RAG\n Cloud & DevOps: A WS, Docker, Git and Github, GitHub Actions, Nginx\n Domain & Business Skills: SEO/SEM marketing\n F rameworks & Libraries: OpenCV, NumPy, Node.js, Express JS, Prisma ORM, FastAPI, Next.js, NoSQL, React, Distributed\nSystems\n Courses: Data Structures and Algorithms, Computer Networks, DBMS, Machine Learning, Deep Learning (DL), DevOps\nEDUCA TION\nY ear Degree/Exam Institute CGP A/Marks\n2023-2027 Bachelor of Technology (Computer Science and AI) Newton School of Technology, Rishihood University 7.1/10.0\nEXTRA-CURRICULAR ACTIVITIES\n F ounder, AssuredGig: Launched a freelance marketplace + global developer community , enabling cross-border\ncollaboration and talent discovery.\n F reelancing:Executed 10+ production-grade projects in web development and AI/ML for diverse clients.\n Content & Growth: Built a 75K+ Views on Instagram , creating tech/productivity content and scaling reach via a “build in\npublic” strategy.\n Leadership & Sports: 2 Ö national-level football athlete and former U-14 state team captain , showcasing leadership and\ndiscipline.\n F ounding Member, MoreThanMe (NGO): Lead the technology side and manage the team , driving tech initiatives and\npeople coordination for the NGO’s mission.\nLINKS FOUND IN DOCUMENT:\nhttps://www.linkedin.com/in/tejmulmovin-softwareengineer/\nhttps://github.com/Tejmul\nhttps://codeforces.com/\nhttps://leetcode.com/u/tejmulmovin/\nhttps://spylook.vercel.app/\nhttps://github.com/Tejmul/Zonuly\nhttps://dashboard-blue-eight-86.vercel.app/\nhttps://www.morethanme.in/",
   "_source": "profile/resume.pdf"
 }

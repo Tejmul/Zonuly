@@ -1,6 +1,7 @@
 "use client";
 
 import { useApi } from "@/lib/api";
+import { Skeleton } from "@/components/ui/primitives";
 
 /* LEARN — the funnel with numbers. Reply and yes rates by every lever we control, so
    the next month's 25-a-day goes where the last month's answers came from. */
@@ -22,10 +23,11 @@ const SECTIONS: [keyof Report, string][] = [
 ];
 
 export function Learn() {
-  const { data, loading, error } = useApi<Report>("/api/learn");
-  if (error) return <p className="py-4 text-[12.5px] text-ink-3">{error}</p>;
-  if (loading && !data) return <p className="py-4 text-[12.5px] text-ink-3">Counting…</p>;
-  if (!data) return null;
+  const { data, error } = useApi<Report>("/api/learn");
+  // Learn is a footnote under the tracker: when its numbers are not there it says
+  // nothing rather than putting a second error on the page.
+  if (error && !data) return null;
+  if (!data) return <Skeleton rows={3} className="py-4" />;
   const pct = (x: number) => `${Math.round(x * 100)}%`;
 
   return (

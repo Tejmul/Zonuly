@@ -35,11 +35,6 @@ log = logging.getLogger(__name__)
 
 LISTS_DIR = ROOT / "data" / "lists"
 
-_STAGE = {
-    "series a": "series a", "series b": "series b", "series a/b": "series b", "series b / pre-b": "series b",
-    "series a / yc": "series a", "seed / yc": "seed", "seed": "seed", "public": "public",
-}
-
 
 # ------------------------------------------------------------------ the files
 
@@ -178,13 +173,16 @@ def sync(key: str, *, verify_sites: bool = True) -> dict:
             row.careers_url = row.careers_url or entry.get("careers")
             row.hq_region = row.hq_region or "india"
             row.description = row.description or entry.get("what")
-            stage = _STAGE.get((entry.get("stage") or "").lower())
+            from jobhunter.admission import normalize_stage
+
+            stage = normalize_stage(entry.get("stage"))   # "Series A / YC" -> "Series A"
             if stage and not row.funding_stage:
                 row.funding_stage = stage
             if entry.get("funding_usd_m") and not row.funding_amount_usd_m:
                 row.funding_amount_usd_m = float(entry["funding_usd_m"])
             if not row.funding_evidence and entry.get("funding"):
-                row.funding_evidence = f"{spec.get('source') or key}: {entry.get('stage')} · {entry['funding']}"
+                # the list's name, not its source file: this line is shown to people
+                row.funding_evidence = f"{spec.get('name') or key} list (hand-picked): {entry.get('stage')} · {entry['funding']}"
             tag = f"[list:{key}] #{entry['rank']}"
             if tag not in (row.notes or ""):
                 row.notes = f"{row.notes}\n{tag}".strip() if row.notes else tag

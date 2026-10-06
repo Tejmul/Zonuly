@@ -943,21 +943,23 @@ def models_check(
     if "error" in resolved:
         typer.secho(f"could not reach the model list: {resolved['error']}", fg=typer.colors.YELLOW)
     else:
-        for name, info in resolved.items():
-            mark = "OK  " if info["available"] and info["free"] else "MISS"
-            tags = []
-            if info["free"]:
-                tags.append("free")
-            else:
-                tags.append("PAID")
-            if info.get("json_mode"):
-                tags.append("json")
-            if info.get("context"):
-                tags.append(f"{info['context']:,} ctx")
-            line = f"[{mark}] {name:<7} {info['model']:<44} {', '.join(tags)}"
-            if not info["available"]:
-                line += "   <- not on openrouter.ai/models"
-            typer.secho(line, fg=None if info["free"] else typer.colors.YELLOW)
+        for name, chain in resolved.items():
+            for rank, info in enumerate(chain):
+                mark = "OK  " if info["available"] and info["free"] else "MISS"
+                tags = []
+                if info["free"]:
+                    tags.append("free")
+                else:
+                    tags.append("PAID")
+                if info.get("json_mode"):
+                    tags.append("json")
+                if info.get("context"):
+                    tags.append(f"{info['context']:,} ctx")
+                label = name if rank == 0 else f"  {rank + 1}."
+                line = f"[{mark}] {label:<7} {info['model']:<44} {', '.join(tags)}"
+                if not info["available"]:
+                    line += "   <- not on openrouter.ai/models"
+                typer.secho(line, fg=None if info["free"] else typer.colors.YELLOW)
     if not live:
         typer.echo("")
         typer.echo("(no call made — pass --live to actually spend a few tokens)")
@@ -1438,16 +1440,53 @@ def harvest_roles(
 
 
 @harvest_app.command("facts")
-def harvest_facts(limit: int = typer.Option(60, help="Companies to look up today (one Exa search each, inside exa_daily_cap)")) -> None:
-    """Company facts from Exa's company index — what they do, headcount, HQ, founded, round — for companies with roles."""
+def harvest_facts(
+    limit: int = typer.Option(60, help="Companies to look up today (one Exa search each, inside exa_daily_cap)"),
+    keyless: bool = typer.Option(False, "--keyless", help="Use only the hosted Exa MCP (free, rate-limited)"),
+    roles_only: bool = typer.Option(False, "--roles-only", help="Only companies that already have roles"),
+) -> None:
+    """Company facts — what they do, round, amount, date, total, valuation, HQ, website — best priority first,
+    with or without roles. Skips companies in backoff after a miss."""
     _setup_logging()
     from jobhunter import enrich
     from jobhunter.research import web
 
-    res = enrich.facts_pending(limit=limit)
+    res = enrich.facts_pending(limit=limit, keyless=keyless, roles_only=roles_only)
     _echo({"companies": len(res), "described": sum(1 for r in res if r.get("description")),
            "team": sum(1 for r in res if r.get("team_size")), "funding": sum(1 for r in res if r.get("funding")),
            "errors": sum(1 for r in res if r.get("error")), "exa": web.exa_budget()})
+
+
+@harvest_app.command("websites")
+def harvest_websites(
+    limit: int = typer.Option(100, help="Name-only companies to find a website for, best priority first"),
+    paid: bool = typer.Option(False, "--paid", help="Let the search fall back to the metered Exa API"),
+) -> None:
+    """Find and verify the website of companies that arrived as a bare name (funding feeds, X, directories):
+    search + domain guesses, kept only when the page names the company. Misses back off (1, 3, 7, 21, 60 days)."""
+    _setup_logging()
+    from jobhunter import enrich
+
+    _echo(enrich.find_websites(limit=limit, keyless=not paid))
+
+
+@harvest_app.command("scrape-first")
+def harvest_scrape_first(dry_run: bool = typer.Option(False, "--dry-run", help="Count, write nothing")) -> None:
+    """Flag the companies we hold nothing about (no site, description, roles or people) so every
+    fill-in pass takes them first; clear the flag on the ones that have been filled. Runs every tick."""
+    _setup_logging()
+    from jobhunter import hygiene
+
+    _echo(hygiene.mark_empty(dry_run=dry_run))
+
+
+@harvest_app.command("priority")
+def harvest_priority(dry_run: bool = typer.Option(False, "--dry-run", help="Compute and report, write nothing")) -> None:
+    """Regrade overrated + priority score + city for every company (bulk, seconds)."""
+    _setup_logging()
+    from jobhunter import targeting
+
+    _echo(targeting.refresh_priority(dry_run=dry_run))
 
 
 @harvest_app.command("story")

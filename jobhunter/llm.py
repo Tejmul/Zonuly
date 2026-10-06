@@ -145,10 +145,12 @@ def health() -> dict:
     """
     status = openrouter.health()
     aliases = status.get("aliases") or {}
+    # an alias is one id or a ranked fallback list; "model" is the first choice
+    chains = {a: (m if isinstance(m, list) else [m]) for a, m in aliases.items()}
     return {
         **status,
-        "model": aliases.get(DEFAULT_ALIAS) or "(no alias configured)",
-        "models": sorted(set(aliases.values())),
+        "model": (chains.get(DEFAULT_ALIAS) or ["(no alias configured)"])[0],
+        "models": sorted({m for chain in chains.values() for m in chain}),
         "model_present": bool(aliases),
         "embed_model": None,
         "embed_present": False,

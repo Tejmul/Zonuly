@@ -31,6 +31,10 @@ RATES_TO_INR = {
 }
 
 LOCATIONS_OK = [l.lower() for l in _S.get("locations_ok", [])]
+# India means Bengaluru and Hyderabad (Tejmul, 2026-10-06). A posting in another Indian
+# city is dropped unless it is remote or also names a target city.
+INDIA_BLOCKED = [l.lower() for l in _S.get("india_blocked_cities", [])]
+_INDIA_OK = re.compile(r"\b(bengaluru|bangalore|hyderabad|secunderabad)\b", re.I)
 
 # ---------------------------------------------------------------- relevance
 
@@ -90,6 +94,9 @@ def location_ok(location: str | None, remote: bool = False) -> bool:
     if not location:
         return True  # unknown location: keep, the scorer will judge it
     loc = location.lower()
+    if INDIA_BLOCKED and not _INDIA_OK.search(loc) and not re.search(r"\b(remote|anywhere|worldwide)\b", loc) \
+            and any(re.search(rf"\b{re.escape(c)}\b", loc) for c in INDIA_BLOCKED):
+        return False
     return any(ok in loc for ok in LOCATIONS_OK)
 
 

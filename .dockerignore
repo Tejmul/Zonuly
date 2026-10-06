@@ -17,8 +17,10 @@ __pycache__/
 dashboard/
 
 # The source scrape the landing page was cut from: 48 MB of build context that the
-# image never copies. demo.db is deliberately NOT ignored — the API serves it.
+# image never copies. demo.db.gz is deliberately NOT ignored — the API serves it;
+# the unpacked demo.db is a local by-product.
 assets/
+demo.db
 
 .git/
 .github/

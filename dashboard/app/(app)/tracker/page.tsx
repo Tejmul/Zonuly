@@ -147,7 +147,7 @@ export default function TrackerPage() {
                     </Td>
                     <Td className="text-xs text-ink-3">{relTime(row.sent_at)}</Td>
                     <Td>
-                      {row.reply_count ? (
+                      {row.reply_count || row.reply_sentiment ? (
                         <SentimentBadge sentiment={row.reply_sentiment} />
                       ) : row.followup_sent ? (
                         <span className="text-xs text-ink-3">followed up</span>

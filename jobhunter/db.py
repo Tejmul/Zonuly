@@ -85,6 +85,28 @@ class Company(SQLModel, table=True):
     hiring_roles: Optional[str] = None       # JSON list of roles found on their own page
     hiring_checked_at: Optional[datetime] = None
 
+    # ---- admission + priority (jobhunter/admission.py, targeting.priority). 2026-10-06.
+    name_key: Optional[str] = Field(default=None, index=True)   # admission.name_key(name): the dedup key
+    # None = active | "quarantined" (junk / bare and unrescuable) | "merged" (see merged_into).
+    # Never deleted: a quarantined row keeps its history and is hidden by default.
+    status: Optional[str] = Field(default=None, index=True)
+    status_reason: Optional[str] = None
+    merged_into: Optional[int] = None        # company.id of the survivor when status = "merged"
+    # OVERRATED: famous, listed, valued ≥ $5B or raised ≥ $1B (thresholds in config.yaml)
+    overrated: Optional[bool] = Field(default=None, index=True)
+    overrated_reason: Optional[str] = None
+    funding_total_usd_m: Optional[float] = None   # total raised, when a source states it
+    # PRIORITY 0–100: recently funded, actively hiring (fresher / remote-anywhere first),
+    # pay power, valuation-for-stage. The sentence says which parts scored.
+    priority_score: Optional[int] = Field(default=None, index=True)
+    priority_why: Optional[str] = None
+    # per-step failure markers with backoff: JSON {step: {"tries", "next", "error"}}
+    retry_state: Optional[str] = None
+    # SCRAPE FIRST: an active company we hold nothing about (no site, description, roles or
+    # people). Every fill-in queue takes these before anything else; hygiene.mark_empty sets
+    # the flag each tick and clears it once the company has a site and either people or roles.
+    scrape_first: Optional[bool] = Field(default=None, index=True)
+
 
 class Job(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

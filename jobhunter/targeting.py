@@ -3,10 +3,11 @@
 The rules are Tejmul's, from MOTIV §2 and the 2026-09-03 refinement, and they live in
 `config.yaml` under `targeting:` so they can be changed without touching code:
 
-  1. UNDERRATED ONLY   — a household name is disqualified outright. Thousands of
-                         applications are already pending there and people who were
-                         selected are sitting on waitlists; our odds are not there.
-  2. RECENTLY FUNDED   — pre-seed to Series B, under the mega-round ceiling.
+  1. NOT OVERRATED    — a famous name, a listed company, valued ≥ $5B or raised ≥ $1B
+                         is disqualified outright (admission.overrated_verdict; the
+                         thresholds are config). Thousands of applications are already
+                         pending there; our odds are not. Headcount is never a criterion.
+  2. RECENTLY FUNDED   — pre-seed to Series C; this orders (priority), it does not exclude.
   3. THE STIPEND BAR   — an internship paying under ₹50k/month is a hard reject. It is
                          a predictor, not a perk: a company that will not pay ₹50k for
                          an intern does not pay ₹30 LPA on conversion.
@@ -34,9 +35,10 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from sqlmodel import select
+from sqlmodel import col, select
 
 from jobhunter import CONFIG
+from jobhunter import admission
 from jobhunter import normalize as norm
 from jobhunter.db import Company, Job, get_session, init_db, utcnow
 
@@ -50,11 +52,9 @@ TIER2_LPA = float(_T.get("ppo_tier2_lpa", 24))
 
 _FUNDING = _T.get("funding") or {}
 STAGES_OK = [s.lower() for s in _FUNDING.get("stages_ok", [])]
-MAX_FUNDING_USD_M = float(_FUNDING.get("max_amount_usd_m", 400))
 MAX_FUNDING_AGE_MONTHS = int(_FUNDING.get("max_age_months", 30))
 
 REGIONS: list[dict] = _T.get("regions") or []
-_HYPED = _T.get("hyped") or {}
 
 TIER1, TIER2, PROSPECT, REJECT, UNKNOWN = "tier1", "tier2", "prospect", "reject", "unknown"
 # queue order: pay we can point at, then pay we cannot but people we can, then the rest
@@ -63,29 +63,12 @@ TIER_ORDER = {TIER1: 0, TIER2: 1, PROSPECT: 2, UNKNOWN: 3, REJECT: 4}
 
 # ------------------------------------------------------------------ underrated
 
-def _name_tokens(name: str) -> set[str]:
-    """Word-wise tokens of a company name, so "Amazon" hits but "Amazonia Labs" does not."""
-    cleaned = re.sub(r"[^a-z0-9 ]+", " ", (name or "").lower())
-    cleaned = re.sub(
-        r"\b(inc|llc|ltd|limited|corp|corporation|gmbh|bv|plc|pvt|private|technologies|"
-        r"technology|labs|lab|systems|solutions|software|the)\b",
-        " ",
-        cleaned,
-    )
-    return {t for t in cleaned.split() if t}
-
-
 def hype_check(name: str) -> tuple[bool, str | None]:
-    """(underrated?, why not). A household name is not a target, however good the role."""
-    tokens = _name_tokens(name)
-    joined = " ".join(sorted(tokens))
-    for bucket, listed in (("big tech", _HYPED.get("big_tech", [])), ("India household name", _HYPED.get("india_household", []))):
-        for entry in listed:
-            e = entry.lower().strip()
-            if not e:
-                continue
-            if (" " in e and e in joined) or (" " not in e and e in tokens):
-                return False, f"{bucket}: matches '{entry}' — oversubscribed, DSA-gated, not where our odds are"
+    """(not famous?, why not). Kept for callers that only have a name; the full rule —
+    famous, listed, valuation, money raised — is admission.overrated_verdict."""
+    hit = admission.famous(name)
+    if hit:
+        return False, f"{hit[0]}: matches '{hit[1]}' — famous, oversubscribed, not where our odds are"
     return True, None
 
 
@@ -96,8 +79,13 @@ def region_of(*texts: str | None) -> str | None:
     blob = " ".join(t.lower() for t in texts if t)
     if not blob:
         return None
+    # India means Bengaluru and Hyderabad (Tejmul, 2026-10-06): text that names only
+    # another Indian city (Gurugram, Mumbai, Pune…) is not an India target at all
+    india_blocked = bool(admission.india_other_city(blob)) and not admission.india_city(blob)
     best: tuple[int, str] | None = None
     for entry in REGIONS:
+        if entry["key"] == "india" and india_blocked:
+            continue
         for needle in entry.get("match", []):
             idx = blob.find(needle.lower())
             if idx >= 0 and (best is None or idx < best[0]):
@@ -162,8 +150,13 @@ def grade(
     team_size: int | None = None,
     eng_roles: int = 0,
     hiring_status: str | None = None,
+    overrated: admission.Overrated | None = None,
 ) -> Grade:
-    """Apply the five rules in order. The first one that decides, decides."""
+    """Apply the five rules in order. The first one that decides, decides.
+
+    `overrated` is the verdict admission.overrated_verdict reached with everything known
+    about the company (hiring, pay band); without it only the name and the funding given
+    here are judged. `team_size` is information, never a rule."""
     g = Grade(
         region=region,
         stipend_inr_month=stipend_inr_month, stipend_evidence=stipend_evidence,
@@ -171,22 +164,22 @@ def grade(
         eng_roles=eng_roles,
     )
 
-    # 1. underrated
-    g.underrated, g.hype_reason = hype_check(name)
-    if not g.underrated:
-        g.checks.append(f"hyped: {g.hype_reason}")
-        g.tier, g.reason = REJECT, g.hype_reason or "hyped company"
+    # 1. not overrated: fame, listing, valuation, money raised — never headcount
+    o = overrated or admission.overrated_verdict(
+        name, stage=funding_stage, amount_usd_m=funding_amount_usd_m, evidence=funding_evidence,
+        hiring_verified=hiring_status == "verified", open_roles=eng_roles)
+    if o.overrated:
+        g.underrated, g.hype_reason = False, o.reason
+        g.checks.append(f"overrated: {o.reason}")
+        g.tier, g.reason = REJECT, f"overrated — {o.reason}"
         return g
-    g.checks.append("underrated: not on the hyped list")
+    # "underrated" is a claim, so it needs something behind it: a known round or a
+    # verified hiring page. With neither it is unknown (None), which is not a rejection.
+    g.underrated = True if (funding_stage or funding_amount_usd_m or hiring_status == "verified") else None
+    g.checks.append(f"not overrated: {o.reason}")
 
-    # 2. recently funded, still small
-    if funding_amount_usd_m is not None and funding_amount_usd_m > MAX_FUNDING_USD_M:
-        g.checks.append(f"funding ${funding_amount_usd_m}M over the ${MAX_FUNDING_USD_M}M ceiling")
-        g.tier, g.reason = REJECT, f"raised ${funding_amount_usd_m}M — past the point of being underrated"
-        return g
-    # A later round is no longer a rejection (Tejmul, 2026-09-03: a big recent raise means
-    # they can pay — that is Pay Power's job). "Underrated" is now about size and hype:
-    # the team ceiling lives in harvest.max_team and is applied at admission.
+    # 2. recently funded — a later round is not a rejection (Tejmul, 2026-09-03: a big
+    # recent raise means they can pay — that is Pay Power's job); it only orders.
     if funding_stage and STAGES_OK and funding_stage.lower().strip() not in STAGES_OK:
         g.checks.append(f"stage '{funding_stage}' is past the seed–Series B window — noted, not rejected")
     if funding_stage or funding_amount_usd_m:
@@ -223,7 +216,7 @@ def grade(
         )
         g.pay_basis, g.pay_basis_evidence = funding_pay_basis(
             region, funding_stage, funding_amount_usd_m, funding_announced,
-            team_size=team_size, evidence=funding_evidence)
+            hiring_verified=hiring_status == "verified", evidence=funding_evidence)
         g.checks.append(f"pay basis: {g.pay_basis} — {g.pay_basis_evidence}")
         if g.pay_basis == "funding-strong" and eng_roles:
             g.tier = PROSPECT
@@ -268,7 +261,7 @@ def grade(
 
 _STRONG_USD_M = float(_FUNDING.get("strong_min_usd_m", 3))
 _WEAK_USD_M = float(_FUNDING.get("weak_max_usd_m", 2))
-_LATER_STAGES = ("series a", "series b", "series c", "series d", "series e", "series f")
+_LATER_STAGES = ("series a", "series b", "series c", "series d+", "series d", "series e", "series f")
 
 # ------------------------------------------------------------------ PAY POWER, the benchmark
 
@@ -276,7 +269,6 @@ _PP = _T.get("pay_power") or {}
 PP_DEEP_USD_M = float(_PP.get("deep_min_usd_m", 10))
 PP_DEEP_MONTHS = int(_PP.get("deep_max_months", 24))
 PP_DEEP_VALUATION_USD_M = float(_PP.get("deep_valuation_usd_m", 50))
-PP_YC_MIN_TEAM = int(_PP.get("yc_min_team", 10))
 PP_PER_HEAD_OK_K = float(_PP.get("per_head_comfortable_usd_k", 200))
 PP_SCORE = {"pays": 100, "deep_pockets": 85, "funded": 65, "thin": 30, "unknown": 0}
 PP_LABEL = {"pays": "Pays — they wrote the number", "deep_pockets": "Deep pockets",
@@ -298,7 +290,7 @@ class PayPower:
 def pay_power(*, region: str | None, ppo_lpa: float | None, ppo_evidence: str | None,
               stage: str | None, amount_usd_m: float | None, announced: str | None,
               funding_evidence: str | None, valuation_usd_m: float | None,
-              team_size: int | None) -> PayPower:
+              team_size: int | None, hiring_verified: bool = False) -> PayPower:
     """How easily can this company pay a fresher ₹30–40 L? The bands are in config.yaml
     and on the page; the first rule that fits decides, and the sentence says which."""
     pp = PayPower()
@@ -337,9 +329,10 @@ def pay_power(*, region: str | None, ppo_lpa: float | None, ppo_evidence: str | 
         pp.band, pp.score = "funded", PP_SCORE["funded"]
         pp.why = f"raised {desc}{head} — a real seed, can pay a remote engineer ₹30–40 L"
         return pp
-    if "yc" in (funding_evidence or "").lower() and recent and (team_size or 0) >= PP_YC_MIN_TEAM:
+    # headcount is not evidence of money (2026-10-06); a live hiring page after the batch is
+    if "yc" in (funding_evidence or "").lower() and recent and hiring_verified:
         pp.band, pp.score = "funded", PP_SCORE["funded"]
-        pp.why = f"YC {desc}, team of {team_size} — hired past the batch cheque, so they raised more"
+        pp.why = f"YC {desc}, hiring confirmed on their own page — past the batch cheque"
         return pp
     if have_funding:
         pp.band, pp.score = "thin", PP_SCORE["thin"]
@@ -354,7 +347,7 @@ def pay_power(*, region: str | None, ppo_lpa: float | None, ppo_evidence: str | 
 
 
 def funding_pay_basis(region: str | None, stage: str | None, amount_usd_m: float | None,
-                      announced: str | None, *, team_size: int | None = None,
+                      announced: str | None, *, hiring_verified: bool = False,
                       evidence: str | None = None) -> tuple[str, str]:
     """(basis, evidence) — can they pay a fresher ₹30 L+, judged from funding alone.
 
@@ -384,12 +377,11 @@ def funding_pay_basis(region: str | None, stage: str | None, amount_usd_m: float
     if (strong_amount or strong_stage) and not stale:
         where = f"{region.upper()} HQ" if region else "outside India"
         return "funding-strong", f"raised {desc}, {where} — able to pay a $40k remote engineer without noticing"
-    # A YC company states no amount, but the batch and the headcount are both on record:
-    # a seed company that has hired ten or more people has raised past the batch cheque.
-    if "yc" in (evidence or "").lower() and not stale and (team_size or 0) >= 10:
+    # A YC company states no amount; a recent batch whose own page shows live hiring has
+    # money past the batch cheque. Headcount is not used (2026-10-06).
+    if "yc" in (evidence or "").lower() and not stale and hiring_verified:
         where = f"{region.upper()} HQ" if region else "outside India"
-        return "funding-strong", (f"YC {desc}, team of {team_size}, {where} — a seed company that hired "
-                                  f"{team_size} people has raised beyond the batch cheque")
+        return "funding-strong", f"YC {desc}, {where}, hiring confirmed on their own page"
     if weak or stale:
         why = "stale" if stale else "small"
         return "funding-weak", f"{desc} — {why} for a ₹30 L hire; needs a stated figure"
@@ -456,6 +448,79 @@ def extract_job_pay(limit: int | None = None, *, only_missing: bool = True) -> d
     return stats
 
 
+# ------------------------------------------------------------------ priority
+
+_P = _T.get("priority") or {}
+P_STAGES = {admission.normalize_stage(x) for x in (_P.get("stages") or ["Pre-seed", "Seed", "Series A", "Series B", "Series C"])}
+P_FRESH = int(_P.get("fresh_months", 6))
+P_RECENT = int(_P.get("recent_months", 18))
+_PW = _P.get("weights") or {}
+W_FUNDING, W_HIRING = float(_PW.get("funding", 35)), float(_PW.get("hiring", 35))
+W_PAY, W_VALUATION = float(_PW.get("pay", 20)), float(_PW.get("valuation", 10))
+STAGE_VALUATION_MAX = {admission.normalize_stage(k): float(v) for k, v in (_P.get("stage_valuation_max_usd_m") or {
+    "Pre-seed": 30, "Seed": 80, "Series A": 300, "Series B": 1000, "Series C": 3000}).items()}
+
+
+def priority(*, overrated: admission.Overrated | None, stage: str | None, announced: str | None,
+             amount_usd_m: float | None, valuation_usd_m: float | None, hiring_verified: bool,
+             roles: int, fresher_roles: int, anywhere_roles: int, pay_score: int | None,
+             pay_band: str | None) -> tuple[int, str]:
+    """(0–100, why). Who to chase first among the companies that are not overrated:
+    recently funded at an early round, visibly hiring people like us (fresher and
+    remote-anywhere roles weigh most), able to pay, and priced sanely for its stage.
+    Headcount plays no part. The weights are config (targeting.priority.weights)."""
+    if overrated is not None and overrated.overrated:
+        return 0, f"overrated — {overrated.reason}"
+    parts: list[str] = []
+    st = admission.normalize_stage(stage)
+    age = _months_old(announced)
+    when = f", {age} mo ago" if age is not None else ""
+    money = f" ${amount_usd_m:g}M" if amount_usd_m else ""
+
+    # funding: how recently, at what round
+    if st in P_STAGES:
+        f = 1.0 if age is not None and age <= P_FRESH else 0.75 if age is not None and age <= P_RECENT \
+            else 0.25 if age is not None else 0.4
+    elif st:
+        f = 0.1
+    elif amount_usd_m:
+        f = 0.6 if age is not None and age <= P_RECENT else 0.2
+    else:
+        f = 0.0
+    fs = round(W_FUNDING * f)
+    if st or amount_usd_m:
+        parts.append(f"funding: {st or 'round'}{money}{when} (+{fs})")
+    else:
+        parts.append("funding: unknown (+0)")
+
+    # hiring: their own page, how many roles, and whether they are roles for us
+    h = (0.3 if hiring_verified else 0.0) + 0.2 * min(roles, 8) / 8 \
+        + 0.3 * min(fresher_roles, 3) / 3 + 0.2 * min(anywhere_roles, 2) / 2
+    hs = round(W_HIRING * h)
+    bits = (["verified"] if hiring_verified else []) + ([f"{roles} roles"] if roles else []) \
+        + ([f"{fresher_roles} fresher"] if fresher_roles else []) + ([f"{anywhere_roles} remote-anywhere"] if anywhere_roles else [])
+    parts.append(f"hiring: {', '.join(bits) or 'no evidence yet'} (+{hs})")
+
+    # pay power, as already banded
+    ps = round(W_PAY * (pay_score or 0) / 100)
+    parts.append(f"pay: {PP_LABEL.get(pay_band or 'unknown', pay_band)} (+{ps})")
+
+    # valuation for the stage: a seed company priced like a Series C is hype
+    cap = STAGE_VALUATION_MAX.get(st) if st else None
+    if valuation_usd_m and cap:
+        v, vwhy = (1.0, "fits stage") if valuation_usd_m <= cap else (0.4, "rich for stage") \
+            if valuation_usd_m <= 2 * cap else (0.0, "priced far past its stage")
+    elif amount_usd_m and cap:
+        v, vwhy = (0.7, "round size fits stage") if amount_usd_m <= cap / 4 else (0.3, "round large for stage")
+    else:
+        v, vwhy = 0.5, "unknown"
+    vs = round(W_VALUATION * v)
+    parts.append(f"valuation: {vwhy} (+{vs})")
+    if overrated is not None and overrated.borderline:
+        parts.append(f"borderline: {overrated.reason}")
+    return max(0, min(100, fs + hs + ps + vs)), " · ".join(parts)
+
+
 # ------------------------------------------------------------------ company grading
 
 def evidence_for(session, company: Company) -> dict:
@@ -487,32 +552,99 @@ def evidence_for(session, company: Company) -> dict:
         "ppo_lpa": ppo, "ppo_evidence": ppo_ev, "ppo_source": ppo_src,
         "region": region_of(company.hq_region, locations, "remote" if remote else None),
         "jobs": len(jobs), "eng_roles": eng_roles,
+        "fresher": sum(1 for j in jobs if not j.is_senior),
+        "anywhere": sum(1 for j in jobs if j.remote_anywhere),
+        "locations": locations,
     }
+
+
+def _judge(company: Company, *, jobs: int, fresher: int, anywhere: int, locations: str,
+           pay_band: str | None, pay_score: int | None) -> tuple[admission.Overrated, int, str, str | None, str | None]:
+    """(overrated verdict, priority, why, India city, non-target India city) for one row —
+    shared by the full grade and the hourly priority refresh."""
+    f = admission.funding_facts(
+        stage=company.funding_stage, amount_usd_m=company.funding_amount_usd_m,
+        total_usd_m=company.funding_total_usd_m, announced=company.funding_announced,
+        valuation_usd_m=company.valuation_usd_m, evidence=company.funding_evidence)
+    verified = company.hiring_status == "verified"
+    o = admission.overrated_verdict(
+        company.name, stage=f["stage"], amount_usd_m=f["amount_usd_m"], total_usd_m=f["total_usd_m"],
+        valuation_usd_m=f["valuation_usd_m"], evidence=company.funding_evidence,
+        hiring_verified=verified, open_roles=jobs, pay_band=pay_band)
+    score, why = priority(
+        overrated=o, stage=f["stage"], announced=f["announced"], amount_usd_m=f["amount_usd_m"],
+        valuation_usd_m=f["valuation_usd_m"], hiring_verified=verified, roles=jobs,
+        fresher_roles=fresher, anywhere_roles=anywhere, pay_score=pay_score, pay_band=pay_band)
+    texts = (locations, company.description, company.story)
+    return o, score, why, admission.india_city(*texts), admission.india_other_city(*texts)
+
+
+def _india_off_target(company: Company, city: str | None, other: str | None, anywhere: int) -> str | None:
+    """Why an India company is not an India target (its only presence is another city)."""
+    if company.list_key or (company.hq_region or "") != "india" or anywhere:
+        return None
+    if other and not (city or company.city):
+        return f"India presence is {other} only — the India targets are Bengaluru and Hyderabad"
+    return None
 
 
 def grade_company(session, company: Company) -> Grade:
     """Grade one company row from its own columns plus its jobs, and write the verdict."""
+    if company.status in ("quarantined", "merged"):
+        # a quarantined or merged row is never chased; it keeps its reason
+        company.tier, company.priority_score = REJECT, 0
+        company.tier_reason = company.tier_reason if (company.tier_reason or "").startswith(company.status) \
+            else f"{company.status}: {company.status_reason or ''}".strip(": ")
+        company.priority_why = company.tier_reason
+        session.add(company)
+        return Grade(tier=REJECT, reason=company.tier_reason)
     ev = evidence_for(session, company)
+    ppo_lpa = company.ppo_lpa or ev["ppo_lpa"]
+    ppo_evidence = company.ppo_evidence or ev["ppo_evidence"]
+    f = admission.funding_facts(
+        stage=company.funding_stage, amount_usd_m=company.funding_amount_usd_m,
+        total_usd_m=company.funding_total_usd_m, announced=company.funding_announced,
+        valuation_usd_m=company.valuation_usd_m, evidence=company.funding_evidence)
+    # pay power first: a borderline company (raised $400M–$1B) is only kept when it pays
+    pp = pay_power(
+        region=company.hq_region or ev["region"], ppo_lpa=ppo_lpa, ppo_evidence=ppo_evidence,
+        stage=(f["stage"] or "").lower() or None, amount_usd_m=f["amount_usd_m"],
+        announced=f["announced"], funding_evidence=company.funding_evidence,
+        valuation_usd_m=company.valuation_usd_m, team_size=company.team_size,
+        hiring_verified=company.hiring_status == "verified",
+    )
+    o, score, why, city, other = _judge(
+        company, jobs=ev["jobs"], fresher=ev["fresher"], anywhere=ev["anywhere"],
+        locations=ev["locations"], pay_band=pp.band, pay_score=pp.score)
     g = grade(
         company.name,
         region=company.hq_region or ev["region"],
         stipend_inr_month=company.stipend_inr_month or ev["stipend_inr_month"],
         stipend_evidence=company.stipend_evidence or ev["stipend_evidence"],
-        ppo_lpa=company.ppo_lpa or ev["ppo_lpa"],
-        ppo_evidence=company.ppo_evidence or ev["ppo_evidence"],
+        ppo_lpa=ppo_lpa,
+        ppo_evidence=ppo_evidence,
         ppo_source=ev["ppo_source"] if company.ppo_lpa is None else "ppo",
-        funding_stage=company.funding_stage,
-        funding_amount_usd_m=company.funding_amount_usd_m,
-        funding_announced=company.funding_announced,
+        funding_stage=(f["stage"] or "").lower() or None,
+        funding_amount_usd_m=f["amount_usd_m"],
+        funding_announced=f["announced"],
         funding_evidence=company.funding_evidence,
         team_size=company.team_size,
         eng_roles=ev["eng_roles"],
         hiring_status=company.hiring_status,
+        overrated=o,
     )
+    off = _india_off_target(company, city, other, ev["anywhere"])
+    if off and g.tier != REJECT:
+        g.tier, g.reason = REJECT, off
+        g.checks.append(off)
     company.tier = g.tier
     company.tier_reason = g.reason
     company.underrated = g.underrated
     company.hype_reason = g.hype_reason
+    company.overrated, company.overrated_reason = o.overrated, o.reason
+    company.priority_score, company.priority_why = (0, off) if off else (score, why)
+    if city and not company.city and not company.list_key:
+        company.city = city
     company.hq_region = company.hq_region or g.region
     company.stipend_inr_month = g.stipend_inr_month
     company.stipend_evidence = g.stipend_evidence
@@ -520,12 +652,6 @@ def grade_company(session, company: Company) -> Grade:
     company.ppo_evidence = g.ppo_evidence
     company.pay_basis = g.pay_basis
     company.pay_basis_evidence = g.pay_basis_evidence
-    pp = pay_power(
-        region=company.hq_region or g.region, ppo_lpa=g.ppo_lpa, ppo_evidence=g.ppo_evidence,
-        stage=company.funding_stage, amount_usd_m=company.funding_amount_usd_m,
-        announced=company.funding_announced, funding_evidence=company.funding_evidence,
-        valuation_usd_m=company.valuation_usd_m, team_size=company.team_size,
-    )
     company.pay_power = pp.score
     company.pay_power_band = pp.band
     company.pay_power_why = pp.why
@@ -552,7 +678,70 @@ def grade_companies(limit: int | None = None, *, regrade: bool = True) -> dict:
             if g.underrated is False:
                 hyped += 1
             session.commit()   # per-company: a kill mid-run loses nothing already decided
-    return {**counts, "hyped_excluded": hyped}
+    return {**counts, "overrated_excluded": hyped, "hyped_excluded": hyped}
+
+
+def refresh_priority(*, dry_run: bool = False, batch: int = 200) -> dict:
+    """The hourly regrade: overrated, priority and city for every row, from bulk-loaded
+    job counts — seconds, not the per-company queries of a full grade. Tier is only
+    touched where the overrated verdict flips: newly overrated -> reject; no longer
+    overrated -> tier cleared so the next grade pass re-grades it. List rows keep their
+    tier (the list is the decision) and their city."""
+    from sqlalchemy import case, func
+
+    init_db()
+    out = {"companies": 0, "changed": 0, "overrated": 0, "newly_overrated": 0, "no_longer_overrated": 0,
+           "city_set": 0, "dry_run": dry_run}
+    with get_session() as session:
+        agg = {cid: (n, fr, an) for cid, n, fr, an in session.exec(
+            select(Job.company_id, func.count(),
+                   func.sum(case((Job.is_senior == False, 1), else_=0)),   # noqa: E712
+                   func.sum(case((Job.remote_anywhere == True, 1), else_=0)))  # noqa: E712
+            .group_by(Job.company_id)).all()}
+        locs: dict[int, list[str]] = {}
+        for cid, loc in session.exec(select(Job.company_id, Job.location).where(col(Job.location).is_not(None))).all():
+            if len(locs.setdefault(cid, [])) < 40:
+                locs[cid].append(loc)
+        rows = session.exec(select(Company).where(col(Company.status).is_(None))).all()
+        dirty = 0
+        for c in rows:
+            out["companies"] += 1
+            n, fr, an = agg.get(c.id, (0, 0, 0))
+            o, score, why, city, other = _judge(
+                c, jobs=n, fresher=int(fr or 0), anywhere=int(an or 0), locations=" ; ".join(locs.get(c.id, [])),
+                pay_band=c.pay_power_band, pay_score=c.pay_power)
+            off = _india_off_target(c, city, other, int(an or 0))
+            if off:
+                score, why = 0, off
+            before = (c.overrated, c.overrated_reason, c.priority_score, c.priority_why, c.city, c.tier)
+            if o.overrated and not c.overrated:
+                out["newly_overrated"] += 1
+                if not c.list_key:
+                    c.tier, c.tier_reason = REJECT, f"overrated — {o.reason}"
+            elif not o.overrated and c.overrated:
+                out["no_longer_overrated"] += 1
+                if not c.list_key and (c.tier_reason or "").startswith("overrated"):
+                    c.tier = None   # re-graded by the next grade pass
+            c.overrated, c.overrated_reason = o.overrated, o.reason
+            c.priority_score, c.priority_why = score, why
+            if city and not c.city and not c.list_key:
+                c.city = city
+                out["city_set"] += 1
+            out["overrated"] += int(o.overrated)
+            if (c.overrated, c.overrated_reason, c.priority_score, c.priority_why, c.city, c.tier) != before:
+                out["changed"] += 1
+                if not dry_run:
+                    session.add(c)
+                    dirty += 1
+                    if dirty >= batch:
+                        session.commit()
+                        dirty = 0
+        if dry_run:
+            session.rollback()
+        else:
+            session.commit()
+    log.info("priority refresh: %s", out)
+    return out
 
 
 def targets(tier: str | None = None, limit: int = 50) -> list[dict]:
@@ -567,19 +756,22 @@ def targets(tier: str | None = None, limit: int = 50) -> list[dict]:
             continue
         out.append({
             "id": c.id, "name": c.name, "tier": c.tier, "reason": c.tier_reason,
-            "underrated": c.underrated,
+            "underrated": c.underrated, "overrated": c.overrated,
+            "overrated_reason": c.overrated_reason,
+            "priority_score": c.priority_score, "priority_why": c.priority_why,
             "description": c.description, "region": c.hq_region,
             "stipend_inr_month": c.stipend_inr_month, "ppo_lpa": c.ppo_lpa,
             "funding_stage": c.funding_stage, "funding_amount_usd_m": c.funding_amount_usd_m,
             "investors": json.loads(c.funding_investors) if c.funding_investors else [],
             "hiring_status": c.hiring_status, "careers_url": c.careers_url,
         })
-    out.sort(key=lambda r: (order.get(r["tier"] or UNKNOWN, 4), -(r["ppo_lpa"] or 0), r["name"]))
+    out.sort(key=lambda r: (-(r["priority_score"] or 0), order.get(r["tier"] or UNKNOWN, 4),
+                            -(r["ppo_lpa"] or 0), r["name"]))
     return out[:limit]
 
 
 __all__ = [
     "Grade", "grade", "grade_company", "grade_companies", "extract_job_pay",
-    "hype_check", "region_of", "targets",
+    "hype_check", "region_of", "targets", "priority", "refresh_priority",
     "TIER1", "TIER2", "PROSPECT", "REJECT", "UNKNOWN", "TIER_ORDER",
 ]

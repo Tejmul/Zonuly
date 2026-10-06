@@ -12,14 +12,14 @@
 import { createContext, useContext } from "react";
 import { useApi, type Health } from "@/lib/api";
 
-type Access = { ready: boolean; publicInstance: boolean };
+type Access = { ready: boolean; publicInstance: boolean; snapshot: Health["snapshot"] | null };
 
-const Ctx = createContext<Access>({ ready: false, publicInstance: false });
+const Ctx = createContext<Access>({ ready: false, publicInstance: false, snapshot: null });
 
 export function AccessProvider({ children }: { children: React.ReactNode }) {
   const { data, loading } = useApi<Health>("/api/health");
   return (
-    <Ctx.Provider value={{ ready: !loading, publicInstance: Boolean(data?.access?.public) }}>
+    <Ctx.Provider value={{ ready: !loading, publicInstance: Boolean(data?.access?.public), snapshot: data?.snapshot ?? null }}>
       {children}
     </Ctx.Provider>
   );
@@ -44,9 +44,29 @@ export function OperatorOnly({
 }
 
 export function DemoBanner() {
-  const { publicInstance } = useAccess();
-  if (!publicInstance) return null;
+  const { publicInstance, snapshot } = useAccess();
+  // Only an explicit `schema_ok: false` is news. An older API without the snapshot
+  // block, or one that is still loading, says nothing.
+  const stale = snapshot?.schema_ok === false;
+  if (!publicInstance && !stale) return null;
 
+  return (
+    <>
+      {publicInstance ? <DemoNote /> : null}
+      {stale ? (
+        <div className="border-b border-line">
+          <p className="mx-auto max-w-[1400px] px-6 py-1.5 text-[11.5px] text-ink-3">
+            The data on the server is from an older build than this page
+            {snapshot?.built_at ? ` (built ${snapshot.built_at.slice(0, 10)})` : ""} — a few columns may read as
+            empty until it is refreshed.
+          </p>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function DemoNote() {
   return (
     <div className="border-b border-line bg-surface-2">
       <p className="mx-auto max-w-[1400px] px-6 py-2 text-[12px] leading-relaxed text-ink-2">
