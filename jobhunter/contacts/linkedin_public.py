@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import httpx
 from sqlmodel import col, select
 
-from jobhunter import CONFIG
+from jobhunter import CONFIG, channels
 from jobhunter.db import Company, Contact, get_session, init_db, utcnow
 
 log = logging.getLogger(__name__)
@@ -78,10 +78,13 @@ def _ddg(query: str, timeout: int = 25) -> tuple[str | None, str | None]:
         r = httpx.get(DDG_HTML, params={"q": query}, headers={"User-Agent": UA},
                       timeout=timeout, follow_redirects=True)
     except Exception as e:  # noqa: BLE001
+        channels.record("ddg", False, f"{type(e).__name__}: {str(e)[:100]}")
         return None, f"{type(e).__name__}: {str(e)[:100]}"
     if r.status_code != 200 or _CHALLENGE.search(r.text[:6000]):
         _throttled_until = time.monotonic() + THROTTLE_BACKOFF_S
+        channels.record("ddg", False, f"challenge / HTTP {r.status_code}", cooldown=True)
         return None, f"search rate-limited (HTTP {r.status_code}); back off"
+    channels.record("ddg", True)
     return r.text, None
 
 
@@ -114,7 +117,9 @@ def _people_from(html: str) -> list[dict]:
         if not _NAME_OK.match(name) or not _ROLE_HINT.search(role):
             continue
         seen.add(slug)
-        out.append({"name": name, "role": role, "url": url})
+        # the whole result title ("Name - Role - Company") is the headline the
+        # affiliation check reads: the company has to be in it, and not as "ex-"
+        out.append({"name": name, "role": role, "url": url, "headline": text})
     return out
 
 
@@ -145,7 +150,8 @@ def _people_from_exa(name: str, limit: int, query: str | None = None) -> tuple[l
         if not _NAME_OK.match(person) or not _ROLE_HINT.search(headline) or bare not in blob:
             continue
         seen.add(slug)
-        out.append({"name": person, "role": headline[:120], "url": url})
+        out.append({"name": person, "role": headline[:120], "url": url,
+                    "headline": f"{r.get('title') or ''} — {headline}"[:300]})
     return out[:limit], res.get("error")
 
 
@@ -163,6 +169,7 @@ def _search(name: str, query: str, max_people: int) -> tuple[list[dict], str, st
 def _save(company_id: int, people: list[dict], via: str) -> int:
     """Store found profiles as contacts, resolving each address from the company's
     pattern when it is known — MX-checked, labelled guessed, never verified."""
+    from jobhunter import guardrails
     from jobhunter.contacts import patterns, roles as roleclass, verify
 
     with get_session() as session:
@@ -175,24 +182,33 @@ def _save(company_id: int, people: list[dict], via: str) -> int:
             if p["name"].lower() in existing:
                 continue
             existing.add(p["name"].lower())
-            verdict = roleclass.classify(p["role"], name=p["name"])
             email = None
-            confidence = "scraped"
+            confidence = None
             if domain and pattern:
                 cands = patterns.candidates(p["name"], domain, pattern)
                 if cands:
                     got, v = verify.best_candidate(cands)
                     if got:
                         email, confidence = got, (v.confidence if v else "pattern-guessed")
+            g = guardrails.vet_contact(session, company=c, name=p["name"], email_addr=email,
+                                       source="pattern" if email else "linkedin-public", channel=f"linkedin:{via}",
+                                       url=p["url"], name_source="linkedin",
+                                       linkedin_headline=p.get("headline") or p["role"], smtp=confidence)
+            if g is None or not g.get("name"):
+                continue      # a LinkedIn lead is a person or nothing
+            verdict = roleclass.classify(p["role"], name=g["name"])
             session.add(Contact(
-                company_id=company_id, name=p["name"], role=p["role"], email=email,
+                company_id=company_id, name=g["name"], role=p["role"], email=g.get("email"),
                 linkedin=p["url"], source="linkedin-public",
                 research_notes=f"found via {via}",
-                confidence=confidence if email else "scraped",
+                confidence=g["confidence"] if g.get("email") else "scraped",
                 role_class=verdict.role_class, seniority=verdict.seniority,
                 referral_rank=verdict.referral_rank, role_evidence=f"LinkedIn: {p['role']}",
                 is_recruiter=verdict.role_class in ("recruiter", "tech_recruiter"),
                 classified_at=utcnow(),
+                name_source="linkedin", email_kind=g.get("email_kind"), affiliation=g["affiliation"],
+                affiliation_source=g["affiliation_source"], affiliation_evidence=g["affiliation_evidence"],
+                affiliation_checked_at=g["affiliation_checked_at"],
             ))
             added += 1
         c.contacts_found_at = utcnow()

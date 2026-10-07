@@ -13,6 +13,7 @@ the queue. The gate never rewrites a sentence — it flags, the human decides.
     one_ask       more than one question / request
     dashes        an em/en dash survived
     guessed       the address is pattern-guessed, not verified (bounces cost the account)
+    affiliation   nothing on record says the person still works there (guardrails.affiliation)
 
 Pure functions; no I/O, no model.
 """
@@ -68,7 +69,7 @@ class GateResult:
     @property
     def blocked(self) -> bool:
         """Blocked means "read this before approving", not "cannot send"."""
-        return any(f["kind"] in ("faithfulness",) for f in self.flags)
+        return any(f["kind"] in ("faithfulness", "affiliation") for f in self.flags)
 
     def as_list(self) -> list[dict]:
         return self.flags
@@ -85,7 +86,8 @@ def _body_only(body: str, signature: str | None) -> str:
 
 
 def check(body: str, *, corpus: str, signature: str | None = None,
-          address_confidence: str | None = None) -> GateResult:
+          address_confidence: str | None = None, affiliation: str | None = None,
+          affiliation_evidence: str | None = None) -> GateResult:
     """Run every gate over `body` against the facts in `corpus`."""
     r = GateResult()
     text = _body_only(body or "", signature)
@@ -156,6 +158,13 @@ def check(body: str, *, corpus: str, signature: str | None = None,
     # ---- the address itself
     if address_confidence and address_confidence != "verified":
         r.flags.append({"kind": "guessed", "detail": f"address is {address_confidence}: it may bounce, and bounces count against the account"})
+
+    # ---- the person: is there evidence they still work there?
+    if affiliation is not None and affiliation not in ("verified-current", "likely-current"):
+        r.flags.append({"kind": "affiliation",
+                        "detail": f"{affiliation}: {affiliation_evidence or 'no evidence they work there now'}"})
+    elif affiliation == "likely-current":
+        r.flags.append({"kind": "affiliation_likely", "detail": f"likely current: {affiliation_evidence or ''}".strip()})
 
     return r
 

@@ -30,7 +30,6 @@ api and the CLI above.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
 import concurrent.futures as cf
@@ -41,7 +40,7 @@ from urllib.parse import urlparse
 import httpx
 from sqlmodel import col, select
 
-from jobhunter import CONFIG, backoff, pipeline
+from jobhunter import CONFIG, backoff, guardrails, pipeline
 from jobhunter.db import Company, fill_order, get_session, init_db, utcnow
 from jobhunter.research import web
 from jobhunter.scrapers import careers_ats as ca
@@ -485,10 +484,10 @@ def run_company(company_id: int, *, use_search: bool = True) -> dict:
                 c.ats, c.ats_slug = f.ats, f.slug
             if jobs:
                 titles = [j.title for j in jobs][:40]
-                c.hiring_status = "verified"
-                c.hiring_evidence = f"{len(jobs)} open role(s) listed on their own careers page ({how}): {', '.join(titles[:5])}"[:300]
-                c.hiring_roles = json.dumps(titles)
-                c.hiring_checked_at = utcnow()
+                guardrails.set_hiring(
+                    session, c, "verified", roles=titles, careers_url=f.careers_url,
+                    evidence=f"{len(jobs)} open role(s) listed on their own careers page ({how}): {', '.join(titles[:5])}"[:300],
+                    channel=f"careers:{how or f.via}"[:40])
                 if not c.hiring_claim_url or c.hiring_claim_source in ("yc", None):
                     c.hiring_claim, c.hiring_claim_url = f"{len(jobs)} open role(s) on their careers page", f.careers_url
                     c.hiring_claim_by, c.hiring_claim_source, c.hiring_claim_at = None, "careers", utcnow()

@@ -13,11 +13,11 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime
 
 import httpx
 
-from jobhunter import CONFIG, secret
-from jobhunter.scrapers.base import get_json
+from jobhunter import CONFIG, channels, secret
 
 log = logging.getLogger(__name__)
 
@@ -35,10 +35,63 @@ COMMITS_PER_REPO = 100
 PROFILES_TO_ENRICH = 12   # bios cost one call each; only fetch them for people we'd actually write to
 
 
+_resolved: str | None = None
+
+
+def _gh_cli_token() -> str:
+    """The token the authenticated GitHub CLI holds (`gh auth token`), or ""."""
+    import subprocess
+
+    from jobhunter.research import backends
+
+    exe = backends.resolve("gh")
+    if not exe:
+        return ""
+    import os
+
+    # gh prefers GITHUB_TOKEN / GH_TOKEN from the environment over its own login — and the
+    # environment's is the token being replaced, so it is hidden from this one call
+    env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_TOKEN", "GH_TOKEN")}
+    try:
+        r = subprocess.run([exe, "auth", "token"], capture_output=True, text=True, timeout=15, env=env)
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def token() -> str:
+    """A token GitHub actually accepts: GITHUB_TOKEN from .env, else the GitHub CLI's.
+
+    2026-10-07: the .env token answered 401 "Bad credentials" on every call, so every
+    people hunt had been running unauthenticated-and-refused ("no org found") while `gh`
+    sat logged in with 5,000 calls an hour. Checked once per process, against /rate_limit
+    (which costs nothing); a refused token is recorded on the github channel."""
+    global _resolved
+    if _resolved is not None:
+        return _resolved
+    for name, cand in (("GITHUB_TOKEN", TOKEN), ("gh auth token", _gh_cli_token())):
+        if not cand:
+            continue
+        try:
+            r = httpx.get(f"{API}/rate_limit", timeout=15,
+                          headers={"Accept": "application/vnd.github+json", "Authorization": f"Bearer {cand}"})
+        except httpx.HTTPError:
+            _resolved = cand        # offline: keep the first one, the calls will say so
+            return cand
+        if r.status_code == 200:
+            _resolved = cand
+            return cand
+        channels.record("github", False, f"{name} refused: HTTP {r.status_code}")
+        log.warning("github: %s refused (HTTP %s) — trying the next credential", name, r.status_code)
+    _resolved = ""
+    return ""
+
+
 def headers() -> dict[str, str]:
     h = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
-    if TOKEN:
-        h["Authorization"] = f"Bearer {TOKEN}"
+    tok = token()
+    if tok:
+        h["Authorization"] = f"Bearer {tok}"
     return h
 
 
@@ -53,6 +106,38 @@ class GHPerson:
     twitter: str | None = None     # the X handle on their profile — a DM route, not an address
     source: str = "github"
     confidence: str = "scraped"
+    # affiliation evidence (guardrails.affiliation): a commit is not employment, these are
+    member: bool = False                     # listed in the org's (public) members
+    last_commit_at: datetime | None = None   # their latest commit to the org's own non-fork repos
+    commit_repo: str | None = None
+    profile_email: bool = False              # the address is the public one on their profile
+
+
+async def get_json(http: httpx.AsyncClient, url: str, **kw) -> object | None:
+    """GET → JSON or None, recording the GitHub channel's health (a 404 is an answer;
+    403/429/5xx and transport errors are failures — guardrails' hourly audit reads them)."""
+    try:
+        r = await http.get(url, **kw)
+    except Exception as e:  # noqa: BLE001 — one dead call must not end a hunt
+        channels.record("github", False, f"{type(e).__name__}: {str(e)[:120]}")
+        return None
+    if r.status_code in (401, 403, 429) or r.status_code >= 500:
+        channels.record("github", False, f"HTTP {r.status_code}: {r.text[:120]}")
+        return None
+    channels.record("github", True)
+    if r.status_code >= 400:
+        return None
+    try:
+        return r.json()
+    except ValueError:
+        return None
+
+
+def _when(raw: str | None) -> datetime | None:
+    try:
+        return datetime.fromisoformat((raw or "").replace("Z", "+00:00")).replace(tzinfo=None) if raw else None
+    except ValueError:
+        return None
 
 
 _DECOR = re.compile(r"(ai|labs?|hq|inc|tech|technologies|app|org|engg|eng|git|github|oss|dev)$")
@@ -132,15 +217,16 @@ async def top_repos(http: httpx.AsyncClient, org: str, limit: int = REPOS_PER_OR
     repos = await get_json(
         http, f"{API}/orgs/{org}/repos?sort=pushed&per_page={limit}&type=public", headers=headers()
     )
-    return [r["name"] for r in (repos or []) if r.get("name") and not r.get("archived")]
+    # a fork's history is upstream's committers, not the company's (Affirm's Flink fork)
+    return [r["name"] for r in (repos or []) if r.get("name") and not r.get("archived") and not r.get("fork")]
 
 
-async def emails_from_repo(http: httpx.AsyncClient, org: str, repo: str) -> dict[str, tuple[str, str | None]]:
-    """{login: (email, name)} harvested from one repo's recent commits."""
+async def emails_from_repo(http: httpx.AsyncClient, org: str, repo: str) -> dict[str, tuple[str, str | None, datetime | None]]:
+    """{login: (email, name, when)} harvested from one repo's recent commits."""
     commits = await get_json(
         http, f"{API}/repos/{org}/{repo}/commits?per_page={COMMITS_PER_REPO}", headers=headers()
     )
-    found: dict[str, tuple[str, str | None]] = {}
+    found: dict[str, tuple[str, str | None, datetime | None]] = {}
     for c in commits or []:
         author = (c.get("author") or {})
         login = author.get("login")
@@ -150,7 +236,7 @@ async def emails_from_repo(http: httpx.AsyncClient, org: str, repo: str) -> dict
             continue
         if _NOREPLY.search(email) or _BOT.search(login):
             continue
-        found.setdefault(login, (email, name))
+        found.setdefault(login, (email, name, _when(meta.get("date"))))   # newest first
     return found
 
 
@@ -191,10 +277,15 @@ async def mine(
         log.info("github: no org found for %s", company_name)
         return None, []
 
-    # 1. harvest emails in bulk from recent commits across the org's active repos
-    harvested: dict[str, tuple[str, str | None]] = {}
+    # 1. harvest emails in bulk from recent commits across the org's own active repos
+    harvested: dict[str, tuple[str, str | None, datetime | None]] = {}
+    repo_of: dict[str, str] = {}
     for repo in await top_repos(http, org):
-        harvested.update(await emails_from_repo(http, org, repo))
+        for login, row in (await emails_from_repo(http, org, repo)).items():
+            old = harvested.get(login)
+            if old is None or (row[2] and (not old[2] or row[2] > old[2])):
+                harvested[login] = row
+                repo_of[login] = f"{org}/{repo}"
         if len(harvested) >= limit * 2:
             break
 
@@ -202,10 +293,11 @@ async def mine(
     members = await org_members(http, org, limit=limit)
 
     people: dict[str, GHPerson] = {}
-    for login, (email, name) in harvested.items():
-        people[login] = GHPerson(login=login, name=name, email=email, confidence="verified")
+    for login, (email, name, when) in harvested.items():
+        people[login] = GHPerson(login=login, name=name, email=email, last_commit_at=when,
+                                 commit_repo=repo_of.get(login))
     for login in members:
-        people.setdefault(login, GHPerson(login=login))
+        people.setdefault(login, GHPerson(login=login)).member = True
 
     ordered = sorted(people.values(), key=lambda p: p.email is None)[:limit]
 
@@ -214,14 +306,17 @@ async def mine(
         profile = await user_profile(http, person.login)
         if profile is None:
             continue
-        person.name = person.name or profile.name
         person.bio = profile.bio
         person.company = profile.company
         person.blog = profile.blog
         person.twitter = profile.twitter
+        if profile.name:
+            person.name = profile.name      # their display name beats the commit's author string
         if not person.email and profile.email:
             person.email = profile.email
-            person.confidence = "verified"
+            person.profile_email = True
+        elif person.email and profile.email and person.email.lower() == profile.email.lower():
+            person.profile_email = True
 
     found = sum(1 for p in ordered if p.email)
     log.info("github: %s (org=%s) -> %d people, %d with emails", company_name, org, len(ordered), found)
@@ -231,4 +326,4 @@ async def mine(
 async def rate_limit(http: httpx.AsyncClient) -> dict:
     data = await get_json(http, f"{API}/rate_limit", headers=headers())
     core = ((data or {}).get("resources") or {}).get("core") or {}
-    return {"limit": core.get("limit"), "remaining": core.get("remaining"), "authenticated": bool(TOKEN)}
+    return {"limit": core.get("limit"), "remaining": core.get("remaining"), "authenticated": bool(token())}

@@ -73,6 +73,8 @@ export function PayCell({
 
 const HIRING: Record<string, string> = {
   verified: "proven", role_missing: "not our role", not_authorized: "unproven", unreachable: "unreadable",
+  // guardrails.hiring: a careers page with no role title read off it, or a proof gone stale
+  careers_only: "page, no roles", needs_recheck: "re-checking",
 };
 
 /** Hiring: proven or not, and how many roles their own page lists. */

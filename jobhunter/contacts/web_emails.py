@@ -24,7 +24,7 @@ import re
 
 from sqlmodel import col, select
 
-from jobhunter import CONFIG
+from jobhunter import CONFIG, guardrails
 from jobhunter.contacts import patterns, roles
 from jobhunter.db import Company, Contact, get_session, init_db, utcnow
 
@@ -204,23 +204,47 @@ def find(company_id: int, *, max_pages: int = MAX_PAGES, fresh: bool = False) ->
                 if p and not p.email:
                     p.email = email
                     p.confidence = "scraped"
+                    p.email_kind = "company"
                     p.research_notes = f"{p.research_notes or ''}\naddress published at {info['where']}".strip()
+                    if p.affiliation not in guardrails.READY:
+                        # their company address, published: a reason to think they are there
+                        on_site = _host(info["where"]) == domain
+                        aff = guardrails.affiliation(
+                            company_name=name, domain=domain, email_kind="company", email_addr=email,
+                            team_page=info["where"] if on_site else None, published_at=info["where"],
+                            linkedin_headline=p.role if p.source == "linkedin-public" else None)
+                        p.affiliation, p.affiliation_source, p.affiliation_evidence = aff.label, aff.source, aff.evidence[:300]
+                        p.affiliation_checked_at = utcnow()
                     session.add(p)
                     nameless = [(i, n) for i, n in nameless if i != matched_id]
                     stats["attached"] += 1
                     existing.add(email)
                     continue
 
-            verdict = roles.classify(None, name=info["name"], email=email)
+            company_row = session.get(Company, company_id)
+            on_site = _host(info["where"]) == domain
+            g = guardrails.vet_contact(session, company=company_row, name=info["name"], email_addr=email,
+                                       source="web", channel="web", url=info["where"],
+                                       name_source="page" if info["name"] else None,
+                                       team_page=info["where"] if (on_site and info["name"]) else None,
+                                       published_at=info["where"])
+            if g is None or not g.get("email"):
+                continue
+            verdict = roles.classify(None, name=g.get("name"), email=email)
+            if generic:
+                verdict = roles.RoleVerdict("other", None, 9, f"shared inbox {local}@", "alias")
             role = "General inbox" if generic else ("Recruiting / HR" if verdict.role_class in ("recruiter", "tech_recruiter") else None)
             session.add(Contact(
-                company_id=company_id, name=info["name"], role=role, email=email,
-                source="web", confidence="scraped",
+                company_id=company_id, name=g.get("name"), role=role, email=g["email"],
+                source="web", confidence=g["confidence"],
                 is_recruiter=verdict.role_class in ("recruiter", "tech_recruiter"),
                 role_class=verdict.role_class, seniority=verdict.seniority,
                 referral_rank=verdict.referral_rank, role_evidence=verdict.evidence or f"address: {local}@",
                 classified_at=utcnow(),
                 research_notes=f"address published at {info['where']}",
+                name_source=g.get("name_source"), email_kind=g.get("email_kind"), affiliation=g["affiliation"],
+                affiliation_source=g["affiliation_source"], affiliation_evidence=g["affiliation_evidence"],
+                affiliation_checked_at=g["affiliation_checked_at"],
             ))
             existing.add(email)
             stats["inbox" if generic else "people"] += 1

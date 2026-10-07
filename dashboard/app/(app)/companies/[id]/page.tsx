@@ -12,6 +12,7 @@ import { api, useApi, useTaskWatcher } from "@/lib/api";
 import { TierPill } from "@/components/ui/tier";
 import { ErrorNote, Loading } from "@/components/ui/primitives";
 import { FundingCell } from "@/components/funding";
+import { AffiliationBadge } from "@/components/signals";
 import { fundingOf, money, roundWhen } from "@/lib/funding";
 
 /* One page per company, in the order you read it: who they are → the hiring post →
@@ -27,6 +28,7 @@ type Job = {
 type Person = {
   id: number; name: string | null; role: string | null; role_class: string | null; label: string | null;
   rank: number | null; email: string | null; confidence: string | null; evidence: string | null;
+  affiliation?: string | null; affiliation_evidence?: string | null;
   github: string | null; linkedin?: string | null; x_handle?: string | null; reachable: boolean; source: string;
 };
 type Detail = {
@@ -278,6 +280,7 @@ export default function CompanyPage() {
                 <span className="text-[13px] font-medium">{p.name ?? "unnamed"}</span>
                 <span className="text-[12px] text-ink-3">{p.label ?? p.role_class}</span>
                 <span className="tnum text-[12px] text-ink-2">{p.email}</span>
+                <AffiliationBadge affiliation={p.affiliation} evidence={p.affiliation_evidence} />
                 <span className="chip">{p.confidence}</span>
                 <span className="ml-auto flex items-center gap-2">
                   {p.github && <a href={p.github} target="_blank" rel="noreferrer" title="GitHub" className="text-ink-3 hover:text-ink"><GitBranch size={13} /></a>}

@@ -234,12 +234,35 @@ def budget_status() -> dict:
     }
 
 
+# The free tier's own per-day ceiling ("free-models-per-day"): once OpenRouter says it,
+# every further call today fails the same way — 406 refused calls on 2026-10-07. Remember
+# the UTC day it was said and stop asking until the next one.
+_CEILING_DAY: str | None = None
+
+
+def _ceiling_today() -> bool:
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if _CEILING_DAY == today:
+        return True
+    try:
+        with _conn() as conn:
+            row = conn.execute("SELECT 1 FROM llm_call WHERE ok = 0 AND ts >= ? AND error LIKE "
+                               "'%free-models-per-day%' LIMIT 1", (today,)).fetchone()
+        return bool(row)
+    except sqlite3.Error:
+        return False
+
+
 def check_budget() -> None:
     """Raise BudgetExceeded if a cap is already spent. Called before every request.
 
     Checked *before* the call, not after: a cap that only notices once the money is
-    gone is a report, not a gate.
+    gone is a report, not a gate. The free tier's daily ceiling counts as a cap.
     """
+    if _ceiling_today():
+        raise BudgetExceeded(
+            "OpenRouter's free-model daily ceiling was reached today (free-models-per-day) — "
+            "it lifts at 00:00 UTC; adding 10 credits to the account raises it to 1,000 requests a day")
     status = budget_status()
     if status["day"]["spent_inr"] >= DAILY_CAP_INR:
         raise BudgetExceeded(
@@ -458,6 +481,10 @@ def _complete_one(
                 "changes, re-check with `python scripts/run.py models list --free`"
             ) from e
         if code == 429:
+            if "per-day" in detail:
+                global _CEILING_DAY
+                _CEILING_DAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                raise BudgetExceeded(f"OpenRouter free-model daily ceiling reached ({detail})") from e
             raise RateLimited(
                 f"rate limited on {model_id}. Free models share a per-minute and a per-day "
                 "ceiling; the daily one lifts substantially once the account holds a few "

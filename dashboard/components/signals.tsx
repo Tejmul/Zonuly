@@ -162,6 +162,19 @@ export function ConfidenceBadge({ confidence }: { confidence: string | null | un
   return <Badge className={cn(tone.text, tone.ring, tone.bg)}>{label}</Badge>;
 }
 
+/* Does the evidence place this person at the company NOW? (guardrails.affiliation) —
+   only the two "current" labels are ever offered as a referrer. Solid = verified. */
+const AFFILIATION_CHIP: Record<string, [string, string]> = {
+  "verified-current": ["chip chip-solid", "current"],
+  "likely-current": ["chip text-ink", "likely current"],
+  unconfirmed: ["chip text-ink-3", "unconfirmed"],
+  generic: ["chip chip-strike", "shared inbox"],
+};
+export function AffiliationBadge({ affiliation, evidence }: { affiliation: string | null | undefined; evidence?: string | null }) {
+  const [cls, label] = (affiliation && AFFILIATION_CHIP[affiliation]) || ["chip text-ink-3", "unchecked"];
+  return <span className={cls} title={evidence ?? undefined}>{label}</span>;
+}
+
 export function StatusDot({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-ink-2">

@@ -242,13 +242,17 @@ def referral_queue(company_id: int | None = None, limit: int = 50) -> list[dict]
             "role_class": c.role_class, "label": LABELS.get(c.role_class or "", c.role_class),
             "seniority": c.seniority, "rank": c.referral_rank or DEFAULT_RANK,
             "email": c.email, "confidence": c.confidence, "evidence": c.role_evidence,
+            "affiliation": c.affiliation, "affiliation_evidence": c.affiliation_evidence,
         }
         for c in rows
     ]
-    # rank first, then a verified address beats a guessed one — an unreachable
-    # founder is worth less than an SDE whose email we actually confirmed
+    # confirmed-current first (an ex-employee refers nobody), then rank, then a verified
+    # address beats a guessed one — an unreachable founder is worth less than an SDE
+    # whose email we actually confirmed
     conf_order = {"verified": 0, "pattern-guessed": 1, "scraped": 2}
-    out.sort(key=lambda r: (r["rank"], conf_order.get(r["confidence"] or "", 3), r["name"] or ""))
+    aff_order = {"verified-current": 0, "likely-current": 1}
+    out.sort(key=lambda r: (aff_order.get(r["affiliation"] or "", 2), r["rank"],
+                            conf_order.get(r["confidence"] or "", 3), r["name"] or ""))
     return out[:limit]
 
 
@@ -260,7 +264,10 @@ def good_referrer_counts(session, company_ids: list[int] | None = None) -> dict[
     """company_id -> how many of its contacts can refer (engineers, EMs, founders,
     recruiters — every class whose config says `refer: true`)."""
     good = [k for k, ok in CAN_REFER.items() if ok] or [c for c in CLASSES if c != "other"]
-    q = select(Contact.company_id).where(col(Contact.role_class).in_(good))
+    # only people the evidence places there now count (guardrails.affiliation): a list
+    # row "covered" by five strangers from a fork is not covered
+    q = select(Contact.company_id).where(col(Contact.role_class).in_(good),
+                                         col(Contact.affiliation).in_(("verified-current", "likely-current")))
     if company_ids is not None:
         q = q.where(col(Contact.company_id).in_(company_ids))
     out: dict[int, int] = {}

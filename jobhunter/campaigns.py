@@ -93,7 +93,8 @@ def _contact_for(session, ev: CampaignEventIn) -> Contact:
         session.commit()
         session.refresh(company)
     contact = Contact(company_id=company.id, name=ev.contact_name, email=addr, source="n8n",
-                      confidence="scraped", is_recruiter=False)
+                      confidence="scraped", is_recruiter=False, affiliation="unconfirmed",
+                      affiliation_source="none", affiliation_evidence="reached by an n8n campaign; no evidence on record")
     session.add(contact)
     session.commit()
     session.refresh(contact)

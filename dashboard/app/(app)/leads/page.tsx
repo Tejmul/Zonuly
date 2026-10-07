@@ -6,7 +6,7 @@ import { GitBranch, Mail, UserSearch } from "lucide-react";
 import { api, useApi, useTaskWatcher, type Company, type Contact } from "@/lib/api";
 import { OperatorOnly } from "@/components/access";
 import { PageHead, TaskStrip } from "@/components/shell";
-import { ConfidenceBadge, Odds } from "@/components/signals";
+import { AffiliationBadge, ConfidenceBadge, Odds } from "@/components/signals";
 import {
   Badge,
   Button,
@@ -28,11 +28,14 @@ function hookOf(research: { hook?: string | null } | null | undefined): string |
 export default function LeadsPage() {
   const [selected, setSelected] = useState<number | null>(null);
   const [confidence, setConfidence] = useState("");
+  // who is still there: confirmed-current people by default — the only ones ever drafted to
+  const [affiliation, setAffiliation] = useState("current");
 
   const companies = useApi<Company[]>("/api/companies");
   const contactParams = new URLSearchParams({ limit: "500" });
   if (selected) contactParams.set("company_id", String(selected));
   if (confidence) contactParams.set("confidence", confidence);
+  if (affiliation) contactParams.set("affiliation", affiliation);
   const contacts = useApi<Contact[]>(`/api/contacts?${contactParams.toString()}`);
 
   const { tasks, watch, dismiss } = useTaskWatcher();
@@ -63,14 +66,23 @@ export default function LeadsPage() {
     <>
       <PageHead
         title="Leads"
-        description="People you could ask for a referral, ranked by how sure we are the address is real."
+        description="People you could ask for a referral: first whether they still work there, then how sure we are the address is real."
         action={
-          <Select value={confidence} onChange={(e) => setConfidence(e.target.value)}>
-            <option value="">All confidence levels</option>
-            <option value="verified">Verified only</option>
-            <option value="pattern-guessed">Pattern-guessed</option>
-            <option value="scraped">Scraped</option>
-          </Select>
+          <>
+            <Select value={affiliation} onChange={(e) => setAffiliation(e.target.value)} aria-label="Still there?">
+              <option value="current">Confirmed current</option>
+              <option value="verified-current">Verified current only</option>
+              <option value="unconfirmed">Unconfirmed</option>
+              <option value="generic">Shared inboxes</option>
+              <option value="">Everyone</option>
+            </Select>
+            <Select value={confidence} onChange={(e) => setConfidence(e.target.value)} aria-label="Address">
+              <option value="">Any address</option>
+              <option value="verified">Verified address</option>
+              <option value="pattern-guessed">Pattern-guessed</option>
+              <option value="scraped">Scraped</option>
+            </Select>
+          </>
         }
       />
 
@@ -157,8 +169,9 @@ export default function LeadsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm text-ink">
-                        {contact.name ?? "Name unknown"}
+                        {contact.name ?? (contact.handle ? `@${contact.handle}` : "Name unknown")}
                       </span>
+                      <AffiliationBadge affiliation={contact.affiliation} evidence={contact.affiliation_evidence} />
                       <ConfidenceBadge confidence={contact.confidence} />
                       <Badge>{contact.source}</Badge>
                       {contact.is_recruiter ? (
@@ -205,8 +218,12 @@ export default function LeadsPage() {
       </div>
 
       <p className="mt-4 text-xs leading-relaxed text-ink-3">
-        <span className="text-ink-2">On confidence:</span> verified means the address came from a
-        real commit, a public profile, or a provider that confirmed it. Pattern-guessed means it was
+        <span className="text-ink-2">Still there?</span> current means the evidence places them at the
+        company now — a public member of its GitHub org, their own profile naming it, its own team page,
+        or a commit to its own repos in the last year (likely current also takes a public LinkedIn headline
+        or a company address published on the web). Unconfirmed people and shared inboxes are never drafted to.{" "}
+        <span className="text-ink-2">On the address:</span> verified means it came from a commit made in
+        the last year, a public profile, or a provider that confirmed it. Pattern-guessed means it was
         built from the company&apos;s email pattern and passed an MX check but nothing stronger —
         many mail providers accept every address at the edge, so treat those as likely, not certain.{" "}
         <Link href="/settings" className="underline underline-offset-2 hover:text-ink">

@@ -6,7 +6,7 @@ import { Check, Send, Sparkles, X } from "lucide-react";
 import { api, useApi, useTaskWatcher, type Email, type Quota } from "@/lib/api";
 import { relTime } from "@/lib/utils";
 import { PageHead, TaskStrip } from "@/components/shell";
-import { ConfidenceBadge } from "@/components/signals";
+import { AffiliationBadge, ConfidenceBadge } from "@/components/signals";
 import { OperatorOnly } from "@/components/access";
 import {
   Badge,
@@ -184,6 +184,7 @@ export default function QueuePage() {
                 <span className="flex flex-wrap items-center gap-2">
                   {active.contact_name ?? "Unknown"}
                   <span className="tnum text-xs font-normal text-ink-3">{active.to_email}</span>
+                  <AffiliationBadge affiliation={active.contact_affiliation} />
                   <ConfidenceBadge confidence={active.contact_confidence} />
                 </span>
               }

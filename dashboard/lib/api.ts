@@ -60,6 +60,11 @@ export type Contact = {
   linkedin: string | null;
   source: string;
   confidence: string;
+  /** Does the evidence place them there now? verified-current | likely-current | unconfirmed | generic */
+  affiliation?: string | null;
+  affiliation_evidence?: string | null;
+  email_kind?: string | null;
+  handle?: string | null;
   is_recruiter: boolean;
   research: { hook?: string; shared_ground?: string; notes?: string; repos?: unknown[] } | null;
   researched_at: string | null;
@@ -74,6 +79,7 @@ export type Email = {
   contact_name: string | null;
   contact_role: string | null;
   contact_confidence: string | null;
+  contact_affiliation?: string | null;
   company_name: string | null;
   to_email: string;
   subject: string;
@@ -155,7 +161,7 @@ export type Overview = {
   by_source: Record<string, number>;
   new_this_week: number;
   companies: number;
-  contacts: { total: number; verified: number };
+  contacts: { total: number; verified: number; by_confidence?: Record<string, number>; by_affiliation?: Record<string, number> };
   top_matches: Job[];
   recent_replies: Reply[];
 };
@@ -183,6 +189,51 @@ export type Health = {
     schema_ok?: boolean;
     lists?: Record<string, number>;
   } | null;
+};
+
+/** GET /api/audit — the hourly scrape audit (jobhunter/audit.py) and its 48-hour history.
+ *  Every block is optional: an older backend, or an audit that has not run yet. */
+export type ChannelRow = {
+  hour: { ok?: number | null; fail?: number | null; cooldowns?: number | null; fail_rate?: number | null };
+  day: { ok?: number | null; fail?: number | null; cooldowns?: number | null; fail_rate?: number | null };
+  last_ok_at?: string | null;
+  last_fail_at?: string | null;
+  last_error?: string | null;
+};
+export type AuditFill = {
+  companies: number;
+  avg_completeness: number;
+  counts: Record<string, number>;
+  rates: Record<string, number>;
+};
+export type AuditReport = {
+  at: string;
+  status: "ok" | "alert";
+  alerts: string[];
+  fill: AuditFill;
+  delta_hour?: Record<string, number> | null;
+  delta_day?: Record<string, number> | null;
+  labels?: { affiliation?: Record<string, number>; address?: Record<string, number>; email_kind?: Record<string, number> };
+  last_hour: {
+    companies_added: number; contacts_added: number; roles_added: number; contacts_relabelled?: number;
+    fields_written: number; companies_completed?: number; writes_by_field?: Record<string, number>;
+  };
+  rejects: { total: number; by_reason: Record<string, number>; by_channel: Record<string, number> };
+  rejects_24h?: number;
+  sample?: { checked: number; passed: number; failed: { id: number; company_id: number | null; field: string; value: string; why: string; channel: string | null }[] };
+  channels: {
+    research?: Record<string, ChannelRow>;
+    openrouter?: { ok: number; fail: number; fail_rate?: number | null; daily_ceiling_hit?: boolean; last_ok_at?: string | null; last_fail_at?: string | null; last_error?: string | null };
+    github_budget?: { limit?: number | null; remaining?: number | null; resets?: string | null; error?: string };
+    tools?: Record<string, { status: string; detail: string }>;
+    exa_mcp_cooldowns_hour?: number;
+  };
+  tick?: { ran_last_hour: boolean; last: { at?: string | null; finished?: string | null } | null };
+};
+export type AuditPayload = {
+  last: AuditReport | null;
+  history: { at: string; status: string; alerts: string[]; fill: AuditFill; last_hour: AuditReport["last_hour"]; rejects: { total: number } }[];
+  agent?: { label: string; every_minutes: number };
 };
 
 /** GET /api/outreach/pipeline — the send pipeline end to end, counts first. On the

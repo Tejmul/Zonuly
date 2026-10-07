@@ -126,6 +126,11 @@ def redact_contact(row: dict) -> dict:
     if _unrestricted():
         return row
     row["email"] = mask_email(row.get("email"))
+    if row.get("affiliation_evidence"):
+        import re
+
+        row["affiliation_evidence"] = re.sub(r"[\w.%+\-]+@[\w.\-]+\.\w+", lambda m: mask_email(m.group(0)) or "",
+                                             row["affiliation_evidence"])
     return row
 
 

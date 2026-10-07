@@ -106,6 +106,7 @@ def test_valuation_and_headcount_need_a_sentence_that_names_the_company():
 
 
 def test_good_referrers_count_only_people_who_can_refer(tmp_path):
+    """…and only people the evidence places there now (guardrails.affiliation, 2026-10-07)."""
     from jobhunter.contacts import roles
 
     engine = create_engine(f"sqlite:///{tmp_path / 't.db'}")
@@ -113,6 +114,8 @@ def test_good_referrers_count_only_people_who_can_refer(tmp_path):
     with Session(engine) as s:
         s.add(Company(id=1, name="Acme"))
         for rc in ("engineer", "founder", "other", None, "recruiter"):
-            s.add(Contact(company_id=1, name=f"P {rc}", source="test", role_class=rc))
+            s.add(Contact(company_id=1, name=f"P {rc}", source="test", role_class=rc, affiliation="verified-current"))
+        s.add(Contact(company_id=1, name="Old Committer", source="github", role_class="engineer",
+                      affiliation="unconfirmed"))
         s.commit()
         assert roles.good_referrer_counts(s, [1]) == {1: 3}

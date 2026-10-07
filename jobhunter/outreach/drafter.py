@@ -13,7 +13,7 @@ import re
 
 from sqlmodel import col, select
 
-from jobhunter import CONFIG
+from jobhunter import CONFIG, guardrails
 from jobhunter.db import Company, Contact, Email, Job, get_session, init_db, utcnow
 
 log = logging.getLogger(__name__)
@@ -222,6 +222,10 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
         contact = session.get(Contact, contact_id)
         if contact is None or not contact.email:
             return {"error": "contact not found or has no email"}
+        if not guardrails.is_ready(contact):
+            # a referral ask goes only to someone the evidence places there now
+            return {"error": f"not a confirmed-current referrer ({contact.affiliation or 'unchecked'}: "
+                             f"{contact.affiliation_evidence or 'no evidence on record'})"}
         company = session.get(Company, contact.company_id)
         job = session.get(Job, job_id) if job_id else None
         if job is None:
@@ -249,6 +253,7 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
         contact_name = greeting_name(contact_name, contact_email) if contact_name is None or _HANDLE.search(contact_name.lower()) else contact_name
         contact_evidence = contact.role_evidence or ""
         contact_conf = contact.confidence
+        contact_aff, contact_aff_ev = contact.affiliation, contact.affiliation_evidence
         company_name = company.name if company else "your company"
         company_id = contact.company_id
         notes = contact.research_notes
@@ -318,7 +323,8 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
         brief.get("hook"), brief.get("shared_ground"), repos, job_reasons,
         company_facts_text, " ".join(f["text"] for f in company_facts.values()),
     ]))
-    verdict = gates.check(body, corpus=corpus, signature=signature(), address_confidence=contact_conf)
+    verdict = gates.check(body, corpus=corpus, signature=signature(), address_confidence=contact_conf,
+                          affiliation=contact_aff, affiliation_evidence=contact_aff_ev)
     evidence = {
         "person": {"evidence": contact_evidence or None, "hook": brief.get("hook"), "shared_ground": brief.get("shared_ground"), "repos": repos},
         "company": company_facts,
@@ -365,7 +371,8 @@ def draft_for_bets(limit: int = 10, *, candidate_id: int = 1) -> list[dict]:
             company = session.get(Company, c["id"])
             people = session.exec(select(Contact).where(Contact.company_id == c["id"])).all()
             leads = network._reachable(company, people)
-            leads.sort(key=lambda p: ((p.referral_rank or 9), p.confidence != "verified", p.name is None))
+            leads.sort(key=lambda p: ((p.referral_rank or 9), p.affiliation != "verified-current",
+                                      p.confidence != "verified", p.name is None))
             if not leads:
                 continue
             job = session.exec(
@@ -473,8 +480,9 @@ def draft_for_high_matches(limit: int = 5, *, per_company: int = 2) -> list[dict
             contacts = session.exec(
                 select(Contact).where(Contact.company_id == cid, col(Contact.email).is_not(None))
             ).all()
-            # verified addresses first, then anyone we have a name for
-            contacts.sort(key=lambda c: (c.confidence != "verified", c.name is None))
+            # confirmed-current referrers only; verified addresses first, then named
+            contacts = [c for c in contacts if guardrails.is_ready(c)]
+            contacts.sort(key=lambda c: (c.affiliation != "verified-current", c.confidence != "verified", c.name is None))
             already = {
                 e.contact_id for e in session.exec(select(Email).where(Email.company_id == cid)).all()
             }

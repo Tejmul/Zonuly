@@ -15,8 +15,8 @@ from email.message import EmailMessage
 
 from sqlmodel import col, func, select
 
-from jobhunter import CONFIG, ROOT
-from jobhunter.db import Email, get_session, init_db, utcnow
+from jobhunter import CONFIG, ROOT, guardrails
+from jobhunter.db import Contact, Email, get_session, init_db, utcnow
 from jobhunter.outreach import gmail, ledger
 
 log = logging.getLogger(__name__)
@@ -80,6 +80,21 @@ def _build_message(to: str, subject: str, body: str, thread_id: str | None) -> d
     return payload
 
 
+def _referrer_problem(session, email: Email) -> str | None:
+    """A cold ask may only go to a confirmed-current referrer (guardrails.affiliation).
+    Follow-ups answer a thread that already exists and are not re-judged."""
+    if email.kind != "cold":
+        return None
+    contact = session.get(Contact, email.contact_id)
+    if contact is None:
+        return "the contact this draft was written to no longer exists"
+    if not guardrails.is_ready(contact):
+        return (f"{contact.name or email.to_email} is not a confirmed-current referrer "
+                f"({contact.affiliation or 'unchecked'}: {contact.affiliation_evidence or 'no evidence on record'}) "
+                "— re-check them or reject the draft")
+    return None
+
+
 def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
     """Send one approved email. Refuses if the cap is hit or we're outside the send window."""
     init_db()
@@ -92,6 +107,9 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
             return {"error": "already sent", "email_id": email_id}
         if email.status != "approved":
             return {"error": f"email is '{email.status}', only approved emails are sent"}
+        why = _referrer_problem(session, email)
+        if why:
+            return {"error": why, "email_id": email_id}
         to, subject, body = email.to_email, email.subject, email.body
         thread_id = email.gmail_thread_id
         candidate_id = email.candidate_id
@@ -186,6 +204,9 @@ def approve(email_id: int, *, subject: str | None = None, body: str | None = Non
             return {"error": f"cannot approve an email that is '{email.status}'"}
         if email.expires_at and email.expires_at < utcnow():
             return {"error": "this draft is stale (older than the expiry window) — re-draft it; the facts may have changed"}
+        why = _referrer_problem(session, email)
+        if why:
+            return {"error": why}
         if subject is not None:
             email.subject = subject[:180]
         if body is not None:

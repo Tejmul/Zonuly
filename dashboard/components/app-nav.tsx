@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Building2, Calendar, Globe, Inbox, LayoutGrid, Mail, MessageSquare, PanelLeft, Send, Settings, Star, Users, Workflow,
+  Activity, Building2, Calendar, Globe, Inbox, LayoutGrid, Mail, MessageSquare, PanelLeft, Send, Settings, Star, Users, Workflow,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme";
 import { SearchBox } from "@/components/search-box";
@@ -29,6 +29,8 @@ const LINKS = [
   { href: "/replies", label: "Replies", icon: MessageSquare, operatorOnly: true },
   { href: "/calendar", label: "Calendar", icon: Calendar },
   { href: "/tracker", label: "Tracker", icon: Send },
+  // the hourly audit: is the scraping still filling fields, and is every channel answering?
+  { href: "/health", label: "Scraping health", icon: Activity },
 ];
 
 function useLinks() {

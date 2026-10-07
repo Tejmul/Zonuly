@@ -157,6 +157,18 @@ def _child_env(extra: dict[str, str] | None = None) -> dict[str, str]:
     return env
 
 
+def _gh_env(env: dict[str, str]) -> dict[str, str]:
+    """gh prefers GITHUB_TOKEN / GH_TOKEN over its own login. When gh holds a login of its
+    own (`gh auth login` wrote hosts.yml), that login is the credential the user set up for
+    it — 2026-10-07 the .env GITHUB_TOKEN was revoked and shadowed a working gh login."""
+    from pathlib import Path
+
+    hosts = Path(os.environ.get("GH_CONFIG_DIR") or Path.home() / ".config" / "gh") / "hosts.yml"
+    if hosts.exists():
+        env = {k: v for k, v in env.items() if k not in ("GITHUB_TOKEN", "GH_TOKEN")}
+    return env
+
+
 def run(
     exe: str,
     args: list[str],
@@ -181,7 +193,7 @@ def run(
             encoding="utf-8",
             errors="replace",
             timeout=timeout or TIMEOUT,
-            env=_child_env(env_extra),
+            env=_gh_env(_child_env(env_extra)) if exe == "gh" else _child_env(env_extra),
             input=stdin,
             shell=False,
             check=False,

@@ -43,6 +43,7 @@ from sqlmodel import col, select
 from jobhunter import CONFIG
 from jobhunter import admission
 from jobhunter import backoff
+from jobhunter import guardrails
 from jobhunter import pipeline
 from jobhunter import targeting
 from jobhunter.db import Company, Contact, Job, fill_order, get_session, init_db, utcnow
@@ -153,7 +154,7 @@ def _upsert(session, *, name: str, website: str | None, source: str, description
             region: str | None, note: str, funding: dict | None = None,
             claim: dict | None = None, story: str | None = None, story_evidence: str | None = None,
             team_size: int | None = None, stats: HarvestStats, headline: bool = False,
-            website_is_link: bool = False) -> Company | None:
+            website_is_link: bool = False, own_site: bool = False) -> Company | None:
     """Create or fill-in-the-blanks through the admission gate. None when the gate says
     no (junk name, overrated, quarantined) — the reason is counted in stats.skipped.
     Never overwrites something already known, except that a newer round replaces an
@@ -175,15 +176,21 @@ def _upsert(session, *, name: str, website: str | None, source: str, description
     admission.stamp(company, verdict if new else None)
     company.website = company.website or verdict.website
     company.domain = company.domain or verdict.domain
-    company.description = company.description or description
     company.hq_region = company.hq_region or region
+    session.add(company)
+    session.flush()          # an id for the provenance rows below
+    channel = _CHANNEL.get(source, source)
+    if description:
+        # a directory's own words (YC) need no name; a snippet or a headline must name them
+        guardrails.set_description(session, company, description, source=(claim or {}).get("url") or website or source,
+                                   channel=channel, own_site=own_site or source in ("yc",), strict=source not in ("yc",))
     if story and not company.story:
         company.story = story[:1200]
         company.story_evidence = story_evidence
     if team_size and not company.team_size:
         company.team_size = int(team_size)
     if funding:
-        _apply_funding(company, funding)
+        _apply_funding(session, company, funding, source=(claim or {}).get("url") or source, channel=channel)
     if claim and not company.hiring_claim_url:
         # the hiring post on record: who said they are hiring, and where
         company.hiring_claim = claim.get("text")
@@ -203,28 +210,18 @@ def _upsert(session, *, name: str, website: str | None, source: str, description
     return company
 
 
-def _apply_funding(company: Company, funding: dict) -> None:
-    """Write a round onto a row: the stage in the one vocabulary, the amount (feeds carry
-    it — it used to be dropped here), the date, the quote. Blanks are filled; a round
-    announced later than the one on record replaces it."""
-    stage = admission.normalize_stage(funding.get("stage"))
-    announced = funding.get("announced")
-    newer = bool(announced and company.funding_announced and str(announced) > str(company.funding_announced))
-    if newer or not (company.funding_stage or company.funding_amount_usd_m):
-        company.funding_stage = stage or (None if newer else company.funding_stage)
-        amt = funding.get("amount_usd_m")
-        company.funding_amount_usd_m = float(amt) if amt else (None if newer else company.funding_amount_usd_m)
-        company.funding_announced = announced or company.funding_announced
-        company.funding_evidence = funding.get("evidence") or company.funding_evidence
-    else:
-        company.funding_stage = company.funding_stage or stage
-        company.funding_announced = company.funding_announced or announced
-        company.funding_evidence = company.funding_evidence or funding.get("evidence")
-    if funding.get("total_usd_m") and not company.funding_total_usd_m:
-        company.funding_total_usd_m = float(funding["total_usd_m"])
-    if funding.get("valuation_usd_m") and not company.valuation_usd_m:
-        company.valuation_usd_m = float(funding["valuation_usd_m"])
-        company.valuation_evidence = company.valuation_evidence or funding.get("evidence")
+# which research channel each source is, for provenance and the hourly audit
+_CHANNEL = {"funding-rss": "feed", "funding-news": "exa-api", "exa": "exa-api", "exa-mcp": "exa-mcp",
+            "yc": "yc", "x": "x", "scrapedo-dir": "scrapedo"}
+
+
+def _apply_funding(session, company: Company, funding: dict, *, source: str | None = None,
+                   channel: str | None = None) -> None:
+    """Write a round onto a row through guardrails.set_funding: the stage in the one
+    vocabulary, the amount when it is a raise, a real date, a quote that names the
+    company. Blanks are filled; a round announced later than the one on record replaces
+    it; a disagreement keeps the better-evidenced value (the other becomes a reject)."""
+    guardrails.set_funding(session, company, funding, source=source, channel=channel)
 
 
 # ------------------------------------------------------------------ source: YC directory
@@ -360,6 +357,71 @@ def admit_exa(queries: list[str] | None = None, *, per_query: int = 25, fresh: b
                         note=f"found by: {q[:80]}", stats=stats)
             session.commit()
     log.info("harvest exa: %s", stats.as_dict())
+    return stats
+
+
+# ------------------------------------------------------------------ source: hosted Exa MCP (keyless)
+
+_KEYLESS_CURSOR = "harvest:keyless_cursor"
+
+
+def _keyless_queries() -> list[str]:
+    """The company-search pool plus this month's funding questions — rotated by a cursor,
+    so each hour asks the next ones and the pool is walked end to end."""
+    month = datetime.now().strftime("%B %Y")
+    funded = [f"{kind} startup that raised a {rnd} round in {month}, hiring software engineers, company website"
+              for kind in ("AI", "developer tools", "fintech infrastructure", "data infrastructure", "B2B SaaS")
+              for rnd in ("seed", "Series A")]
+    return list(DEFAULT_EXA_QUERIES) + funded
+
+
+def admit_exa_keyless(queries: int = 4, *, per_query: int = 10, fresh: bool = False) -> HarvestStats:
+    """New companies through the hosted Exa MCP — free, no key, paced by web.search. A
+    result counts only when it is the company's OWN site (the host carries the name it
+    gives); everything goes through the admission gate and the guardrails like any other
+    source. The cursor is stored, so the next run asks the next questions."""
+    from jobhunter.db import get_setting, set_setting
+
+    init_db()
+    stats = HarvestStats("exa-mcp")
+    pool = _keyless_queries()
+    with get_session() as session:
+        try:
+            cursor = int(get_setting(session, _KEYLESS_CURSOR, "0") or 0)
+        except ValueError:
+            cursor = 0
+    todo = [pool[(cursor + i) % len(pool)] for i in range(min(queries, len(pool)))]
+    with get_session() as session:
+        for q in todo:
+            hit = web.search(q, limit=per_query, fresh=fresh, only=("exa-mcp",))
+            if hit.get("error") and not hit.get("results"):
+                stats.skip(f"search error: {hit['error'][:60]}")
+                if web.mcp_cooling():
+                    break
+                continue
+            for r in hit.get("results") or []:
+                stats.seen += 1
+                url = r.get("url") or ""
+                host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+                if not host or _NOT_A_SITE.search(host) or admission.bogus_host(host):
+                    stats.skip("not the company's own site")
+                    continue
+                name = _clean_name(r.get("title") or "")
+                if not name or not admission.host_fits_name(name, host):
+                    stats.skip("title does not name the site's company")
+                    continue
+                snippet = r.get("snippet") or ""
+                region = targeting.region_of(snippet, q)
+                if region and region not in REGIONS_OK:
+                    stats.skip("region outside targets")
+                    continue
+                stats.candidates += 1
+                _upsert(session, name=name, website=f"https://{host}", source="exa-mcp",
+                        description=_first_sentence(snippet), region=region,
+                        note=f"found by (keyless): {q[:80]}", stats=stats, own_site=True)
+            session.commit()
+        set_setting(session, _KEYLESS_CURSOR, str((cursor + len(todo)) % len(pool)))
+    log.info("harvest exa keyless: %s", stats.as_dict())
     return stats
 
 
@@ -552,10 +614,12 @@ def probe_ats(limit: int | None = None, *, concurrency: int = 6,
             if hit:
                 ats, slug, count = hit
                 company.ats, company.ats_slug = ats, slug
-                company.careers_url = company.careers_url or discover.PROBES[ats].format(slug=slug)
-                company.hiring_status = VERIFIED
-                company.hiring_evidence = f"{ats} board '{slug}' is live with {count} open posting(s)"
-                company.hiring_checked_at = utcnow()
+                # a live board is not yet a role title: careers_only until scrape_roles
+                # reads the titles off it (guardrails.hiring), then verified
+                guardrails.set_hiring(session, company, VERIFIED, roles=None,
+                                      careers_url=company.careers_url or discover.PROBES[ats].format(slug=slug),
+                                      evidence=f"{ats} board '{slug}' is live with {count} open posting(s)",
+                                      channel="ats")
                 # their own board beats a directory flag as the post on record
                 if not company.hiring_claim_url or company.hiring_claim_source in ("yc", None):
                     company.hiring_claim = f"{count} open posting(s) on their {ats} board"
@@ -619,13 +683,21 @@ def scrape_roles(limit: int | None = None, *, only_without_jobs: bool = True, co
             jobs.append(j)
     stats = pipeline.ScrapeStats(scraped=len(jobs), per_source={"harvest": len(jobs)})
     stats = pipeline.persist(jobs, stats)
-    # remember which boards were read, so the next run only reads new ones
+    # remember which boards were read, so the next run only reads new ones — and a board
+    # whose titles we now hold is hiring proven by its own words (guardrails.hiring)
     read_names = {name for name, *_ in targets}
+    titles_of = {name: [j.title for j in (r or []) if getattr(j, "title", None)] for (name, *_), r in zip(targets, results)}
     with get_session() as session:
         for c in session.exec(select(Company).where(col(Company.name).in_(read_names))).all():
             if _ROLES_READ not in (c.notes or ""):
                 c.notes = f"{c.notes}\n{_ROLES_READ}".strip() if c.notes else _ROLES_READ
-                session.add(c)
+            titles = titles_of.get(c.name) or []
+            if titles and c.ats and c.ats_slug:
+                board = (discover.PROBES.get(c.ats) or careers_ats.BOARD_PAGES.get(c.ats) or "").format(slug=c.ats_slug)
+                guardrails.set_hiring(session, c, VERIFIED, roles=titles[:40], careers_url=c.careers_url or board or None,
+                                      evidence=f"{len(titles)} open role(s) on their {c.ats} board: {', '.join(titles[:5])}"[:300],
+                                      channel="ats")
+            session.add(c)
         session.commit()
     out = {"boards": len(targets), **stats.as_dict()}
     log.info("harvest roles: %s", out)

@@ -18,13 +18,12 @@ is stated more firmly than the evidence supports.
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 
 from sqlmodel import col, select
 
-from jobhunter import CONFIG, admission, backoff
+from jobhunter import CONFIG, admission, backoff, guardrails
 from jobhunter.db import Company, get_session, init_db, utcnow
 from jobhunter.research import agent as research_agent
 from jobhunter.research import github as gh
@@ -43,23 +42,10 @@ _NOT_A_DESCRIPTION = re.compile(
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 
 # What a bot wall, a CAPTCHA or a JS-only shell hands back instead of the page. Saved as a
-# description it read "Just a moment... Checking your browser" on 18 rows (audit P9).
-_BOT_WALL = re.compile(
-    r"(just a moment|checking your browser|attention required|enable javascript|"
-    r"verify you are (?:a )?human|are you a robot|captcha|access denied|request blocked|"
-    r"pardon our interruption|ddos protection|cf-browser-verification|cloudflare ray id|"
-    r"403 forbidden|you have been blocked|unusual traffic|please turn javascript on|"
-    r"this site can.t be reached|page not found|404 not found)",
-    re.I,
-)
-
-
-def bot_wall(text: str | None) -> bool:
-    """Is this page text a bot wall / error shell rather than the company's own words?"""
-    if not text:
-        return False
-    head = text[:1500]
-    return bool(_BOT_WALL.search(head)) and len(text) < 4000
+# description it read "Just a moment... Checking your browser" on 18 rows (audit P9). The
+# pattern lives with the other validators now (guardrails.BOT_WALL).
+_BOT_WALL = guardrails.BOT_WALL
+bot_wall = guardrails.bot_wall
 
 
 def _first_real_sentence(text: str, *, title: str | None = None) -> str | None:
@@ -256,25 +242,13 @@ def _describe_with_model(name: str, text: str) -> tuple[str | None, str | None]:
     return (desc[:300] if desc else None), (str(data.get("evidence") or "")[:300] or None)
 
 
-def _write_funding(company: Company, funding: dict) -> None:
-    """A round read from a source, onto the row: stage in the one vocabulary, amount only
-    when it is a raise, total and valuation when stated, the quote it came from."""
-    stage = admission.normalize_stage(funding.get("stage"))
-    if funding.get("public"):
-        stage = "Public"
-    company.funding_stage = stage or company.funding_stage
-    amt = funding.get("amount_usd_m")
-    if amt and admission.credible_amount(float(amt), funding.get("evidence_quote")):
-        company.funding_amount_usd_m = float(amt)
-    company.funding_announced = funding.get("announced") or company.funding_announced
-    if funding.get("total_usd_m"):
-        company.funding_total_usd_m = float(funding["total_usd_m"])
-    if funding.get("valuation_usd_m"):
-        company.valuation_usd_m = float(funding["valuation_usd_m"])
-        company.valuation_evidence = (funding.get("evidence_quote") or "")[:300] or company.valuation_evidence
-    if funding.get("investors"):
-        company.funding_investors = json.dumps(funding["investors"])
-    company.funding_evidence = funding.get("evidence_quote") or company.funding_evidence
+def _write_funding(session, company: Company, funding: dict, *, source: str | None, channel: str,
+                   fill_only: bool = False) -> dict:
+    """A round read from a source, onto the row — through guardrails.set_funding: stage in
+    the one vocabulary, amount only when it is a raise, a date that is not in the future,
+    investors as names, a valuation above the raise, a quote that names the company.
+    What fails is kept in extraction_reject."""
+    return guardrails.set_funding(session, company, funding, source=source, channel=channel, fill_only=fill_only)
 
 
 def enrich_company(company_id: int, *, depth: str = "standard", fresh: bool = False,
@@ -325,6 +299,7 @@ def enrich_company(company_id: int, *, depth: str = "standard", fresh: bool = Fa
     # 3. the profile: description, story, funding, valuation, team — one model call over
     #    their own words; the page's first sentence when there is no model
     description = evidence = None
+    desc_own = True       # read off their own pages (model or first sentence) — no name needed
     profile: dict = {}
     if page_text:
         if use_model and _model_available():
@@ -334,7 +309,8 @@ def enrich_company(company_id: int, *, depth: str = "standard", fresh: bool = Fa
         if not description:
             description = _first_real_sentence(page_text, title=page_title)
             evidence = description
-    description = description or research.get("one_liner")
+    if not description and research.get("one_liner"):
+        description, desc_own = research.get("one_liner"), False
 
     # 4. funding, from whatever text we hold. Regex + quote, never a guess.
     funding = research.get("funding") or {}
@@ -364,9 +340,12 @@ def enrich_company(company_id: int, *, depth: str = "standard", fresh: bool = Fa
             log.info("enrich %s: %s (backoff)", name, found.get("error"))
             return found
         backoff.ok(company, "enrich")
-        if company.description and bot_wall(company.description):
-            company.description = None   # an earlier pass saved a bot wall
-        company.description = description or company.description
+        site_url = (found["sources"][0] if found["sources"] else target)
+        # through the guardrails: a bot wall, a banner, a job ad or a line about someone
+        # else is refused (and kept as a reject); a bad value on record is replaced
+        guardrails.set_description(session, company, description, source=site_url,
+                                   channel="model" if profile.get("description") else ("page" if desc_own else "search"),
+                                   own_site=desc_own)
         company.website = research.get("website") or company.website
         company.domain = research.get("domain") or company.domain
         company.github_org = company.github_org or research.get("github_org") or (
@@ -374,7 +353,8 @@ def enrich_company(company_id: int, *, depth: str = "standard", fresh: bool = Fa
         )
         company.careers_url = research.get("careers_url") or company.careers_url
         if funding:
-            _write_funding(company, funding)
+            _write_funding(session, company, funding, source=site_url,
+                           channel="model" if profile.get("funding_stage") or profile.get("funding_amount_usd_m") else "page")
         if profile.get("story"):
             # an origin read from their own About page beats a directory blurb
             directory_story = not (company.story_evidence or "").startswith("http")
@@ -382,11 +362,9 @@ def enrich_company(company_id: int, *, depth: str = "standard", fresh: bool = Fa
                 company.story = str(profile["story"])[:1200]
                 company.story_evidence = about_url or target
         if profile.get("valuation_usd_m") is not None:
-            try:
-                company.valuation_usd_m = float(profile["valuation_usd_m"])
-                company.valuation_evidence = str(profile.get("valuation_evidence") or "")[:300]
-            except (TypeError, ValueError):
-                pass
+            guardrails.set_valuation(session, company, profile["valuation_usd_m"],
+                                     str(profile.get("valuation_evidence") or "")[:300] or None,
+                                     source=about_url or site_url, channel="model")
         if profile.get("team_size") is not None and not company.team_size:
             try:
                 company.team_size = int(profile["team_size"])
@@ -515,11 +493,12 @@ def facts_from_search(company_id: int, *, fresh: bool = False, keyless: bool = F
     with get_session() as session:
         c = session.get(Company, company_id)
         backoff.ok(c, "facts")
-        if not c.description or len(c.description) < 25 or bot_wall(c.description):
-            desc = _card_sentence(text, name)
-            if desc and not bot_wall(desc):
-                c.description = desc
-                out["description"] = desc
+        chan = "exa-mcp" if keyless else "exa-api"
+        desc = _card_sentence(text, name)
+        own = bool(domain and (admission.host_of(best.get("url")) or "").endswith(domain))
+        # a search snippet must name the company (guardrails.description, strict)
+        if desc and guardrails.set_description(session, c, desc, source=best.get("url"), channel=chan, own_site=own):
+            out["description"] = c.description
         # the hit on a host that carries the name IS their site: the fix for name-only rows
         host = admission.host_of(best.get("url"))
         if not c.website and host and not admission.bogus_host(host, name) and admission.host_fits_name(name, host):
@@ -532,6 +511,8 @@ def facts_from_search(company_id: int, *, fresh: bool = False, keyless: bool = F
         m = _FOUNDED.search(text)
         if m:
             out["founded"] = m.group(1)
+            if not c.founded_year and 1900 < int(m.group(1)) <= utcnow().year and guardrails.names_company(text, name, domain):
+                c.founded_year = int(m.group(1))
         m = _HQ.search(text)
         if m:
             out["hq"] = m.group(1).strip()
@@ -540,15 +521,14 @@ def facts_from_search(company_id: int, *, fresh: bool = False, keyless: bool = F
             if city and not c.city and not c.list_key:
                 c.city = city
         fund = _sane_funding(_funding_from(text, url=best.get("url")))
-        newer = fund and fund.get("announced") and (not c.funding_announced or str(fund["announced"]) > str(c.funding_announced))
-        if fund and (not c.funding_stage or newer or fund.get("total_usd_m")):
-            _write_funding(c, fund)
-            out["funding"] = {k: fund.get(k) for k in ("stage", "amount_usd_m", "total_usd_m", "announced")}
-        elif fund and fund.get("valuation_usd_m") and not c.valuation_usd_m:
-            # a hand-picked list already states the round; a stated valuation is still new
-            c.valuation_usd_m = float(fund["valuation_usd_m"])
-            c.valuation_evidence = f"{(fund.get('evidence_quote') or text)[:240]} — {best.get('url')}"
-            out["valuation_usd_m"] = c.valuation_usd_m
+        if fund:
+            # a hand-picked list row keeps the round its list states; blanks are still filled
+            res = _write_funding(session, c, fund, source=best.get("url"), channel="card" if fund.get("total_usd_m") else chan,
+                                 fill_only=bool(c.list_key))
+            if res["written"]:
+                out["funding"] = {k: fund.get(k) for k in ("stage", "amount_usd_m", "total_usd_m", "announced")}
+            if res["rejected"]:
+                out["rejected"] = res["rejected"]
         if _HIRING_TEXT.search(text) and not c.hiring_claim_url:
             c.hiring_claim = _HIRING_TEXT.search(text).group(0)
             c.hiring_claim_url = best.get("url")
@@ -669,8 +649,10 @@ def size_from_search(company_id: int, *, fresh: bool = False) -> dict:
     with get_session() as session:
         c = session.get(Company, company_id)
         if "valuation" in found and c.valuation_usd_m is None:
-            c.valuation_usd_m, c.valuation_evidence = float(found["valuation"][0]), found["valuation"][1][:400]
-            out["valuation_usd_m"] = c.valuation_usd_m
+            src = found["valuation"][1].rsplit(" — ", 1)[-1]
+            if guardrails.set_valuation(session, c, found["valuation"][0], found["valuation"][1][:400],
+                                        source=src, channel="exa-mcp"):
+                out["valuation_usd_m"] = c.valuation_usd_m
         if "team" in found and c.team_size is None:
             c.team_size, c.team_size_evidence = int(found["team"][0]), found["team"][1][:400]
             out["team_size"] = c.team_size

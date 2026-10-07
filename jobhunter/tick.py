@@ -56,6 +56,13 @@ L = {
     "websites": int(_T.get("websites_per_tick", 30)),
     "facts_keyless": int(_T.get("facts_keyless_per_tick", 20)),
     "careers": int(_T.get("careers_per_tick", 40)),
+    # GitHub affiliation evidence (contacts/affiliation.py): companies per tick, inside the
+    # hourly GitHub budget minus a reserve the people hunt keeps
+    "affiliation": int(_T.get("affiliation_per_tick", 20)),
+    "affiliation_reserve": int(_T.get("affiliation_github_reserve", 1500)),
+    # keyless discovery once the fill queues are exhausted (backoff), queries per tick
+    "discover_queries": int(_T.get("discover_queries_per_tick", 4)),
+    "saturated_below": int(_T.get("saturated_below", 10)),
 }
 PAID_HOURLY = bool(_T.get("paid_hourly", True))
 # the one-off cleanup's merge/quarantine pass, hourly. Off until the first
@@ -187,6 +194,31 @@ def _mark_empty() -> dict:
     return hygiene.mark_empty()
 
 
+def _guard() -> dict:
+    from jobhunter import guardrails
+
+    return guardrails.sweep()
+
+
+def _work(v) -> int:
+    """How many companies a step actually took on, from its summary."""
+    if isinstance(v, int):
+        return v
+    if not isinstance(v, dict) or v.get("error"):
+        return 0
+    for k in ("tried", "companies", "checked", "searched", "probed"):
+        if isinstance(v.get(k), int):
+            return v[k]
+    return 0
+
+
+def _saturated(s: dict) -> bool:
+    """True when this tick's fill steps found (almost) nothing left to do: every gap is in
+    backoff or filled, so the hour is better spent finding new companies."""
+    steps = ("websites", "facts_keyless", "careers", "people", "people_no_roles", "linkedin", "verify")
+    return sum(_work(s.get(k)) for k in steps) < L["saturated_below"]
+
+
 def run_free(budget_s: int = 1800) -> dict:
     """Keyless work, in the order the 2,000-target needs it: leads, then proof, then fresh companies."""
     from jobhunter import enrich, harvest, hiring_verify, targeting
@@ -199,6 +231,9 @@ def run_free(budget_s: int = 1800) -> dict:
     # today, and the budget checks below would otherwise let a slow tick starve it
     _step(s, "full_scrape", full_scrape_if_due)
     _step(s, "hygiene", hygiene_step)
+    # the guard: stale hiring verdicts downgraded, completeness recomputed — the fill
+    # queues below order by what is actually missing (db.fill_order)
+    _step(s, "guard", _guard)
     # the companies we hold nothing about go to the front of every queue below
     _step(s, "scrape_first", _mark_empty)
     # priority before the queues read it: overrated, priority score, city for every row
@@ -230,6 +265,17 @@ def run_free(budget_s: int = 1800) -> dict:
         _step(s, "roles", harvest.scrape_roles)
     if time.time() - t0 < budget_s:
         _step(s, "people_no_roles", harvest.find_people, limit=L["people"] // 2, require_roles=False)
+    # is each GitHub-found person still there? org membership, recent commits, profiles
+    if L["affiliation"] and time.time() - t0 < budget_s:
+        from jobhunter.contacts import affiliation
+
+        _step(s, "affiliation", lambda: {k: v for k, v in affiliation.run(
+            L["affiliation"], reserve=L["affiliation_reserve"]).items() if k != "labels"})
+    # the existing companies are as complete as the channels allow (everything left is in
+    # backoff): go further — new companies through the keyless Exa MCP and the gate
+    if _saturated(s) and time.time() - t0 < budget_s:
+        _step(s, "discover", lambda: harvest.admit_exa_keyless(L["discover_queries"]).as_dict())
+        _step(s, "probe_new", harvest.probe_ats)
     _step(s, "pay", targeting.extract_job_pay, only_missing=True)
     _step(s, "grade", targeting.grade_companies, regrade=False)
     _step(s, "priority_after", targeting.refresh_priority)
@@ -393,7 +439,7 @@ def _plist(kind: str) -> dict:
 
 
 def install() -> dict:
-    """Write both LaunchAgents and load them. Idempotent."""
+    """Write both LaunchAgents and load them, and the hourly audit beside them. Idempotent."""
     LOGS.mkdir(exist_ok=True)
     out = {}
     for kind in ("free", "paid"):
@@ -403,6 +449,9 @@ def install() -> dict:
         path.write_bytes(plistlib.dumps(_plist(kind)))
         r = subprocess.run(["launchctl", "load", str(path)], capture_output=True, text=True)
         out[kind] = {"plist": str(path), "loaded": r.returncode == 0, "stderr": r.stderr.strip()[:200]}
+    from jobhunter import audit
+
+    out["audit"] = audit.install()
     return out
 
 

@@ -254,9 +254,12 @@ def rows(key: str) -> dict:
             "people": {
                 "total": len(cpeople), "reachable": len(reachable),
                 "verified": sum(1 for p in cpeople if p.confidence == "verified" and p.email),
+                # people the evidence places there now (guardrails.affiliation)
+                "current": sum(1 for p in cpeople if p.affiliation in ("verified-current", "likely-current")),
                 "by_source": _count(p.source for p in cpeople),
                 "best": {
                     "id": best.id, "name": best.name, "email": best.email, "confidence": best.confidence,
+                    "affiliation": best.affiliation,
                     "label": roleclass.LABELS.get(best.role_class or "", best.role_class),
                 } if best else None,
             },

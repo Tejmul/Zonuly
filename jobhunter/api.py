@@ -216,6 +216,11 @@ def _contact_dict(c: Contact, company_name: str | None = None) -> dict:
         "x_handle": c.x_handle,
         "source": c.source,
         "confidence": c.confidence,
+        # the person, not the address: does the evidence place them there now?
+        "affiliation": c.affiliation,
+        "affiliation_evidence": c.affiliation_evidence,
+        "email_kind": c.email_kind,
+        "handle": c.handle,
         "is_recruiter": c.is_recruiter,
         "research": notes,
         "researched_at": c.researched_at.isoformat() if c.researched_at else None,
@@ -232,6 +237,7 @@ def _email_dict(e: Email, *, contact: Contact | None = None, company: Company | 
         "contact_name": contact.name if contact else None,
         "contact_role": contact.role if contact else None,
         "contact_confidence": contact.confidence if contact else None,
+        "contact_affiliation": contact.affiliation if contact else None,
         "company_name": company.name if company else None,
         "to_email": e.to_email,
         "subject": e.subject,
@@ -407,6 +413,10 @@ def overview() -> dict:
         by_confidence = dict(
             session.exec(select(Contact.confidence, func.count()).group_by(Contact.confidence)).all()
         )
+        by_affiliation = {
+            (k or "unchecked"): v
+            for k, v in session.exec(select(Contact.affiliation, func.count()).group_by(Contact.affiliation)).all()
+        }
         # leads are people (MOTIV: the referrer, not the company): who they are, how we
         # found them, and how many companies now have someone to ask
         has_email = col(Contact.email).is_not(None) & (col(Contact.email) != "")
@@ -446,7 +456,8 @@ def overview() -> dict:
         "by_source": by_source,
         "new_this_week": new_this_week,
         "companies": companies,
-        "contacts": {"total": contacts, "verified": verified, "by_confidence": by_confidence},
+        "contacts": {"total": contacts, "verified": verified, "by_confidence": by_confidence,
+                     "by_affiliation": by_affiliation},
         "top_matches": [_job_dict(j) for j in top],
         "recent_replies": reply_rows,
         "weekly": weekly,
@@ -818,6 +829,7 @@ def company_detail(company_id: int) -> dict:
 def list_contacts(
     company_id: int | None = None,
     confidence: str | None = None,
+    affiliation: str | None = Query(None, description="verified-current | likely-current | unconfirmed | generic | current (the first two)"),
     limit: int = Query(200, le=1000),
 ) -> list[dict]:
     with get_session() as session:
@@ -826,11 +838,20 @@ def list_contacts(
             stmt = stmt.where(Contact.company_id == company_id)
         if confidence:
             stmt = stmt.where(Contact.confidence == confidence)
+        if affiliation == "current":
+            stmt = stmt.where(col(Contact.affiliation).in_(("verified-current", "likely-current")))
+        elif affiliation:
+            stmt = stmt.where(Contact.affiliation == affiliation)
+        if affiliation and not company_id:
+            # the people we could ask first: a confirmed person beats a long list of maybes
+            stmt = stmt.order_by(col(Contact.affiliation).desc(), col(Contact.referral_rank))
         rows = session.exec(stmt.limit(limit)).all()
         names = {c.id: c.name for c in session.exec(select(Company)).all()}
         out = [_contact_dict(c, names.get(c.company_id)) for c in rows]
+        aff = {"verified-current": 0, "likely-current": 1, "unconfirmed": 2, "generic": 3}
         rank = {"verified": 0, "pattern-guessed": 1, "scraped": 2}
-        return sorted(out, key=lambda c: (rank.get(c["confidence"], 3), c["name"] is None))
+        return sorted(out, key=lambda c: (aff.get(c.get("affiliation") or "", 4), rank.get(c["confidence"], 3),
+                                          c["name"] is None))
 
 
 @app.post("/api/companies/{company_id}/find-contacts")
@@ -867,6 +888,19 @@ def research(contact_id: int, job_id: int | None = None) -> dict:
             f"research:{contact_id}", lambda: asyncio.run(research_contact(contact_id, job_id))
         )
     }
+
+
+# ---------------------------------------------------------------- scraping health (the hourly audit)
+
+@app.get("/api/audit")
+def audit_report() -> dict:
+    """The last hourly audit (fill rates and their 1h/24h deltas, throughput, rejects,
+    channel health, stall alerts) and the rolling 48-hour history. Read-only."""
+    from jobhunter import audit
+
+    out = audit.latest()
+    out["agent"] = {"label": audit.LABEL, "every_minutes": audit.INTERVAL_S // 60}
+    return out
 
 
 # ---------------------------------------------------------------- review queue & emails

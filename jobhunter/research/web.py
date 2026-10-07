@@ -25,7 +25,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from jobhunter import CONFIG
+from jobhunter import CONFIG, channels
 from jobhunter.research import backends, cache
 from jobhunter.research.models import Page, SearchResult
 from jobhunter.scrapers.base import html_to_text
@@ -111,13 +111,17 @@ def _read_scrapedo(url: str, timeout: int, *, render: bool = False) -> tuple[str
         r = httpx.get(SCRAPEDO_API, params=params, timeout=timeout, follow_redirects=True)
         if r.status_code >= 400:
             log.debug("scrape.do %s -> %s", url, r.status_code)
+            channels.record("scrapedo", r.status_code == 404, f"HTTP {r.status_code}")
             return None, None
         html = r.text
     except Exception as e:  # noqa: BLE001
         log.debug("scrape.do failed for %s: %s", url, e)
+        channels.record("scrapedo", False, f"{type(e).__name__}: {str(e)[:120]}")
         return None, None
     if _ANTIBOT.search(html[:4000]):
+        channels.record("scrapedo", False, "anti-bot page")
         return None, None
+    channels.record("scrapedo", True)
     title = None
     m = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
     if m:
@@ -277,8 +281,10 @@ def _exa_mcp_call(tool: str, args: dict, timeout: int) -> str | None:
         envelope = _mcp_error(p.out)
         if p.ok and not envelope:
             _mcp_state["fails"] = 0
+            channels.record("exa-mcp", True)
             return _mcp_text(p.out) or None
         detail = f"{p.err} {envelope or p.out[:300]}"
+        channels.record("exa-mcp", False, f"{p.reason}: {detail.strip()[:200]}")
         if p.reason == "missing" or not (_TRANSIENT.search(detail) or p.reason == "timeout"):
             log.debug("mcporter %s failed (%s): %s", tool, p.reason, p.err[:200])
             _errors.append(f"exa-mcp: {p.reason}: {p.err[:120]}")
@@ -290,6 +296,7 @@ def _exa_mcp_call(tool: str, args: dict, timeout: int) -> str | None:
     if _mcp_state["fails"] >= 2:
         _mcp_state["cool_until"] = time.monotonic() + _MCP_COOLDOWN_S
         _mcp_state["fails"] = 0
+        channels.record("exa-mcp", False, "cooling down after repeated failures", cooldown=True)
         log.warning("exa-mcp failing repeatedly — cooling down %ss, then trying again", int(_MCP_COOLDOWN_S))
     _errors.append("exa-mcp: rate-limited or offline after retries")
     return None
@@ -464,13 +471,16 @@ def _exa_api_search(
             except Exception:  # noqa: BLE001
                 pass
             _errors.append(f"exa-api {r.status_code}: {reason}")
+            channels.record("exa-api", False, f"{r.status_code}: {reason}")
             log.warning("exa api -> %s: %s", r.status_code, reason)
             return []
         data = r.json()
     except Exception as e:  # noqa: BLE001 — a dead backend falls through to the next
         _errors.append(f"exa-api: {type(e).__name__}: {str(e)[:160]}")
+        channels.record("exa-api", False, f"{type(e).__name__}: {str(e)[:160]}")
         log.debug("exa api failed: %s", e)
         return []
+    channels.record("exa-api", True)
 
     out: list[SearchResult] = []
     for item in (data or {}).get("results") or []:
@@ -719,15 +729,21 @@ def _read_jina(url: str, timeout: int) -> tuple[str | None, str | None]:
             follow_redirects=True,
         )
         if r.status_code >= 400:
+            # a 404 / 422 for a page that does not exist is an answer; 429 and 5xx are not
+            channels.record("jina", r.status_code not in (402, 403, 429) and r.status_code < 500,
+                            f"HTTP {r.status_code}")
             return None, None
         body = r.text
     except Exception as e:  # noqa: BLE001
         log.debug("jina failed for %s: %s", url, e)
+        channels.record("jina", False, f"{type(e).__name__}: {str(e)[:120]}")
         return None, None
 
     if _ANTIBOT.search(body[:4000]):
         log.debug("jina returned an anti-bot challenge for %s", url)
+        channels.record("jina", False, "anti-bot challenge")
         return None, None
+    channels.record("jina", True)
 
     title = None
     m = re.search(r"^Title:\s*(.+)$", body[:2000], re.M)
@@ -749,11 +765,14 @@ def _read_direct(url: str, timeout: int) -> tuple[str | None, str | None]:
             follow_redirects=True,
         )
         if r.status_code >= 400:
+            channels.record("direct", r.status_code < 500 and r.status_code not in (403, 429), f"HTTP {r.status_code}")
             return None, None
         html = r.text
     except Exception as e:  # noqa: BLE001
         log.debug("direct fetch failed for %s: %s", url, e)
+        channels.record("direct", False, f"{type(e).__name__}: {str(e)[:120]}")
         return None, None
+    channels.record("direct", True)
     title = None
     m = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
     if m:

@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 
 from sqlmodel import select
 
-from jobhunter import admission
+from jobhunter import admission, guardrails
 from jobhunter import normalize as norm
 from jobhunter.contacts import roles as roleclass
 from jobhunter.db import Company, Contact, Job, get_session, init_db
@@ -167,7 +167,7 @@ def _build_funnel(*, include_rejects: bool = False) -> dict:
     for c in companies:
         reachable = [
             p for p in contacts_by_company.get(c.id, [])
-            if p.email and (p.referral_rank or 9) <= 6
+            if p.email and (p.referral_rank or 9) <= 6 and guardrails.is_ready(p)
             and (not c.domain or p.email.split("@")[-1].lower() == c.domain.lower()
                  or p.email.split("@")[-1].lower() in _FREEMAIL)
         ]
@@ -409,6 +409,8 @@ def company_detail(company_id: int) -> dict:
                 "id": p.id, "name": p.name, "role": p.role, "role_class": p.role_class,
                 "label": roleclass.LABELS.get(p.role_class or "", p.role_class),
                 "rank": p.referral_rank, "email": p.email, "confidence": p.confidence,
+                "affiliation": p.affiliation, "affiliation_evidence": p.affiliation_evidence,
+                "email_kind": p.email_kind,
                 "github": p.github, "linkedin": p.linkedin, "x_handle": p.x_handle,
                 "evidence": p.role_evidence,
                 "reachable": p.id in reachable_ids,
@@ -543,7 +545,7 @@ def company_list(*, include_rejects: bool = False, include_overrated: bool = Fal
                 "best": {
                     "name": best.name, "role_class": best.role_class,
                     "label": roleclass.LABELS.get(best.role_class or "", best.role_class),
-                    "email": best.email, "confidence": best.confidence,
+                    "email": best.email, "confidence": best.confidence, "affiliation": best.affiliation,
                 } if best else None,
             },
             "ready": bool(referrers) and c.hiring_status in ("verified", "role_missing"),
@@ -643,6 +645,10 @@ def _reachable(c: Company, people: list[Contact]) -> list[Contact]:
     out = []
     for p in people:
         if not p.email or (p.referral_rank or 9) > 6:
+            continue
+        # only someone the evidence places there NOW (guardrails.affiliation) is a lead;
+        # a commit in someone's fork, an old address or an inbox is not
+        if not guardrails.is_ready(p):
             continue
         dom = p.email.split("@")[-1].lower()
         on_domain = bool(domain) and dom == domain

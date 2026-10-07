@@ -65,9 +65,14 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                     "github": f"https://github.com/{p.login}",
                     "x_handle": p.twitter,
                     "source": "github",
-                    "confidence": "verified" if p.email else "scraped",
+                    # the address tier is settled by the guardrails from the commit date
+                    "confidence": "scraped",
                     "is_recruiter": _looks_recruiter(p.bio),
                     "employer_claim": (p.company or "").strip() or None,
+                    # affiliation evidence: membership, the commit's date and repo
+                    "handle": p.login, "org_member": p.member, "last_commit_at": p.last_commit_at,
+                    "commit_repo": p.commit_repo, "profile_email": p.profile_email,
+                    "name_source": "github-profile" if p.bio is not None or p.company is not None else "commit",
                 }
             )
         stats["github"] = len(gh_people)
@@ -83,6 +88,9 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                         "source": "site",
                         "confidence": "scraped",
                         "is_recruiter": c.is_recruiter,
+                        # named next to an address on their own site: the company says so
+                        "team_page": website if c.name else None,
+                        "published_at": website, "name_source": "page" if c.name else None,
                     }
                 )
                 stats["site"] += 1
@@ -121,21 +129,38 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                 if email:
                     p["email"] = email
                     p["confidence"] = verdict.confidence if verdict else "pattern-guessed"
+                    p["smtp"] = p["confidence"]
                     p["source"] = "pattern"
                     p["verify_note"] = verdict.reason if verdict else ""
                     stats["pattern"] += 1
 
-    # ---- persist
+    # ---- persist, every row through the guardrails (name, address, affiliation)
+    from jobhunter import guardrails
+
     with get_session() as session:
+        company_row = session.get(Company, company_id)
+        if domain and company_row is not None and not company_row.domain:
+            company_row.domain = domain
         for p in people:
             email = (p.get("email") or "").lower().strip()
             if not email or email in existing:
                 continue
             existing.add(email)
-            if p["confidence"] == "verified":
+            g = guardrails.vet_contact(
+                session, company=company_row, name=p.get("name"), email_addr=email, source=p["source"],
+                channel="github" if p["source"] == "github" else p["source"], url=p.get("github") or website,
+                handle=p.get("handle"), name_source=p.get("name_source"), org_member=bool(p.get("org_member")),
+                employer_claim=p.get("employer_claim"), last_commit_at=p.get("last_commit_at"),
+                commit_repo=p.get("commit_repo"), team_page=p.get("team_page"), published_at=p.get("published_at"),
+                smtp=p.get("smtp") or (p["confidence"] if p["source"] == "hunter" else None),
+                profile_email=bool(p.get("profile_email")))
+            if g is None or not g.get("email"):
+                continue
+            if g["confidence"] == "verified":
                 stats["verified"] += 1
+            stats[g["affiliation"]] = stats.get(g["affiliation"], 0) + 1
             # label them on the way in: an unranked contact list is not a queue
-            verdict = roles.classify(p.get("role"), name=p.get("name"), email=email,
+            verdict = roles.classify(p.get("role"), name=g.get("name"), email=g["email"],
                                      bio=p.get("verify_note"))
             if verdict.role_class == "other" and p["source"] == "github":
                 # No bio, but they commit to the company's public repos: that is an
@@ -143,17 +168,19 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                 verdict = roles.RoleVerdict("engineer", verdict.seniority,
                                             roles.RANKS.get("engineer", roles.DEFAULT_RANK),
                                             "commits in the company's public repos", "source")
+            if g.get("email_kind") == "generic":
+                verdict = roles.RoleVerdict("other", None, 9, f"shared inbox {g['email'].split('@')[0]}@", "alias")
             stats[verdict.role_class] = stats.get(verdict.role_class, 0) + 1
             session.add(
                 Contact(
                     company_id=company_id,
-                    name=p.get("name"),
+                    name=g.get("name"),
                     role=p.get("role"),
-                    email=email,
+                    email=g["email"],
                     github=p.get("github"),
                     x_handle=p.get("x_handle"),
                     source=p["source"],
-                    confidence=p["confidence"],
+                    confidence=g["confidence"],
                     is_recruiter=verdict.role_class in ("recruiter", "tech_recruiter") or bool(p.get("is_recruiter")),
                     role_class=verdict.role_class,
                     seniority=verdict.seniority,
@@ -162,6 +189,10 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                     classified_at=utcnow(),
                     research_notes=p.get("verify_note"),
                     employer_claim=p.get("employer_claim"),
+                    handle=g.get("handle"), name_source=g.get("name_source"), email_kind=g.get("email_kind"),
+                    affiliation=g["affiliation"], affiliation_source=g["affiliation_source"],
+                    affiliation_evidence=g["affiliation_evidence"], affiliation_checked_at=g["affiliation_checked_at"],
+                    last_commit_at=g.get("last_commit_at"),
                 )
             )
             stats["added"] += 1
@@ -228,6 +259,7 @@ def fill_by_pattern(company_id: int) -> int:
                 continue
             p.email = email
             p.confidence = verdict.confidence if verdict else "pattern-guessed"
+            p.email_kind = "company"      # a pattern address is on their domain; who they are is unchanged
             p.research_notes = f"{p.research_notes or ''}\nemail by pattern {pattern}".strip()
             session.add(p)
             taken.add(email)

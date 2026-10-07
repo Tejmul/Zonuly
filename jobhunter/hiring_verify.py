@@ -30,7 +30,6 @@ this is a fetch and a regex, and it stays free.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
 from dataclasses import dataclass, field
@@ -39,7 +38,7 @@ from urllib.parse import urlparse
 
 from sqlmodel import col, select
 
-from jobhunter import CONFIG
+from jobhunter import CONFIG, guardrails
 from jobhunter.db import Company, Job, get_session, init_db, utcnow
 from jobhunter.research import agent as research_agent
 from jobhunter.research import web
@@ -353,11 +352,10 @@ def verify_company(company_id: int, *, claimed_role: str | None = None, fresh: b
 
     with get_session() as session:
         company = session.get(Company, company_id)
-        company.hiring_status = v.status
-        company.hiring_evidence = v.evidence
-        company.hiring_roles = json.dumps(v.roles) if v.roles else None
-        company.careers_url = v.careers_url or company.careers_url
-        company.hiring_checked_at = utcnow()
+        # 'verified' only with a role title read off their own page or ATS, URL kept —
+        # hiring language alone ("join our team") is careers_only (guardrails.hiring)
+        guardrails.set_hiring(session, company, v.status, roles=v.roles, careers_url=v.careers_url,
+                              evidence=v.evidence, channel="hiring-verify")
         if claimed_role:
             company.hiring_claim = claimed_role
         session.add(company)
@@ -387,11 +385,15 @@ def verify_pending(limit: int = 10, *, tiers: tuple[str, ...] = ("tier1", "tier2
         if list_key:
             stmt = stmt.where(Company.list_key == list_key)
         rows = session.exec(stmt).all()
+        # a verdict the guardrails downgraded (no role title on their own page, or stale)
+        # is re-read within a day — the board's titles usually settle it
+        soon = utcnow() - timedelta(days=1)
         pending = [
             c for c in rows
             if ((c.tier or "unknown") in tiers or c.list_key)
             and (c.hiring_checked_at is None or c.hiring_checked_at < cutoff
-                 or (list_key and c.hiring_status != VERIFIED))
+                 or (list_key and c.hiring_status != VERIFIED)
+                 or (c.hiring_status in ("careers_only", "needs_recheck") and c.hiring_checked_at < soon))
             and (c.website or c.ats_slug or c.careers_url)
         ]
         pending.sort(key=lambda c: (*fill_order(c), TIER_ORDER.get(c.tier or "unknown", 9),

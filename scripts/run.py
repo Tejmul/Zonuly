@@ -32,6 +32,9 @@
     python scripts/run.py models check --live          # prove each alias answers
     python scripts/run.py models costs --month         # spend by alias and by stage
     python scripts/run.py fit-explain 441              # why the free gate scored a job that way
+
+    python scripts/run.py audit run                    # the hourly scrape audit, now (audit install = launchd)
+    python scripts/revalidate.py                       # re-run the guardrails over stored data (dry run)
 """
 
 from __future__ import annotations
@@ -1205,6 +1208,78 @@ def tick_status() -> None:
     from jobhunter import tick
 
     _echo(tick.status())
+
+
+# ---------------------------------------------------------------- audit
+
+audit_app = typer.Typer(
+    add_completion=False,
+    help="The hourly audit: fill rates now vs 1h/24h ago, throughput, rejects, channel health, stall alerts",
+)
+app.add_typer(audit_app, name="audit")
+
+
+@audit_app.command("run")
+def audit_run(
+    quiet: bool = typer.Option(False, help="no macOS notification on an alert"),
+    full: bool = typer.Option(False, "--json", help="print the whole report"),
+) -> None:
+    """Run one audit now (what launchd calls every hour) and store the report."""
+    _setup_logging()
+    from jobhunter import audit
+
+    r = audit.run(notify=not quiet)
+    if full:
+        _echo(r)
+        return
+    f = r["fill"]
+    typer.secho(f"audit {r['at']} — {r['status'].upper()}  ({f['companies']} active companies, "
+                f"avg completeness {f['avg_completeness']}%)", bold=True)
+    dh, dd = r.get("delta_hour") or {}, r.get("delta_day") or {}
+    for k, v in f["rates"].items():
+        extra = "".join(f"  {lbl} {d[k] * 100:+.1f}" for lbl, d in (("1h", dh), ("24h", dd)) if k in d)
+        typer.echo(f"  {k:<22} {v * 100:5.1f}%{extra}")
+    typer.echo(f"last hour: {json.dumps({k: v for k, v in r['last_hour'].items() if k != 'writes_by_field'})}")
+    typer.echo(f"rejects (1h): {r['rejects']['total']}  {json.dumps(dict(list(r['rejects']['by_reason'].items())[:6]))}")
+    typer.echo(f"sample: {r['sample']['passed']}/{r['sample']['checked']} still pass")
+    for ch, h in (r["channels"]["research"] or {}).items():
+        typer.echo(f"  channel {ch:<10} hour ok {h['hour'].get('ok') or 0:>4} fail {h['hour'].get('fail') or 0:>4}"
+                   f"  last ok {h.get('last_ok_at') or '-'}")
+    o = r["channels"]["openrouter"]
+    typer.echo(f"  openrouter      hour ok {o['ok']:>4} fail {o['fail']:>4}  daily ceiling hit: {o['daily_ceiling_hit']}")
+    for a in r["alerts"]:
+        typer.secho(f"ALERT {a}", fg="red")
+
+
+@audit_app.command("show")
+def audit_show() -> None:
+    """The last stored report and how many hours of history are kept."""
+    from jobhunter import audit
+
+    d = audit.latest()
+    _echo({"last": d["last"], "history_hours": len(d["history"])})
+
+
+@audit_app.command("install")
+def audit_install() -> None:
+    """Write and load com.zonuly.audit (every hour)."""
+    from jobhunter import audit
+
+    _echo(audit.install())
+
+
+@audit_app.command("uninstall")
+def audit_uninstall() -> None:
+    from jobhunter import audit
+
+    _echo(audit.uninstall())
+
+
+@audit_app.command("status")
+def audit_status() -> None:
+    from jobhunter import audit
+
+    _echo(audit.status())
 
 
 # ---------------------------------------------------------------- outreach

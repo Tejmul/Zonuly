@@ -320,6 +320,16 @@ modules:
     path: jobhunter/targeting.py
     layer_order: 1
     summary: Company grading — hyped exclusion, funding window, the ₹50k stipend bar, the tier1/tier2/prospect bands. No network.
+  - id: module:jobhunter.guardrails
+    label: guardrails.py
+    path: jobhunter/guardrails.py
+    layer_order: 0
+    summary: One validator per field every extraction passes before it is written (name, description, funding, hiring, person, address, affiliation); provenance per field in field_meta + extraction_write; refusals in extraction_reject; completeness 0–100.
+  - id: module:jobhunter.audit
+    label: audit.py
+    path: jobhunter/audit.py
+    layer_order: 3
+    summary: The hourly scrape audit (launchd com.zonuly.audit) — fill rates now vs 1h/24h, throughput, rejects by reason/channel, channel health, a re-validated sample, stall alerts with a macOS notification. GET /api/audit, /health page.
   - id: module:jobhunter.enrich
     label: enrich.py
     path: jobhunter/enrich.py
@@ -1237,6 +1247,34 @@ features:
     proposed_by: [arch:plan, arch:architecture, arch:orchestration, arch:idea, arch:final]
     serves: [guarantee:confidence-labels, constraint:send-cap-25]
     implemented_in: [module:jobhunter.db, module:jobhunter.contacts]
+  - id: feature:extraction-guardrails
+    label: Guardrails — every scraped value validated before it is written, every refusal kept
+    summary: >
+      2026-10-07, Tejmul: "scraping isn't the problem, the format is". guardrails.py checks
+      names, descriptions (≥60 chars, about this company, no bot wall / banner / job ad /
+      funding headline / industry label), funding (vocabulary stage, 0.05–5,000 $M raise,
+      no future date, investor names, valuation above the raise, a quote naming the company),
+      hiring (verified only with a role title on their own page, stale after 30 days) and
+      people (names not handles, generic inboxes never referrers, affiliation
+      verified-current / likely-current / unconfirmed / generic). Wired into enrich, harvest,
+      hiring_verify, careers, github_miner, linkedin_public, web_emails, site. Only
+      confirmed-current people are leads, drafted to, approved or sent.
+    status: built
+    stage: stage:contacts
+    serves: [guarantee:confidence-labels, guarantee:no-fabrication, guarantee:human-gate]
+    implemented_in: [module:jobhunter.guardrails, module:jobhunter.contacts, module:jobhunter.enrich]
+  - id: feature:hourly-scrape-audit
+    label: Hourly audit — is scraping still filling fields, and is every channel answering?
+    summary: >
+      jobhunter/audit.py under launchd (com.zonuly.audit, hourly): per-field fill rates vs
+      one hour and one day ago, rows added, fields written, rejects by reason and channel,
+      Exa MCP / Jina / GitHub / scrape.do / OpenRouter health from channel_hour and the model
+      ledger, 20 writes re-validated, and a STALL / CHANNEL alert with a macOS notification.
+      Report in setting audit:last (+48h history) and logs/audit.log; /health in the dashboard.
+    status: built
+    stage: stage:scrape
+    serves: [constraint:context-continuity]
+    implemented_in: [module:jobhunter.audit]
   - id: feature:contact-ranker
     label: Verified-first ordering, then role relevance
     summary: Confidence tier first; engineers on the team you'd join beat recruiters. Seniority ordering (mid-level replies more than VPs) not built.
@@ -1405,7 +1443,7 @@ features:
     implemented_in: [module:jobhunter.outreach]
   - id: feature:gmail-api-own-account
     label: The user's own Gmail, by app password — SMTP to send as "Tejmul Movin <tejmulmovin9@gmail.com>", IMAP (X-GM-THRID) to read the thread back
-    summary: 2026-09-22 — the OAuth route needed a Google Cloud project, verification of the restricted gmail.readonly scope and re-consent every 7 days, and never got done; an app password needs none of that, threads follow-ups by In-Reply-To, and bounces are detected from the mailer-daemon report. OAuth kept only for the Calendar push (gmail.auth: oauth). Built; awaiting the app password to run end to end.
+    summary: 2026-09-22 — the OAuth route needed a Google Cloud project, verification of the restricted gmail.readonly scope and re-consent every 7 days, and never got done; an app password needs none of that, threads follow-ups by In-Reply-To, and bounces are detected from the mailer-daemon report. OAuth kept only for the Calendar push (gmail.auth = oauth). Built; awaiting the app password to run end to end.
     status: partial
     stage: stage:send
     proposed_by: [arch:plan, arch:architecture, arch:tools, arch:orchestration]

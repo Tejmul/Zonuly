@@ -109,6 +109,19 @@ class Company(SQLModel, table=True):
     # the flag each tick and clears it once the company has a site and either people or roles.
     scrape_first: Optional[bool] = Field(default=None, index=True)
 
+    # ---- guardrails (jobhunter/guardrails.py). 2026-10-07. Every field a scrape writes
+    # carries where it came from: JSON {field: {value, evidence, source, channel, at,
+    # confidence, sources, flags}}. A value the validators refused is not here; it is a
+    # row in extraction_reject.
+    field_meta: Optional[str] = None
+    founded_year: Optional[int] = None        # only when a source states it; bounds the funding date
+    # COMPLETENESS 0–100: description, funding stage/amount/date, investors, valuation,
+    # hiring verified, careers url, ≥3 confirmed-current referrers, ≥1 of them with an
+    # address — and the parts still missing (JSON list). Fill queues read it (db.fill_order).
+    completeness: Optional[int] = Field(default=None, index=True)
+    completeness_missing: Optional[str] = None
+    validated_at: Optional[datetime] = None
+
 
 class Job(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -172,6 +185,65 @@ class Contact(SQLModel, table=True):
     research_notes: Optional[str] = None  # what the researcher found about them
     researched_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=utcnow)
+    # ---- guardrails (jobhunter/guardrails.py). 2026-10-07. `confidence` above is the
+    # ADDRESS (will it bounce?); these say whether the PERSON still works there.
+    handle: Optional[str] = None          # the login (GitHub) kept apart from the name
+    name_source: Optional[str] = None     # github-profile | commit | linkedin | page | address
+    email_kind: Optional[str] = Field(default=None, index=True)   # company | personal | generic | other
+    # verified-current | likely-current | unconfirmed | generic — only the first two are
+    # ever offered as a referrer (network._reachable, drafting, the review gate)
+    affiliation: Optional[str] = Field(default=None, index=True)
+    affiliation_evidence: Optional[str] = None
+    # org-member | profile-company | team-page | company-address | recent-commit |
+    # linkedin-headline | none
+    affiliation_source: Optional[str] = None
+    affiliation_checked_at: Optional[datetime] = None
+    last_commit_at: Optional[datetime] = None   # their latest commit to the company's own (non-fork) repos
+
+
+class ExtractionReject(SQLModel, table=True):
+    """A value a scrape found and the guardrails refused — kept, never silently dropped."""
+
+    __tablename__ = "extraction_reject"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    company_id: Optional[int] = Field(default=None, index=True)
+    contact_id: Optional[int] = Field(default=None, index=True)
+    field: str = Field(index=True)
+    value: Optional[str] = None
+    reason: str = Field(index=True)
+    source: Optional[str] = None          # the URL (or "revalidate", "yc-oss") it came from
+    channel: Optional[str] = Field(default=None, index=True)   # exa-mcp | jina | github | model | feed …
+    at: datetime = Field(default_factory=utcnow, index=True)
+
+
+class ExtractionWrite(SQLModel, table=True):
+    """A value the guardrails accepted, with its provenance — what the hourly audit samples."""
+
+    __tablename__ = "extraction_write"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    company_id: Optional[int] = Field(default=None, index=True)
+    contact_id: Optional[int] = Field(default=None, index=True)
+    field: str = Field(index=True)
+    value: Optional[str] = None
+    evidence: Optional[str] = None
+    source: Optional[str] = None
+    channel: Optional[str] = Field(default=None, index=True)
+    confidence: Optional[str] = None
+    at: datetime = Field(default_factory=utcnow, index=True)
+
+
+class ChannelHour(SQLModel, table=True):
+    """Calls per research channel per hour: is Exa MCP / Jina / GitHub / OpenRouter answering?"""
+
+    __tablename__ = "channel_hour"
+    channel: str = Field(primary_key=True)
+    hour: str = Field(primary_key=True)   # local "YYYY-MM-DDTHH"
+    ok: int = 0
+    fail: int = 0
+    cooldowns: int = 0
+    last_ok_at: Optional[datetime] = None
+    last_fail_at: Optional[datetime] = None
+    last_error: Optional[str] = None
 
 
 class Email(SQLModel, table=True):
@@ -349,10 +421,14 @@ def get_session() -> Session:
 def fill_order(company: Company) -> tuple:
     """The one order every fill-in queue reads (2026-10-07: "the ★ India list first, then
     all companies"): hand-picked list rows first, in list order; then the scrape-first rows
-    we hold nothing about; then best priority. Callers append their own tie-breakers."""
+    we hold nothing about; then the least-complete of the high-priority companies — priority
+    in bands of 20, least complete first inside a band (guardrails.refresh_completeness),
+    then exact priority. Callers append their own tie-breakers."""
     listed = bool(company.list_key)
+    prio = company.priority_score or 0
+    done = company.completeness if company.completeness is not None else 0
     return (0 if listed else 1, (company.list_rank or 9999) if listed else 0,
-            0 if company.scrape_first else 1, -(company.priority_score or 0))
+            0 if company.scrape_first else 1, -(prio // 20), done, -prio)
 
 
 def get_setting(session: Session, key: str, default: str = "") -> str:
