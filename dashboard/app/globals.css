@@ -541,6 +541,31 @@ body {
   .atlas-pulse { animation: none; opacity: 0; }
 }
 
+/* Atlas motion. A segment or company slides to its new slot on a transform (never
+   top/left); what arrives fades in, its dot growing from 40%; a hover dim is a
+   200ms fade. The curve is GSAP's power2.out, so CSS and the tweens in
+   components/atlas-net.tsx land together. The global reduced-motion rule above
+   collapses all of it to an instant change. */
+.atlas-move { transition: transform 450ms cubic-bezier(0.215, 0.61, 0.355, 1), opacity 200ms ease; }
+.atlas-fade { transition: opacity 200ms ease; }
+.atlas-wire { transition: stroke-width 300ms ease, stroke-opacity 300ms ease; }
+@keyframes atlas-in { from { opacity: 0; } }
+.atlas-enter { animation: atlas-in 320ms ease-out backwards; }
+@keyframes atlas-grow { from { transform: scale(0.4); } }
+.atlas-pop {
+  transform-box: fill-box; transform-origin: center;
+  animation: atlas-grow 320ms cubic-bezier(0.215, 0.61, 0.355, 1) backwards;
+}
+/* The score bar scales rather than resizes — .bar-mark's grow-in keyframe would pin
+   its transform, so this is its own class. */
+.atlas-bar {
+  display: block; height: 100%;
+  background: var(--data-2);
+  border-radius: 0 4px 4px 0;
+  transform-origin: left center;
+  transition: transform 450ms cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
 /* ---------------------------------------------------------------- the mark
    Threshold (components/logo.tsx). A press or hover lifts it a hair — the only motion
    a mark needs; reduced motion is zeroed by the global rule. */

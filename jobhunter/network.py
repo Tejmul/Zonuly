@@ -768,6 +768,14 @@ def build(*, include_rejects: bool = False) -> dict:
             "bet": facts[c.id]["bet"], "near": facts[c.id]["near"], "missing": facts[c.id]["missing"],
             "hiring_post": {"url": c.hiring_claim_url, "by": c.hiring_claim_by, "source": c.hiring_claim_source}
             if c.hiring_claim_url else None,
+            # what the Atlas filters on: where, how recently and how much they raised, what
+            # they can pay, and the priority the targeting model gave them
+            "city": c.city, "list_key": c.list_key,
+            "funding_announced": c.funding_announced.isoformat() if hasattr(c.funding_announced, "isoformat")
+            else c.funding_announced,
+            "funding_amount_usd_m": c.funding_amount_usd_m, "funding_total_usd_m": c.funding_total_usd_m,
+            "valuation_usd_m": c.valuation_usd_m, "pay_power_band": c.pay_power_band,
+            "priority_score": c.priority_score, "priority_why": c.priority_why,
         }
         for c in sorted(companies, key=rank)
     ]
