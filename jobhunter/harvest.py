@@ -393,10 +393,10 @@ def admit_exa_keyless(queries: int = 4, *, per_query: int = 10, fresh: bool = Fa
     todo = [pool[(cursor + i) % len(pool)] for i in range(min(queries, len(pool)))]
     with get_session() as session:
         for q in todo:
-            hit = web.search(q, limit=per_query, fresh=fresh, only=("exa-mcp",))
+            hit = web.search(q, limit=per_query, fresh=fresh, only=web.KEYLESS)
             if hit.get("error") and not hit.get("results"):
                 stats.skip(f"search error: {hit['error'][:60]}")
-                if web.mcp_cooling():
+                if web.search_down():
                     break
                 continue
             for r in hit.get("results") or []:

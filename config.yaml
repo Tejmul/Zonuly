@@ -741,6 +741,7 @@ research:
   x_min_gap_seconds: 30
   backends:
     web_search:
+    - jina-ddg      # 2026-10-07: keyless, through Agent Reach's page reader; Exa MCP was 429 on 44/44
     - exa-mcp
     - exa-api
     page_read:

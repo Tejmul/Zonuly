@@ -203,8 +203,8 @@ def discover(name: str, website: str | None, careers_url: str | None = None, *,
             f.careers_url = ca.BOARD_PAGES.get(f.ats, "").format(slug=f.slug) or None
             return f
 
-        if use_search and not web.mcp_cooling():
-            res = web.search(f"{name} careers jobs", limit=8, only=("exa-mcp",))
+        if use_search and not web.search_down():
+            res = web.search(f"{name} careers jobs", limit=8, only=web.KEYLESS)
             if res.get("error") and not res.get("results"):
                 f.errors += 1
             for r in res.get("results") or []:

@@ -463,7 +463,7 @@ def facts_from_search(company_id: int, *, fresh: bool = False, keyless: bool = F
         name, website, domain = c.name, c.website, c.domain
     query = f"{name} company" + (f" {domain}" if domain else "")
     if keyless:
-        hit = web.search(f"{name} startup funding round", limit=5, fresh=fresh, only=("exa-mcp",))
+        hit = web.search(f"{name} startup funding round", limit=5, fresh=fresh, only=web.KEYLESS)
     else:
         hit = web.search(query, limit=5, category="company", fresh=fresh,
                          include_domains=[domain] if domain else None)
@@ -638,7 +638,7 @@ def size_from_search(company_id: int, *, fresh: bool = False) -> dict:
                                      (need_team, f"{name} number of employees team size", headcount_from, "team")):
         if not need:
             continue
-        hit = web.search(query, limit=6, fresh=fresh, only=("exa-mcp",))
+        hit = web.search(query, limit=6, fresh=fresh, only=web.KEYLESS)
         if hit.get("error") and not hit.get("results"):
             return {**out, "error": hit["error"], "channel": True}
         for r in hit.get("results") or []:
@@ -863,7 +863,7 @@ def find_website(company_id: int, *, keyless: bool = True, use_search: bool = Tr
     search_error = None
     if use_search:
         query = f"{name} official website" + (f" — {hint}" if hint and len(hint) > 20 else "")
-        hit = web.search(query, limit=8, only=("exa-mcp",) if keyless else None)
+        hit = web.search(query, limit=8, only=web.KEYLESS if keyless else None)
         if hit.get("error") and not hit.get("results"):
             search_error = f"search: {hit['error'][:160]}"
         cands += _site_candidates(name, hit.get("results") or [])
@@ -939,11 +939,11 @@ def find_websites(limit: int = 30, *, keyless: bool = True) -> dict:
     out = {"tried": 0, "found": 0, "missed": 0, "errors": 0, "search_off": False, "samples": []}
     for cid in ids:
         out["tried"] += 1
-        # search pauses while the hosted MCP cools down after failures, then resumes —
+        # search pauses only while every keyless backend is cooling down, then resumes —
         # an outage costs a few minutes of domain-guess-only, not the rest of the run
         from jobhunter.research import web
 
-        out["search_off"] = web.mcp_cooling()
+        out["search_off"] = web.search_down()
         try:
             r = find_website(cid, keyless=keyless, use_search=not out["search_off"])
         except Exception as e:  # noqa: BLE001 — one company must not end the pass

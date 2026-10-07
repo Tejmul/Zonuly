@@ -302,6 +302,98 @@ def _exa_mcp_call(tool: str, args: dict, timeout: int) -> str | None:
     return None
 
 
+# ------------------------------------------------------------------ jina-ddg
+#
+# Keyless web search through two Agent Reach pieces: DuckDuckGo's HTML results page,
+# fetched by Jina Reader. DuckDuckGo answers a direct request from this machine with a
+# bot challenge (HTTP 202) and Jina's own search endpoint needs a key, but Jina Reader
+# rendering the DDG page returns plain Markdown — title, the real URL inside DDG's
+# `uddg=` redirect, date and snippet. Exa stops being a single point of failure.
+
+#: The free search backends — what an hourly job may use without spending money.
+KEYLESS: tuple[str, ...] = ("jina-ddg", "exa-mcp")
+
+_JDDG_GAP_S = float(RESEARCH.get("jina_ddg_min_gap_seconds", 3.5))   # Jina keyless ≈ 20/min
+_jddg_last = 0.0
+_jddg_state = {"fails": 0, "cool_until": 0.0}
+
+
+def search_down() -> bool:
+    """True only while every keyless search backend is in its failure cooldown."""
+    return mcp_cooling() and time.monotonic() < _jddg_state["cool_until"]
+
+
+def _jddg_fail(why: str) -> None:
+    channels.record("jina-ddg", False, why)
+    _errors.append(f"jina-ddg: {why}")
+    _jddg_state["fails"] += 1
+    if _jddg_state["fails"] >= 3:
+        _jddg_state["cool_until"] = time.monotonic() + _MCP_COOLDOWN_S
+        _jddg_state["fails"] = 0
+        log.warning("jina-ddg failing repeatedly — cooling down %ss", int(_MCP_COOLDOWN_S))
+_JDDG_HIT = re.compile(r"^## \[(?P<title>.+?)\]\((?P<href>[^)\s]+)\)\s*$", re.M)
+
+
+def _jina_ddg_search(query: str, limit: int, timeout: int) -> list[SearchResult]:
+    from urllib.parse import quote_plus
+
+    global _jddg_last
+    if time.monotonic() < _jddg_state["cool_until"]:
+        _errors.append("jina-ddg: cooling down after repeated failures")
+        return []
+    wait = _JDDG_GAP_S - (time.monotonic() - _jddg_last)
+    if wait > 0:
+        time.sleep(wait)
+    _jddg_last = time.monotonic()
+    try:
+        r = httpx.get(JINA + DDG_HTML + "?q=" + quote_plus(query),
+                      headers={"User-Agent": JINA_UA, "Accept": "text/plain"},
+                      timeout=timeout, follow_redirects=True)
+    except Exception as e:  # noqa: BLE001 — a dead channel is an answer, not a crash
+        _jddg_fail(f"{type(e).__name__}: {str(e)[:120]}")
+        return []
+    if r.status_code >= 400:
+        _jddg_fail(f"HTTP {r.status_code}")
+        return []
+    results = _parse_jina_ddg(r.text, limit)
+    _jddg_state["fails"] = 0
+    channels.record("jina-ddg", True, f"{len(results)} results")
+    if not results:
+        _errors.append("jina-ddg: no results on the page")
+    return results
+
+
+def _unbold(text: str) -> str:
+    """DDG bolds each matched word separately: `**developer****infrastructure**` is two
+    words, so the seam between two bold runs is a space, not nothing."""
+    import html
+
+    text = re.sub(r"\*\*\*\*", " ", text)
+    text = re.sub(r"\*\*|__", "", text)
+    return re.sub(r"\s+", " ", html.unescape(text)).strip()
+
+
+def _parse_jina_ddg(text: str, limit: int) -> list[SearchResult]:
+    out: list[SearchResult] = []
+    hits = list(_JDDG_HIT.finditer(text))
+    for i, m in enumerate(hits):
+        url = _ddg_target(m.group("href"))
+        if not url.startswith("http") or "duckduckgo.com" in url:
+            continue   # DDG's own ads and navigation
+        block = text[m.end(): hits[i + 1].start() if i + 1 < len(hits) else len(text)]
+        date = re.search(r"\b(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}", block)
+        # the snippet is the paragraph whose text is a bracketed link: [**Name** raised …](…)
+        snip = next((ln for ln in block.splitlines() if ln.startswith("[") and not ln.startswith("[![")), "")
+        snip = re.sub(r"\]\([^)]*\)", "", snip).lstrip("[")
+        snip = _unbold(snip)
+        title = _unbold(m.group("title"))
+        out.append(SearchResult(title=title, url=url, snippet=snip or None,
+                                published=date.group(1) if date else None, source="jina-ddg"))
+        if len(out) >= limit:
+            break
+    return out
+
+
 # ------------------------------------------------------------------ search
 
 
@@ -318,7 +410,7 @@ def search(
 ) -> dict:
     """Semantic web search. Returns {query, backend, results: [...], error?}.
 
-    `only` restricts the backends tried (e.g. ("exa-mcp",) — the keyless hosted MCP —
+    `only` restricts the backends tried (e.g. KEYLESS — DuckDuckGo via Jina, then the hosted MCP —
     so an hourly free job never falls through to the metered Exa API).
 
     `include_domains` restricts hits to those hosts (e.g. ["reddit.com"] to read what
@@ -358,6 +450,11 @@ def search(
             text = _exa_mcp_call("web_search_exa", {"query": query, "numResults": limit}, timeout)
             if text:
                 results = _parse_exa_text(text)
+        elif backend == "jina-ddg":
+            if category or days or include_domains:
+                continue   # DDG has no index categories or date filter; do not answer a different question
+            tried.append(backend)
+            results = _jina_ddg_search(query, limit, timeout)
         elif backend == "exa-api":
             tried.append(backend)
             results = _exa_api_search(query, limit, timeout, category=category, days=days,
