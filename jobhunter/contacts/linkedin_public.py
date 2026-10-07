@@ -239,25 +239,97 @@ def find_founders(company_id: int, *, max_people: int = 6) -> dict:
     return {"company": name, "found": len(people), "added": added, "via": via}
 
 
-def find_pending(limit: int = 30, *, tiers: tuple[str, ...] = ("tier1", "tier2", "prospect", "unknown")) -> dict:
-    """Companies with roles and no leads yet, best tier first. Slow: one search each, gapped."""
-    from jobhunter.db import Job
-    from jobhunter.targeting import TIER_ORDER
+_TOPUP = "[li-topup]"
+TOPUP_DAYS = 14
+
+
+def _topped_up_recently(notes: str | None, days: int = TOPUP_DAYS) -> bool:
+    m = re.search(r"\[li-topup\] (\d{4}-\d{2}-\d{2})", notes or "")
+    if not m:
+        return False
+    from datetime import datetime, timedelta
+
+    return datetime.strptime(m.group(1), "%Y-%m-%d") >= utcnow() - timedelta(days=days)
+
+
+def top_up(company_id: int, *, want: int = 5) -> dict:
+    """More referrers for a company still short of `want` who can refer: the engineer /
+    founder search, then founders + engineering leads + recruiters. Each search runs at
+    most once per TOPUP_DAYS per company ("[li-topup] <date>" in its notes)."""
+    from jobhunter.contacts import roles as roleclass
 
     init_db()
     with get_session() as session:
-        rows = session.exec(select(Company)).all()
+        c = session.get(Company, company_id)
+        if c is None:
+            return {"error": f"no company {company_id}"}
+        if _topped_up_recently(c.notes):
+            return {"company": c.name, "skipped": "topped up recently", "added": 0}
+        have = roleclass.good_referrer_counts(session, [company_id]).get(company_id, 0)
+    out = {"company_id": company_id, "had": have, "added": 0}
+    if have >= want:
+        return out
+    for step in (find_for_company, find_founders):
+        r = step(company_id)
+        out["added"] += r.get("added", 0)
+        if r.get("error"):
+            out["error"] = r["error"]
+            if not out["added"]:
+                return out       # the search channel failed (throttled, offline): not marked, retried next pass
+        with get_session() as session:
+            if roleclass.good_referrer_counts(session, [company_id]).get(company_id, 0) >= want:
+                break
+    with get_session() as session:
+        c = session.get(Company, company_id)
+        kept = [ln for ln in (c.notes or "").splitlines() if not ln.startswith(_TOPUP)]
+        c.notes = "\n".join(kept + [f"{_TOPUP} {utcnow():%Y-%m-%d}: +{out['added']}"]).strip()
+        session.add(c)
+        session.commit()
+    return out
+
+
+def find_pending(limit: int = 30, *, tiers: tuple[str, ...] = ("tier1", "tier2", "prospect", "unknown"),
+                 list_key: str | None = None, want: int | None = None) -> dict:
+    """Companies with roles and no leads yet — and every list row still short of `want`
+    people who can refer (topped up) — in db.fill_order: list rows first. Slow: one
+    search each, gapped."""
+    from jobhunter.contacts import roles as roleclass
+    from jobhunter.db import Job, fill_order
+    from jobhunter.targeting import TIER_ORDER
+
+    want = want or roleclass.GOOD_REFERRERS
+    init_db()
+    with get_session() as session:
+        stmt = select(Company).where(col(Company.status).is_(None))
+        if list_key:
+            stmt = stmt.where(Company.list_key == list_key)
+        rows = session.exec(stmt).all()
         with_jobs = set(session.exec(select(Job.company_id).distinct()).all())
         with_leads = set(session.exec(select(Contact.company_id).distinct()).all())
+        good = roleclass.good_referrer_counts(session, [c.id for c in rows if c.list_key])
+        short = {c.id for c in rows if c.list_key and good.get(c.id, 0) < want
+                 and not _topped_up_recently(c.notes)}
         pending = [
             c for c in rows
-            if (c.tier or "unknown") in tiers and c.id in with_jobs and c.id not in with_leads
-            and "[li]" not in (c.notes or "")
+            if c.id in short or (
+                not c.list_key and (c.tier or "unknown") in tiers and c.id in with_jobs
+                and c.id not in with_leads and "[li]" not in (c.notes or ""))
         ]
-        pending.sort(key=lambda c: (TIER_ORDER.get(c.tier or "unknown", 9), c.name))
+        pending.sort(key=lambda c: (*fill_order(c), TIER_ORDER.get(c.tier or "unknown", 9), c.name))
         ids = [c.id for c in pending[:limit]]
-    out = {"searched": 0, "found_people": 0, "companies_with_people": 0}
+    out = {"searched": 0, "found_people": 0, "companies_with_people": 0, "topped_up": 0}
     for cid in ids:
+        if cid in short:
+            r = top_up(cid, want=want)
+            out["searched"] += 1
+            out["topped_up"] += 1
+            out["found_people"] += r.get("added", 0)
+            if r.get("added"):
+                out["companies_with_people"] += 1
+            if "rate" in (r.get("error") or ""):
+                out["stopped"] = "search rate-limited — resumes next tick"
+                break
+            continue
         r = find_for_company(cid)
         out["searched"] += 1
         if r.get("error") and "rate" in r["error"]:

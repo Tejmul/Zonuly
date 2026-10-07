@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from sqlalchemy import event
 from sqlmodel import Field, Session, SQLModel, create_engine
 
 from jobhunter import CONFIG, ROOT
@@ -61,6 +62,7 @@ class Company(SQLModel, table=True):
     valuation_usd_m: Optional[float] = None # only when a source states it
     valuation_evidence: Optional[str] = None
     team_size: Optional[int] = None
+    team_size_evidence: Optional[str] = None   # the sentence (and URL) the headcount was read from
     # how we decided they can pay: stated | funding-strong | funding-weak | none
     pay_basis: Optional[str] = None
     pay_basis_evidence: Optional[str] = None
@@ -282,6 +284,22 @@ engine = create_engine(
 )
 
 
+# WAL: readers never wait on the writer and the writer never waits on readers, so the
+# dashboard's reads, the 10-minute tick and a harvest stop locking each other out. Only
+# writers still queue. The mode is stored in the file, so setting it once sticks; the
+# public snapshot is cut back to a plain journal by scripts/make_demo_db.py.
+@event.listens_for(engine, "connect")
+def _sqlite_pragmas(dbapi_conn, _record) -> None:
+    cur = dbapi_conn.cursor()
+    try:
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA synchronous=NORMAL")
+    except Exception:  # noqa: BLE001 — a read-only file keeps whatever mode it has
+        pass
+    finally:
+        cur.close()
+
+
 _SQLITE_TYPES = {
     "INTEGER": "INTEGER", "BIGINT": "INTEGER", "BOOLEAN": "BOOLEAN",
     "VARCHAR": "VARCHAR", "TEXT": "VARCHAR", "FLOAT": "FLOAT", "DATETIME": "DATETIME",
@@ -326,6 +344,15 @@ def init_db() -> None:
 
 def get_session() -> Session:
     return Session(engine)
+
+
+def fill_order(company: Company) -> tuple:
+    """The one order every fill-in queue reads (2026-10-07: "the ★ India list first, then
+    all companies"): hand-picked list rows first, in list order; then the scrape-first rows
+    we hold nothing about; then best priority. Callers append their own tie-breakers."""
+    listed = bool(company.list_key)
+    return (0 if listed else 1, (company.list_rank or 9999) if listed else 0,
+            0 if company.scrape_first else 1, -(company.priority_score or 0))
 
 
 def get_setting(session: Session, key: str, default: str = "") -> str:

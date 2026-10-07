@@ -71,6 +71,9 @@ def build(src: Path, out: Path) -> dict:
         con.close()
 
     stamp = _finish(out)
+    # the app's engine runs the working file in WAL; the baked image wants one self-contained file
+    with sqlite3.connect(out) as plain:
+        plain.execute("PRAGMA journal_mode=DELETE")
 
     return {
         "stamp": stamp,

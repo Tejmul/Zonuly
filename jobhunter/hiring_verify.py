@@ -34,15 +34,16 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
-from sqlmodel import select
+from sqlmodel import col, select
 
 from jobhunter import CONFIG
 from jobhunter.db import Company, Job, get_session, init_db, utcnow
 from jobhunter.research import agent as research_agent
 from jobhunter.research import web
+from jobhunter.scrapers import careers_ats
 from jobhunter.scrapers import discover as ats_discover
 from jobhunter.scrapers.base import make_client
 
@@ -174,6 +175,16 @@ async def _check_ats(name: str, website: str | None, ats: str | None, slug: str 
     v = Verification()
     async with make_client() as http:
         hit = None
+        if ats in careers_ats.API_FETCHERS and ats not in ats_discover.PROBES and slug:
+            # a board the careers pass found (Workable, SmartRecruiters, Recruitee …): its JSON
+            status, jobs = await careers_ats.read_board(http, ats, slug, name)
+            v.checked.append(careers_ats.BOARD_PAGES[ats].format(slug=slug))
+            if status == careers_ats.HIT and jobs:
+                v.status, v.open_count = VERIFIED, len(jobs)
+                v.roles = [j.title for j in jobs][:40]
+                v.careers_url = careers_ats.BOARD_PAGES[ats].format(slug=slug)
+                v.evidence = f"{ats} board '{slug}' is live with {len(jobs)} open posting(s)"
+                return v
         if ats and slug:
             hit = await ats_discover.probe(http, ats, slug) if ats in ats_discover.PROBES else None
             v.checked.append(ats_discover.PROBES.get(ats, "{slug}").format(slug=slug))
@@ -193,9 +204,21 @@ async def _check_ats(name: str, website: str | None, ats: str | None, slug: str 
     return v
 
 
-def _check_careers(website: str | None, *, fresh: bool = False) -> Verification:
-    """Their careers page on their own domain, read and searched for real hiring language."""
+def _check_careers(website: str | None, *, fresh: bool = False, careers_url: str | None = None) -> Verification:
+    """Their careers page on their own domain, read and searched for real hiring language.
+    A careers page already found (careers.py — a link on their homepage, a hosted board)
+    is read first: the guessed paths miss most of them."""
     v = Verification()
+    if careers_url and "api." not in (urlparse(careers_url).hostname or ""):
+        v.checked.append(careers_url)
+        page = web.read(careers_url, fresh=fresh, timeout=TIMEOUT + 20)
+        text = page.get("text") or ""
+        if text and not _SAYS_NO_OPENINGS.search(text):
+            signals, found_roles = research_agent.hiring_signals(text, limit=8)
+            if signals or found_roles:
+                v.status, v.careers_url, v.roles = VERIFIED, page.get("url") or careers_url, found_roles
+                v.evidence = _best_signal(signals, found_roles)
+                return v
     problem = _site_problem(website)
     if problem:
         # We could not look at anything they control, so we have not disproved anything.
@@ -264,11 +287,11 @@ def _check_careers(website: str | None, *, fresh: bool = False) -> Verification:
 
 def verify(name: str, *, website: str | None = None, ats: str | None = None,
            slug: str | None = None, claimed_role: str | None = None,
-           fresh: bool = False) -> Verification:
+           fresh: bool = False, careers_url: str | None = None) -> Verification:
     """Check one company. ATS first (cheapest and strongest), careers page second."""
     v = asyncio.run(_check_ats(name, website, ats, slug)) or Verification()
     if v.status != VERIFIED:
-        careers = _check_careers(website, fresh=fresh)
+        careers = _check_careers(website, fresh=fresh, careers_url=careers_url)
         careers.checked = v.checked + careers.checked
         v = careers
 
@@ -323,8 +346,10 @@ def verify_company(company_id: int, *, claimed_role: str | None = None, fresh: b
         name, website = company.name, company.website
         ats, slug = company.ats, company.ats_slug
         claim = claimed_role or company.hiring_claim
+        careers_url = company.careers_url
 
-    v = verify(name, website=website, ats=ats, slug=slug, claimed_role=claim, fresh=fresh)
+    v = verify(name, website=website, ats=ats, slug=slug, claimed_role=claim, fresh=fresh,
+               careers_url=careers_url)
 
     with get_session() as session:
         company = session.get(Company, company_id)
@@ -342,25 +367,35 @@ def verify_company(company_id: int, *, claimed_role: str | None = None, fresh: b
 
 
 def verify_pending(limit: int = 10, *, tiers: tuple[str, ...] = ("tier1", "tier2", "unknown", "prospect"),
-                   recheck_days: int = MAX_AGE_DAYS, fresh: bool = False) -> list[dict]:
-    """Verify the companies worth verifying: graded targets, oldest check first.
+                   recheck_days: int = MAX_AGE_DAYS, fresh: bool = False,
+                   list_key: str | None = None) -> list[dict]:
+    """Verify the companies worth verifying: list rows first (db.fill_order), then the
+    graded targets by priority, oldest check first among equals.
 
-    A `reject` is never checked — we are not going to write to them either way — and a
-    check younger than `recheck_days` is left alone.
+    A `reject` is never checked — we are not going to write to them either way — unless a
+    hand-picked list names it; a check younger than `recheck_days` is left alone. With
+    `list_key`, only that list, and a row that is not yet `verified` is checked again
+    whatever its age (the careers pass may have found the page since).
     """
     init_db()
+    from jobhunter.db import fill_order
     from jobhunter.targeting import TIER_ORDER
 
     cutoff = utcnow() - timedelta(days=recheck_days)
     with get_session() as session:
-        rows = session.exec(select(Company)).all()
+        stmt = select(Company).where(col(Company.status).is_(None))
+        if list_key:
+            stmt = stmt.where(Company.list_key == list_key)
+        rows = session.exec(stmt).all()
         pending = [
             c for c in rows
-            if (c.tier or "unknown") in tiers
-            and (c.hiring_checked_at is None or c.hiring_checked_at < cutoff)
-            and (c.website or c.ats_slug)
+            if ((c.tier or "unknown") in tiers or c.list_key)
+            and (c.hiring_checked_at is None or c.hiring_checked_at < cutoff
+                 or (list_key and c.hiring_status != VERIFIED))
+            and (c.website or c.ats_slug or c.careers_url)
         ]
-        pending.sort(key=lambda c: (TIER_ORDER.get(c.tier or "unknown", 9), c.name))
+        pending.sort(key=lambda c: (*fill_order(c), TIER_ORDER.get(c.tier or "unknown", 9),
+                                    c.hiring_checked_at or datetime.min, c.name))
         ids = [c.id for c in pending[:limit]]
     return [verify_company(cid, fresh=fresh) for cid in ids]
 

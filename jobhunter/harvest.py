@@ -45,10 +45,10 @@ from jobhunter import admission
 from jobhunter import backoff
 from jobhunter import pipeline
 from jobhunter import targeting
-from jobhunter.db import Company, Contact, Job, get_session, init_db, utcnow
+from jobhunter.db import Company, Contact, Job, fill_order, get_session, init_db, utcnow
 from jobhunter.hiring_verify import VERIFIED
 from jobhunter.research import web
-from jobhunter.scrapers import ashby, discover, greenhouse, lever
+from jobhunter.scrapers import ashby, careers_ats, discover, greenhouse, lever
 from jobhunter.scrapers.base import RawJob, gather_limited, make_client
 
 log = logging.getLogger(__name__)
@@ -507,26 +507,30 @@ async def _probe_one(http: httpx.AsyncClient, cid: int, name: str, website: str 
 
 
 def probe_ats(limit: int | None = None, *, concurrency: int = 6,
-              company_ids: list[int] | None = None) -> dict:
+              company_ids: list[int] | None = None, list_key: str | None = None) -> dict:
     """Which public board (Greenhouse / Lever / Ashby) each new company uses.
 
     A live board with postings is the company saying "we are hiring" in its own
     machine-readable words, so a hit also sets hiring_status=verified — the same
     verdict hiring_verify would reach, without the careers-page round trip.
     `company_ids` narrows the probe to those rows (a hand-picked list) and re-probes
-    them even if an earlier pass found nothing.
+    them even if an earlier pass found nothing; `list_key` does the same for a whole list.
+    Order: db.fill_order — list rows, then scrape-first, then priority.
     """
     init_db()
     with get_session() as session:
         stmt = select(Company).where(col(Company.ats).is_(None), col(Company.status).is_(None))
         if company_ids:
             stmt = stmt.where(col(Company.id).in_(company_ids))
+        elif list_key:
+            stmt = stmt.where(Company.list_key == list_key)
         else:
-            stmt = stmt.where(col(Company.overrated).is_not(True))
+            stmt = stmt.where(col(Company.overrated).is_not(True) | col(Company.list_key).is_not(None))
         rows = session.exec(stmt).all()
-        rows.sort(key=lambda c: -(c.priority_score or 0))
+        rows.sort(key=lambda c: (*fill_order(c), c.id))
+        forced = bool(company_ids or list_key)
         pending = [(c.id, c.name, c.website) for c in rows
-                   if (c.website or c.name) and (company_ids or (
+                   if (c.website or c.name) and (forced or (
                        _PROBED_NONE not in (c.notes or "") and backoff.due(c, "ats-probe")))]
         if limit:
             pending = pending[:limit]
@@ -576,27 +580,34 @@ def probe_ats(limit: int | None = None, *, concurrency: int = 6,
 
 
 def scrape_roles(limit: int | None = None, *, only_without_jobs: bool = True, concurrency: int = 6,
-                 company_ids: list[int] | None = None) -> dict:
-    """Every open role from each discovered board, through the normal persist gate."""
+                 company_ids: list[int] | None = None, list_key: str | None = None) -> dict:
+    """Every open role from each discovered board, through the normal persist gate —
+    Greenhouse / Lever / Ashby and the boards the careers pass finds with public JSON
+    (Workable, SmartRecruiters, Recruitee, BambooHR, Breezy). List rows first."""
     init_db()
     with get_session() as session:
         stmt = select(Company).where(col(Company.ats).is_not(None), col(Company.ats_slug).is_not(None))
         if company_ids:
             stmt = stmt.where(col(Company.id).in_(company_ids))
+        if list_key:
+            stmt = stmt.where(Company.list_key == list_key)
         rows = session.exec(stmt).all()
+        rows.sort(key=lambda c: (*fill_order(c), c.id))
         if only_without_jobs:
             # "no jobs" is also what a board full of senior/non-engineering roles looks
             # like after the gates — so a board we already read is marked, not re-read
             with_jobs = set(session.exec(select(Job.company_id).distinct()).all())
             rows = [c for c in rows if c.id not in with_jobs and _ROLES_READ not in (c.notes or "")]
-        targets = [(c.name, c.website, c.ats, c.ats_slug) for c in rows if c.ats in _FETCHERS]
+        targets = [(c.name, c.website, c.ats, c.ats_slug) for c in rows
+                   if c.ats in _FETCHERS or c.ats in careers_ats.API_FETCHERS]
         if limit:
             targets = targets[:limit]
 
     async def run() -> list:
         async with make_client() as http:
             return await gather_limited(
-                [_FETCHERS[ats](http, slug, name) for name, _, ats, slug in targets], limit=concurrency
+                [_FETCHERS[ats](http, slug, name) if ats in _FETCHERS else _board(http, ats, slug, name)
+                 for name, _, ats, slug in targets], limit=concurrency
             )
 
     results = asyncio.run(run()) if targets else []
@@ -621,58 +632,92 @@ def scrape_roles(limit: int | None = None, *, only_without_jobs: bool = True, co
     return out
 
 
+async def _board(http, ats: str, slug: str, name: str) -> list[RawJob]:
+    _, jobs = await careers_ats.read_board(http, ats, slug, name)
+    return jobs if isinstance(jobs, list) else []
+
+
 # ------------------------------------------------------------------ people
 
 def find_people(limit: int = 200, *, tiers: tuple[str, ...] = ("tier1", "tier2", "prospect", "unknown"),
-                refresh_days: int = 30, require_roles: bool = True) -> dict:
-    """Who could refer us, company by company, best tier first.
+                refresh_days: int = 30, require_roles: bool = True, list_key: str | None = None,
+                topup_days: int = 7) -> dict:
+    """Who could refer us, company by company — list rows first (db.fill_order).
 
     The free waterfall in contacts/ (GitHub commits → their site → pattern → Hunter),
     run over the fitting companies that have not been searched in `refresh_days`.
+    A hand-picked list row is in regardless of tier, roles or region, and is TOPPED UP:
+    while it has fewer than roles.GOOD_REFERRERS people who can refer, it is searched
+    again once `topup_days` have passed (each run also tries public LinkedIn for it).
     Sequential on purpose: GitHub's budget is per hour and the site scraper is polite,
     and a kill between companies loses nothing — every company commits on its own.
     """
     from datetime import timedelta
 
-    from jobhunter.contacts import discover_for_company
+    from jobhunter.contacts import discover_for_company, linkedin_public
+    from jobhunter.contacts import roles as roleclass
 
     init_db()
     cutoff = utcnow() - timedelta(days=refresh_days)
+    topup_cutoff = utcnow() - timedelta(days=topup_days)
     with get_session() as session:
-        rows = session.exec(select(Company).where(col(Company.status).is_(None))).all()
+        stmt = select(Company).where(col(Company.status).is_(None))
+        if list_key:
+            stmt = stmt.where(Company.list_key == list_key)
+        rows = session.exec(stmt).all()
         with_jobs = set(session.exec(select(Job.company_id).distinct()).all())
+        good = roleclass.good_referrer_counts(session, [c.id for c in rows if c.list_key])
+
+        def short(c: Company) -> bool:
+            return bool(c.list_key) and good.get(c.id, 0) < roleclass.GOOD_REFERRERS
+
         pending = [
             c for c in rows
-            if (c.tier or "unknown") in tiers
-            and c.underrated is not False
-            and not c.overrated
-            # an unknown region is not a no: funding-feed rows often carry none until facts run
-            and (c.hq_region in REGIONS_OK or c.hq_region is None)
-            and (c.website or c.domain or c.github_org)
-            and (not require_roles or c.id in with_jobs)
-            and (c.contacts_found_at is None or c.contacts_found_at < cutoff)
+            if (c.website or c.domain or c.github_org)
+            and ((short(c) and (c.contacts_found_at is None or c.contacts_found_at < topup_cutoff))
+                 or (c.list_key and (c.contacts_found_at is None or c.contacts_found_at < cutoff))
+                 or (not c.list_key
+                     and (c.tier or "unknown") in tiers
+                     and c.underrated is not False
+                     and not c.overrated
+                     # an unknown region is not a no: funding-feed rows often carry none until facts run
+                     and (c.hq_region in REGIONS_OK or c.hq_region is None)
+                     and (not require_roles or c.id in with_jobs)
+                     and (c.contacts_found_at is None or c.contacts_found_at < cutoff)))
         ]
-        # best priority first (recently funded, hiring freshers, can pay); then fresher
-        # roles, verified hiring and tier as before
+        # list rows, then scrape-first, then best priority (recently funded, hiring
+        # freshers, can pay); then fresher roles, verified hiring and tier as before
         with_fresher = set(session.exec(
             select(Job.company_id).where(Job.is_senior == False).distinct()  # noqa: E712
         ).all())
-        pending.sort(key=lambda c: (0 if c.scrape_first else 1, -(c.priority_score or 0),
+        pending.sort(key=lambda c: (*fill_order(c),
                                     targeting.TIER_ORDER.get(c.tier or "unknown", 9),
                                     0 if c.id in with_fresher else 1,
                                     0 if c.hiring_status == VERIFIED else 1, c.name))
         ids = [c.id for c in pending[:limit]]
+        topup = {c.id for c in pending[:limit] if short(c)}
 
-    out = {"companies": len(ids), "with_people": 0, "added": 0, "verified": 0, "by_source": {}}
+    out = {"companies": len(ids), "with_people": 0, "added": 0, "verified": 0, "by_source": {},
+           "topped_up": len(topup), "linkedin_added": 0}
+    li_down = False
     for cid in ids:
         try:
             s = asyncio.run(discover_for_company(cid))
         except Exception as e:  # noqa: BLE001 — one company must not end the hunt
             log.warning("people: company %s failed: %s", cid, e)
             continue
-        if s.get("added"):
+        added = s.get("added", 0)
+        if cid in topup and not li_down:
+            # a list row still short of referrers: public LinkedIn (no login) for
+            # engineers / founders, then founders + eng leads + recruiters
+            li = linkedin_public.top_up(cid, want=roleclass.GOOD_REFERRERS)
+            added += li.get("added", 0)
+            out["linkedin_added"] += li.get("added", 0)
+            if "rate" in (li.get("error") or ""):
+                li_down = True      # every further search would only wait and fail
+        if added:
             out["with_people"] += 1
-        out["added"] += s.get("added", 0)
+        out["added"] += added
         out["verified"] += s.get("verified", 0)
         for k in ("github", "site", "pattern", "hunter"):
             out["by_source"][k] = out["by_source"].get(k, 0) + s.get(k, 0)

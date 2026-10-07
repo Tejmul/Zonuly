@@ -696,7 +696,7 @@ scheduler:
   scrape_hour: 8
   reply_poll_minutes: 60
 tick:
-  free_interval_seconds: 3600
+  free_interval_seconds: 600   # 2026-10-07: round the clock — a tick holds a lock, so a start that finds one running just exits
   paid_hour: 6
   paid_minute: 15
   people_per_tick: 100          # 2026-10-07: raised — the free channels (GitHub, site pages, hosted Exa MCP) are not the bottleneck
@@ -709,6 +709,7 @@ tick:
   # 2026-10-06: hourly free-tick additions (keyless) and the paced paid slice.
   websites_per_tick: 120       # name-only companies -> verified website (hosted Exa MCP + direct fetch)
   facts_keyless_per_tick: 40   # funding/HQ/website via the hosted Exa MCP (paced; retries a 429, cools down, resumes)
+  careers_per_tick: 40         # 2026-10-07: careers page + roles for any company (careers.py), list rows first
   # The paid per-day totals above (facts/describe/story/levels) and the research caps
   # (exa_daily_cap, scrapedo_daily) are spread across the day: by hour h at most
   # total * (h+1)/24 is spent. paid_hourly runs that slice at the end of each free tick.

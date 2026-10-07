@@ -41,6 +41,7 @@ UA = (CONFIG.get("sources") or {}).get(
 )
 
 JINA = "https://r.jina.ai/"
+JINA_UA = "ZoNuLy/1.0 (+research; jina-reader)"
 EXA_API = "https://api.exa.ai/search"
 EXA_CONTENTS_API = "https://api.exa.ai/contents"
 SCRAPEDO_API = "https://api.scrape.do/"
@@ -704,11 +705,16 @@ _ANTIBOT = re.compile(r"(just a moment\.\.\.|performing security verification|at
 
 
 def _read_jina(url: str, timeout: int) -> tuple[str | None, str | None]:
-    """Jina Reader returns Markdown with a `Title:` header. Public, no key needed."""
+    """Jina Reader returns Markdown with a `Title:` header. Public, no key needed.
+
+    Jina is an API, not a website: sent the browser User-Agent the scrapers use, its
+    Cloudflare front answers 403 "Just a moment…" (2026-10-07 — every read had been
+    silently falling through to the direct fetch, which cannot render a JS page). A plain
+    client UA gets the rendered Markdown."""
     try:
         r = httpx.get(
             JINA + url,
-            headers={"User-Agent": UA, "Accept": "text/plain"},
+            headers={"User-Agent": JINA_UA, "Accept": "text/plain"},
             timeout=timeout,
             follow_redirects=True,
         )

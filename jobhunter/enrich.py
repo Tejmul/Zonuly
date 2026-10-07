@@ -24,7 +24,7 @@ import re
 
 from sqlmodel import col, select
 
-from jobhunter import admission, backoff
+from jobhunter import CONFIG, admission, backoff
 from jobhunter.db import Company, get_session, init_db, utcnow
 from jobhunter.research import agent as research_agent
 from jobhunter.research import github as gh
@@ -544,6 +544,11 @@ def facts_from_search(company_id: int, *, fresh: bool = False, keyless: bool = F
         if fund and (not c.funding_stage or newer or fund.get("total_usd_m")):
             _write_funding(c, fund)
             out["funding"] = {k: fund.get(k) for k in ("stage", "amount_usd_m", "total_usd_m", "announced")}
+        elif fund and fund.get("valuation_usd_m") and not c.valuation_usd_m:
+            # a hand-picked list already states the round; a stated valuation is still new
+            c.valuation_usd_m = float(fund["valuation_usd_m"])
+            c.valuation_evidence = f"{(fund.get('evidence_quote') or text)[:240]} — {best.get('url')}"
+            out["valuation_usd_m"] = c.valuation_usd_m
         if _HIRING_TEXT.search(text) and not c.hiring_claim_url:
             c.hiring_claim = _HIRING_TEXT.search(text).group(0)
             c.hiring_claim_url = best.get("url")
@@ -561,6 +566,123 @@ def facts_from_search(company_id: int, *, fresh: bool = False, keyless: bool = F
     return out
 
 
+# ------------------------------------------------------------------ valuation and headcount
+#
+# Two keyless searches (hosted Exa MCP only) for the two numbers a funding card rarely
+# carries. Read by regex from the result snippets, never by a model, and kept only when
+# the sentence the number sits in names the company — the sentence and the URL are stored
+# as the evidence. A range ("51-200 employees") is a band, not a headcount: not stored.
+
+_MONEY = (r"(?P<cur>US\$|\$|USD\s?|₹|Rs\.?\s?|INR\s?)\s?(?P<num>\d[\d,]*(?:\.\d+)?)\s?"
+          r"(?P<unit>lakh crore|billion|bn|b|million|mn|mln|m|crore|cr)\b")
+_VALUATION = re.compile(
+    # "valuation" needs its verb: a data card's "Funding, Valuation $5.5M" header is followed
+    # by the money RAISED, not a valuation
+    r"(?:valued\s+(?:at\s+)?|valuation\s+(?:(?:of|at|stood|stands|was|is|pegged|touched|to)\s+){1,2})(?:about\s+|around\s+|nearly\s+|over\s+|roughly\s+|"
+    r"more than\s+|close to\s+|almost\s+|~)?" + _MONEY
+    + r"|" + _MONEY.replace("?P<", "?P<b_") + r"\s+(?:post[- ]money\s+|pre[- ]money\s+)?valuation", re.I)
+_HEADCOUNT = re.compile(
+    r"(?<![\d,–-])(?:(?:team|workforce|headcount) of\s+(?:over\s+|about\s+|around\s+|nearly\s+|more than\s+)?"
+    r"(?P<a>\d[\d,]*)\+?(?:\s+(?:people|employees|members|staff))?"
+    r"|(?:employs|employing|has|with|over|more than|nearly|around|about)\s+(?P<b>\d[\d,]*)\+?\s+"
+    r"(?:full[- ]time\s+)?(?:employees|staff|team members)"
+    r"|(?P<c>\d[\d,]*)\+?\s+(?:full[- ]time\s+)?employees)(?![\d–-])", re.I)
+_USD_TO_INR = float((CONFIG.get("search") or {}).get("usd_to_inr") or 88)
+
+
+def _usd_m(num: str, unit: str, cur: str) -> float | None:
+    try:
+        n = float(num.replace(",", ""))
+    except ValueError:
+        return None
+    unit = unit.lower()
+    if unit in ("crore", "cr", "lakh crore"):
+        inr = n * (1e12 if unit == "lakh crore" else 1e7)
+        return round(inr / _USD_TO_INR / 1e6, 1)
+    if cur.strip().upper() in ("₹", "RS", "RS.", "INR"):
+        return None    # "₹500 million" is rare and ambiguous next to crore — not guessed
+    return n * 1000 if unit in ("billion", "bn", "b") else n
+
+
+def _sentence_at(text: str, start: int, end: int) -> str:
+    dot = text.rfind(". ", 0, start)
+    a = max(dot + 2 if dot != -1 else 0, start - 220, 0)
+    b = text.find(". ", end)
+    return re.sub(r"\s+", " ", text[a: b + 1 if b != -1 else end + 160]).strip()[:300]
+
+
+def valuation_from(text: str, name: str) -> tuple[float, str] | None:
+    """(USD millions, the sentence) for the first stated valuation that names the company."""
+    stem = admission.name_key(name)[:8]
+    for m in _VALUATION.finditer(text or ""):
+        g = m.groupdict()
+        num, unit, cur = (g["num"], g["unit"], g["cur"]) if g.get("num") else (g["b_num"], g["b_unit"], g["b_cur"])
+        sentence = _sentence_at(text, m.start(), m.end())
+        if stem and stem not in re.sub(r"[^a-z0-9]", "", sentence.lower()):
+            continue
+        val = _usd_m(num, unit, cur or "")
+        if val and 1 <= val <= 500_000:
+            return val, sentence
+    return None
+
+
+def headcount_from(text: str, name: str) -> tuple[int, str] | None:
+    """(people, the sentence) for the first stated headcount that names the company."""
+    stem = admission.name_key(name)[:8]
+    for m in _HEADCOUNT.finditer(text or ""):
+        raw = m.group("a") or m.group("b") or m.group("c")
+        sentence = _sentence_at(text, m.start(), m.end())
+        if stem and stem not in re.sub(r"[^a-z0-9]", "", sentence.lower()):
+            continue
+        try:
+            n = int(raw.replace(",", ""))
+        except ValueError:
+            continue
+        if 2 <= n <= 200_000:
+            return n, sentence
+    return None
+
+
+def size_from_search(company_id: int, *, fresh: bool = False) -> dict:
+    """Valuation and team size for one company, keyless: two hosted-Exa-MCP searches, read
+    by regex, evidence-linked. A channel failure leaves no marker; a miss backs off."""
+    init_db()
+    with get_session() as session:
+        c = session.get(Company, company_id)
+        if c is None:
+            return {"error": f"no company {company_id}"}
+        name, need_val, need_team = c.name, c.valuation_usd_m is None, c.team_size is None
+    out: dict = {"company": name}
+    found: dict = {}
+    for need, query, reader, key in ((need_val, f"{name} valuation", valuation_from, "valuation"),
+                                     (need_team, f"{name} number of employees team size", headcount_from, "team")):
+        if not need:
+            continue
+        hit = web.search(query, limit=6, fresh=fresh, only=("exa-mcp",))
+        if hit.get("error") and not hit.get("results"):
+            return {**out, "error": hit["error"], "channel": True}
+        for r in hit.get("results") or []:
+            got = reader(f"{r.get('title') or ''}. {r.get('snippet') or ''}", name)
+            if got:
+                found[key] = (got[0], f"{got[1]} — {r.get('url')}")
+                break
+    with get_session() as session:
+        c = session.get(Company, company_id)
+        if "valuation" in found and c.valuation_usd_m is None:
+            c.valuation_usd_m, c.valuation_evidence = float(found["valuation"][0]), found["valuation"][1][:400]
+            out["valuation_usd_m"] = c.valuation_usd_m
+        if "team" in found and c.team_size is None:
+            c.team_size, c.team_size_evidence = int(found["team"][0]), found["team"][1][:400]
+            out["team_size"] = c.team_size
+        if found:
+            backoff.ok(c, "size")
+        else:
+            backoff.fail(c, "size", "no stated valuation or headcount in the search results")
+        session.add(c)
+        session.commit()
+    return out
+
+
 def _mark(company_id: int, step: str, error: str) -> None:
     with get_session() as session:
         c = session.get(Company, company_id)
@@ -570,35 +692,61 @@ def _mark(company_id: int, step: str, error: str) -> None:
             session.commit()
 
 
-def _queue(session, *, need_jobs: bool = False) -> list[Company]:
-    """Active, not overrated, best priority first — the order every fill-in pass reads.
-    A company with a backoff marker sorts after everything else it ties with."""
-    from jobhunter.db import Job
+def _queue(session, *, need_jobs: bool = False, list_key: str | None = None) -> list[Company]:
+    """Active, not overrated, in db.fill_order (list rows, then scrape-first, then
+    priority) — the order every fill-in pass reads. A hand-picked list row is kept even
+    when graded reject or overrated: the list is the decision. `list_key` narrows to one list."""
+    from jobhunter.db import Job, fill_order
 
-    rows = session.exec(select(Company).where(col(Company.status).is_(None),
-                                              col(Company.overrated).is_not(True))).all()
-    rows = [c for c in rows if c.tier != "reject" or c.list_key]
+    stmt = select(Company).where(col(Company.status).is_(None))
+    if list_key:
+        stmt = stmt.where(Company.list_key == list_key)
+    rows = session.exec(stmt).all()
+    rows = [c for c in rows if c.list_key or (c.tier != "reject" and not c.overrated)]
     if need_jobs:
         with_jobs = set(session.exec(select(Job.company_id).distinct()).all())
         rows = [c for c in rows if c.id in with_jobs]
-    rows.sort(key=lambda c: (0 if c.scrape_first else 1, -(c.priority_score or 0), 0 if c.list_key else 1, c.id))
+    rows.sort(key=lambda c: (*fill_order(c), c.id))
     return rows
 
 
-def facts_pending(limit: int = 40, *, keyless: bool = False, roles_only: bool = False) -> list[dict]:
-    """Companies with no [facts] read yet — with or without roles — best priority first,
-    skipping any in backoff. Inside the Exa cap unless `keyless`."""
+def facts_pending(limit: int = 40, *, keyless: bool = False, roles_only: bool = False,
+                  list_key: str | None = None) -> list[dict]:
+    """Companies with no [facts] read yet — with or without roles — list rows first,
+    skipping any in backoff. Inside the Exa cap unless `keyless`. With `list_key`, a list
+    row whose facts were read but still lacks valuation or team size is read again."""
     init_db()
     with get_session() as session:
-        pending = [c for c in _queue(session, need_jobs=roles_only)
-                   if "[facts]" not in (c.notes or "") and backoff.due(c, "facts")]
+        def gap(c: Company) -> bool:
+            if "[facts]" not in (c.notes or ""):
+                return True
+            return bool(list_key) and (c.valuation_usd_m is None or c.team_size is None)
+
+        pending = [c for c in _queue(session, need_jobs=roles_only, list_key=list_key)
+                   if gap(c) and backoff.due(c, "facts")]
         ids = [c.id for c in pending[:limit]]
+        listed = {c.id for c in pending[:limit] if c.list_key}
     out = []
     for cid in ids:
-        r = facts_from_search(cid, keyless=keyless)
+        r = {}
+        with get_session() as session:
+            c = session.get(Company, cid)
+            need_facts = "[facts]" not in (c.notes or "")
+            need_size = cid in listed and keyless and (c.valuation_usd_m is None or c.team_size is None) \
+                and backoff.due(c, "size")
+        if need_facts:
+            r = facts_from_search(cid, keyless=keyless)
+            if r.get("channel"):
+                out.append(r)
+                break   # the search channel is capped or rate-limited: stop, mark nobody
+        if need_size:
+            # list rows: the two numbers a funding card rarely carries, searched for directly
+            s = size_from_search(cid)
+            if s.get("channel"):
+                out.append({**r, **s})
+                break
+            r = {**s, **r, **{k: s[k] for k in ("valuation_usd_m", "team_size") if s.get(k)}}
         out.append(r)
-        if r.get("channel"):
-            break   # the search channel is capped or rate-limited: stop, mark nobody
     return out
 
 

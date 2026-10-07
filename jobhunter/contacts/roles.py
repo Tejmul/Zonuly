@@ -252,5 +252,22 @@ def referral_queue(company_id: int | None = None, limit: int = 50) -> list[dict]
     return out[:limit]
 
 
+# A list company is "covered" once this many people who can refer are on record.
+GOOD_REFERRERS = int(_P.get("good_referrers_per_company", 5))
+
+
+def good_referrer_counts(session, company_ids: list[int] | None = None) -> dict[int, int]:
+    """company_id -> how many of its contacts can refer (engineers, EMs, founders,
+    recruiters — every class whose config says `refer: true`)."""
+    good = [k for k, ok in CAN_REFER.items() if ok] or [c for c in CLASSES if c != "other"]
+    q = select(Contact.company_id).where(col(Contact.role_class).in_(good))
+    if company_ids is not None:
+        q = q.where(col(Contact.company_id).in_(company_ids))
+    out: dict[int, int] = {}
+    for cid in session.exec(q).all():
+        out[cid] = out.get(cid, 0) + 1
+    return out
+
+
 __all__ = ["RoleVerdict", "classify", "classify_with_model", "classify_contacts",
-           "referral_queue", "CLASSES", "RANKS", "LABELS"]
+           "referral_queue", "good_referrer_counts", "GOOD_REFERRERS", "CLASSES", "RANKS", "LABELS"]

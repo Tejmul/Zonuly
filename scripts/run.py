@@ -1419,24 +1419,50 @@ def harvest_x(
 
 
 @harvest_app.command("probe")
-def harvest_probe(limit: int = typer.Option(None), concurrency: int = typer.Option(6)) -> None:
+def harvest_probe(limit: int = typer.Option(None), concurrency: int = typer.Option(6),
+                  list_key: str = typer.Option(None, "--list", help="Only companies on this list (e.g. india-star)")) -> None:
     """Find each new company's public ATS board. A live board = hiring verified."""
     _setup_logging()
     from jobhunter import harvest
 
-    _echo(harvest.probe_ats(limit=limit, concurrency=concurrency))
+    _echo(harvest.probe_ats(limit=limit, concurrency=concurrency, list_key=list_key))
 
 
 @harvest_app.command("roles")
 def harvest_roles(
     limit: int = typer.Option(None),
     all_boards: bool = typer.Option(False, "--all", help="Re-read boards that already have jobs"),
+    list_key: str = typer.Option(None, "--list", help="Only companies on this list (e.g. india-star)"),
 ) -> None:
     """Every open role from each discovered board, through the normal relevance and location gates."""
     _setup_logging()
     from jobhunter import harvest
 
-    _echo(harvest.scrape_roles(limit=limit, only_without_jobs=not all_boards))
+    _echo(harvest.scrape_roles(limit=limit, only_without_jobs=not all_boards, list_key=list_key))
+
+
+@harvest_app.command("careers")
+def harvest_careers(
+    list_key: str = typer.Option(None, "--list", help="Only companies on this list (e.g. india-star)"),
+    limit: int = typer.Option(None, help="Companies to read, list rows first; default all pending"),
+    force: bool = typer.Option(False, "--force", help="Read again even if read recently or in backoff"),
+    concurrency: int = typer.Option(4, help="Companies read at once"),
+    no_search: bool = typer.Option(False, "--no-search", help="Skip the keyless web-search fallback"),
+) -> None:
+    """Find each company's careers page (homepage links, common paths, keyless search), the hosted board
+    behind it (Keka, Darwinbox, Zoho Recruit, Workable, Lever …) and the open roles on it — board JSON,
+    JSON-LD, or the page text read by the model (titles kept only if literally on the page)."""
+    _setup_logging()
+    from jobhunter import careers
+
+    out = careers.run(limit=limit, list_key=list_key, force=force,
+                      concurrency=concurrency, use_search=not no_search)
+    for l in out.pop("lines", []):
+        typer.echo(f"  {(l.get('company') or str(l.get('id')))[:24]:24} "
+                   f"{(l.get('careers_url') or '-')[:60]:60} {l.get('ats') or '':12} "
+                   f"roles {l.get('found', 0):>3} (+{l.get('inserted', 0)})"
+                   + (f"  ! {l['error']}" if l.get("error") else ""))
+    _echo(out)
 
 
 @harvest_app.command("facts")
@@ -1444,6 +1470,7 @@ def harvest_facts(
     limit: int = typer.Option(60, help="Companies to look up today (one Exa search each, inside exa_daily_cap)"),
     keyless: bool = typer.Option(False, "--keyless", help="Use only the hosted Exa MCP (free, rate-limited)"),
     roles_only: bool = typer.Option(False, "--roles-only", help="Only companies that already have roles"),
+    list_key: str = typer.Option(None, "--list", help="Only companies on this list (e.g. india-star)"),
 ) -> None:
     """Company facts — what they do, round, amount, date, total, valuation, HQ, website — best priority first,
     with or without roles. Skips companies in backoff after a miss."""
@@ -1451,9 +1478,10 @@ def harvest_facts(
     from jobhunter import enrich
     from jobhunter.research import web
 
-    res = enrich.facts_pending(limit=limit, keyless=keyless, roles_only=roles_only)
+    res = enrich.facts_pending(limit=limit, keyless=keyless, roles_only=roles_only, list_key=list_key)
     _echo({"companies": len(res), "described": sum(1 for r in res if r.get("description")),
            "team": sum(1 for r in res if r.get("team_size")), "funding": sum(1 for r in res if r.get("funding")),
+           "valuation": sum(1 for r in res if r.get("valuation_usd_m")),
            "errors": sum(1 for r in res if r.get("error")), "exa": web.exa_budget()})
 
 
@@ -1509,13 +1537,47 @@ def harvest_people(
     limit: int = typer.Option(200, help="How many companies to search this run"),
     tiers: str = typer.Option("tier1,tier2,prospect,unknown", help="Comma-separated, best first"),
     any_roles: bool = typer.Option(False, "--any", help="Also companies with no scraped roles yet"),
+    list_key: str = typer.Option(None, "--list", help="Only companies on this list (e.g. india-star)"),
+    topup_days: int = typer.Option(7, help="List rows short of good referrers are searched again after N days"),
 ) -> None:
-    """Who could refer us — the free waterfall (GitHub, site, pattern) over fitting companies, best tier first."""
+    """Who could refer us — the free waterfall (GitHub, site, pattern) over fitting companies, list rows first.
+    List rows with fewer than ~5 people who can refer are topped up (public LinkedIn too)."""
     _setup_logging()
     from jobhunter import harvest
 
     _echo(harvest.find_people(limit=limit, tiers=tuple(t.strip() for t in tiers.split(",") if t.strip()),
-                              require_roles=not any_roles))
+                              require_roles=not any_roles, list_key=list_key, topup_days=topup_days))
+
+
+@harvest_app.command("verify")
+def harvest_verify(
+    limit: int = typer.Option(60, help="Companies to check, list rows first"),
+    list_key: str = typer.Option(None, "--list", help="Only companies on this list (e.g. india-star)"),
+    fresh: bool = typer.Option(False, help="Bypass the page cache"),
+) -> None:
+    """Hiring verification against the company's own board / careers page. With --list, every list row
+    not yet verified is checked again."""
+    _setup_logging()
+    from jobhunter import hiring_verify as hv
+
+    res = hv.verify_pending(limit=limit, tiers=("tier1", "tier2", "prospect", "unknown"), fresh=fresh,
+                            list_key=list_key)
+    counts: dict = {}
+    for r in res:
+        counts[r.get("status") or "error"] = counts.get(r.get("status") or "error", 0) + 1
+    _echo({"checked": len(res), "by_status": counts})
+
+
+@harvest_app.command("linkedin")
+def harvest_linkedin(
+    limit: int = typer.Option(30, help="Companies to search, list rows first"),
+    list_key: str = typer.Option(None, "--list", help="Only companies on this list (e.g. india-star)"),
+) -> None:
+    """Public-LinkedIn leads (no login): companies with roles and no leads, and list rows short of referrers."""
+    _setup_logging()
+    from jobhunter.contacts import linkedin_public
+
+    _echo(linkedin_public.find_pending(limit=limit, list_key=list_key))
 
 
 @harvest_app.command("parallel")

@@ -55,6 +55,7 @@ L = {
     "exa_queries": int(_T.get("exa_discovery_queries_per_day", 6)),
     "websites": int(_T.get("websites_per_tick", 30)),
     "facts_keyless": int(_T.get("facts_keyless_per_tick", 20)),
+    "careers": int(_T.get("careers_per_tick", 40)),
 }
 PAID_HOURLY = bool(_T.get("paid_hourly", True))
 # the one-off cleanup's merge/quarantine pass, hourly. Off until the first
@@ -211,6 +212,11 @@ def run_free(budget_s: int = 1800) -> dict:
         _step(s, "facts_keyless", lambda: _count(enrich.facts_pending(limit=L["facts_keyless"], keyless=True)))
     _step(s, "probe", harvest.probe_ats)
     _step(s, "roles", harvest.scrape_roles)
+    # the careers page for everyone the board probe missed — list rows first (careers.py)
+    if L["careers"]:
+        from jobhunter import careers
+
+        _step(s, "careers", lambda: {k: v for k, v in careers.run(limit=L["careers"]).items() if k != "lines"})
     _step(s, "people", harvest.find_people, limit=L["people"])
     # public-LinkedIn leads for the companies GitHub can't cover — free, gapped, no login
     from jobhunter.contacts import linkedin_public
@@ -380,7 +386,7 @@ def _plist(kind: str) -> dict:
         "Nice": 5,
     }
     if kind == "free":
-        base["StartInterval"] = FREE_INTERVAL_S      # hourly; a missed interval fires on wake
+        base["StartInterval"] = FREE_INTERVAL_S      # every 10 min (config); a missed interval fires on wake
     else:
         base["StartCalendarInterval"] = {"Hour": PAID_HOUR, "Minute": PAID_MINUTE}   # daily, after the caps reset
     return base
