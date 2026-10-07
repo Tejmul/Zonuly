@@ -1,6 +1,6 @@
 # ZoNuLy — context brief
 
-> Generated 2026-10-06T22:54 from the knowledge graph (29589 nodes, 93317 edges). Do not edit — run `python scripts/run.py kg brief`.
+> Generated 2026-10-07T11:50 from the knowledge graph (30376 nodes, 98291 edges). Do not edit — run `python scripts/run.py kg brief`.
 > To query: `kg search <text>` · `kg show <id>` · `kg path <a> <b>` · `kg compose "<problem>"` · to remember: `kg note "<what changed>" --about <id>`.
 
 ## The problem
@@ -19,11 +19,11 @@ An engineer on site in the US/UK/Germany costs ₹1.5–2 crore a year; the same
 
 ## Where the pipeline is right now (live)
 
-- **4148** jobs from 8 sources (ashby 1454, greenhouse 1149, wellfound 1019, hn 265, wwr 165, lever 38, remoteok 29, yc 29)
-- **107** scored · status: high_match 26, new 4041, scored 81
-- **4068** companies · **21579** contacts (pattern-guessed 224, scraped 4355, verified 17000)
+- **4149** jobs from 8 sources (ashby 1454, greenhouse 1149, wellfound 1019, hn 265, wwr 165, lever 39, remoteok 29, yc 29)
+- **156** scored · status: high_match 37, new 3993, scored 119
+- **4069** companies · **21591** contacts (pattern-guessed 224, scraped 4367, verified 17000)
 - emails: draft 1 · replies: none
-- top matches: [75] Software Engineer, Early Career (AI) @ Notion (job:693); [75] Software Engineer - Data Infrastructure @ Luma AI (job:793); [75] Applied AI Engineer @ WorkOS (job:865); [75] LLM Engineer Freelancer @ Monterail (job:1035); [75] AI Automation Engineer, In-House MarTech Video SaaS @ Vidalytics (job:1047); [72] Software Engineer, Forward Deployed AI Solutions @ Ramp (job:658); [72] Software Engineer, AI Workflows @ Notion (job:689); [72] Product Engineer - Dedicated Inference  @ Baseten (job:755)
+- top matches: [85] Backend Engineer — Intern (4 months, in-office) @ ethereal labs (job:3707); [85] Junior AI Engineer @ Silstone Health (job:3902); [85] Data Science Engineer Intern @ Eshal AI (job:3998); [78] Founding Software Engineer @ *Strello Health (job:1219); [78] Founding Full-Stack Engineer @ Arusto (job:3043); [78] Junior AI Engineer @ Planso (job:3085); [78] AI Engineer @ Frequency.cx (job:3129); [78] Founding Engineer for AI Consumer App @ Scalio (job:3592)
 
 ## Constraints and guarantees (never cut)
 

@@ -19,6 +19,7 @@ import ipaddress
 import json
 import logging
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
@@ -231,17 +232,66 @@ def _mcp_text(payload: str) -> str:
     return "\n\n".join(b.get("text", "") for b in blocks if isinstance(b, dict) and b.get("text"))
 
 
-def _exa_mcp_call(tool: str, args: dict, timeout: int) -> str | None:
-    p = backends.run(
-        "mcporter",
-        ["call", f"{MCP_SERVER}.{tool}", "--args", json.dumps(args), "--output", "json"],
-        timeout=timeout,
-    )
-    if not p.ok:
-        log.debug("mcporter %s failed (%s): %s", tool, p.reason, p.err[:200])
+# The hosted Exa MCP is free but rate-limited per IP, and it drops out for a minute at a
+# time. A 429 used to end search for the whole run; now calls are paced, a transient
+# failure is retried with backoff, and only a run of failures opens a short cooldown —
+# after which search is tried again rather than abandoned.
+_MCP_GAP_S = float(RESEARCH.get("exa_mcp_min_gap_seconds", 2.0))
+_MCP_BACKOFF_S = tuple(RESEARCH.get("exa_mcp_backoff_seconds") or (3, 10, 30))
+_MCP_COOLDOWN_S = float(RESEARCH.get("exa_mcp_cooldown_seconds", 300))
+_TRANSIENT = re.compile(r"429|rate.?limit|too many requests|offline|fetch failed|timed out|ECONN|ETIMEDOUT|503|502", re.I)
+_mcp_state = {"last": 0.0, "fails": 0, "cool_until": 0.0}
+
+
+def _mcp_error(payload: str) -> str | None:
+    """mcporter reports a dead server as {"server", "error", "issue"} — sometimes with exit 0."""
+    try:
+        data = json.loads(payload)
+    except (json.JSONDecodeError, TypeError):
         return None
-    text = _mcp_text(p.out)
-    return text or None
+    if isinstance(data, dict) and data.get("error") and "content" not in data:
+        return str(data.get("error"))
+    return None
+
+
+def mcp_cooling() -> bool:
+    """True while the hosted MCP is in its post-failure cooldown."""
+    return time.monotonic() < _mcp_state["cool_until"]
+
+
+def _exa_mcp_call(tool: str, args: dict, timeout: int) -> str | None:
+    if mcp_cooling():
+        _errors.append("exa-mcp: cooling down after repeated failures")
+        return None
+    for attempt in range(len(_MCP_BACKOFF_S) + 1):
+        wait = _MCP_GAP_S - (time.monotonic() - _mcp_state["last"])
+        if wait > 0:
+            time.sleep(wait)
+        _mcp_state["last"] = time.monotonic()
+        p = backends.run(
+            "mcporter",
+            ["call", f"{MCP_SERVER}.{tool}", "--args", json.dumps(args), "--output", "json"],
+            timeout=timeout,
+        )
+        envelope = _mcp_error(p.out)
+        if p.ok and not envelope:
+            _mcp_state["fails"] = 0
+            return _mcp_text(p.out) or None
+        detail = f"{p.err} {envelope or p.out[:300]}"
+        if p.reason == "missing" or not (_TRANSIENT.search(detail) or p.reason == "timeout"):
+            log.debug("mcporter %s failed (%s): %s", tool, p.reason, p.err[:200])
+            _errors.append(f"exa-mcp: {p.reason}: {p.err[:120]}")
+            return None
+        if attempt < len(_MCP_BACKOFF_S):
+            log.info("exa-mcp transient failure (%s) — retrying in %ss", p.reason, _MCP_BACKOFF_S[attempt])
+            time.sleep(_MCP_BACKOFF_S[attempt])
+    _mcp_state["fails"] += 1
+    if _mcp_state["fails"] >= 2:
+        _mcp_state["cool_until"] = time.monotonic() + _MCP_COOLDOWN_S
+        _mcp_state["fails"] = 0
+        log.warning("exa-mcp failing repeatedly — cooling down %ss, then trying again", int(_MCP_COOLDOWN_S))
+    _errors.append("exa-mcp: rate-limited or offline after retries")
+    return None
 
 
 # ------------------------------------------------------------------ search

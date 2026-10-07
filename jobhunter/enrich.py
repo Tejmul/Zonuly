@@ -777,26 +777,43 @@ def find_website(company_id: int, *, keyless: bool = True, use_search: bool = Tr
         backoff.ok(c, "website")
         how = "search hit" if good[0] in from_search else "domain guess"
         tag = f"[website] {url} — {note} ({how})"
+        c.notes = _reopen(c.notes)
         c.notes = f"{c.notes}\n{tag}".strip() if c.notes else tag
+        # a hunt that ran on the bare name had nothing to go on; the site is a fresh start
+        c.contacts_found_at = None
         session.add(c)
         session.commit()
     return {"company": name, "website": url, "note": note}
 
 
+def _reopen(notes: str | None) -> str | None:
+    """Drop the "[ats] probed: no public board" verdict. It was reached by guessing board
+    slugs from the bare name; with a verified website the probe can read the careers page
+    instead, so the company goes back in its queue."""
+    if not notes:
+        return notes
+    kept = [ln for ln in notes.splitlines() if not ln.startswith("[ats] probed: no public board")]
+    return "\n".join(kept) or None
+
+
 def find_websites(limit: int = 30, *, keyless: bool = True) -> dict:
     """find_website over the name-only companies, best priority first, skipping backoff.
     `keyless` (the hourly free tick) uses only the hosted Exa MCP, domain guesses and
-    direct fetches; after three search failures in a row (the MCP rate-limits) the rest
-    of the run uses guesses only."""
+    direct fetches; while the MCP cools down after repeated failures it uses guesses
+    only, and search resumes when the cooldown ends."""
     init_db()
     with get_session() as session:
         pending = [c for c in _queue(session)
                    if not c.website and not c.domain and not c.list_key and backoff.due(c, "website")]
         ids = [c.id for c in pending[:limit]]
     out = {"tried": 0, "found": 0, "missed": 0, "errors": 0, "search_off": False, "samples": []}
-    search_down = 0
     for cid in ids:
         out["tried"] += 1
+        # search pauses while the hosted MCP cools down after failures, then resumes —
+        # an outage costs a few minutes of domain-guess-only, not the rest of the run
+        from jobhunter.research import web
+
+        out["search_off"] = web.mcp_cooling()
         try:
             r = find_website(cid, keyless=keyless, use_search=not out["search_off"])
         except Exception as e:  # noqa: BLE001 — one company must not end the pass
@@ -810,10 +827,7 @@ def find_websites(limit: int = 30, *, keyless: bool = True) -> dict:
                 out["samples"].append(f"{r['company']} -> {r['website']}")
         else:
             out["missed"] += 1
-        search_down = search_down + 1 if (r.get("error") or "").startswith("search:") else 0
-        if search_down >= 3 and not out["search_off"]:
-            out["search_off"] = True
-            log.warning("find_websites: search failing three times running — domain guesses only")
+
     log.info("find_websites: %s", out)
     return out
 

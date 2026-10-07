@@ -699,16 +699,16 @@ tick:
   free_interval_seconds: 3600
   paid_hour: 6
   paid_minute: 15
-  people_per_tick: 40
-  verify_per_tick: 60
+  people_per_tick: 100          # 2026-10-07: raised — the free channels (GitHub, site pages, hosted Exa MCP) are not the bottleneck
+  verify_per_tick: 120
   describe_per_tick: 40
   story_per_tick: 40
   facts_per_tick: 90
   levels_per_tick: 60
   exa_discovery_queries_per_day: 6
   # 2026-10-06: hourly free-tick additions (keyless) and the paced paid slice.
-  websites_per_tick: 30        # name-only companies -> verified website (hosted Exa MCP + direct fetch)
-  facts_keyless_per_tick: 10   # funding/HQ/website via the hosted Exa MCP (rate-limited; stops at the first 429)
+  websites_per_tick: 120       # name-only companies -> verified website (hosted Exa MCP + direct fetch)
+  facts_keyless_per_tick: 40   # funding/HQ/website via the hosted Exa MCP (paced; retries a 429, cools down, resumes)
   # The paid per-day totals above (facts/describe/story/levels) and the research caps
   # (exa_daily_cap, scrapedo_daily) are spread across the day: by hour h at most
   # total * (h+1)/24 is spent. paid_hourly runs that slice at the end of each free tick.

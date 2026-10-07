@@ -31,3 +31,12 @@ def test_mark_empty_flags_bare_rows_and_clears_filled_ones(monkeypatch, tmp_path
         assert not s.get(Company, 3).scrape_first
         assert s.get(Company, 4).scrape_first is False
         assert len(s.exec(Company.__table__.select()).all()) == 4   # nothing removed
+
+
+def test_a_found_website_reopens_the_ats_probe():
+    from jobhunter.enrich import _reopen
+
+    notes = "[funding-rss] Acme raised $5M\n[ats] probed: no public board\n[facts] read"
+    assert _reopen(notes) == "[funding-rss] Acme raised $5M\n[facts] read"
+    assert _reopen("[ats] probed: no public board") is None
+    assert _reopen(None) is None

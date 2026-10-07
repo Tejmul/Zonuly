@@ -370,7 +370,9 @@ def _plist(kind: str) -> dict:
         "Label": f"{LABEL}.{kind}",
         "ProgramArguments": [PYTHON, str(ROOT / "scripts" / "run.py"), "tick", "run", "--kind", kind],
         "WorkingDirectory": str(ROOT),
-        "EnvironmentVariables": {"PATH": "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin", "HOME": str(Path.home())},
+        # ~/.local/bin is where `uv tool install` puts the research CLIs (yt-dlp, agent-reach)
+        "EnvironmentVariables": {"PATH": f"{Path.home()}/.local/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin",
+                                 "HOME": str(Path.home())},
         "StandardOutPath": str(LOGS / f"tick-{kind}.log"),
         "StandardErrorPath": str(LOGS / f"tick-{kind}.log"),
         "RunAtLoad": True,          # a tick on login / when the agent is (re)loaded — i.e. when the laptop is open
