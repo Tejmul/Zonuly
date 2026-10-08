@@ -9,6 +9,9 @@ rather than a progress bar. Each run answers:
     output    companies / contacts / roles added in the last hour, fields written
               (extraction_write), companies that reached 100% complete
     rejects   what the guardrails refused in the last hour, by reason and by channel
+    referrals ready referrers added, addresses found (by pattern / by source), companies
+              that went from no ready referrer with an address to one, companies that became
+              complete, re-verification and re-check results (referrals.audit_block)
     channels  each research channel (hosted Exa MCP, Jina, direct, GitHub, scrape.do,
               DuckDuckGo, OpenRouter): calls, failure rate, last success / failure, Exa MCP
               cooldowns, whether OpenRouter's daily ceiling was hit; the Agent Reach CLIs
@@ -379,6 +382,14 @@ def run(*, notify: bool = True, probe_tools: bool = True) -> dict:
             "rejects_24h": rejects(s, utcnow() - timedelta(hours=24))["total"],
             "sample": sample(s, since),
         }
+        # referrals are the main thing (2026-10-08): who was added, which addresses were
+        # found and how, which companies gained an address or became complete, re-checks
+        try:
+            from jobhunter import referrals
+
+            report["referrals"] = referrals.audit_block(s, since)
+        except Exception as e:  # noqa: BLE001 — a block failing must not lose the audit
+            report["referrals"] = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
     history = _history()
     prev_hour = _closest(history, now_local - timedelta(hours=1), 0.75)
     prev_day = _closest(history, now_local - timedelta(hours=24), 2.0)
@@ -420,7 +431,10 @@ def _compact(report: dict) -> dict:
     return {"at": report["at"], "status": report["status"], "alerts": report["alerts"],
             "fill": {k: report["fill"][k] for k in ("companies", "avg_completeness", "counts", "rates")},
             "last_hour": {k: v for k, v in report["last_hour"].items() if k != "writes_by_field"},
-            "rejects": {"total": report["rejects"]["total"]}}
+            "rejects": {"total": report["rejects"]["total"]},
+            "referrals": {k: v for k, v in (report.get("referrals") or {}).items()
+                          if k in ("ready_added", "ready_added_with_email", "companies_with_email",
+                                   "companies_gained_email", "companies_became_complete")}}
 
 
 def _store(report: dict, history: list[dict]) -> None:

@@ -1,6 +1,6 @@
 # ZoNuLy — context brief
 
-> Generated 2026-10-08T13:43 from the knowledge graph (31400 nodes, 101676 edges). Do not edit — run `python scripts/run.py kg brief`.
+> Generated 2026-10-08T15:42 from the knowledge graph (31757 nodes, 103116 edges). Do not edit — run `python scripts/run.py kg brief`.
 > To query: `kg search <text>` · `kg show <id>` · `kg path <a> <b>` · `kg compose "<problem>"` · to remember: `kg note "<what changed>" --about <id>`.
 
 ## The problem
@@ -19,9 +19,9 @@ An engineer on site in the US/UK/Germany costs ₹1.5–2 crore a year; the same
 
 ## Where the pipeline is right now (live)
 
-- **4351** jobs from 9 sources (ashby 1530, greenhouse 1162, wellfound 1024, hn 265, wwr 168, careers 102, lever 39, yc 31, remoteok 30)
-- **156** scored · status: high_match 37, new 4195, scored 119
-- **4320** companies · **22115** contacts (pattern-guessed 293, scraped 20482, verified 1340)
+- **4376** jobs from 9 sources (ashby 1530, greenhouse 1162, wellfound 1024, hn 265, wwr 168, careers 127, lever 39, yc 31, remoteok 30)
+- **156** scored · status: high_match 37, new 4220, scored 119
+- **4333** companies · **22432** contacts (pattern-guessed 95, scraped 20956, verified 1381)
 - emails: draft 1 · replies: none
 - top matches: [85] Backend Engineer — Intern (4 months, in-office) @ ethereal labs (job:3707); [85] Junior AI Engineer @ Silstone Health (job:3902); [85] Data Science Engineer Intern @ Eshal AI (job:3998); [78] Founding Software Engineer @ *Strello Health (job:1219); [78] Founding Full-Stack Engineer @ Arusto (job:3043); [78] Junior AI Engineer @ Planso (job:3085); [78] AI Engineer @ Frequency.cx (job:3129); [78] Founding Engineer for AI Consumer App @ Scalio (job:3592)
 

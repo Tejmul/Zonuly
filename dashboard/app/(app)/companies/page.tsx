@@ -17,7 +17,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import { ArrowRight, ChevronRight, Search, Star } from "lucide-react";
-import { useApi } from "@/lib/api";
+import { useApi, type FillingPayload, type FillingRow } from "@/lib/api";
 import { inCity, type City } from "@/lib/funding";
 import { rise } from "@/components/anim";
 import { CityFilter, FundingCell, HiringCell, PayCell, cityCounts } from "@/components/funding";
@@ -51,8 +51,19 @@ type Row = {
     best: { name: string | null; role_class: string | null; label: string | null; email: string | null; confidence: string | null } | null;
   };
   ready: boolean;
+  complete?: boolean;
+  missing?: string[];
 };
 type Payload = { companies: Row[]; stats: Record<string, number> };
+
+/* What a company still lacks before it is shown — the four parts of the complete bar
+   (jobhunter/guardrails.complete_bar). */
+const MISSING_LABEL: Record<string, string> = {
+  website: "no website",
+  description: "no description",
+  hiring: "no hiring proof",
+  referrer_email: "no referrer with an address",
+};
 
 /* Four views. The meaning is printed under the control, so the difference between them
    is never a guess. */
@@ -101,6 +112,10 @@ function Companies() {
   );
   const [open, setOpen] = useState<number | null>(null);
   const [city, setCity] = useState<City | "all">("all");
+  // Complete companies are the page; the rest are "being filled", listed with what each
+  // one still lacks. Fetched only when the tab is opened.
+  const [tab, setTab] = useState<"complete" | "filling">(wanted === "filling" ? "filling" : "complete");
+  const filling = useApi<FillingPayload>(tab === "filling" ? "/api/companies/filling" : null);
 
   const counts = useMemo(() => {
     const cs = data?.companies ?? [];
@@ -165,6 +180,35 @@ function Companies() {
         </div>
       </header>
 
+      {/* ------------------------------------------------------------ complete | being filled */}
+      <div className="flex items-center gap-1 border-b border-line" role="tablist" aria-label="Complete or being filled">
+        {([
+          ["complete", "Complete", data.stats?.shown_complete ?? data.companies.length],
+          ["filling", "Being filled", data.stats?.being_filled ?? filling.data?.total ?? null],
+        ] as const).map(([key, label, n]) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={`-mb-px inline-flex cursor-pointer items-center gap-1.5 border-b-2 px-3 py-2 text-[12.5px] transition-colors ${
+              tab === key ? "border-ink font-medium text-ink" : "border-transparent text-ink-3 hover:text-ink"
+            }`}
+          >
+            {label}
+            {typeof n === "number" && <span className="tnum text-[11px] text-ink-3">({n.toLocaleString()})</span>}
+          </button>
+        ))}
+        <span className="marginal ml-auto pb-1.5">
+          {tab === "complete"
+            ? "Website, a description that passes, hiring proof and a ready referrer with an address."
+            : "Not shown yet — each row says what is missing. The tick fills referrers first."}
+        </span>
+      </div>
+
+      {tab === "filling" ? (
+        <BeingFilled payload={filling.data} error={filling.error} onRetry={filling.reload} q={q} setQ={setQ} />
+      ) : (<>
       {/* ------------------------------------------------------------ the views */}
       <div>
         <div className="flex flex-wrap items-center gap-2">
@@ -341,11 +385,98 @@ function Companies() {
         </div>
       </div>
 
+      </>)}
+
       <p className="max-w-[80ch] text-[11.5px] leading-relaxed text-ink-3">
         Roles is open roles · fresher roles. People is people found · people who could refer (engineer, EM or founder
         with a usable address). Pay power is the five-step ladder from unknown to pays (hover for the rules). Funding is
         the last round, its amount and when — printed in ink as recent when it is twelve months old or less. India needs a stated number to go above Thin — rupee pay does not follow dollar rounds.
       </p>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ being filled */
+
+function BeingFilled({ payload, error, onRetry, q, setQ }: {
+  payload: FillingPayload | null; error: string | null; onRetry: () => void;
+  q: string; setQ: (v: string) => void;
+}) {
+  const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const all = payload?.companies ?? [];
+    return needle ? all.filter((c) => `${c.name} ${c.description ?? ""}`.toLowerCase().includes(needle)) : all;
+  }, [payload, q]);
+
+  if (error && !payload) return <div className="plate"><ErrorNote message={error} onRetry={onRetry} /></div>;
+  if (!payload) return <div className="plate"><Loading label="Reading what is still being filled" rows={8} /></div>;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="relative min-w-0 flex-1 sm:max-w-xs">
+          <Search size={13} className="absolute top-1/2 left-2.5 -translate-y-1/2 text-ink-3" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Find a company"
+            className="h-8 w-full rounded-md border border-line bg-surface pr-2 pl-7 text-[12px] placeholder:text-ink-3 focus:border-line-strong focus:outline-none"
+          />
+        </label>
+        {Object.entries(payload.missing_counts).map(([k, n]) => (
+          <span key={k} className="chip tnum">{MISSING_LABEL[k] ?? k} · {n.toLocaleString()}</span>
+        ))}
+        <span className="marginal ml-auto">{rows.length.toLocaleString()} shown</span>
+      </div>
+
+      <div className="plate overflow-x-auto">
+        {rows.length === 0 ? (
+          <p className="px-4 py-8 text-[13px] text-ink-3">
+            {payload.total === 0
+              ? "Nothing is being filled. Every company we track is complete."
+              : "No company matches that search."}
+          </p>
+        ) : (
+          <ul className="min-w-[720px] divide-y divide-line">
+            {rows.map((c, i) => <FillingItem key={c.id} c={c} i={i} />)}
+          </ul>
+        )}
+      </div>
+      <p className="max-w-[80ch] text-[11.5px] leading-relaxed text-ink-3">
+        Best first: the ★ India list, then companies only a referrer short, then by priority. Referrers counts people
+        the evidence places there now · of them with an address. A part a re-check failed (a site that stopped
+        answering, a careers page with no roles) is missing until the next check passes it.
+      </p>
+    </div>
+  );
+}
+
+function FillingItem({ c, i }: { c: FillingRow; i: number }) {
+  return (
+    <li className="[contain-intrinsic-size:auto_48px] [content-visibility:auto]">
+      <Link
+        href={`/companies/${c.id}`}
+        className="grid grid-cols-[2rem_minmax(12rem,1.4fr)_6rem_6.5rem_minmax(14rem,2fr)] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-2"
+      >
+        <span className="tnum text-right text-[11px] text-ink-3">{i + 1}</span>
+        <span className="min-w-0">
+          <span className="flex items-center gap-2">
+            <span className="truncate text-[13px] font-medium">{c.name}</span>
+            {c.list_key && <span className="chip" title="On the ★ India list">★</span>}
+            {typeof c.priority_score === "number" && <span className="chip tnum">P{Math.round(c.priority_score)}</span>}
+          </span>
+          <span className="block truncate text-[11.5px] text-ink-3">{c.description ?? c.website ?? "—"}</span>
+        </span>
+        <span className="truncate text-[12px] text-ink-2">{c.city ?? REGION[c.region ?? ""] ?? c.region ?? "—"}</span>
+        <span className="tnum text-[12px] text-ink-2" title="ready referrers · with an address">
+          {c.ready_referrers} · {c.ready_with_email}
+        </span>
+        <span className="flex flex-wrap gap-1.5">
+          {c.missing.map((m) => (
+            <span key={m} className="chip" title={c.recheck_failed?.[m] ?? undefined}>{MISSING_LABEL[m] ?? m}</span>
+          ))}
+        </span>
+      </Link>
+    </li>
   );
 }

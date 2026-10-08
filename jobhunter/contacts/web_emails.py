@@ -8,8 +8,9 @@ and the founders' emails, or any other engineers who work there."
 So: search the web for anything "@their-domain" — the LinkedIn company card, a
 press contact, a founder's address on a conference page, careers@ on a job post —
 read the handful of pages that carry one, and keep every same-domain address with
-whatever name sits next to it. One real `first.last@` teaches the company's pattern,
-and the pattern is then applied to every named person we already hold (the LinkedIn
+whatever name sits next to it. Two real named addresses that agree (or one + their own
+page stating the format) confirm the company's pattern (contacts/addresses.py), and the
+pattern is then applied to every named person we already hold (the LinkedIn
 profiles), which is where the referrers come from. Nothing is invented: an address is
 stored only if a page showed it, with the URL it was read from.
 
@@ -142,7 +143,7 @@ def find(company_id: int, *, max_pages: int = MAX_PAGES, fresh: bool = False) ->
     # 2. what the web says: addresses straight from the snippets, pages worth reading after
     searched = 0
     for q in QUERIES:
-        res = web.search(q.format(name=name, domain=domain), limit=8, fresh=fresh)
+        res = web.search(q.format(name=name, domain=domain), limit=8, fresh=fresh, only=web.KEYLESS)
         if res.get("error") and not res.get("results"):
             log.info("web_emails: search failed for %s: %s", name, res["error"][:120])
             continue
@@ -249,18 +250,17 @@ def find(company_id: int, *, max_pages: int = MAX_PAGES, fresh: bool = False) ->
             existing.add(email)
             stats["inbox" if generic else "people"] += 1
 
-        # 5. learn the pattern from every (name, address) pair now on record
-        c = session.get(Company, company_id)
-        if c and not c.email_pattern:
-            pairs = [{"name": p.name, "email": p.email} for p in
-                     session.exec(select(Contact).where(Contact.company_id == company_id,
-                                                        col(Contact.email).is_not(None))).all()]
-            learned = patterns.learn_from_contacts(pairs, domain)
-            if learned:
-                c.email_pattern = learned
-                session.add(c)
-                stats["pattern"] = learned
         session.commit()
+    # 5. learn the format from every named address now on record — confirmed only with
+    # ≥2 agreeing (or one + their own page) — and address the ready referrers by it
+    from jobhunter.contacts import addresses
+
+    try:
+        res = addresses.fill(company_id)
+        stats["pattern"] = res.get("pattern")
+        stats["by_pattern"] = res.get("added", 0)
+    except Exception as e:  # noqa: BLE001
+        log.warning("web_emails: pattern fill for %s failed: %s", name, e)
 
     log.info("web_emails: %s -> %d addresses (%d attached, %d people, %d inbox) pattern=%s",
              name, len(found), stats["attached"], stats["people"], stats["inbox"], stats["pattern"])

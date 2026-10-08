@@ -229,7 +229,30 @@ export type AuditReport = {
     exa_mcp_cooldowns_hour?: number;
   };
   tick?: { ran_last_hour: boolean; last: { at?: string | null; finished?: string | null } | null };
+  referrals?: AuditReferrals;
 };
+/** The referrals block of the hourly audit (jobhunter/referrals.py audit_block). */
+export type AuditReferrals = {
+  error?: string;
+  ready_added?: number;
+  ready_added_with_email?: number;
+  addresses_found?: { by_pattern: number; by_source: Record<string, number> };
+  companies_gained_email?: number | null;
+  companies_lost_email?: number | null;
+  companies_with_email?: number;
+  companies_became_complete?: number;
+  people_runs?: { companies: number; linkedin_down: string | null };
+  reverify?: { confirmed: number; downgraded: number; inconclusive: number; affiliation_rejects: number };
+  revalidate?: { checked: number; passed: number; newly_failed: number; recovered: number };
+};
+/** GET /api/companies/filling — companies not yet complete, with what each is missing. */
+export type FillingRow = {
+  id: number; name: string; website: string | null; description: string | null;
+  city: string | null; region: string | null; list_key: string | null; list_rank: number | null;
+  priority_score: number | null; missing: string[]; recheck_failed: Record<string, string>;
+  ready_referrers: number; ready_with_email: number; hiring_status: string | null;
+};
+export type FillingPayload = { companies: FillingRow[]; total: number; missing_counts: Record<string, number> };
 export type AuditPayload = {
   last: AuditReport | null;
   history: { at: string; status: string; alerts: string[]; fill: AuditFill; last_hour: AuditReport["last_hour"]; rejects: { total: number } }[];

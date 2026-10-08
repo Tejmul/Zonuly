@@ -483,11 +483,19 @@ _NOT_PERSON = {"github", "bot", "admin", "team", "support", "root", "unknown", "
                "anonymous", "noreply", "test", "null", "none", "staff", "ops", "founders", "office"}
 
 
+#: a careers page's "Firstname Lastname <firstname.lastname@acme.com>" is a format, not a person
+_PLACEHOLDER_NAME = re.compile(
+    r"^(first\s*name\s+last\s*name|first\s+last|fname\s+lname|given\s+name\s+surname|"
+    r"your\s+name|full\s+name|first\s*name\s+surname)$", re.I)
+
+
 def person_name(raw: str | None) -> Check:
     """A person's name — two or more words of letters (or a CJK name) — not a login."""
     if not raw or not str(raw).strip():
         return _no("empty")
     n = re.sub(r"\s+", " ", str(raw)).strip(" .,;:-_'\"")
+    if _PLACEHOLDER_NAME.match(n):
+        return _no("a format example (Firstname Lastname), not a person", raw)
     if "@" in n or "http" in n.lower() or "/" in n:
         return _no("an address or a link, not a name", raw)
     n = re.sub(r"\s+", " ", re.sub(r"[^\w\s.'’\-]", " ", n)).strip(" .-")   # emoji and symbols go
@@ -1115,6 +1123,8 @@ def is_ready(contact: Contact) -> bool:
     # is a mailbox someone pasted on a page, whatever domain it is on
     if not (contact.name or contact.handle or contact.github or contact.linkedin):
         return False
+    if contact.name and _PLACEHOLDER_NAME.match(contact.name.strip()):
+        return False      # "Firstname Lastname" off a careers page is nobody
     if contact.email:
         chk = email(contact.email)
         if not chk.ok or chk.value[1] == "generic":
@@ -1194,6 +1204,154 @@ def refresh_completeness(session=None) -> dict:
             session.close()
 
 
+# ------------------------------------------------------------------ the complete bar (what is shown)
+#
+# 2026-10-08 ("incomplete stuff should not be here"): the dashboard lists a company by
+# default only when it carries the four things a referral ask needs — a website, a
+# description that passes the validators, proof they hire, and a person confirmed there
+# now with an address. Funding is optional. The rest are "being filled", with what is
+# missing named. A part the rolling re-check failed (recheck_failed) counts as missing.
+
+SHOWN_PARTS = ("website", "description", "hiring", "referrer_email")
+
+
+def _json_obj(raw: str | None, default):
+    try:
+        val = json.loads(raw) if raw else default
+    except (TypeError, ValueError):
+        return default
+    return val if isinstance(val, type(default)) else default
+
+
+def complete_bar(c: Company, *, has_roles: bool, ready_with_email: int) -> tuple[bool, list[str]]:
+    """(complete, the parts missing) for one company."""
+    failed = _json_obj(c.recheck_failed, {})
+    have = {
+        "website": bool(c.website) and "website" not in failed,
+        "description": bool(c.description) and "description" not in failed
+        and bool(description(c.description, name=c.name, domain=c.domain, strict=False)),
+        "hiring": (c.hiring_status == "verified" or has_roles) and "hiring" not in failed,
+        "referrer_email": ready_with_email >= 1,
+    }
+    missing = [p for p in SHOWN_PARTS if not have[p]]
+    return not missing, missing
+
+
+def ready_counts(session) -> dict[int, tuple[int, int]]:
+    """company_id -> (ready referrers, of them with an address) — is_ready, any role."""
+    from sqlmodel import col, select
+
+    out: dict[int, list[int]] = {}
+    for p in session.exec(select(Contact).where(col(Contact.affiliation).in_(READY))).all():
+        if not is_ready(p):
+            continue
+        e = out.setdefault(p.company_id, [0, 0])
+        e[0] += 1
+        e[1] += 1 if p.email else 0
+    return {k: (v[0], v[1]) for k, v in out.items()}
+
+
+def refresh_complete(session) -> dict:
+    """Recompute company.complete / complete_missing for every active company."""
+    from sqlmodel import col, select
+
+    from jobhunter.db import Job
+
+    counts = ready_counts(session)
+    with_roles = set(session.exec(select(Job.company_id).distinct()).all())
+    out = {"complete": 0, "became_complete": 0, "dropped": 0, "became_ids": []}
+    for c in session.exec(select(Company).where(col(Company.status).is_(None))).all():
+        ok, missing = complete_bar(c, has_roles=c.id in with_roles, ready_with_email=counts.get(c.id, (0, 0))[1])
+        miss = json.dumps(missing)
+        if ok and not c.complete:
+            c.complete_at = utcnow()
+            out["became_complete"] += 1
+            out["became_ids"].append(c.id)
+        elif not ok and c.complete:
+            out["dropped"] += 1
+        if c.complete != ok or c.complete_missing != miss:
+            c.complete, c.complete_missing = ok, miss
+            session.add(c)
+        out["complete"] += ok
+    session.commit()
+    out["became_ids"] = out["became_ids"][:50]
+    return out
+
+
+# ------------------------------------------------------------------ referrer addresses and re-checks
+
+def set_email_pattern(session, company: Company, verdict: dict, *, channel: str = "pattern-learn") -> str:
+    """Store a learned pattern with its evidence. Only a `confirmed` verdict sets
+    company.email_pattern; a pattern on record that the evidence no longer confirms is
+    cleared and kept as a reject. Returns written | agreed | cleared | unchanged."""
+    old = company.email_pattern
+    pat = verdict.get("pattern") if verdict.get("status") == "confirmed" else None
+    company.email_pattern_evidence = json.dumps({**verdict, "at": utcnow().isoformat(timespec="seconds")},
+                                                default=str)[:4000]
+    session.add(company)
+    if pat and pat == old:
+        return "agreed"
+    if pat:
+        company.email_pattern = pat
+        record(session, company, "email_pattern", pat, evidence=verdict.get("reason"),
+               source=verdict.get("stated") or ", ".join(verdict.get("examples") or [])[:300],
+               channel=channel, confidence="high" if (verdict.get("agree") or 0) >= 3 else "medium")
+        return "written"
+    if old:
+        reject(session, company_id=company.id, field="email_pattern", value=old,
+               reason=f"not confirmed: {verdict.get('reason') or verdict.get('status')}", channel=channel)
+        company.email_pattern = None
+        return "cleared"
+    return "unchanged"
+
+
+def set_pattern_address(session, contact: Contact, company: Company, address: str, *,
+                        evidence: str, mx_ok: bool) -> bool:
+    """Give a ready referrer with a real name and no address its pattern address —
+    labelled pattern-guessed (it falls under the guessed-address send cap), never verified."""
+    if contact.email or not is_ready(contact) or not mx_ok:
+        return False
+    chk = email(address, domain=company.domain)
+    if not chk or chk.value[1] != "company":
+        reject(session, company_id=company.id, contact_id=contact.id, field="contact.email", value=address,
+               reason=chk.reason if not chk else f"pattern address is {chk.value[1]}, not on their domain",
+               channel="pattern")
+        return False
+    contact.email, contact.email_kind, contact.confidence = chk.value[0], "company", "pattern-guessed"
+    contact.research_notes = f"{contact.research_notes or ''}\nemail by pattern: {evidence}".strip()[:2000]
+    session.add(contact)
+    session.add(ExtractionWrite(company_id=company.id, contact_id=contact.id, field="contact.email",
+                                value=chk.value[0], evidence=evidence[:400], source=company.domain,
+                                channel="pattern", confidence="pattern-guessed"))
+    return True
+
+
+def downgrade_affiliation(session, contact: Contact, *, reason: str, source: str | None = None,
+                          channel: str = "reverify") -> None:
+    """A re-check that no longer places them there: unconfirmed, with the reason kept."""
+    reject(session, company_id=contact.company_id, contact_id=contact.id, field="contact.affiliation",
+           value=contact.affiliation, reason=f"re-check: {reason}"[:240], source=source, channel=channel)
+    contact.affiliation, contact.affiliation_source = "unconfirmed", "none"
+    contact.affiliation_evidence = f"re-check {utcnow():%Y-%m-%d}: {reason}"[:300]
+    contact.affiliation_checked_at = utcnow()
+    session.add(contact)
+
+
+def set_recheck(session, company: Company, failed: dict[str, str], *, channel: str = "revalidate") -> dict:
+    """Store the rolling re-check's verdict: the parts that failed (each kept as a reject
+    with its reason) and validated_at. A failed part drops the company out of complete
+    until a later re-check passes it. Returns {newly_failed, recovered}."""
+    before = _json_obj(company.recheck_failed, {})
+    for part, why in failed.items():
+        if part not in before:
+            reject(session, company_id=company.id, field=f"recheck.{part}", value=part,
+                   reason=f"re-check failed: {why}"[:240], source=company.website, channel=channel)
+    company.recheck_failed = json.dumps(failed) if failed else None
+    company.validated_at = utcnow()
+    session.add(company)
+    return {"newly_failed": sorted(set(failed) - set(before)), "recovered": sorted(set(before) - set(failed))}
+
+
 def sweep_stale_hiring(session) -> int:
     """'verified' older than HIRING_STALE_DAYS → needs_recheck (hiring_verify re-reads it)."""
     from sqlmodel import col, select
@@ -1245,7 +1403,9 @@ def sweep() -> dict:
         stale = sweep_stale_hiring(session)
         labelled = label_unlabelled(session)
         out = refresh_completeness(session)
-    return {"hiring_stale": stale, "contacts_labelled": labelled, **out}
+        shown = refresh_complete(session)
+    return {"hiring_stale": stale, "contacts_labelled": labelled, **out,
+            "shown": {k: v for k, v in shown.items() if k != "became_ids"}}
 
 
 __all__ = [
@@ -1254,5 +1414,7 @@ __all__ = [
     "careers_page", "own_careers_url", "hiring", "person_name", "email", "affiliation", "employer_matches",
     "address_confidence", "reject", "record", "put", "set_description", "set_funding", "set_valuation",
     "set_hiring", "vet_contact", "is_ready", "completeness", "refresh_completeness", "referrer_counts",
-    "sweep", "sweep_stale_hiring", "relabel_contact", "label_unlabelled",
+    "sweep", "sweep_stale_hiring", "relabel_contact", "label_unlabelled", "SHOWN_PARTS", "complete_bar",
+    "ready_counts", "refresh_complete", "set_email_pattern", "set_pattern_address", "downgrade_affiliation",
+    "set_recheck",
 ]

@@ -764,7 +764,10 @@ tick:
   free_interval_seconds: 600   # 2026-10-07: round the clock — a tick holds a lock, so a start that finds one running just exits
   paid_hour: 6
   paid_minute: 15
-  people_per_tick: 100          # 2026-10-07: raised — the free channels (GitHub, site pages, hosted Exa MCP) are not the bottleneck
+  people_per_tick: 150          # 2026-10-08: referrers first — the people step runs before every other fill step (referrals.py)
+  people_budget_seconds: 1500   # …and stops after 25 min of a tick; the keyless search paces itself (Jina ≈ 20/min)
+  reverify_per_tick: 150        # ready referrers whose evidence is > 90 days old, re-confirmed
+  revalidate_per_tick: 30       # companies re-checked (website answers, description passes, careers lists roles)
   verify_per_tick: 120
   describe_per_tick: 40
   story_per_tick: 40

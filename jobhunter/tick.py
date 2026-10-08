@@ -47,6 +47,11 @@ PAID_MINUTE = int(_T.get("paid_minute", 15))
 L = {
     "verify": int(_T.get("verify_per_tick", 60)),
     "people": int(_T.get("people_per_tick", 40)),
+    # 2026-10-08 "referrals are the main thing": the people step runs first and is the
+    # dominant work — at most this many seconds of it per tick (the free channels pace it)
+    "people_budget": int(_T.get("people_budget_seconds", 1500)),
+    "reverify": int(_T.get("reverify_per_tick", 150)),
+    "revalidate": int(_T.get("revalidate_per_tick", 30)),
     "describe": int(_T.get("describe_per_tick", 40)),
     "story": int(_T.get("story_per_tick", 40)),
     "facts": int(_T.get("facts_per_tick", 90)),
@@ -190,6 +195,15 @@ def hygiene_step() -> dict:
     return out
 
 
+def _complete() -> dict:
+    from jobhunter import guardrails
+    from jobhunter.db import get_session
+
+    with get_session() as session:
+        out = guardrails.refresh_complete(session)
+    return {k: v for k, v in out.items() if k != "became_ids"}
+
+
 def _mark_empty() -> dict:
     from jobhunter import hygiene
 
@@ -217,7 +231,7 @@ def _work(v) -> int:
 def _saturated(s: dict) -> bool:
     """True when this tick's fill steps found (almost) nothing left to do: every gap is in
     backoff or filled, so the hour is better spent finding new companies."""
-    steps = ("websites", "facts_keyless", "careers", "people", "people_no_roles", "linkedin", "verify")
+    steps = ("websites", "facts_keyless", "careers", "people", "verify")
     return sum(_work(s.get(k)) for k in steps) < L["saturated_below"]
 
 
@@ -240,6 +254,15 @@ def run_free(budget_s: int = 1800) -> dict:
     _step(s, "scrape_first", _mark_empty)
     # priority before the queues read it: overrated, priority score, city for every row
     _step(s, "priority", targeting.refresh_priority)
+    # REFERRERS FIRST (2026-10-08): the ★ list, then companies complete except for a
+    # referrer with an address, then the rest by priority — GitHub, team pages via Jina,
+    # public LinkedIn through the keyless search, the confirmed address pattern
+    from jobhunter import referrals
+
+    _step(s, "people", referrals.people_step, limit=L["people"], budget_s=L["people_budget"])
+    # referrers whose evidence is older than 90 days re-confirmed; ~30 companies re-checked
+    _step(s, "reverify", referrals.reverify_referrers, limit=L["reverify"])
+    _step(s, "revalidate", referrals.revalidate_companies, limit=L["revalidate"])
     # free discovery: funding-news RSS (amounts + dates, no Exa) then its boards/roles
     _step(s, "funding_rss", harvest.admit_funding_rss)
     # name-only companies (funding feeds, X, directories) get a verified website, keyless:
@@ -254,19 +277,12 @@ def run_free(budget_s: int = 1800) -> dict:
         from jobhunter import careers
 
         _step(s, "careers", lambda: {k: v for k, v in careers.run(limit=L["careers"]).items() if k != "lines"})
-    _step(s, "people", harvest.find_people, limit=L["people"])
-    # public-LinkedIn leads for the companies GitHub can't cover — free, gapped, no login
-    from jobhunter.contacts import linkedin_public
-
-    _step(s, "linkedin", linkedin_public.find_pending, limit=L.get("linkedin", 15))
     if time.time() - t0 < budget_s:
         _step(s, "verify", lambda: {"checked": len(hiring_verify.verify_pending(limit=L["verify"], tiers=("tier1", "tier2", "prospect", "unknown")))})
     if time.time() - t0 < budget_s:
         _step(s, "yc", harvest.admit_yc)
         _step(s, "probe", harvest.probe_ats)
         _step(s, "roles", harvest.scrape_roles)
-    if time.time() - t0 < budget_s:
-        _step(s, "people_no_roles", harvest.find_people, limit=L["people"] // 2, require_roles=False)
     # is each GitHub-found person still there? org membership, recent commits, profiles
     if L["affiliation"] and time.time() - t0 < budget_s:
         from jobhunter.contacts import affiliation
@@ -293,6 +309,8 @@ def run_free(budget_s: int = 1800) -> dict:
     _step(s, "pay_floor", lambda: {k: v for k, v in _india.apply_pay_floor().items()
                                    if k not in ("sample_hidden",)})
     _step(s, "priority_after", targeting.refresh_priority)
+    # the complete bar (what the dashboard shows) after this tick's people and re-checks
+    _step(s, "complete", _complete)
     if PAID_HOURLY and time.time() - t0 < budget_s:
         s["paid_slice"] = run_paid(hourly=True)
     s["status"] = harvest.status()

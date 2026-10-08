@@ -1210,6 +1210,73 @@ def tick_status() -> None:
     _echo(tick.status())
 
 
+# ---------------------------------------------------------------- referrals
+
+referrals_app = typer.Typer(
+    add_completion=False,
+    help="Referrers first: the people step, address patterns from evidence, re-verification, the complete bar",
+)
+app.add_typer(referrals_app, name="referrals")
+
+
+@referrals_app.command("measure")
+def referrals_measure() -> None:
+    """Ready referrers per company, with an address, the ★ list, complete companies."""
+    from jobhunter import referrals
+
+    _echo(referrals.measure())
+
+
+@referrals_app.command("patterns")
+def referrals_patterns(apply: bool = typer.Option(False, "--apply", help="back up, then write (default: dry run)")) -> None:
+    """Learn each company's address format from its own addresses (≥2 agree, or 1 + their page) and
+    address the ready referrers without one. Dry run by default."""
+    _setup_logging()
+    from jobhunter import referrals
+
+    out: dict = {}
+    if apply:
+        out["backup"] = str(referrals.backup("pre-patterns"))
+    out.update(referrals.pattern_step(dry_run=not apply))
+    _echo(out)
+
+
+@referrals_app.command("people")
+def referrals_people(
+    limit: int = typer.Option(50, help="companies"),
+    list_key: str = typer.Option(None, "--list", help="only this hand-picked list, e.g. india-star"),
+    top: int = typer.Option(None, help="the list rows plus the top N by priority"),
+    budget: int = typer.Option(3600, help="seconds"),
+) -> None:
+    """The people step (GitHub, team pages via Jina, the open web, LinkedIn via keyless search)."""
+    _setup_logging()
+    from jobhunter import referrals
+
+    _echo(referrals.people_step(limit, budget_s=budget, list_key=list_key, top=top))
+
+
+@referrals_app.command("reverify")
+def referrals_reverify(limit: int = typer.Option(150)) -> None:
+    """Re-confirm ready referrers whose evidence is older than 90 days; failing → unconfirmed."""
+    _setup_logging()
+    from jobhunter import referrals
+
+    _echo(referrals.reverify_referrers(limit))
+
+
+@referrals_app.command("revalidate")
+def referrals_revalidate(limit: int = typer.Option(30)) -> None:
+    """Re-check companies (never-checked first): site answers, description passes, careers lists roles."""
+    _setup_logging()
+    from jobhunter import guardrails, referrals
+    from jobhunter.db import get_session
+
+    out = referrals.revalidate_companies(limit)
+    with get_session() as s:
+        out["complete"] = {k: v for k, v in guardrails.refresh_complete(s).items() if k != "became_ids"}
+    _echo(out)
+
+
 # ---------------------------------------------------------------- audit
 
 audit_app = typer.Typer(

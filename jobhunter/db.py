@@ -128,6 +128,20 @@ class Company(SQLModel, table=True):
     # targeting.india.discovery.fill_first_days it is filled right after the ★ list.
     india_found_at: Optional[datetime] = Field(default=None, index=True)
     india_source: Optional[str] = None     # rss | search | yc | ats — which source found it
+    # ---- referrals (jobhunter/referrals.py). 2026-10-08: "referrals are the main thing".
+    # The evidence behind email_pattern: JSON {pattern, status: confirmed|weak|conflict|none,
+    # agree, matched, votes, examples, stated, at}. email_pattern is only set when confirmed
+    # (≥2 agreeing addresses on their domain, or 1 + their own page stating the format).
+    email_pattern_evidence: Optional[str] = None
+    # SHOWN: what the dashboard lists by default (guardrails.complete_bar, every tick) —
+    # website + description passing the guardrails + hiring proof + ≥1 ready referrer with
+    # an address. complete_missing is the JSON list of the parts still missing.
+    complete: Optional[bool] = Field(default=None, index=True)
+    complete_missing: Optional[str] = None
+    complete_at: Optional[datetime] = None     # when it last became complete
+    # the rolling re-check (referrals.revalidate_companies): JSON {part: reason} for the
+    # parts that failed it — website | description | hiring. A failed part is missing.
+    recheck_failed: Optional[str] = None
 
 
 class Job(SQLModel, table=True):
@@ -445,6 +459,22 @@ def fill_order(company: Company) -> tuple:
                    and (utcnow() - found).days < _INDIA_FILL_FIRST_DAYS)
     return (0 if listed else 1 if fresh_india else 2, (company.list_rank or 9999) if listed else 0,
             0 if company.scrape_first else 1, -(prio // 20), done, -prio)
+
+
+def people_order(company: Company) -> tuple:
+    """The people step's own order (2026-10-08, "referrers first"): the hand-picked list
+    rows in list order; then companies complete except for a referrer with an address;
+    then everyone else by priority (db.fill_order's bands)."""
+    import json as _json
+
+    listed = bool(company.list_key)
+    try:
+        missing = set(_json.loads(company.complete_missing or "[]"))
+    except (TypeError, ValueError):
+        missing = set()
+    only_referrer = bool(missing) and missing <= {"referrer_email"}
+    return (0 if listed else 1 if only_referrer else 2, (company.list_rank or 9999) if listed else 0,
+            *fill_order(company)[2:])
 
 
 def get_setting(session: Session, key: str, default: str = "") -> str:

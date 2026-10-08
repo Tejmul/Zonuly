@@ -145,8 +145,10 @@ def login_of(contact: Contact) -> str | None:
 
 
 def check_company(company_id: int, client: httpx.Client, budget: Budget, *, max_profiles: int = 30,
-                  dry_run: bool = False) -> dict:
-    """Relabel one company's GitHub contacts from org evidence + profiles."""
+                  dry_run: bool = False, fresh_ids: set[int] | None = None) -> dict:
+    """Relabel one company's GitHub contacts from org evidence + profiles. `fresh_ids`:
+    contacts whose profile is re-read whatever is on the row (the 90-day re-verification) —
+    a "company" field they have since changed is read as it is now."""
     with get_session() as session:
         c = session.get(Company, company_id)
         if c is None or not c.github_org:
@@ -179,11 +181,12 @@ def check_company(company_id: int, client: httpx.Client, budget: Budget, *, max_
                     when, repo = w2, r2
             claim, profile_email = p.employer_claim, False
             need_name = not guardrails.person_name(p.name)
-            if (need_name or not (member or claim)) and profiles < max_profiles and budget.ok():
+            fresh = bool(fresh_ids and p.id in fresh_ids)
+            if (need_name or not (member or claim) or fresh) and profiles < max_profiles and budget.ok():
                 u = _get(client, budget, f"{API}/users/{login}")
                 profiles += 1
                 if isinstance(u, dict):
-                    claim = (u.get("company") or "").strip() or claim
+                    claim = (u.get("company") or "").strip() or (None if fresh else claim)
                     nm = guardrails.person_name(u.get("name"))
                     if need_name and nm:
                         if not dry_run:

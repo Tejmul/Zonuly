@@ -44,7 +44,10 @@ type Overview = {
   };
   by_source: Record<string, number>;
   new_this_week: number;
+  /** complete companies (site, description, hiring proof, a ready referrer with an address) */
   companies: number;
+  companies_all?: number;
+  companies_filling?: number;
   contacts: { total: number; verified: number; by_confidence?: Record<string, number> };
   /* The fields below arrived with the redesign; an older API omits them and the
      panels that need them wait rather than break. */
@@ -160,8 +163,10 @@ export default function Dashboard() {
           icon={<Building2 size={20} />}
           tint="stone"
           value={o.companies}
-          label="Companies mapped"
-          trail={d ? <Delta now={d.companies.this_week} before={d.companies.last_week} /> : null}
+          label="Complete companies"
+          trail={typeof o.companies_filling === "number"
+            ? <span className="text-[12.5px] text-ink-3">{nf(o.companies_filling)} being filled</span>
+            : d ? <Delta now={d.companies.this_week} before={d.companies.last_week} /> : null}
         />
         <Kpi
           icon={<Briefcase size={20} />}
@@ -271,7 +276,7 @@ export default function Dashboard() {
         <Card>
           <CardHead title="Is the hiring real?" sub="A board carries a role for months after it is filled. Each company is checked against the page it controls." />
           {hiring.length ? (
-            <Stack segments={hiring} ariaLabel={`Of ${nf(o.companies)} companies, ${nf(o.hiring?.verified ?? 0)} have hiring proven on their own site`} />
+            <Stack segments={hiring} ariaLabel={`Of ${nf(o.companies_all ?? o.companies)} companies, ${nf(o.hiring?.verified ?? 0)} have hiring proven on their own site`} />
           ) : <Waiting />}
         </Card>
       </section>

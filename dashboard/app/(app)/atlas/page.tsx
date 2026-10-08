@@ -200,6 +200,15 @@ function AtlasView() {
           worth your hours come out on the right — each one traceable back through the wires
           that produced it.
         </p>
+        {typeof net.data?.stats?.being_filled === "number" && net.data.stats.being_filled > 0 && (
+          <p className="mt-1.5 text-[12px] text-ink-3">
+            Complete companies only.{" "}
+            <Link href="/companies?view=filling" className="underline decoration-line underline-offset-2 hover:decoration-ink">
+              {net.data.stats.being_filled.toLocaleString()} being filled
+            </Link>{" "}
+            — each still missing a site, a description, hiring proof or a referrer with an address.
+          </p>
+        )}
       </header>
 
       {/* ----------------------------------------------------------- filters */}

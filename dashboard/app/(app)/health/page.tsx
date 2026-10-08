@@ -100,6 +100,7 @@ export default function HealthPage() {
       {head}
       <Banner r={r} every={data.agent?.every_minutes ?? 60} hours={data.history.length} />
       <Throughput r={r} />
+      <Referrals r={r} />
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <FillRates r={r} />
         <div className="flex min-w-0 flex-col gap-4">
@@ -164,6 +165,49 @@ function Throughput({ r }: { r: AuditReport }) {
         <Stat label="People re-checked" value={h.contacts_relabelled ?? 0} hint="affiliation" />
         <Stat label="Refused" value={r.rejects.total} hint={r.rejects_24h !== undefined ? `${r.rejects_24h.toLocaleString()} in 24h` : undefined} />
       </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ referrals (the main thing) */
+
+function Referrals({ r }: { r: AuditReport }) {
+  const x = r.referrals;
+  if (!x) return null;
+  if (x.error) {
+    return (
+      <section data-anim className="plate mt-4 px-4 py-3">
+        <h2 className="text-[13.5px] font-semibold">Referrals</h2>
+        <p className="mt-1 text-[12px] text-ink-3">This hour&rsquo;s referral block could not be read: {x.error}</p>
+      </section>
+    );
+  }
+  const bySource = Object.entries(x.addresses_found?.by_source ?? {});
+  const rv = x.reverify;
+  const rc = x.revalidate;
+  return (
+    <section data-anim className="plate mt-4">
+      <div className="flex flex-wrap items-baseline gap-x-3 border-b border-line px-4 py-3">
+        <h2 className="text-[13.5px] font-semibold">Referrals in the last hour</h2>
+        <p className="text-[12px] text-ink-3">
+          {(x.companies_with_email ?? 0).toLocaleString()} companies have a referrer confirmed there now with an address.
+          {x.people_runs?.linkedin_down ? ` LinkedIn search paused: ${x.people_runs.linkedin_down}.` : ""}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 divide-line sm:grid-cols-3 lg:grid-cols-6 lg:divide-x">
+        <Stat label="Ready referrers added" value={x.ready_added ?? 0} hero hint={`${x.ready_added_with_email ?? 0} with an address`} />
+        <Stat label="Addresses by pattern" value={x.addresses_found?.by_pattern ?? 0} hint="confirmed format, MX-checked" />
+        <Stat label="Gained an address" value={x.companies_gained_email ?? 0}
+          hint={x.companies_gained_email == null ? "from the next audit" : "companies, 0 → ≥1"} />
+        <Stat label="Became complete" value={x.companies_became_complete ?? 0} hint="now shown" />
+        <Stat label="Re-confirmed" value={rv?.confirmed ?? 0} hint={`${rv?.downgraded ?? 0} downgraded · ${rv?.inconclusive ?? 0} unclear`} />
+        <Stat label="Companies re-checked" value={rc?.checked ?? 0} hint={`${rc?.newly_failed ?? 0} failed · ${rc?.recovered ?? 0} recovered`} />
+      </div>
+      {bySource.length > 0 && (
+        <p className="border-t border-line px-4 py-2.5 text-[12px] text-ink-3">
+          Addresses on new ready referrers, by source: {bySource.map(([k, n]) => `${k} ${n}`).join(" · ")}
+        </p>
+      )}
     </section>
   );
 }

@@ -7,45 +7,25 @@ is "Name - Role - Company", so we read the name and role straight from the searc
 the company's own pattern (contacts/patterns.py), exactly like the GitHub path.
 
 This is the fix for companies with no public GitHub — the ~1,300 the free channels
-otherwise leave without a lead. Free and unlimited except for the search engine's own
-rate limit, so it is deliberately slow and gapped.
+otherwise leave without a lead. 2026-10-08: the search is the research layer's KEYLESS
+web search (DuckDuckGo read through Jina, then the hosted Exa MCP — paced there, free),
+and a profile is kept only when its headline names the company now (likely-current).
 """
 
 from __future__ import annotations
 
 import logging
 import re
-import time
-from urllib.parse import parse_qs, unquote, urlparse
 
-import httpx
 from sqlmodel import col, select
 
-from jobhunter import CONFIG, channels
+from jobhunter import CONFIG
 from jobhunter.db import Company, Contact, get_session, init_db, utcnow
 
 log = logging.getLogger(__name__)
 
-UA = (CONFIG.get("sources") or {}).get(
-    "user_agent",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
-)
-DDG_HTML = "https://html.duckduckgo.com/html/"
-MIN_GAP_S = float((CONFIG.get("contacts") or {}).get("linkedin_min_gap_seconds", 12))
 MAX_PER_COMPANY = int((CONFIG.get("contacts") or {}).get("linkedin_max_per_company", 8))
-_last_call = 0.0
-# once DuckDuckGo answers with a challenge page it keeps doing so for a while; waiting
-# the full gap before every further attempt would turn a 53-company pass into half an
-# hour of sleeping, so a throttle is remembered and the Exa path is taken directly
-_throttled_until = 0.0
-THROTTLE_BACKOFF_S = float((CONFIG.get("contacts") or {}).get("linkedin_throttle_backoff_seconds", 1800))
-
-_RESULT = re.compile(r'result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', re.S)
-_SNIPPET = re.compile(r'result__snippet"[^>]*>(.*?)</a>', re.S)
 _IN = re.compile(r"(?:[a-z]{2}\.)?linkedin\.com/in/[A-Za-z0-9\-%]+", re.I)
-_CHALLENGE = re.compile(r"(anomaly|captcha|challenge|bots use DuckDuckGo)", re.I)
-# "Firstname Lastname - Software Engineer - Company | LinkedIn"
-_TITLE = re.compile(r"^(?P<name>[^-–|]{2,50}?)\s*[-–|]\s*(?P<role>[^-–|]{2,60}?)(?:\s*[-–|].*)?(?:\s*\|\s*LinkedIn)?\s*$")
 # roles that can refer, in priority order
 _ROLE_HINT = re.compile(
     r"\b(founder|co[- ]?founder|ceo|cto|chief|vp|head of|director|engineering manager|"
@@ -54,116 +34,110 @@ _ROLE_HINT = re.compile(
 _NAME_OK = re.compile(r"^[A-Z][a-zA-Z.'’\-]+(?:\s+[A-Z][a-zA-Z.'’\-]+){1,3}$")
 
 
-def _ddg(query: str, timeout: int = 25) -> tuple[str | None, str | None]:
-    """One search. scrape.do first when it has budget (rotating IPs, no rate limit), else
-    DuckDuckGo direct (free but throttled by IP). Same result HTML either way."""
-    from urllib.parse import quote
-
-    from jobhunter.research import web
-
-    # scrape.do fetches the DDG results page through its proxy pool — no IP rate limit
-    if web.scrapedo_budget()["daily_left"] > 0:
-        html = web.fetch_html_scrapedo(f"{DDG_HTML}?q={quote(query)}", timeout=timeout)
-        if html and not _CHALLENGE.search(html[:6000]) and "result__a" in html:
-            return html, None
-
-    global _last_call, _throttled_until
-    if time.monotonic() < _throttled_until:
-        return None, "search rate-limited (backing off); use exa"
-    wait = MIN_GAP_S - (time.monotonic() - _last_call)
-    if wait > 0:
-        time.sleep(wait)
-    _last_call = time.monotonic()
-    try:
-        r = httpx.get(DDG_HTML, params={"q": query}, headers={"User-Agent": UA},
-                      timeout=timeout, follow_redirects=True)
-    except Exception as e:  # noqa: BLE001
-        channels.record("ddg", False, f"{type(e).__name__}: {str(e)[:100]}")
-        return None, f"{type(e).__name__}: {str(e)[:100]}"
-    if r.status_code != 200 or _CHALLENGE.search(r.text[:6000]):
-        _throttled_until = time.monotonic() + THROTTLE_BACKOFF_S
-        channels.record("ddg", False, f"challenge / HTTP {r.status_code}", cooldown=True)
-        return None, f"search rate-limited (HTTP {r.status_code}); back off"
-    channels.record("ddg", True)
-    return r.text, None
+_EXPERIENCE = re.compile(r"Experience:\s*([^·|\n]{2,80})", re.I)
+# the hosted Exa MCP's profile card: "### AI Engineer - [Sarvam](https://…/company/…) (Current)"
+_CURRENT = re.compile(r"###\s*([^\n]+?)\s+-\s+\[([^\]]{2,80})\]\([^)]*\)\s*\(Current\)", re.I)
+_LI_SUFFIX = re.compile(r"\s*[-–|·]\s*LinkedIn(?:\s+[A-Z][a-z]+)?\s*$")
 
 
-def _target(href: str) -> str:
-    if "uddg=" in href:
-        return unquote(parse_qs(urlparse(href).query).get("uddg", [""])[0])
-    return href
+def _segment_names(segments: list[str], company: str, domain: str | None) -> str | None:
+    """The first headline segment that names the company and not as a former employer."""
+    from jobhunter import guardrails
+
+    for seg in segments:
+        if guardrails.names_company(seg, company, domain) and not guardrails._EX.search(seg):
+            return seg
+    return None
 
 
-def _people_from(html: str) -> list[dict]:
-    """Extract {name, role, url} from a search page's LinkedIn profile results."""
+def people_from_results(results: list[dict], company: str, domain: str | None = None) -> list[dict]:
+    """{name, role, url, headline} from web-search hits on linkedin.com/in — a person only
+    when the result's own headline ("Name - Role - Company | LinkedIn", the profile's
+    "(Current)" position, or its "Experience:" line) names THIS company, and not as a
+    former employer. Pure, so the tests call it."""
     out: list[dict] = []
     seen: set[str] = set()
-    for href, title in _RESULT.findall(html):
-        url = _target(href)
-        if not _IN.search(url):
-            continue
-        url = url.split("?")[0]
-        slug = url.rstrip("/").split("/in/")[-1].lower()
-        if slug in seen:
-            continue
-        text = re.sub(r"<[^>]+>", "", title)
-        text = re.sub(r"\s+", " ", text).strip()
-        m = _TITLE.match(text)
-        if not m:
-            continue
-        name = m.group("name").strip(" .")
-        role = m.group("role").strip()
-        # a real person name (not "500+ connections" or a company handle)
-        if not _NAME_OK.match(name) or not _ROLE_HINT.search(role):
-            continue
-        seen.add(slug)
-        # the whole result title ("Name - Role - Company") is the headline the
-        # affiliation check reads: the company has to be in it, and not as "ex-"
-        out.append({"name": name, "role": role, "url": url, "headline": text})
-    return out
-
-
-def _people_from_exa(name: str, limit: int, query: str | None = None) -> tuple[list[dict], str | None]:
-    """The same question through the research layer's web search (Exa MCP — the
-    keyless Agent Reach path — with the keyed API behind it), for the days DuckDuckGo
-    answers with a challenge page. A result is a person only when it is a
-    linkedin.com/in URL whose headline names a referring role and mentions the company."""
-    from jobhunter.research import web
-
-    stem = re.sub(r"[^a-z0-9]", "", name.lower())
-    bare = re.sub(r"(ai|labs?|hq|inc|tech|technologies|app)$", "", stem) or stem
-    out: list[dict] = []
-    seen: set[str] = set()
-    query = query or f'site:linkedin.com/in "{name}" (software engineer OR founding engineer OR CTO OR founder)'
-    res = web.search(query, limit=max(limit, 10))
-    for r in res.get("results") or []:
+    for r in results or []:
         url = (r.get("url") or "").split("?")[0]
         if not _IN.search(url):
             continue
         slug = url.rstrip("/").split("/in/")[-1].lower()
         if slug in seen:
             continue
-        person = (r.get("title") or "").split("|")[0].split(" - ")[0].strip(" .")
+        title = _LI_SUFFIX.sub("", (r.get("title") or "").strip())
+        title = re.sub(r"\s*\.\.\.$", "", title)
+        parts = [x.strip(" .") for x in re.split(r"\s+[-–|]\s+|\s*\|\s*", title) if x.strip(" .")]
+        if not parts:
+            continue
+        person = parts[0]
         snippet = (r.get("snippet") or "").strip()
-        headline = snippet.splitlines()[0].strip() if snippet else ""
-        blob = re.sub(r"[^a-z0-9]", "", snippet.lower())
-        if not _NAME_OK.match(person) or not _ROLE_HINT.search(headline) or bare not in blob:
+        first_line = snippet.splitlines()[0].strip() if snippet else ""
+        cur = _CURRENT.search(snippet)
+        exp = _EXPERIENCE.search(snippet)
+        hit = None
+        role = ""
+        from jobhunter import guardrails
+
+        if cur and guardrails.names_company(cur.group(2), company, domain):
+            role, hit = cur.group(1).strip(), f"{cur.group(1).strip()} at {cur.group(2).strip()} (current)"
+        if not hit:
+            segs = parts[1:] + [x.strip() for x in re.split(r"\s*\|\s*", first_line) if x.strip()]
+            seg = _segment_names(segs, company, domain)
+            if seg:
+                hit = seg
+                role = next((x for x in segs if _ROLE_HINT.search(x)), seg)
+        if not hit and exp and _segment_names([exp.group(1)], company, domain):
+            hit = f"Experience: {exp.group(1).strip()}"
+            role = next((x for x in parts[1:] if _ROLE_HINT.search(x)), first_line or hit)
+        if not _NAME_OK.match(person) or not hit:
             continue
         seen.add(slug)
-        out.append({"name": person, "role": headline[:120], "url": url,
-                    "headline": f"{r.get('title') or ''} — {headline}"[:300]})
-    return out[:limit], res.get("error")
+        out.append({"name": person, "role": role[:120], "url": url, "headline": hit[:300]})
+    return out
 
 
-def _search(name: str, query: str, max_people: int) -> tuple[list[dict], str, str | None]:
-    """(people, via, error) — DuckDuckGo, then Exa when it is throttled."""
-    html, err = _ddg(query)
-    if not err:
-        return _people_from(html)[:max_people], "ddg", None
-    people, exa_err = _people_from_exa(name, max_people, query)
-    if not people and exa_err:
-        return [], "exa", f"{err}; exa: {exa_err}"
-    return people, "exa", None
+def _search(name: str, query: str, max_people: int, domain: str | None = None) -> tuple[list[dict], str, str | None]:
+    """(people, via, error) through the research layer's KEYLESS web search — DuckDuckGo
+    read through Jina first, then the hosted Exa MCP — never a metered backend."""
+    from jobhunter.research import web
+
+    if web.search_down():
+        return [], "keyless", "search rate-limited: every keyless backend is cooling down"
+    res = web.search(query, limit=max(max_people, 10), only=web.KEYLESS)
+    people = people_from_results(res.get("results") or [], name, domain)[:max_people]
+    if not people and res.get("error") and not res.get("results"):
+        return [], res.get("backend") or "keyless", f"search failed: {res['error'][:160]}"
+    return people, res.get("backend") or "keyless", None
+
+
+#: the queries, best referrers first (2026-10-08): engineers, engineering leads, founders, recruiters
+ROLE_QUERIES = {
+    "engineers": "engineer",
+    "leads": '"engineering manager" OR "senior engineer" OR "staff engineer" OR "tech lead"',
+    "founders": "founder OR co-founder OR CTO",
+    "recruiters": 'recruiter OR "talent acquisition"',
+}
+
+
+def search_role(company_id: int, kind: str, *, max_people: int = MAX_PER_COMPANY) -> dict:
+    """One keyless search for one kind of referrer at one company — with the city for
+    a Bengaluru / Hyderabad company, since "Acme engineer" alone finds every Acme."""
+    init_db()
+    with get_session() as session:
+        c = session.get(Company, company_id)
+        if c is None:
+            return {"error": f"no company {company_id}"}
+        name, domain, city, region = c.name, c.domain, c.city, c.hq_region
+    where = f" {city}" if city and (region == "india" or city in ("Bengaluru", "Bangalore", "Hyderabad")) else ""
+    query = f'"{name}" {ROLE_QUERIES[kind]}{where} site:linkedin.com/in'
+    people, via, err = _search(name, query, max_people, domain)
+    if where and not people and not err:
+        # the city narrowed it to nothing: the headline check still keeps it to this company
+        people, via, err = _search(name, f'"{name}" {ROLE_QUERIES[kind]} site:linkedin.com/in', max_people, domain)
+    if err:
+        return {"company": name, "kind": kind, "error": err}
+    added = _save(company_id, people, via) if people else 0
+    return {"company": name, "kind": kind, "found": len(people), "added": added, "via": via}
 
 
 def _save(company_id: int, people: list[dict], via: str) -> int:
@@ -174,7 +148,8 @@ def _save(company_id: int, people: list[dict], via: str) -> int:
 
     with get_session() as session:
         c = session.get(Company, company_id)
-        domain, pattern = c.domain, c.email_pattern
+        # only a pattern the company's own addresses confirm (contacts/addresses.py)
+        domain, pattern = c.domain, patterns.confirmed(c)
         existing = {(k.name or "").lower() for k in session.exec(
             select(Contact).where(Contact.company_id == company_id)).all()}
         added = 0
@@ -224,9 +199,9 @@ def find_for_company(company_id: int, *, max_people: int = MAX_PER_COMPANY) -> d
         c = session.get(Company, company_id)
         if c is None:
             return {"error": f"no company {company_id}"}
-        name = c.name
+        name, c_domain = c.name, c.domain
     query = f'site:linkedin.com/in "{name}" (software engineer OR founding engineer OR CTO OR founder)'
-    people, via, err = _search(name, query, max_people)
+    people, via, err = _search(name, query, max_people, c_domain)
     if err:
         return {"company": name, "error": err}
     if not people:
@@ -244,10 +219,10 @@ def find_founders(company_id: int, *, max_people: int = 6) -> dict:
         c = session.get(Company, company_id)
         if c is None:
             return {"error": f"no company {company_id}"}
-        name = c.name
+        name, c_domain = c.name, c.domain
     query = (f'site:linkedin.com/in "{name}" (founder OR co-founder OR CEO OR CTO OR '
              f'"head of engineering" OR "VP engineering" OR "head of talent" OR "HR")')
-    people, via, err = _search(name, query, max_people)
+    people, via, err = _search(name, query, max_people, c_domain)
     if err:
         return {"company": name, "error": err}
     added = _save(company_id, people, via) if people else 0
@@ -363,4 +338,5 @@ def find_pending(limit: int = 30, *, tiers: tuple[str, ...] = ("tier1", "tier2",
     return out
 
 
-__all__ = ["find_for_company", "find_founders", "find_pending"]
+__all__ = ["find_for_company", "find_founders", "find_pending", "search_role", "people_from_results",
+           "ROLE_QUERIES"]

@@ -35,7 +35,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
 from sqlmodel import select
@@ -431,7 +431,16 @@ def company_detail(company_id: int) -> dict:
 
 # ------------------------------------------------------------------ company-first
 
-def company_list(*, include_rejects: bool = False, include_overrated: bool = False) -> dict:
+def _missing(c: Company) -> list[str]:
+    try:
+        val = json.loads(c.complete_missing or "[]")
+    except (TypeError, ValueError):
+        return []
+    return val if isinstance(val, list) else []
+
+
+def company_list(*, include_rejects: bool = False, include_overrated: bool = False,
+                 include_incomplete: bool = False) -> dict:
     """One row per company — never one per role.
 
     The atlas answers "which companies are in this stage", which necessarily places a
@@ -454,6 +463,11 @@ def company_list(*, include_rejects: bool = False, include_overrated: bool = Fal
         # for; list rows only by the pay floor (india.py)
         companies = [c for c in companies if (c.list_key and c.status != "below_pay_bar")
                      or (not c.overrated and c.status is None)]
+    # only complete companies are shown by default (guardrails.complete_bar, 2026-10-08):
+    # website, a description that passes, hiring proof, a ready referrer with an address
+    being_filled = sum(1 for c in companies if not c.complete)
+    if not include_incomplete:
+        companies = [c for c in companies if c.complete]
     keep = {c.id for c in companies}
 
     jobs_by: dict[int, list[Job]] = defaultdict(list)
@@ -554,6 +568,8 @@ def company_list(*, include_rejects: bool = False, include_overrated: bool = Fal
                 } if best else None,
             },
             "ready": bool(referrers) and c.hiring_status in ("verified", "role_missing"),
+            "complete": bool(c.complete),
+            "missing": _missing(c),
         })
 
     # what we can trust first, then remote-from-anywhere (the currency-gap thesis only
@@ -588,8 +604,41 @@ def company_list(*, include_rejects: bool = False, include_overrated: bool = Fal
             "with_referrals": sum(1 for r in out if r["referrals"]["reachable"]),
             "ready": sum(1 for r in out if r["ready"]),
             "on_lists": sum(1 for r in out if r["list_key"]),
+            "shown_complete": sum(1 for r in out if r["complete"]),
+            "being_filled": being_filled,
         },
     }
+
+
+def filling(*, limit: int = 2000) -> dict:
+    """The companies not yet complete — what each is missing, best first: the ★ list, then
+    the ones only a referrer short, then by priority (db.people_order)."""
+    from jobhunter import guardrails
+    from jobhunter.db import people_order
+
+    init_db()
+    with get_session() as session:
+        rows = session.exec(select(Company)).all()
+        counts = guardrails.ready_counts(session)
+    rows = [c for c in rows if not c.complete and (
+        (c.list_key and c.status != "below_pay_bar")
+        or (c.status is None and not c.overrated and (c.tier or "unknown") != "reject"))]
+    rows.sort(key=lambda c: (*people_order(c), -(c.priority_score or 0), c.name))
+    parts = Counter(m for c in rows for m in _missing(c))
+    out = []
+    for c in rows[:limit]:
+        r, e = counts.get(c.id, (0, 0))
+        try:
+            failed = json.loads(c.recheck_failed) if c.recheck_failed else {}
+        except (TypeError, ValueError):
+            failed = {}
+        out.append({
+            "id": c.id, "name": c.name, "website": c.website, "description": c.description,
+            "city": c.city, "region": c.hq_region, "list_key": c.list_key, "list_rank": c.list_rank,
+            "priority_score": c.priority_score, "missing": _missing(c), "recheck_failed": failed,
+            "ready_referrers": r, "ready_with_email": e, "hiring_status": c.hiring_status,
+        })
+    return {"companies": out, "total": len(rows), "missing_counts": dict(parts.most_common())}
 
 
 # ------------------------------------------------------------------ trust
@@ -668,7 +717,7 @@ def _reachable(c: Company, people: list[Contact]) -> list[Contact]:
     return out
 
 
-def build(*, include_rejects: bool = False) -> dict:
+def build(*, include_rejects: bool = False, include_incomplete: bool = False) -> dict:
     """The atlas as a market map: industry-chain layers, segments as nodes.
 
     A node is a segment ("Fintech & payments", "LLM inference & AI infrastructure"),
@@ -698,6 +747,10 @@ def build(*, include_rejects: bool = False) -> dict:
     if not include_rejects:
         companies = [c for c in companies if (c.tier or "unknown") != "reject"
                      and not c.overrated and c.status is None]
+    # the map shows complete companies by default (guardrails.complete_bar)
+    being_filled = sum(1 for c in companies if not c.complete)
+    if not include_incomplete:
+        companies = [c for c in companies if c.complete]
     keep_ids = {c.id for c in companies}
 
     jobs_by: dict[int, list[Job]] = defaultdict(list)
@@ -805,6 +858,7 @@ def build(*, include_rejects: bool = False) -> dict:
             "companies": len(companies_out), "bets": bets, "near": near,
             "chokepoints": sum(1 for n in out_nodes if n["chokepoint"]),
             "bottlenecks": sum(1 for n in out_nodes if n["bottleneck"]),
+            "being_filled": being_filled, "complete_only": not include_incomplete,
         },
         "definitions": {
             "chokepoint": "A segment holding at least one bet: hiring proven on their own site, a fresher role, "

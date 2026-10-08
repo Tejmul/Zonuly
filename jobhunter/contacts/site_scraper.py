@@ -94,3 +94,43 @@ def _name_near(html: str, email: str, window: int = 300) -> str | None:
     if first.lower() in {"the", "our", "we", "contact", "email", "get", "all", "read", "learn"}:
         return None
     return f"{first} {last}"
+
+
+TEAM_PATHS = ["/team", "/about", "/about-us", "/people", "/company"]
+
+
+def team_from_jina(website: str, domain: str | None = None, *, max_pages: int = 3) -> list[tuple[SiteContact, str]]:
+    """The team / about pages read through Jina Reader (the research layer's page read —
+    a JS-rendered page the direct fetch sees empty). (contact, page url) for every named
+    address on the company's own domain. A shared inbox is dropped; a name is only what
+    sits next to the address."""
+    from jobhunter.research import web
+
+    if not website:
+        return []
+    base = website.rstrip("/")
+    if not base.startswith("http"):
+        base = f"https://{base}"
+    domain = domain or base.split("//")[-1].split("/")[0].removeprefix("www.")
+    found: dict[str, tuple[SiteContact, str]] = {}
+    read = 0
+    for path in TEAM_PATHS:
+        if read >= max_pages:
+            break
+        url = base + path
+        page = web.read(url, prefer="jina", timeout=40)
+        text = page.get("text") or ""
+        if not text or page.get("error"):
+            continue
+        read += 1
+        for raw in set(_EMAIL_RE.findall(text)):
+            email = raw.lower().strip(".")
+            if _ASSET.search(email) or not _same_domain(email, domain) or email in found:
+                continue
+            if _GENERIC.match(email) or _RECRUIT.match(email):
+                continue      # an inbox reaches the company, not a referrer
+            name = _name_near(text, raw)
+            if not name:
+                continue
+            found[email] = (SiteContact(email=email, name=name, source="site"), url)
+    return list(found.values())

@@ -270,6 +270,10 @@ def rows(key: str) -> dict:
             "ready": bool(reachable),
             "pay_bar": india.pay_label(c),
             "below_bar_reason": c.status_reason if c.status == "below_pay_bar" else None,
+            # the complete bar (guardrails.complete_bar): the page lists complete rows first
+            # and the rest under "Still being filled" — no hand-picked row disappears
+            "complete": bool(c.complete),
+            "missing": json.loads(c.complete_missing) if c.complete_missing else [],
         })
 
     return {
@@ -289,6 +293,8 @@ def rows(key: str) -> dict:
             "hiring_proven": sum(1 for r in out if r["hiring_status"] == "verified"),
             "by_city": _count(r["city"] for r in out if r["city"]),
             "below_bar": len(below),
+            "complete": sum(1 for r in out if r["complete"]),
+            "being_filled": sum(1 for r in out if not r["complete"]),
         },
     }
 

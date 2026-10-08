@@ -355,6 +355,10 @@ def _jina_ddg_search(query: str, limit: int, timeout: int) -> list[SearchResult]
     if r.status_code >= 400:
         _jddg_fail(f"HTTP {r.status_code}")
         return []
+    if "bots use DuckDuckGo" in r.text[:2000] or "complete the following challenge" in r.text[:2000]:
+        # DuckDuckGo challenged Jina's address: a failure (so the cooldown engages), not "no results"
+        _jddg_fail("DuckDuckGo bot challenge")
+        return []
     results = _parse_jina_ddg(r.text, limit)
     _jddg_state["fails"] = 0
     channels.record("jina-ddg", True, f"{len(results)} results")

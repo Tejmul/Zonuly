@@ -337,7 +337,18 @@ def overview() -> dict:
         new_this_week = session.exec(
             select(func.count()).select_from(Job).where(col(Job.scraped_at) >= week_ago)
         ).one()
-        companies = session.exec(select(func.count()).select_from(Company)).one()
+        companies_all = session.exec(select(func.count()).select_from(Company)).one()
+        # the count the dashboard shows is complete companies (guardrails.complete_bar)
+        # same visibility as the Companies page and /api/companies/filling: active, not
+        # overrated or a reject — unless a hand-picked list names it
+        visible = col(Company.status).is_(None) & (
+            col(Company.list_key).is_not(None)
+            | ((col(Company.overrated).is_(None) | (Company.overrated == False))  # noqa: E712
+               & (col(Company.tier).is_(None) | (Company.tier != "reject"))))
+        companies = session.exec(select(func.count()).select_from(Company).where(
+            visible, Company.complete == True)).one()  # noqa: E712
+        filling_n = session.exec(select(func.count()).select_from(Company).where(
+            visible, (col(Company.complete).is_(None)) | (Company.complete == False))).one()  # noqa: E712
         contacts = session.exec(select(func.count()).select_from(Contact)).one()
         verified = session.exec(
             select(func.count()).select_from(Contact).where(Contact.confidence == "verified")
@@ -456,6 +467,8 @@ def overview() -> dict:
         "by_source": by_source,
         "new_this_week": new_this_week,
         "companies": companies,
+        "companies_all": companies_all,
+        "companies_filling": filling_n,
         "contacts": {"total": contacts, "verified": verified, "by_confidence": by_confidence,
                      "by_affiliation": by_affiliation},
         "top_matches": [_job_dict(j) for j in top],
@@ -622,6 +635,7 @@ def list_companies(
     hiring: str | None = Query(None, description="verified | role_missing | not_authorized | unreachable"),
     sort: str = Query("priority", description="priority | score | tier | pay | name"),
     include_overrated: bool = Query(False, description="also list overrated, quarantined and merged companies"),
+    include_incomplete: bool = Query(False, description="also list companies still being filled (not complete)"),
     limit: int = Query(200, le=5000),
 ) -> list[dict]:
     from jobhunter import admission, india
@@ -634,6 +648,10 @@ def list_companies(
         out = []
         for c in companies:
             if _hidden(c, include_overrated):
+                continue
+            # complete only by default (guardrails.complete_bar): site, description, hiring
+            # proof, a ready referrer with an address — /api/companies/filling has the rest
+            if not include_incomplete and not c.complete:
                 continue
             contacts_n = n_contacts.get(c.id, 0)
             if has_contacts is True and contacts_n == 0:
@@ -686,6 +704,8 @@ def list_companies(
                     "hiring_status": c.hiring_status,
                     "hiring_evidence": c.hiring_evidence,
                     "careers_url": c.careers_url,
+                    "complete": bool(c.complete),
+                    "missing": _json_or(c.complete_missing, []),
                 }
             )
         tier_rank = {"tier1": 0, "tier2": 1, "prospect": 2, "unknown": 3, "reject": 4}
@@ -700,11 +720,22 @@ def list_companies(
 
 
 @app.get("/api/network")
-def company_network(include_rejects: bool = False) -> dict:
-    """The company atlas: layers, nodes, dependencies, chokepoints, bottlenecks."""
+def company_network(include_rejects: bool = False, include_incomplete: bool = False) -> dict:
+    """The company atlas: layers, nodes, dependencies, chokepoints, bottlenecks — complete
+    companies only unless `include_incomplete`."""
     from jobhunter import network
 
-    return network.build(include_rejects=include_rejects)
+    return network.build(include_rejects=include_rejects, include_incomplete=include_incomplete)
+
+
+@app.get("/api/companies/filling")
+def companies_filling(limit: int = Query(2000, le=10000)) -> dict:
+    """The companies still being filled — not yet complete — each with the parts it is
+    missing (website | description | hiring | referrer_email), best first: the ★ list,
+    then the ones only a referrer short, then by priority."""
+    from jobhunter import network
+
+    return network.filling(limit=limit)
 
 
 class NewCompany(BaseModel):
@@ -743,7 +774,8 @@ def add_company(body: NewCompany) -> dict:
 
 
 @app.get("/api/companies/grouped")
-def companies_grouped(include_rejects: bool = False, include_overrated: bool = False) -> dict:
+def companies_grouped(include_rejects: bool = False, include_overrated: bool = False,
+                      include_incomplete: bool = False) -> dict:
     """One row per company, with its roles grouped by family and its referrers attached.
 
     Distinct from /api/network, which is a map: there a company legitimately appears in
@@ -751,7 +783,8 @@ def companies_grouped(include_rejects: bool = False, include_overrated: bool = F
     """
     from jobhunter import network
 
-    return network.company_list(include_rejects=include_rejects, include_overrated=include_overrated)
+    return network.company_list(include_rejects=include_rejects, include_overrated=include_overrated,
+                                include_incomplete=include_incomplete)
 
 
 # ---------------------------------------------------------------- hand-picked lists

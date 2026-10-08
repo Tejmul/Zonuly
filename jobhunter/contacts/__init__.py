@@ -43,12 +43,13 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
         if company is None:
             return {"error": f"no company {company_id}"}
         name, website, domain = company.name, company.website, company.domain
-        github_org, known_pattern = company.github_org, company.email_pattern
-        existing = {
-            c.email.lower() for c in session.exec(
-                select(Contact).where(Contact.company_id == company_id, col(Contact.email).is_not(None))
-            ).all()
-        }
+        # only a pattern the company's own addresses confirm is ever rendered (addresses.py)
+        github_org, known_pattern = company.github_org, patterns.confirmed(company)
+        held = session.exec(select(Contact).where(Contact.company_id == company_id)).all()
+        existing = {c.email.lower() for c in held if c.email}
+        # a person found without an address is kept by their GitHub login (dedup)
+        existing_logins = {(c.handle or "").lower() for c in held if c.handle} | {
+            (c.github or "").rstrip("/").split("/")[-1].lower() for c in held if c.github}
 
     stats = {"company": name, "github": 0, "site": 0, "pattern": 0, "hunter": 0, "verified": 0, "added": 0}
     people: list[dict] = []
@@ -95,16 +96,18 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                 )
                 stats["site"] += 1
 
-        # ---- 3. learn the pattern from whatever real addresses we now hold
+        # ---- 3. the pattern: only one already confirmed by ≥2 of their addresses (or one +
+        # their own page). This run's addresses are voted on after they are stored (step 7).
         domain = domain or (website or "").split("//")[-1].split("/")[0].removeprefix("www.") or None
-        pattern = known_pattern or (patterns.learn_from_contacts(people, domain) if domain else None)
+        pattern = known_pattern
 
         # ---- 4. Hunter, only if we still have no pattern and there are names to apply it to
         nameless = [p for p in people if p["name"] and not p["email"]]
         if not pattern and domain and nameless and hunter.available():
             result = await hunter.domain_search(http, domain)
             if result:
-                pattern = result.pattern
+                # Hunter's own pattern is a claim, not evidence: its addresses are stored
+                # and voted on with the rest (addresses.learn), the claim is not used
                 for e in result.emails:
                     full = " ".join(x for x in (e.get("first_name"), e.get("last_name")) if x) or None
                     people.append(
@@ -119,8 +122,8 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                     )
                     stats["hunter"] += 1
 
-        # ---- 5. fill the gaps by pattern, verifying each guess
-        if domain:
+        # ---- 5. fill the gaps by a CONFIRMED pattern, MX-checked (no SMTP probing)
+        if domain and pattern:
             for p in nameless:
                 cands = patterns.candidates(p["name"], domain, pattern)
                 if not cands:
@@ -143,9 +146,20 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
             company_row.domain = domain
         for p in people:
             email = (p.get("email") or "").lower().strip()
-            if not email or email in existing:
+            login = (p.get("handle") or "").lower()
+            if not email:
+                # a GitHub person with no address is still a referrer when the evidence
+                # places them there now (a public org member, a commit inside 12 months)
+                # and they have a real name — the confirmed pattern can address them later
+                if not (p["source"] == "github" and login and login not in existing_logins and p.get("name")
+                        and (p.get("org_member") or p.get("last_commit_at"))):
+                    continue
+            elif email in existing:
                 continue
-            existing.add(email)
+            if email:
+                existing.add(email)
+            if login:
+                existing_logins.add(login)
             g = guardrails.vet_contact(
                 session, company=company_row, name=p.get("name"), email_addr=email, source=p["source"],
                 channel="github" if p["source"] == "github" else p["source"], url=p.get("github") or website,
@@ -154,13 +168,13 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                 commit_repo=p.get("commit_repo"), team_page=p.get("team_page"), published_at=p.get("published_at"),
                 smtp=p.get("smtp") or (p["confidence"] if p["source"] == "hunter" else None),
                 profile_email=bool(p.get("profile_email")))
-            if g is None or not g.get("email"):
+            if g is None or not (g.get("email") or (g.get("name") and g["affiliation"] in guardrails.READY)):
                 continue
             if g["confidence"] == "verified":
                 stats["verified"] += 1
             stats[g["affiliation"]] = stats.get(g["affiliation"], 0) + 1
             # label them on the way in: an unranked contact list is not a queue
-            verdict = roles.classify(p.get("role"), name=g.get("name"), email=g["email"],
+            verdict = roles.classify(p.get("role"), name=g.get("name"), email=g.get("email"),
                                      bio=p.get("verify_note"))
             if verdict.role_class == "other" and p["source"] == "github":
                 # No bio, but they commit to the company's public repos: that is an
@@ -168,7 +182,7 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                 verdict = roles.RoleVerdict("engineer", verdict.seniority,
                                             roles.RANKS.get("engineer", roles.DEFAULT_RANK),
                                             "commits in the company's public repos", "source")
-            if g.get("email_kind") == "generic":
+            if g.get("email_kind") == "generic" and g.get("email"):
                 verdict = roles.RoleVerdict("other", None, 9, f"shared inbox {g['email'].split('@')[0]}@", "alias")
             stats[verdict.role_class] = stats.get(verdict.role_class, 0) + 1
             session.add(
@@ -176,7 +190,7 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                     company_id=company_id,
                     name=g.get("name"),
                     role=p.get("role"),
-                    email=g["email"],
+                    email=g.get("email"),
                     github=p.get("github"),
                     x_handle=p.get("x_handle"),
                     source=p["source"],
@@ -200,7 +214,6 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
         company = session.get(Company, company_id)
         if company:
             company.github_org = company.github_org or org
-            company.email_pattern = company.email_pattern or pattern
             company.domain = company.domain or domain
             company.contacts_found_at = utcnow()
             session.add(company)
@@ -231,43 +244,17 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
 
 
 def fill_by_pattern(company_id: int) -> int:
-    """Give every named, address-less contact at a company its pattern address.
+    """Learn the company's address format from its own addresses and give every ready,
+    named referrer without an address the confirmed pattern's address (addresses.fill):
+    ≥2 agreeing examples or one + their own page, MX-checked, labelled pattern-guessed.
+    Returns how many addresses were added."""
+    from jobhunter.contacts import addresses
 
-    The pattern is learned once (from a commit email, a published address, Hunter) and
-    was only ever applied to the people found in that same run — the LinkedIn profiles
-    saved earlier, before the pattern was known, stayed without an address. This closes
-    that gap. Each guess is MX-checked and labelled `pattern-guessed`, never verified,
-    and is skipped if the address already belongs to someone else on record.
-    """
-    init_db()
-    with get_session() as session:
-        company = session.get(Company, company_id)
-        if company is None or not company.email_pattern or not company.domain:
-            return 0
-        pattern, domain, cname = company.email_pattern, company.domain, company.name
-        rows = session.exec(select(Contact).where(Contact.company_id == company_id)).all()
-        taken = {(p.email or "").lower() for p in rows if p.email}
-        filled = 0
-        for p in rows:
-            if p.email or not p.name:
-                continue
-            cands = patterns.candidates(p.name, domain, pattern)
-            if not cands or cands[0] in taken:
-                continue
-            email, verdict = verify.best_candidate(cands)
-            if not email:
-                continue
-            p.email = email
-            p.confidence = verdict.confidence if verdict else "pattern-guessed"
-            p.email_kind = "company"      # a pattern address is on their domain; who they are is unchanged
-            p.research_notes = f"{p.research_notes or ''}\nemail by pattern {pattern}".strip()
-            session.add(p)
-            taken.add(email)
-            filled += 1
-        session.commit()
-    if filled:
-        log.info("contacts: %s -> %d addresses by pattern %s", cname, filled, pattern)
-    return filled
+    try:
+        return int(addresses.fill(company_id).get("added", 0))
+    except Exception as e:  # noqa: BLE001 — an address pass must never fail discovery
+        log.warning("contacts: pattern fill for %s failed: %s", company_id, e)
+        return 0
 
 
 def discover_for_high_matches(limit: int = 5, *, refresh_days: int = 30,

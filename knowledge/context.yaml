@@ -330,6 +330,12 @@ modules:
     path: jobhunter/guardrails.py
     layer_order: 0
     summary: One validator per field every extraction passes before it is written (name, description, funding, hiring, person, address, affiliation); provenance per field in field_meta + extraction_write; refusals in extraction_reject; completeness 0–100.
+  - id: module:jobhunter.referrals
+    label: referrals.py
+    path: jobhunter/referrals.py
+    layer_order: 2
+    summary: Referrals are the main thing (2026-10-08) — the people step the tick runs FIRST (★ list, then companies only a referrer short, then priority; GitHub + site, team pages via Jina, the open web, LinkedIn keyless; target 3 ready, 1 with an address), the evidence-based address pattern, 90-day referrer re-verification, the rolling company re-check (~30/tick), the audit's referrals block. Shown = company.complete (guardrails.complete_bar — site + description + hiring proof + a ready referrer with an address); /api/companies/filling lists the rest.
+    depends_on: [module:jobhunter.db, module:jobhunter.guardrails, module:jobhunter.contacts, module:jobhunter.research]
   - id: module:jobhunter.audit
     label: audit.py
     path: jobhunter/audit.py
@@ -360,7 +366,7 @@ modules:
     label: contacts/linkedin_public.py
     path: jobhunter/contacts/linkedin_public.py
     layer_order: 2
-    summary: Public LinkedIn profiles via web search, never a login — DuckDuckGo first, the Exa MCP (Agent Reach, keyless) when throttled; emails resolved from the company's own pattern.
+    summary: Public LinkedIn profiles via the KEYLESS web search (DuckDuckGo through Jina, then the hosted Exa MCP), never a login — engineers, engineering leads, founders, recruiters, the city for India companies; kept only when the headline names the company now; emails only from a confirmed pattern.
   - id: module:jobhunter.contacts.roles
     label: contacts/roles.py
     path: jobhunter/contacts/roles.py
@@ -1211,7 +1217,7 @@ features:
     implemented_in: [module:jobhunter.contacts]
   - id: feature:email-pattern-inference
     label: Learn the company's email pattern, apply it to every other name, MX-check
-    summary: first.last@ / flast@ / first@ learned from verified examples; results always labelled pattern-guessed.
+    summary: first.last@ / flast@ / first@ learned from the company's own READ addresses (commit/profile, team page, web) — used only when ≥2 agree (or 1 + their page states the format) and the leader is clearly ahead; evidence on company.email_pattern_evidence; ready referrers only, MX-checked, no SMTP probe; always pattern-guessed (the 5/day guessed cap). An unconfirmed pattern's guesses are retracted (2026-10-08, contacts/addresses.py).
     status: built
     stage: stage:contacts
     proposed_by: [arch:plan, arch:architecture, arch:tools, arch:orchestration]

@@ -39,6 +39,8 @@ type Row = {
   // the India ₹20L pay floor (jobhunter/india.py): ok / below / unknown + the quote
   pay_bar?: { state: "ok" | "below" | "unknown" | null; evidence?: string | null; label?: string | null } | null;
   below_bar_reason?: string | null;
+  // the complete bar (guardrails.complete_bar) and the parts still missing
+  complete?: boolean; missing?: string[];
   // What the pipeline itself has read, next to the report's claims. Newer backends
   // only — every one of these may be missing.
   funding_stage?: string | null; funding_round_label?: string | null; funding_amount_usd_m?: number | null;
@@ -66,6 +68,9 @@ function payOf(c: Row) {
   if (pp && typeof pp === "object") return pp;
   return { score: typeof pp === "number" ? pp : null, band: c.pay_power_band ?? null, why: null };
 }
+const MISSING: Record<string, string> = {
+  website: "no website", description: "no description", hiring: "no hiring proof", referrer_email: "no referrer email",
+};
 const SOURCE: Record<string, string> = {
   github: "GitHub", site: "their site", pattern: "email pattern", hunter: "Hunter", "linkedin-public": "LinkedIn (public)",
 };
@@ -135,6 +140,135 @@ export default function ListPage() {
     with_people: 0, reachable: 0, ready: 0, by_city: {},
   };
 
+  // complete rows first; the rest under "Still being filled" — no hand-picked row disappears
+  const shown = rows.filter((c) => c.complete !== false);
+  const filling = rows.filter((c) => c.complete === false);
+  const renderRow = (c: Row) => {
+    const isOpen = open === c.id;
+    return (
+      <li key={c.id} data-row>
+        <div className={`${COLS} px-4 py-2.5 transition-colors hover:bg-surface-2`}>
+          <span className="tnum text-right text-[11px] text-ink-3">{c.rank}</span>
+          <button onClick={() => setOpen(isOpen ? null : c.id)} aria-expanded={isOpen} aria-label="Details" className="cursor-pointer">
+            <ChevronRight size={13} className={`text-ink-3 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
+          </button>
+          <button onClick={() => setOpen(isOpen ? null : c.id)} className="min-w-0 cursor-pointer text-left">
+            <span className="flex items-center gap-2">
+              <span className="truncate text-[13px] font-medium">{c.name}</span>
+              {c.ready && <span className="chip chip-solid">ready</span>}
+              {c.complete === false && (c.missing ?? []).filter((m) => m !== "website").map((m) => <span key={m} className="chip">{MISSING[m] ?? m}</span>)}
+              {c.category === "large-tech" && <span className="chip">large tech</span>}
+              {!c.website && <span className="chip" title={c.website_note ?? ""}>no website</span>}
+              {c.overrated && <span className="chip chip-strike" title={c.hype_reason ?? "Too well known to be underrated"}>overrated</span>}
+              {typeof c.priority_score === "number" && Number.isFinite(c.priority_score) && (
+                <span className="chip tnum" title={c.priority_why ?? "Priority score"}>P{Math.round(c.priority_score)}</span>
+              )}
+            </span>
+            <span className="block truncate text-[11.5px] text-ink-3">{c.what ?? "—"}</span>
+          </button>
+          <span className="truncate text-[12px] text-ink-2">{c.city ?? "—"}</span>
+          <span className="min-w-0"><ListFunding c={c} /></span>
+          <span className="text-right"><PayCell {...payOf(c)} /></span>
+          <span
+            className="tnum truncate text-[11.5px] text-ink-2"
+            title={c.ctc_kind === "reported" ? "A publicly posted, role-specific figure" : c.ctc_kind === "indicative" ? "Indicative market range from the report — not the company's promise" : ""}
+          >
+            {c.ctc ? `${c.ctc_kind === "indicative" ? "~" : ""}${c.ctc}` : "—"}
+          </span>
+          <span className={`tnum text-right text-[12px] ${c.roles.total ? "" : "text-ink-3"}`}>
+            {c.roles.total ? `${c.roles.total}${c.roles.fresher ? ` · ${c.roles.fresher} fr` : ""}` : "—"}
+          </span>
+          <span className={`tnum text-right text-[12px] ${c.people.total ? "" : "text-ink-3"}`}>
+            {c.people.total ? `${c.people.total} · ${c.people.reachable} ask` : "—"}
+          </span>
+          <span className="min-w-0"><HiringCell status={c.hiring_status} roles={c.hiring_roles} /></span>
+          <OperatorOnly>
+            <button
+              onClick={() => findOne(c.id)}
+              disabled={busy.has(c.id) || busy.has("all")}
+              className="inline-flex h-7 cursor-pointer items-center gap-1 justify-self-end rounded-md border border-line bg-surface px-2 text-[11px] text-ink-2 transition-colors hover:text-ink disabled:opacity-50"
+              title="GitHub commits → their site → email pattern → Hunter"
+            >
+              {busy.has(c.id) ? <Loader2 size={11} className="animate-spin" /> : <UserSearch size={11} />}
+              people
+            </button>
+          </OperatorOnly>
+        </div>
+
+        {isOpen && (
+          <div className="grid gap-5 border-t border-line bg-surface-2 px-4 py-4 md:grid-cols-3">
+            <div>
+              <p className="marginal">Who to ask</p>
+              {c.people.best ? (
+                <div className="mt-2 text-[12px]">
+                  <p><span className="font-medium">{c.people.best.name ?? "unnamed"}</span>
+                    <span className="text-ink-3"> — {c.people.best.label}</span></p>
+                  <p className="tnum mt-0.5 text-[11.5px] text-ink-3">{c.people.best.email} · {c.people.best.confidence}</p>
+                  <p className="mt-1.5 text-[11.5px] text-ink-3">
+                    {c.people.reachable} of {c.people.total} could refer · {c.people.verified} verified addresses
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-2 text-[12px] text-ink-3">
+                  {c.people.total ? `${c.people.total} found, none with a usable address yet.` : "Nobody found yet."}
+                </p>
+              )}
+              {Object.keys(c.people.by_source).length > 0 && (
+                <p className="mt-2 text-[11px] text-ink-3">
+                  {Object.entries(c.people.by_source).map(([k, n]) => `${n} via ${SOURCE[k] ?? k}`).join(" · ")}
+                </p>
+              )}
+              {c.email_pattern && <p className="tnum mt-1 text-[11px] text-ink-3">pattern {c.email_pattern}</p>}
+            </div>
+            <div>
+              <p className="marginal">Roles on their board</p>
+              {c.roles.titles.length ? (
+                <ul className="mt-2 space-y-1 text-[12px]">
+                  {c.roles.titles.map((t) => <li key={t} className="truncate">{t}</li>)}
+                  {c.roles.total > c.roles.titles.length && (
+                    <li className="text-ink-3">+{c.roles.total - c.roles.titles.length} more</li>
+                  )}
+                </ul>
+              ) : (
+                <p className="mt-2 text-[12px] text-ink-3">
+                  {c.ats ? "Board found, no fitting roles on it." : "No public job board found yet."}
+                </p>
+              )}
+              {c.hiring_evidence && (
+                <p className="mt-3 border-l-2 border-line pl-2.5 text-[11.5px] leading-relaxed text-ink-3 italic [overflow-wrap:anywhere]">{c.hiring_evidence}</p>
+              )}
+            </div>
+            <div>
+              <p className="marginal">From the report</p>
+              <dl className="mt-2 grid grid-cols-[5rem_1fr] gap-y-1 text-[12px]">
+                <dt className="text-ink-3">Stage</dt><dd>{c.stage ?? "—"}</dd>
+                <dt className="text-ink-3">Raised</dt><dd>{c.funding ?? "—"}</dd>
+                <dt className="text-ink-3">Size</dt><dd>{c.size ?? "not verified"}</dd>
+                <dt className="text-ink-3">CTC</dt><dd>{c.ctc ?? "—"}{c.ctc_kind === "indicative" ? <span className="text-ink-3"> (indicative)</span> : c.ctc_kind === "reported" ? <span className="text-ink-3"> (reported)</span> : null}</dd>
+              </dl>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {c.website && (
+                  <a href={c.website} target="_blank" rel="noreferrer" className="text-[11.5px] underline decoration-line underline-offset-2 hover:decoration-ink">
+                    {c.website.replace(/^https?:\/\/(www\.)?/, "")}
+                  </a>
+                )}
+                {c.careers_url && (
+                  <a href={c.careers_url} target="_blank" rel="noreferrer" className="text-[11.5px] underline decoration-line underline-offset-2 hover:decoration-ink">careers</a>
+                )}
+              </div>
+              <Link
+                href={`/companies/${c.id}`}
+                className="group mt-3 inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 text-[11.5px] font-medium transition-colors hover:bg-paper"
+              >
+                Everything we know
+                <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </div>
+          </div>
+        )}
+      </li>
+    );
+  };
   return (
     <div ref={root} className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -214,139 +348,31 @@ export default function ListPage() {
             <span className="marginal">Hiring</span>
             <span />
           </div>
-          {rows.length === 0 ? (
-            <p className="px-4 py-8 text-[13px] text-ink-3">Nothing matches.</p>
+          {shown.length === 0 ? (
+            <p className="px-4 py-8 text-[13px] text-ink-3">
+              {rows.length ? "No company on this list is complete yet — every one is below, being filled." : "Nothing matches."}
+            </p>
           ) : (
             <ul className="divide-y divide-line">
-              {rows.map((c) => {
-                const isOpen = open === c.id;
-                return (
-                  <li key={c.id} data-row>
-                    <div className={`${COLS} px-4 py-2.5 transition-colors hover:bg-surface-2`}>
-                      <span className="tnum text-right text-[11px] text-ink-3">{c.rank}</span>
-                      <button onClick={() => setOpen(isOpen ? null : c.id)} aria-expanded={isOpen} aria-label="Details" className="cursor-pointer">
-                        <ChevronRight size={13} className={`text-ink-3 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
-                      </button>
-                      <button onClick={() => setOpen(isOpen ? null : c.id)} className="min-w-0 cursor-pointer text-left">
-                        <span className="flex items-center gap-2">
-                          <span className="truncate text-[13px] font-medium">{c.name}</span>
-                          {c.ready && <span className="chip chip-solid">ready</span>}
-                          {c.category === "large-tech" && <span className="chip">large tech</span>}
-                          {!c.website && <span className="chip" title={c.website_note ?? ""}>no website</span>}
-                          {c.overrated && <span className="chip chip-strike" title={c.hype_reason ?? "Too well known to be underrated"}>overrated</span>}
-                          {typeof c.priority_score === "number" && Number.isFinite(c.priority_score) && (
-                            <span className="chip tnum" title={c.priority_why ?? "Priority score"}>P{Math.round(c.priority_score)}</span>
-                          )}
-                        </span>
-                        <span className="block truncate text-[11.5px] text-ink-3">{c.what ?? "—"}</span>
-                      </button>
-                      <span className="truncate text-[12px] text-ink-2">{c.city ?? "—"}</span>
-                      <span className="min-w-0"><ListFunding c={c} /></span>
-                      <span className="text-right"><PayCell {...payOf(c)} /></span>
-                      <span
-                        className="tnum truncate text-[11.5px] text-ink-2"
-                        title={c.ctc_kind === "reported" ? "A publicly posted, role-specific figure" : c.ctc_kind === "indicative" ? "Indicative market range from the report — not the company's promise" : ""}
-                      >
-                        {c.ctc ? `${c.ctc_kind === "indicative" ? "~" : ""}${c.ctc}` : "—"}
-                      </span>
-                      <span className={`tnum text-right text-[12px] ${c.roles.total ? "" : "text-ink-3"}`}>
-                        {c.roles.total ? `${c.roles.total}${c.roles.fresher ? ` · ${c.roles.fresher} fr` : ""}` : "—"}
-                      </span>
-                      <span className={`tnum text-right text-[12px] ${c.people.total ? "" : "text-ink-3"}`}>
-                        {c.people.total ? `${c.people.total} · ${c.people.reachable} ask` : "—"}
-                      </span>
-                      <span className="min-w-0"><HiringCell status={c.hiring_status} roles={c.hiring_roles} /></span>
-                      <OperatorOnly>
-                        <button
-                          onClick={() => findOne(c.id)}
-                          disabled={busy.has(c.id) || busy.has("all")}
-                          className="inline-flex h-7 cursor-pointer items-center gap-1 justify-self-end rounded-md border border-line bg-surface px-2 text-[11px] text-ink-2 transition-colors hover:text-ink disabled:opacity-50"
-                          title="GitHub commits → their site → email pattern → Hunter"
-                        >
-                          {busy.has(c.id) ? <Loader2 size={11} className="animate-spin" /> : <UserSearch size={11} />}
-                          people
-                        </button>
-                      </OperatorOnly>
-                    </div>
-
-                    {isOpen && (
-                      <div className="grid gap-5 border-t border-line bg-surface-2 px-4 py-4 md:grid-cols-3">
-                        <div>
-                          <p className="marginal">Who to ask</p>
-                          {c.people.best ? (
-                            <div className="mt-2 text-[12px]">
-                              <p><span className="font-medium">{c.people.best.name ?? "unnamed"}</span>
-                                <span className="text-ink-3"> — {c.people.best.label}</span></p>
-                              <p className="tnum mt-0.5 text-[11.5px] text-ink-3">{c.people.best.email} · {c.people.best.confidence}</p>
-                              <p className="mt-1.5 text-[11.5px] text-ink-3">
-                                {c.people.reachable} of {c.people.total} could refer · {c.people.verified} verified addresses
-                              </p>
-                            </div>
-                          ) : (
-                            <p className="mt-2 text-[12px] text-ink-3">
-                              {c.people.total ? `${c.people.total} found, none with a usable address yet.` : "Nobody found yet."}
-                            </p>
-                          )}
-                          {Object.keys(c.people.by_source).length > 0 && (
-                            <p className="mt-2 text-[11px] text-ink-3">
-                              {Object.entries(c.people.by_source).map(([k, n]) => `${n} via ${SOURCE[k] ?? k}`).join(" · ")}
-                            </p>
-                          )}
-                          {c.email_pattern && <p className="tnum mt-1 text-[11px] text-ink-3">pattern {c.email_pattern}</p>}
-                        </div>
-                        <div>
-                          <p className="marginal">Roles on their board</p>
-                          {c.roles.titles.length ? (
-                            <ul className="mt-2 space-y-1 text-[12px]">
-                              {c.roles.titles.map((t) => <li key={t} className="truncate">{t}</li>)}
-                              {c.roles.total > c.roles.titles.length && (
-                                <li className="text-ink-3">+{c.roles.total - c.roles.titles.length} more</li>
-                              )}
-                            </ul>
-                          ) : (
-                            <p className="mt-2 text-[12px] text-ink-3">
-                              {c.ats ? "Board found, no fitting roles on it." : "No public job board found yet."}
-                            </p>
-                          )}
-                          {c.hiring_evidence && (
-                            <p className="mt-3 border-l-2 border-line pl-2.5 text-[11.5px] leading-relaxed text-ink-3 italic [overflow-wrap:anywhere]">{c.hiring_evidence}</p>
-                          )}
-                        </div>
-                        <div>
-                          <p className="marginal">From the report</p>
-                          <dl className="mt-2 grid grid-cols-[5rem_1fr] gap-y-1 text-[12px]">
-                            <dt className="text-ink-3">Stage</dt><dd>{c.stage ?? "—"}</dd>
-                            <dt className="text-ink-3">Raised</dt><dd>{c.funding ?? "—"}</dd>
-                            <dt className="text-ink-3">Size</dt><dd>{c.size ?? "not verified"}</dd>
-                            <dt className="text-ink-3">CTC</dt><dd>{c.ctc ?? "—"}{c.ctc_kind === "indicative" ? <span className="text-ink-3"> (indicative)</span> : c.ctc_kind === "reported" ? <span className="text-ink-3"> (reported)</span> : null}</dd>
-                          </dl>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {c.website && (
-                              <a href={c.website} target="_blank" rel="noreferrer" className="text-[11.5px] underline decoration-line underline-offset-2 hover:decoration-ink">
-                                {c.website.replace(/^https?:\/\/(www\.)?/, "")}
-                              </a>
-                            )}
-                            {c.careers_url && (
-                              <a href={c.careers_url} target="_blank" rel="noreferrer" className="text-[11.5px] underline decoration-line underline-offset-2 hover:decoration-ink">careers</a>
-                            )}
-                          </div>
-                          <Link
-                            href={`/companies/${c.id}`}
-                            className="group mt-3 inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 text-[11.5px] font-medium transition-colors hover:bg-paper"
-                          >
-                            Everything we know
-                            <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
-                          </Link>
-                        </div>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
+              {shown.map(renderRow)}
             </ul>
           )}
         </div>
       </div>
+
+      {filling.length > 0 && (
+        <details className="plate group">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-[12.5px] text-ink-2 hover:text-ink">
+            <ChevronRight size={13} className="text-ink-3 transition-transform duration-200 group-open:rotate-90" />
+            <span className="font-medium">Still being filled</span>
+            <span className="chip tnum">{filling.length}</span>
+            <span className="marginal ml-auto">missing a description, hiring proof or a referrer with an address — filled first every tick</span>
+          </summary>
+          <div className="overflow-x-auto border-t border-line">
+            <ul className="min-w-[1080px] divide-y divide-line">{filling.map(renderRow)}</ul>
+          </div>
+        </details>
+      )}
 
       <BelowBar rows={data.below_bar ?? []} floor={data.pay_floor_lpa ?? 20} />
 
