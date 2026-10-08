@@ -29,9 +29,11 @@ dependencies = [
 # not a library — nothing in jobhunter imports it. Prefer installing it in its own
 # environment: pipx install "agent-reach @ <the URL below>". This extra exists for
 # anyone who wants it inside the project venv instead: `uv sync --extra research`.
-# PyPI's agent-reach is stale at 0.1.0; the GitHub archive is 1.5.x.
+# PyPI's agent-reach is stale at 0.1.0; the GitHub archive is 1.5.x. Pinned to a release
+# tag: the main-branch zip changes on every upstream push, its hash in uv.lock stops
+# matching, and every install (CI included) fails before anything runs.
 research = [
-    "agent-reach @ https://github.com/Panniantong/Agent-Reach/archive/refs/heads/main.zip",
+    "agent-reach @ https://github.com/Panniantong/Agent-Reach/archive/refs/tags/v1.5.0.zip",
 ]
 dev = [
     "pytest>=8",

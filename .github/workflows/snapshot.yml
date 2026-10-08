@@ -16,4 +16,4 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --frozen --no-dev
       - run: gunzip -k demo.db.gz
-      - run: uv run python scripts/smoke.py --db demo.db
+      - run: uv run --frozen --no-dev python scripts/smoke.py --db demo.db
