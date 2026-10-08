@@ -288,7 +288,7 @@ targeting:
       - lyft
       - airbnb
       - twitter
-      - snap
+      - =snap
       - tiktok
       - bytedance
       - spotify
@@ -301,7 +301,7 @@ targeting:
       - snowflake
       - atlassian
       - dropbox
-      - zoom
+      - =zoom
       - slack
       - servicenow
       - workday
@@ -309,7 +309,7 @@ targeting:
       - cloudflare
       - datadog
       - mongodb
-      - elastic
+      - =elastic
       - hubspot
       - doordash
       - instacart
@@ -350,6 +350,53 @@ targeting:
       - autodesk
       - expedia
       - booking com
+      # listed companies: thousands of applicants per opening, whatever the round on record (2026-10-08)
+      listed:
+      - affirm
+      - robinhood
+      - sofi
+      - =toast
+      - doordash
+      - lyft
+      - =snap
+      - shopify
+      - atlassian
+      - hubspot
+      - =zoom
+      - okta
+      - =elastic
+      - confluent
+      - hashicorp
+      - =unity
+      - roblox
+      - duolingo
+      - palantir
+      - crowdstrike
+      - zscaler
+      - servicenow
+      - salesforce
+      - oracle
+      - ibm
+      - adobe
+      - intel
+      - amd
+      - qualcomm
+      - workday
+      - paypal
+      - =block
+      - =square
+      - etsy
+      - ebay
+      - spotify
+      - dropbox
+      - =box
+      - asana
+      - monday.com
+      - klaviyo
+      - samsara
+      - gitlab
+      - digitalocean
+      - freshworks
       ai_labs:
       - openai
       - anthropic

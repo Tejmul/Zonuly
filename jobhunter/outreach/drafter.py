@@ -13,7 +13,7 @@ import re
 
 from sqlmodel import col, select
 
-from jobhunter import CONFIG, guardrails
+from jobhunter import CONFIG, guardrails, openrouter
 from jobhunter.db import Company, Contact, Email, Job, get_session, init_db, utcnow
 
 log = logging.getLogger(__name__)
@@ -208,6 +208,20 @@ def _cooldown(session, contact_id: int, company_id: int, candidate_id: int) -> s
     return None
 
 
+def _draft_call(prompt: str) -> dict | None:
+    from jobhunter import llm
+
+    return llm.chat_json(
+        prompt,
+        DRAFT_SYSTEM,
+        temperature=0.6,
+        num_predict=600,
+        alias="writer",         # a human reads this one; it is worth the better model
+        purpose="draft",
+        default=None,
+    )
+
+
 def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = True,
               candidate_id: int = 1, force: bool = False) -> dict:
     """Create one draft email in the review queue, gated: the facts it may use are
@@ -215,7 +229,7 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
     init_db()
     from datetime import timedelta
 
-    from jobhunter import llm, resume
+    from jobhunter import resume
     from jobhunter.outreach import gates
 
     with get_session() as session:
@@ -227,6 +241,11 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
             return {"error": f"not a confirmed-current referrer ({contact.affiliation or 'unchecked'}: "
                              f"{contact.affiliation_evidence or 'no evidence on record'})"}
         company = session.get(Company, contact.company_id)
+        # the targeting decision holds here too: no asks into an overrated, merged or
+        # quarantined company — the hand-picked list is the exception, as everywhere
+        if company is not None and not company.list_key and (company.overrated or company.status):
+            why = company.overrated_reason or company.status_reason or company.status or "overrated"
+            return {"error": f"{company.name} is not a target ({why})"}
         job = session.get(Job, job_id) if job_id else None
         if job is None:
             # fresher roles first, then remote-from-anywhere, then the matcher's score
@@ -281,13 +300,20 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
 
         from jobhunter.outreach.researcher import research_contact
 
-        brief = asyncio.run(research_contact(contact_id, job_db_id)) or {}
+        try:
+            brief = asyncio.run(research_contact(contact_id, job_db_id)) or {}
+        except openrouter.BudgetExceeded as e:
+            # the drafting call below would be refused for the same reason: say so, don't crash
+            return {"error": f"model budget: {e}", "budget": True}
+        except Exception as e:  # noqa: BLE001 — research only adds a hook; the gate still checks the draft
+            log.warning("research for contact %s failed, drafting without it: %s", contact_id, e)
+            brief = {}
 
     repos = ", ".join(r.get("name", "") for r in (brief.get("repos") or [])[:3]) or "(none found)"
     profile_text = resume.profile_summary(max_chars=1400)
 
-    data = llm.chat_json(
-        DRAFT_PROMPT.format(
+    try:
+        data = _draft_call(DRAFT_PROMPT.format(
             user_name=USER_NAME,
             user_headline=USER_HEADLINE,
             profile=profile_text,
@@ -302,14 +328,9 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
             job_title=job_title,
             job_where=job_where,
             match_reasons=job_reasons or "(not scored)",
-        ),
-        DRAFT_SYSTEM,
-        temperature=0.6,
-        num_predict=600,
-        alias="writer",         # a human reads this one; it is worth the better model
-        purpose="draft",
-        default=None,
-    )
+        ))
+    except openrouter.BudgetExceeded as e:
+        return {"error": f"model budget: {e}", "budget": True}
     if not isinstance(data, dict) or not data.get("body"):
         return {"error": "LLM produced no usable draft"}
 
@@ -380,7 +401,10 @@ def draft_for_bets(limit: int = 10, *, candidate_id: int = 1) -> list[dict]:
                 .order_by(col(Job.is_senior), col(Job.remote_anywhere).desc(), col(Job.match_score).desc())
             ).first()
             lead = leads[0]
-            out.append({"company": company.name, "lead": lead.name, **draft_for(lead.id, job.id if job else None, candidate_id=candidate_id)})
+            r = draft_for(lead.id, job.id if job else None, candidate_id=candidate_id)
+            out.append({"company": company.name, "lead": lead.name, **r})
+            if r.get("budget"):
+                break   # every later draft would be refused the same way
     return out
 
 
@@ -495,5 +519,8 @@ def draft_for_high_matches(limit: int = 5, *, per_company: int = 2) -> list[dict
                 targets.append((c.id, best_job.id if best_job else None))
 
     for contact_id, job_id in targets[:limit]:
-        out.append(draft_for(contact_id, job_id))
+        r = draft_for(contact_id, job_id)
+        out.append(r)
+        if r.get("budget"):
+            break   # every later draft would be refused the same way
     return out

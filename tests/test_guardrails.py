@@ -67,8 +67,10 @@ def test_a_commit_is_not_employment():
 
 
 def test_only_confirmed_current_people_are_ready():
-    assert g.is_ready(Contact(company_id=1, source="github", affiliation="verified-current", email_kind="personal"))
-    assert g.is_ready(Contact(company_id=1, source="linkedin-public", affiliation="likely-current"))
+    assert g.is_ready(Contact(company_id=1, source="github", affiliation="verified-current", email_kind="personal",
+                              github="https://github.com/zidan"))
+    assert g.is_ready(Contact(company_id=1, source="linkedin-public", affiliation="likely-current",
+                              name="Priya Rao", linkedin="https://linkedin.com/in/priyarao"))
     assert not g.is_ready(Contact(company_id=1, source="github", affiliation="unconfirmed"))
     assert not g.is_ready(Contact(company_id=1, source="web", affiliation="generic", email_kind="generic"))
     assert not g.is_ready(Contact(company_id=1, source="github"))          # never checked is not ready
@@ -231,3 +233,44 @@ def test_a_channel_failing_most_calls_alerts_but_a_small_sample_does_not():
     assert len(alerts) == 1 and "exa-mcp" in alerts[0]
     assert audit.stall_check(progress_last_hour=5, tick_ran=True, channel_rates={},
                              openrouter={"ok": 1, "fail": 20})
+
+
+def test_compound_role_mailboxes_are_shared_inboxes_not_referrers():
+    from jobhunter import guardrails as g
+
+    for addr in ("infosec-compliance@observe.ai", "security-team@acme.com", "careers.india@acme.com"):
+        assert g.email(addr).value[1] == "generic", addr
+    for addr in ("kailash.bysani@acme.com", "priya.design@acme.com", "zidan@magentic.ai"):
+        assert g.email(addr).value[1] != "generic", addr
+
+
+def test_is_ready_rechecks_the_address_for_rows_labelled_before_the_rule():
+    from jobhunter import guardrails as g
+    from jobhunter.db import Contact
+
+    old_row = Contact(company_id=1, name="Infosec", email="infosec-compliance@observe.ai", source="site",
+                      affiliation="verified-current", email_kind="company")
+    assert not g.is_ready(old_row)
+    person = Contact(company_id=1, name="Zidan", email="zidan@magentic.ai", source="github",
+                     affiliation="verified-current", email_kind="company")
+    assert g.is_ready(person)
+
+
+def test_format_examples_are_not_people():
+    from jobhunter import guardrails as g
+
+    for addr in ("first.last@observe.ai", "jane-doe@observe.ai", "firstname.lastname@acme.com",
+                 "john.doe@acme.com", "your.name@acme.com", "flast@acme.com"):
+        assert not g.email(addr).ok, addr
+    for addr in ("jane.dsouza@acme.com", "first@firstround.com", "lastrada@acme.com"):
+        assert g.email(addr).ok, addr
+
+
+def test_a_nameless_address_is_not_a_referrer():
+    from jobhunter import guardrails as g
+    from jobhunter.db import Contact
+
+    bare = Contact(company_id=1, email="datadeletion@observe.ai", source="site",
+                   affiliation="likely-current", email_kind="company")
+    assert not g.is_ready(bare)
+    assert g.email("doe@observe.ai").ok is False

@@ -516,6 +516,15 @@ def person_name(raw: str | None) -> Check:
 _EMAIL = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 _NOISE_LOCAL = re.compile(r"^(noreply|no-reply|donotreply|do-not-reply|mailer-daemon|postmaster|abuse|"
                           r"bounce|unsubscribe|notifications?|example|test)$", re.I)
+#: A careers page that says "write to first.last@acme.com" is showing a format, not a
+#: person: scraped as-is, these became "likely-current referrers" (2026-10-08 rehearsal).
+_PLACEHOLDER_LOCAL = re.compile(
+    r"^(first|firstname|fname|given)[._-]?(last|lastname|lname|surname|family)$|"
+    r"^(f|first)[._-]?(l|last)$|^flast$|^firstl$|"
+    r"^(john|jane)[._-]?(doe|smith)$|^j[._-]?doe$|^doe$|"
+    r"^(your|my)[._-]?(name|email|mail|id)$|^(name|yourname|username|user|someone|somebody|person|employee)$",
+    re.I,
+)
 GENERIC_LOCAL = {
     "info", "hello", "hi", "hey", "hola", "contact", "contactus", "contact-us", "support", "sales", "team",
     "press", "media", "pr", "marketing", "partnerships", "partnership", "partners", "business", "biz",
@@ -526,6 +535,22 @@ GENERIC_LOCAL = {
     "investors", "ir", "social", "events", "newsletter", "apply", "general", "webmaster", "dpo",
     "grievance", "compliance", "finance", "payments", "studio", "design", "growth", "success",
 }
+#: Words that make a mailbox a function, not a person, wherever they sit in the local
+#: part: infosec-compliance@, security-team@, careers.india@. GENERIC_LOCAL minus the
+#: words a person's address can carry ("hi", "team", "design" …), plus compound pieces.
+ROLE_TOKENS = (GENERIC_LOCAL - {
+    "hi", "hey", "hola", "team", "people", "founders", "studio", "design", "growth", "success", "care",
+    "connect", "mail", "email", "general", "service", "social", "events", "community", "business", "biz",
+    "office",
+}) | {"infosec", "sec", "trust", "safety", "gdpr", "dmca", "soc", "noc", "alerts", "audit", "risk",
+      "tickets", "ticket", "talentacquisition", "workwithus", "joinus", "noreply", "donotreply",
+      "datadeletion", "dataprotection", "datarequest", "datarequests", "dsar", "optout", "unsubscribe"}
+
+
+def _role_mailbox(local: str) -> bool:
+    return any(t in ROLE_TOKENS for t in re.split(r"[-._+0-9]+", local) if t)
+
+
 FREEMAIL = {
     "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "yahoo.com",
     "ymail.com", "yahoo.co.in", "yahoo.co.uk", "icloud.com", "me.com", "mac.com", "proton.me",
@@ -547,7 +572,9 @@ def email(raw: str | None, *, domain: str | None = None) -> Check:
     local, host = e.split("@", 1)
     if _NOISE_LOCAL.match(local) or host.endswith("noreply.github.com") or host in ("example.com", "localhost"):
         return _no("a no-reply or relay address", raw)
-    if local in GENERIC_LOCAL or local.split("+")[0] in GENERIC_LOCAL:
+    if _PLACEHOLDER_LOCAL.match(local):
+        return _no("a format example (first.last@), not a person", raw)
+    if local in GENERIC_LOCAL or local.split("+")[0] in GENERIC_LOCAL or _role_mailbox(local):
         return Check(True, (e, "generic"), confidence="high")
     if domain:
         reg = admission.registrable(domain.lower()) or domain.lower()
@@ -1014,21 +1041,41 @@ def relabel_contact(p: Contact, company: Company | None) -> dict:
                       team_page=team_page, linkedin_headline=headline,
                       published_at=published_at if kind == "company" else None)
     # a label the GitHub pass already proved (membership, a dated commit) is not lowered
-    keep = p.affiliation in READY and p.affiliation_source in ("org-member", "recent-commit",
-                                                               "company-address", "profile-company")
+    # — unless the address it rested on is now known to be an inbox or a format example
+    keep = (p.affiliation in READY and p.affiliation_source in ("org-member", "recent-commit",
+                                                                "company-address", "profile-company")
+            and kind != "generic" and "_email_reject" not in out)
     if not keep:
         out.update({"affiliation": aff.label, "affiliation_source": aff.source,
                     "affiliation_evidence": aff.evidence[:300]})
     if p.email and p.source == "github" and "email" not in out:
-        out["confidence"] = address_confidence(source="github", email_kind=kind, last_commit_at=p.last_commit_at)
+        tier = address_confidence(source="github", email_kind=kind, last_commit_at=p.last_commit_at)
+        # a profile's public address was written as verified, and the row does not record
+        # that it came from the profile — so a re-check never lowers it on a missing commit
+        # date; only a rule that now refuses the address (an inbox) can
+        if not (p.confidence == "verified" and tier == "scraped" and kind != "generic"):
+            out["confidence"] = tier
     if kind == "generic":
         out["role_class"], out["referral_rank"] = "other", 9
     return out
 
 
 def is_ready(contact: Contact) -> bool:
-    """May this person be offered as a referrer? Confirmed current, not an inbox."""
-    return (contact.affiliation in READY) and contact.email_kind != "generic"
+    """May this person be offered as a referrer? Confirmed current, not an inbox.
+
+    The address is re-read here rather than trusted from email_kind, so a rule that
+    grows (a new role-mailbox word) protects rows labelled before it existed."""
+    if contact.affiliation not in READY or contact.email_kind == "generic":
+        return False
+    # a referral is asked of a person: an address with no name and no profile behind it
+    # is a mailbox someone pasted on a page, whatever domain it is on
+    if not (contact.name or contact.handle or contact.github or contact.linkedin):
+        return False
+    if contact.email:
+        chk = email(contact.email)
+        if not chk.ok or chk.value[1] == "generic":
+            return False
+    return True
 
 
 # ------------------------------------------------------------------ completeness
