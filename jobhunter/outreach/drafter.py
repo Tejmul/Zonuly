@@ -242,9 +242,12 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
                              f"{contact.affiliation_evidence or 'no evidence on record'})"}
         company = session.get(Company, contact.company_id)
         # the targeting decision holds here too: no asks into an overrated, merged or
-        # quarantined company — the hand-picked list is the exception, as everywhere
-        if company is not None and not company.list_key and (company.overrated or company.status):
-            why = company.overrated_reason or company.status_reason or company.status or "overrated"
+        # quarantined company — the hand-picked list is the exception, as everywhere, except
+        # for the India pay floor, which holds for list rows too (india.py, 2026-10-08)
+        if company is not None and (company.status == "below_pay_bar" or (
+                not company.list_key and (company.overrated or company.status))):
+            why = (company.status_reason if company.status == "below_pay_bar" else None) or \
+                company.overrated_reason or company.status_reason or company.status or "overrated"
             return {"error": f"{company.name} is not a target ({why})"}
         job = session.get(Job, job_id) if job_id else None
         if job is None:

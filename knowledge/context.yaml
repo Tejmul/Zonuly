@@ -315,6 +315,11 @@ stages:
 
 # ------------------------------------------------------------------ modules (layering: nothing imports upward)
 modules:
+  - id: module:jobhunter.india
+    label: india.py
+    path: jobhunter/india.py
+    layer_order: 2
+    summary: India — the ₹20 LPA pay floor (company.status below_pay_bar, re-checked every tick; any evidence ≥ 20 keeps, stipends ignored, unknown keeps) and keyless discovery of underrated Bengaluru / Hyderabad startups (Indian funding RSS, DDG-via-Jina search, FundedIQ city pages, YC India, India ATS boards), each admitted only with a quote naming the company and the city.
   - id: module:jobhunter.targeting
     label: targeting.py
     path: jobhunter/targeting.py
@@ -1810,6 +1815,19 @@ features:
     proposed_by: [arch:plan-v3]
     serves: [guarantee:no-fabrication, constraint:free-tier]
     implemented_in: [module:jobhunter.research]
+  - id: feature:india-pay-floor
+    label: India ₹20 LPA pay floor — an India company whose best full-time fresher pay evidence is under ₹20L is hidden (status below_pay_bar), never deleted, back on new evidence
+    summary: Tejmul 2026-10-08. Evidence = company.ppo_lpa, non-senior postings' stated full-time band and PPO, the ★ list's ctc upper bound; stipends are not full-time pay; unknown pay keeps ("pay unknown"). Applies to ★ list rows too (shown collapsed on the list page). Companies, atlas, lists, fill queues and drafting respect it. targeting.india.min_lpa.
+    status: built
+    stage: stage:score
+    implemented_in: [module:jobhunter.india]
+  - id: feature:india-discovery
+    label: India discovery — underrated Bengaluru / Hyderabad startups, recently funded preferred, every one through the admission gate with a city quote
+    summary: Tejmul 2026-10-08. Tick step after the ★ list and fill work (tick.india_discovery_per_tick, 30); new rows filled right after the ★ list for 30 days (db.fill_order via company.india_found_at).
+    status: built
+    stage: stage:scrape
+    implemented_in: [module:jobhunter.india]
+    serves: [constraint:free-tier]
 # ------------------------------------------------------------------ decisions (FINAL-PLAN §3 + this session)
 decisions:
   - id: decision:d22-underrated-only

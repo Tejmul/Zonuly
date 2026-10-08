@@ -940,6 +940,50 @@ def set_hiring(session, company: Company, status: str, *, roles: list[str] | Non
     return final
 
 
+# ------------------------------------------------------------------ India city (2026-10-08)
+
+_BASED = r"(?:{c})[\s-]*(?:based|headquartered|hq)|(?:based|headquartered|hq|offices?|located|office)\s+(?:out\s+)?(?:in|at)\s+(?:{c})"
+
+
+def india_city(text: str | None, *, name: str, domain: str | None = None, own_page: bool = False) -> Check:
+    """Does this quote place the company in Bengaluru or Hyderabad? Only those two count
+    (targeting.india). The quote must name the company unless it was read off the
+    company's own site or ATS (`own_page`). "<city>-based" / "based in <city>" is high
+    confidence; a bare mention (a job location, a dateline) is medium."""
+    if not text:
+        return _no("no quote")
+    city = admission.india_city(text)
+    if not city:
+        other = admission.india_other_city(text)
+        return _no(f"names {other}, not Bengaluru or Hyderabad" if other else "names neither Bengaluru nor Hyderabad")
+    if not own_page and not names_company(text, name, domain):
+        return _no("the quote does not name the company")
+    aliases = "|".join(re.escape(a) for a in admission.INDIA_CITIES)
+    based = re.search(_BASED.format(c=aliases), text, re.I)
+    other = admission.india_other_city(text)
+    if other and not based:
+        # "Delhi-based X opens a Bengaluru office" is fine; "X (Mumbai) … investors in Bengaluru" is not
+        return _no(f"names {other} as well, and nothing says the company is based in {city}")
+    return Check(True, city, confidence="high" if based else "medium")
+
+
+def set_city(session, company: Company, text: str | None, *, source: str | None = None,
+             channel: str | None = None, own_page: bool = False) -> str | None:
+    """Write company.city from a quote that places it in Bengaluru / Hyderabad. A row
+    that already has a city keeps it (a hand-picked list row always does). Returns the
+    city written or agreed, None when the quote was refused."""
+    chk = india_city(text, name=company.name, domain=company.domain, own_page=own_page)
+    if not chk:
+        reject(session, company_id=company.id, field="city", value=(text or "")[:300], reason=chk.reason,
+               source=source, channel=channel)
+        return None
+    if company.list_key and company.city:
+        return company.city
+    put(session, company, "city", chk.value, evidence=(text or "")[:300], source=source, channel=channel,
+        confidence=chk.confidence)
+    return company.city
+
+
 # ------------------------------------------------------------------ contacts
 
 def vet_contact(session, *, company: Company, name: str | None, email_addr: str | None, source: str,

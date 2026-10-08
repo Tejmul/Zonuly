@@ -1,6 +1,6 @@
 # ZoNuLy — context brief
 
-> Generated 2026-10-07T19:18 from the knowledge graph (30738 nodes, 100207 edges). Do not edit — run `python scripts/run.py kg brief`.
+> Generated 2026-10-08T13:43 from the knowledge graph (31400 nodes, 101676 edges). Do not edit — run `python scripts/run.py kg brief`.
 > To query: `kg search <text>` · `kg show <id>` · `kg path <a> <b>` · `kg compose "<problem>"` · to remember: `kg note "<what changed>" --about <id>`.
 
 ## The problem
@@ -19,9 +19,9 @@ An engineer on site in the US/UK/Germany costs ₹1.5–2 crore a year; the same
 
 ## Where the pipeline is right now (live)
 
-- **4301** jobs from 9 sources (ashby 1527, greenhouse 1162, wellfound 1024, hn 265, wwr 168, careers 55, lever 39, yc 31, remoteok 30)
-- **156** scored · status: high_match 37, new 4145, scored 119
-- **4083** companies · **21791** contacts (pattern-guessed 234, scraped 21226, verified 331)
+- **4351** jobs from 9 sources (ashby 1530, greenhouse 1162, wellfound 1024, hn 265, wwr 168, careers 102, lever 39, yc 31, remoteok 30)
+- **156** scored · status: high_match 37, new 4195, scored 119
+- **4320** companies · **22115** contacts (pattern-guessed 293, scraped 20482, verified 1340)
 - emails: draft 1 · replies: none
 - top matches: [85] Backend Engineer — Intern (4 months, in-office) @ ethereal labs (job:3707); [85] Junior AI Engineer @ Silstone Health (job:3902); [85] Data Science Engineer Intern @ Eshal AI (job:3998); [78] Founding Software Engineer @ *Strello Health (job:1219); [78] Founding Full-Stack Engineer @ Arusto (job:3043); [78] Junior AI Engineer @ Planso (job:3085); [78] AI Engineer @ Frequency.cx (job:3129); [78] Founding Engineer for AI Consumer App @ Scalio (job:3592)
 
@@ -186,6 +186,7 @@ Click a node → its companies, bets first, each saying what it is missing.
 - **[BUILT]** HN Who-is-Hiring, RemoteOK, WeWorkRemotely, YC directory — The places a funded 40-person company posts before anyone aggregates it. HN is freeform and needs the model; the rest are feeds. _(in jobhunter.scrapers)_ _(from: PLAN.md — the original build plan, JOBHUNTER-TOOLS.md — tools, services and relationship sourcing, MULTI-AGENT-ORCHESTRATION.md — conductor, supervisors, workers)_
 - **[BUILT]** Hourly audit — is scraping still filling fields, and is every channel answering? — jobhunter/audit.py under launchd (com.zonuly.audit, hourly): per-field fill rates vs one hour and one day ago, rows added, fields written, rejects by reason and channel, Exa MCP / Jina / GitHub / scrape.do / OpenRouter health from channel_hour and the model ledger, 20 writes re-validated, and a STALL / CHANNEL alert with a macOS notification. Report in setting audit:last (+48h history) and logs/audit.log; /health in the dashboard.
  _(in jobhunter.audit)_
+- **[BUILT]** India discovery — underrated Bengaluru / Hyderabad startups, recently funded preferred, every one through the admission gate with a city quote — Tejmul 2026-10-08. Tick step after the ★ list and fill work (tick.india_discovery_per_tick, 30); new rows filled right after the ★ list for 30 days (db.fill_order via company.india_found_at). _(in jobhunter.india)_
 - **[GAP]** No scraper writes companies.yaml — discovery stages, promote audits and merges — Dead website, duplicate domain, missing ATS are caught before the registry that compounds is touched. Default is a preview; --apply refuses on a failing audit. _(from: CHOKEPOINTS.md — a keyless scraper run at the source's rate limit)_
 - **[BUILT]** One dead source never kills a run — Every scraper is individually try/except'd; ScrapeStats.errors records which failed and per_source counts are kept every run. _(in jobhunter.pipeline)_ _(from: MULTI-AGENT-ORCHESTRATION.md — conductor, supervisors, workers, JOBHUNTER-ARCHITECTURE.md — lessons from the MVRX portal)_
 - **[DROPPED]** Per-source circuit breaker with a source_health table — Three consecutive failures disable a source for the cycle. Replaced by simple fault isolation — a run is one shot, not a long workflow. _(from: MULTI-AGENT-ORCHESTRATION.md — conductor, supervisors, workers)_
@@ -278,6 +279,7 @@ companies first; Exa discovery queries target the phrasing. Senior roles are kep
 - **[BUILT]** A low score ranks a role last; it never deletes it — gtm-os has a pytest gate against any auto-reject constant. The user may know something the rubric doesn't. _(in jobhunter.matcher, jobhunter.api)_ _(from: MULTI-AGENT-ORCHESTRATION.md — conductor, supervisors, workers)_
 - **[BUILT]** Deterministic caps override the model — senior title 35, below salary floor 40, thin description 60 — The model is trained toward encouragement; the caps aren't. _(in jobhunter.matcher)_ _(from: FINAL-PLAN.md — the reconciliation)_
 - **[GAP]** Fifth rubric dimension — does this posting allow remote-from-India, sponsor, or sit where a new-grad visa is realistic — DE > UK > US for on-site; remote contractor is the realistic path for US/UK startups. Hard rule — US on-site with no sponsorship statement caps at 45. Must cite the JD sentence it relied on. _(from: FINAL-PLAN-V2.md — the plan against the restated problem)_
+- **[BUILT]** India ₹20 LPA pay floor — an India company whose best full-time fresher pay evidence is under ₹20L is hidden (status below_pay_bar), never deleted, back on new evidence — Tejmul 2026-10-08. Evidence = company.ppo_lpa, non-senior postings' stated full-time band and PPO, the ★ list's ctc upper bound; stipends are not full-time pay; unknown pay keeps ("pay unknown"). Applies to ★ list rows too (shown collapsed on the list page). Companies, atlas, lists, fill queues and drafting respect it. targeting.india.min_lpa. _(in jobhunter.india)_
 - **[BUILT]** Rubric scoring — calibrated-pessimistic screen odds + reasons + gaps — Stack overlap, YOE barrier, early-career signal, domain proximity, company stage. A Staff role scores low on perfect overlap; a Series-A founding role scores high on imperfect overlap. Hand-verified on Notion 75 / Deepgram 65 / Observe.AI 35 / Databricks 15. _(in jobhunter.matcher)_ _(from: PLAN.md — the original build plan, JOBHUNTER-ARCHITECTURE.md — lessons from the MVRX portal, MULTI-AGENT-ORCHESTRATION.md — conductor, supervisors, workers, GEMINI.md — sequential agents, guardrails, provenance, IDEA.md — the problem, stated plainly)_
 - **[GAP]** Triage agent on the cheap alias — worth scoring? region? remote? sponsorship stated? — The middle of the cost gradient — ₹0.05 per JD — so the judge only reads plausible roles. _(from: FINAL-PLAN-V3.md — built from gtm-arch, zon-arch and CHOKEPOINTS; no local model, MULTI-AGENT-ORCHESTRATION.md — conductor, supervisors, workers)_
 - **[BUILT]** job -REQUIRES-> skill, the free explainable half of matching — Skill nodes previously linked only to profile:me, which made them labels rather than a graph. Every job is now matched against the profile's skills in one pass and linked — 3,068 edges over 1,237 jobs — so profile:me -HAS_SKILL-> skill <-REQUIRES- job is a path. "Which of their roles want what I have" and "which of my skills does no target job ask for" are both traversals, at zero model cost.
@@ -529,6 +531,7 @@ Calendar page in the dashboard. Replies can also be recorded by hand (record-rep
 - `jobhunter/contacts/roles.py` — Role classification and referral ranking — founder · senior engineer · engineer · EM · tech HR · recruiter.
 - `jobhunter/enrich.py` — Fills the registry from the research layer — what a company does, who funded it — then re-grades it.
 - `jobhunter/hiring_verify.py` — Corroborates a hiring claim against the company's own ATS board or careers page; marks the unbacked ones not_authorized.
+- `jobhunter/india.py` — India — the ₹20 LPA pay floor (company.status below_pay_bar, re-checked every tick; any evidence ≥ 20 keeps, stipends ignored, unknown keeps) and keyless discovery of underrated Bengaluru / Hyderabad startups (Indian funding RSS, DDG-via-Jina search, FundedIQ city pages, YC India, India ATS boards), each admitted only with a quote naming the company and the city.
 - `jobhunter/kg/` — Knowledge graph — store (SQLite nodes/edges/FTS), context loader, data sync, compose, brief, export. → jobhunter.db
 - `jobhunter/lists.py` — Hand-picked company lists (data/lists/<key>.yaml) — sync to company rows with website verification, rows for the dashboard, the people pass in list order, the GitHub-org audit. → jobhunter.db, jobhunter.contacts
 - `jobhunter/matcher.py` — Resume vector cache, percentile prefilter, rubric scoring with hard-rule caps, counts. → jobhunter.llm, jobhunter.db

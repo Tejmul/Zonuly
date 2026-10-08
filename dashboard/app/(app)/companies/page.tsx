@@ -33,6 +33,8 @@ type Row = {
   pay_basis?: string | null; team_size?: number | null;
   pay_power?: { score: number | null; band: string | null; why: string | null; per_head_usd_k: number | null };
   region: string | null; city?: string | null; list_key?: string | null; list_rank?: number | null;
+  // the India ₹20L pay floor (jobhunter/india.py); below-the-bar rows never reach this page
+  pay_bar?: { state: "ok" | "below" | "unknown" | null; evidence?: string | null; label?: string | null } | null;
   tier: string | null; tier_reason: string | null;
   ppo_lpa: number | null; stipend_inr_month: number | null;
   funding_stage: string | null; hiring_status: string | null; hiring_evidence: string | null;
@@ -237,6 +239,9 @@ function Companies() {
                           {c.list_key && <span className="chip" title="On the ★ India list">★</span>}
                           {c.ready && <span className="chip chip-solid">ready</span>}
                           {c.trust === "bare" && <span className="chip">name only</span>}
+                          {c.pay_bar?.state === "unknown" && (
+                            <span className="chip" title="No stated full-time figure yet — kept; hidden only if a posting or the list says under ₹20L">pay unknown</span>
+                          )}
                           {c.overrated && <span className="chip chip-strike" title={c.hype_reason ?? "Too well known to be underrated"}>overrated</span>}
                           {typeof c.priority_score === "number" && Number.isFinite(c.priority_score) && (
                             <span className="chip tnum" title={c.priority_why ?? "Priority score"}>P{Math.round(c.priority_score)}</span>

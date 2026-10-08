@@ -36,6 +36,9 @@ type Row = {
   };
   searched_at: string | null;
   ready: boolean;
+  // the India ₹20L pay floor (jobhunter/india.py): ok / below / unknown + the quote
+  pay_bar?: { state: "ok" | "below" | "unknown" | null; evidence?: string | null; label?: string | null } | null;
+  below_bar_reason?: string | null;
   // What the pipeline itself has read, next to the report's claims. Newer backends
   // only — every one of these may be missing.
   funding_stage?: string | null; funding_round_label?: string | null; funding_amount_usd_m?: number | null;
@@ -47,6 +50,9 @@ type Row = {
 type Payload = {
   key: string; name: string; title: string | null; description: string; source: string | null;
   companies: Row[];
+  // rows under the India ₹20L floor: hidden from the list itself, shown collapsed below it
+  below_bar?: Row[];
+  pay_floor_lpa?: number;
   stats: {
     companies: number; with_website: number; with_roles: number; with_people: number; ready: number;
     people: number; reachable: number; hiring_proven: number; by_city: Record<string, number>;
@@ -342,6 +348,8 @@ export default function ListPage() {
         </div>
       </div>
 
+      <BelowBar rows={data.below_bar ?? []} floor={data.pay_floor_lpa ?? 20} />
+
       <p className="max-w-[80ch] text-[11.5px] leading-relaxed text-ink-3">
         Stage, raised and CTC are the report&apos;s words{data.source ? ` (${data.source})` : ""}, not the pipeline&apos;s.
         A CTC marked ~ is an indicative market range; unmarked is a publicly reported role figure. Roles, people and
@@ -351,6 +359,35 @@ export default function ListPage() {
 
       <TaskStrip tasks={tasks} onDismiss={dismiss} />
     </div>
+  );
+}
+
+/** List rows whose best evidence of full-time fresher pay is under the India floor —
+ *  hidden from the list and from every queue, never deleted, and back on their own when
+ *  a posting or the list states a figure at or above it. Collapsed by default. */
+function BelowBar({ rows, floor }: { rows: Row[]; floor: number }) {
+  if (!rows.length) return null;
+  return (
+    <details className="plate group">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-[12.5px] text-ink-2 hover:text-ink">
+        <ChevronRight size={13} className="text-ink-3 transition-transform duration-200 group-open:rotate-90" />
+        <span className="font-medium">Below the ₹{floor}L bar</span>
+        <span className="chip tnum">{rows.length}</span>
+        <span className="marginal ml-auto">hidden — not chased, not deleted</span>
+      </summary>
+      <ul className="divide-y divide-line border-t border-line">
+        {rows.map((c) => (
+          <li key={c.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2">
+            <span className="tnum w-6 text-right text-[11px] text-ink-3">{c.rank}</span>
+            <Link href={`/companies/${c.id}`} className="text-[13px] font-medium hover:underline">{c.name}</Link>
+            <span className="text-[12px] text-ink-3">{c.city ?? "—"}</span>
+            <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-2" title={c.below_bar_reason ?? ""}>
+              {c.below_bar_reason ?? c.pay_bar?.evidence ?? "—"}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 

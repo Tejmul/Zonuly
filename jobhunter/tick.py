@@ -63,6 +63,8 @@ L = {
     # keyless discovery once the fill queues are exhausted (backoff), queries per tick
     "discover_queries": int(_T.get("discover_queries_per_tick", 4)),
     "saturated_below": int(_T.get("saturated_below", 10)),
+    # new Bengaluru / Hyderabad startups per tick (india.py), after the ★ list and fill work
+    "india": int(_T.get("india_discovery_per_tick", 30)),
 }
 PAID_HOURLY = bool(_T.get("paid_hourly", True))
 # the one-off cleanup's merge/quarantine pass, hourly. Off until the first
@@ -271,6 +273,13 @@ def run_free(budget_s: int = 1800) -> dict:
 
         _step(s, "affiliation", lambda: {k: v for k, v in affiliation.run(
             L["affiliation"], reserve=L["affiliation_reserve"]).items() if k != "labels"})
+    # India discovery (2026-10-08): underrated Bengaluru / Hyderabad startups, keyless, each
+    # admitted only with a quote placing it in one of the two cities. After the ★ list and
+    # the fill work above; the new rows are filled first next tick (db.fill_order).
+    if L["india"] and time.time() - t0 < budget_s:
+        from jobhunter import india
+
+        _step(s, "india_discovery", lambda: {k: v for k, v in india.discover(L["india"]).items() if k != "new_ids"})
     # the existing companies are as complete as the channels allow (everything left is in
     # backoff): go further — new companies through the keyless Exa MCP and the gate
     if _saturated(s) and time.time() - t0 < budget_s:
@@ -278,6 +287,11 @@ def run_free(budget_s: int = 1800) -> dict:
         _step(s, "probe_new", harvest.probe_ats)
     _step(s, "pay", targeting.extract_job_pay, only_missing=True)
     _step(s, "grade", targeting.grade_companies, regrade=False)
+    # the India ₹20L pay floor, re-checked every tick: new evidence hides or brings back
+    from jobhunter import india as _india
+
+    _step(s, "pay_floor", lambda: {k: v for k, v in _india.apply_pay_floor().items()
+                                   if k not in ("sample_hidden",)})
     _step(s, "priority_after", targeting.refresh_priority)
     if PAID_HOURLY and time.time() - t0 < budget_s:
         s["paid_slice"] = run_paid(hourly=True)

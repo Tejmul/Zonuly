@@ -571,6 +571,24 @@ targeting:
       - =ust
   # India: only these two cities count; the rest are never India targets
   india:
+    # PAY FLOOR (Tejmul, 2026-10-08: "even in India, the companies which pay less than 20
+    # lakhs, remove them"). An India company whose BEST evidence of full-time fresher /
+    # early-career pay is under this is hidden (company.status = below_pay_bar), never
+    # deleted; any evidence at or above it keeps it; unknown pay keeps it. Internship
+    # stipends are not full-time pay. Re-evaluated every tick (jobhunter/india.py).
+    min_lpa: 20
+    # a stated full-time figure below this is a misparse (a monthly number read as
+    # annual), not evidence — it is ignored rather than allowed to hide a company
+    implausible_below_lpa: 3
+    # India discovery (jobhunter/india.py): underrated Bengaluru / Hyderabad startups.
+    # Recently funded preferred; a candidate is admitted only with a quote that places
+    # it in one of the two cities.
+    discovery:
+      fresh_months: 24
+      stages: [Pre-seed, Seed, Series A, Series B, Series C]
+      # a newly found India company is filled (careers, roles, facts, people) right after
+      # the ★ list for this many days (db.fill_order)
+      fill_first_days: 30
     cities:
       Bengaluru:
       - bengaluru
@@ -757,6 +775,7 @@ tick:
   websites_per_tick: 120       # name-only companies -> verified website (hosted Exa MCP + direct fetch)
   facts_keyless_per_tick: 40   # funding/HQ/website via the hosted Exa MCP (paced; retries a 429, cools down, resumes)
   careers_per_tick: 40         # 2026-10-07: careers page + roles for any company (careers.py), list rows first
+  india_discovery_per_tick: 30 # 2026-10-08: new Bengaluru/Hyderabad startups per tick (india.py), after the ★ list and fill work
   # The paid per-day totals above (facts/describe/story/levels) and the research caps
   # (exa_daily_cap, scrapedo_daily) are spread across the day: by hour h at most
   # total * (h+1)/24 is spent. paid_hourly runs that slice at the end of each free tick.

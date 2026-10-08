@@ -1801,5 +1801,41 @@ def people_queue(
             typer.echo(f"      read from: {r['evidence']}")
 
 
+# ---------------------------------------------------------------- India: pay floor + discovery
+
+india_app = typer.Typer(help="India: the ₹20 LPA pay floor and Bengaluru / Hyderabad startup discovery (india.py).")
+app.add_typer(india_app, name="india")
+
+
+@india_app.command("pay-floor")
+def india_pay_floor(dry_run: bool = typer.Option(False, "--dry-run", help="Report only; write nothing")) -> None:
+    """Hide (status below_pay_bar) or bring back every India company by the ₹20L floor."""
+    _setup_logging()
+    from jobhunter import india
+
+    _echo(india.apply_pay_floor(dry_run=dry_run))
+
+
+@india_app.command("discover")
+def india_discover(
+    limit: int = typer.Option(30, help="New companies to admit this run"),
+    searches: int = typer.Option(6, help="Keyless web searches"),
+    dir_pages: int = typer.Option(1, help="Directory pages to read"),
+    rss_pages: int = typer.Option(1, help="Pages of each paged feed (backfill)"),
+    rss_reads: int = typer.Option(10, help="Articles to read for items whose feed text names no city"),
+    ats: int = typer.Option(1, help="Careers-board searches"),
+    budget: int = typer.Option(420, help="Seconds"),
+    force: bool = typer.Option(False, help="Ignore the hourly feed / daily YC gates"),
+    sources: str = typer.Option("rss,directory,yc,search,ats", help="Comma-separated subset"),
+) -> None:
+    """Admit new underrated Bengaluru / Hyderabad startups through the admission gate."""
+    _setup_logging()
+    from jobhunter import india
+
+    _echo(india.discover(limit, searches=searches, dir_pages=dir_pages, rss_pages=rss_pages, rss_reads=rss_reads,
+                         ats_queries=ats, budget_s=budget, force=force,
+                         sources=tuple(x.strip() for x in sources.split(",") if x.strip())))
+
+
 if __name__ == "__main__":
     app()

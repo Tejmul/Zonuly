@@ -227,7 +227,10 @@ def rows(key: str) -> dict:
     for p in people:
         people_by.setdefault(p.company_id, []).append(p)
 
-    out = []
+    from jobhunter import india
+
+    out: list[dict] = []
+    below: list[dict] = []     # under the India ₹20L floor (india.py): shown collapsed, not chased
     for c in companies:
         meta = json.loads(c.list_meta) if c.list_meta else {}
         cjobs = jobs_by.get(c.id, [])
@@ -235,7 +238,7 @@ def rows(key: str) -> dict:
         reachable = _reachable(c, cpeople)
         best = reachable[0] if reachable else None
         fresher = [j for j in cjobs if not j.is_senior]
-        out.append({
+        (below if c.status == "below_pay_bar" else out).append({
             "id": c.id, "rank": c.list_rank, "name": c.name, "city": c.city,
             "what": c.description or meta.get("what"),
             "website": c.website, "careers_url": c.careers_url,
@@ -265,12 +268,16 @@ def rows(key: str) -> dict:
             },
             "searched_at": c.contacts_found_at.isoformat() if c.contacts_found_at else None,
             "ready": bool(reachable),
+            "pay_bar": india.pay_label(c),
+            "below_bar_reason": c.status_reason if c.status == "below_pay_bar" else None,
         })
 
     return {
         "key": spec["key"], "name": spec.get("name"), "title": spec.get("title"),
         "description": (spec.get("description") or "").strip(), "source": spec.get("source"),
         "companies": out,
+        "below_bar": below,
+        "pay_floor_lpa": india.MIN_LPA,
         "stats": {
             "companies": len(out),
             "with_website": sum(1 for r in out if r["website"]),
@@ -281,6 +288,7 @@ def rows(key: str) -> dict:
             "reachable": sum(r["people"]["reachable"] for r in out),
             "hiring_proven": sum(1 for r in out if r["hiring_status"] == "verified"),
             "by_city": _count(r["city"] for r in out if r["city"]),
+            "below_bar": len(below),
         },
     }
 
@@ -319,8 +327,9 @@ def find_people(key: str, *, linkedin: bool = True, refresh_days: int = 0,
         companies = session.exec(
             select(Company).where(Company.list_key == key).order_by(col(Company.list_rank))
         ).all()
-        todo = [c.id for c in companies
-                if not (cutoff and c.contacts_found_at and c.contacts_found_at >= cutoff)]
+        # a row below the India pay bar is hidden, not chased (india.py)
+        todo = [c.id for c in companies if c.status != "below_pay_bar"
+                and not (cutoff and c.contacts_found_at and c.contacts_found_at >= cutoff)]
     if limit:
         todo = todo[:limit]
 

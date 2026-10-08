@@ -602,8 +602,12 @@ def _funding_dict(c: Company) -> dict:
 
 
 def _hidden(c: Company, include_overrated: bool) -> bool:
-    """Hidden by default: overrated, quarantined and merged rows. A hand-picked list row
-    is never hidden — the list is the decision."""
+    """Hidden by default: overrated, quarantined, merged and below-the-India-pay-bar rows.
+    A hand-picked list row is never hidden for being overrated — the list is the decision —
+    but the pay floor applies to it too (Tejmul, 2026-10-08); the list page shows those
+    in their own collapsed section."""
+    if c.status == "below_pay_bar":
+        return not include_overrated
     if c.list_key:
         return False
     if c.status in ("quarantined", "merged"):
@@ -620,7 +624,7 @@ def list_companies(
     include_overrated: bool = Query(False, description="also list overrated, quarantined and merged companies"),
     limit: int = Query(200, le=5000),
 ) -> list[dict]:
-    from jobhunter import admission
+    from jobhunter import admission, india
 
     with get_session() as session:
         companies = session.exec(select(Company)).all()
@@ -666,6 +670,8 @@ def list_companies(
                     "priority_why": c.priority_why,
                     "status": c.status,
                     "status_reason": c.status_reason,
+                    # the India ₹20L floor (india.py): ok / below / unknown + the quote
+                    "pay_bar": india.pay_label(c) if india.in_scope(c) else None,
                     "list_key": c.list_key,
                     "stipend_inr_month": c.stipend_inr_month,
                     "ppo_lpa": c.ppo_lpa,

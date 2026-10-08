@@ -89,8 +89,10 @@ class Company(SQLModel, table=True):
 
     # ---- admission + priority (jobhunter/admission.py, targeting.priority). 2026-10-06.
     name_key: Optional[str] = Field(default=None, index=True)   # admission.name_key(name): the dedup key
-    # None = active | "quarantined" (junk / bare and unrescuable) | "merged" (see merged_into).
-    # Never deleted: a quarantined row keeps its history and is hidden by default.
+    # None = active | "quarantined" (junk / bare and unrescuable) | "merged" (see merged_into)
+    # | "below_pay_bar" (an India company whose best full-time pay evidence is under
+    # targeting.india.min_lpa — india.py re-checks it every tick and clears it on new evidence).
+    # Never deleted: a hidden row keeps its history and is hidden by default.
     status: Optional[str] = Field(default=None, index=True)
     status_reason: Optional[str] = None
     merged_into: Optional[int] = None        # company.id of the survivor when status = "merged"
@@ -121,6 +123,11 @@ class Company(SQLModel, table=True):
     completeness: Optional[int] = Field(default=None, index=True)
     completeness_missing: Optional[str] = None
     validated_at: Optional[datetime] = None
+    # ---- India discovery (jobhunter/india.py). 2026-10-08. When the India discovery step
+    # admitted this row with a quote placing it in Bengaluru / Hyderabad; for
+    # targeting.india.discovery.fill_first_days it is filled right after the ★ list.
+    india_found_at: Optional[datetime] = Field(default=None, index=True)
+    india_source: Optional[str] = None     # rss | search | yc | ats — which source found it
 
 
 class Job(SQLModel, table=True):
@@ -418,16 +425,25 @@ def get_session() -> Session:
     return Session(engine)
 
 
+_INDIA_FILL_FIRST_DAYS = int((((CONFIG.get("targeting") or {}).get("india") or {}).get("discovery") or {})
+                             .get("fill_first_days", 30))
+
+
 def fill_order(company: Company) -> tuple:
     """The one order every fill-in queue reads (2026-10-07: "the ★ India list first, then
-    all companies"): hand-picked list rows first, in list order; then the scrape-first rows
+    all companies"): hand-picked list rows first, in list order; then the Bengaluru /
+    Hyderabad companies India discovery found in the last fill_first_days (2026-10-08);
+    then the scrape-first rows
     we hold nothing about; then the least-complete of the high-priority companies — priority
     in bands of 20, least complete first inside a band (guardrails.refresh_completeness),
     then exact priority. Callers append their own tie-breakers."""
     listed = bool(company.list_key)
     prio = company.priority_score or 0
     done = company.completeness if company.completeness is not None else 0
-    return (0 if listed else 1, (company.list_rank or 9999) if listed else 0,
+    found = company.india_found_at
+    fresh_india = (not listed and found is not None
+                   and (utcnow() - found).days < _INDIA_FILL_FIRST_DAYS)
+    return (0 if listed else 1 if fresh_india else 2, (company.list_rank or 9999) if listed else 0,
             0 if company.scrape_first else 1, -(prio // 20), done, -prio)
 
 

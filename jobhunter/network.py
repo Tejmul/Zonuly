@@ -41,6 +41,7 @@ from dataclasses import dataclass, field
 from sqlmodel import select
 
 from jobhunter import admission, guardrails
+from jobhunter import india as _india
 from jobhunter import normalize as norm
 from jobhunter.contacts import roles as roleclass
 from jobhunter.db import Company, Contact, Job, get_session, init_db
@@ -449,8 +450,10 @@ def company_list(*, include_rejects: bool = False, include_overrated: bool = Fal
         # a company on a hand-picked list stays whatever the grade said (lists.py)
         companies = [c for c in companies if (c.tier or "unknown") != "reject" or c.list_key]
     if not include_overrated:
-        # overrated, quarantined and merged rows are hidden unless asked for; list rows never
-        companies = [c for c in companies if c.list_key or (not c.overrated and c.status is None)]
+        # overrated, quarantined, merged and below-the-pay-bar rows are hidden unless asked
+        # for; list rows only by the pay floor (india.py)
+        companies = [c for c in companies if (c.list_key and c.status != "below_pay_bar")
+                     or (not c.overrated and c.status is None)]
     keep = {c.id for c in companies}
 
     jobs_by: dict[int, list[Job]] = defaultdict(list)
@@ -513,6 +516,8 @@ def company_list(*, include_rejects: bool = False, include_overrated: bool = Fal
             "website": c.website,
             "region": c.hq_region,
             "city": c.city,
+            # the India ₹20L floor (india.py): ok / below / unknown — "pay unknown" is shown, not hidden
+            "pay_bar": _india.pay_label(c) if _india.in_scope(c) else None,
             # the hand-picked list this company is on, if any (jobhunter/lists.py)
             "list_key": c.list_key,
             "list_rank": c.list_rank,
