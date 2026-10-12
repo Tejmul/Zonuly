@@ -244,6 +244,8 @@ def _mcp_text(payload: str) -> str:
 _MCP_GAP_S = float(RESEARCH.get("exa_mcp_min_gap_seconds", 2.0))
 _MCP_BACKOFF_S = tuple(RESEARCH.get("exa_mcp_backoff_seconds") or (3, 10, 30))
 _MCP_COOLDOWN_S = float(RESEARCH.get("exa_mcp_cooldown_seconds", 300))
+_MCP_RATE_LIMIT_COOLDOWN_S = float(RESEARCH.get("exa_mcp_rate_limit_cooldown_seconds", 3600))
+_RATE_LIMITED = re.compile(r"\b429\b|rate limit|too many requests", re.I)
 _TRANSIENT = re.compile(r"429|rate.?limit|too many requests|offline|fetch failed|timed out|ECONN|ETIMEDOUT|503|502", re.I)
 _mcp_state = {"last": 0.0, "fails": 0, "cool_until": 0.0}
 
@@ -285,6 +287,16 @@ def _exa_mcp_call(tool: str, args: dict, timeout: int) -> str | None:
             return _mcp_text(p.out) or None
         detail = f"{p.err} {envelope or p.out[:300]}"
         channels.record("exa-mcp", False, f"{p.reason}: {detail.strip()[:200]}")
+        if _RATE_LIMITED.search(detail):
+            # Exa's free MCP limit is per IP and lasts far longer than a retry: the 5-minute
+            # cooldown was hitting it 30-60 times an hour all night. Step aside for an hour.
+            _mcp_state["cool_until"] = time.monotonic() + _MCP_RATE_LIMIT_COOLDOWN_S
+            _mcp_state["fails"] = 0
+            channels.record("exa-mcp", False, "rate-limited — resting an hour", cooldown=True)
+            log.info("exa-mcp rate-limited — resting %ss; the other keyless backends carry on",
+                     int(_MCP_RATE_LIMIT_COOLDOWN_S))
+            _errors.append("exa-mcp: rate-limited (free MCP limit)")
+            return None
         if p.reason == "missing" or not (_TRANSIENT.search(detail) or p.reason == "timeout"):
             log.debug("mcporter %s failed (%s): %s", tool, p.reason, p.err[:200])
             _errors.append(f"exa-mcp: {p.reason}: {p.err[:120]}")
@@ -310,61 +322,137 @@ def _exa_mcp_call(tool: str, args: dict, timeout: int) -> str | None:
 # rendering the DDG page returns plain Markdown — title, the real URL inside DDG's
 # `uddg=` redirect, date and snippet. Exa stops being a single point of failure.
 
-#: The free search backends — what an hourly job may use without spending money.
-KEYLESS: tuple[str, ...] = ("jina-ddg", "exa-mcp")
+#: The free search backends — what an hourly job may use without spending money. Three
+#: independent engines, so one rate limit or bot check no longer takes search down.
+KEYLESS: tuple[str, ...] = ("jina-ddg", "jina-startpage", "exa-mcp")
 
 _JDDG_GAP_S = float(RESEARCH.get("jina_ddg_min_gap_seconds", 3.5))   # Jina keyless ≈ 20/min
-_jddg_last = 0.0
-_jddg_state = {"fails": 0, "cool_until": 0.0}
+_jina_last = 0.0
+#: per engine read through Jina: consecutive failures and the cooldown they opened
+_kl_state: dict[str, dict] = {"jina-ddg": {"fails": 0, "cool_until": 0.0},
+                              "jina-startpage": {"fails": 0, "cool_until": 0.0}}
+
+
+def _kl_cooling(name: str) -> bool:
+    return time.monotonic() < _kl_state[name]["cool_until"]
 
 
 def search_down() -> bool:
     """True only while every keyless search backend is in its failure cooldown."""
-    return mcp_cooling() and time.monotonic() < _jddg_state["cool_until"]
+    return mcp_cooling() and all(_kl_cooling(n) for n in _kl_state)
 
 
-def _jddg_fail(why: str) -> None:
-    channels.record("jina-ddg", False, why)
-    _errors.append(f"jina-ddg: {why}")
-    _jddg_state["fails"] += 1
-    if _jddg_state["fails"] >= 3:
-        _jddg_state["cool_until"] = time.monotonic() + _MCP_COOLDOWN_S
-        _jddg_state["fails"] = 0
-        log.warning("jina-ddg failing repeatedly — cooling down %ss", int(_MCP_COOLDOWN_S))
+def _kl_fail(name: str, why: str) -> None:
+    channels.record(name, False, why)
+    _errors.append(f"{name}: {why}")
+    st = _kl_state[name]
+    st["fails"] += 1
+    if st["fails"] >= 3:
+        st["cool_until"] = time.monotonic() + _MCP_COOLDOWN_S
+        st["fails"] = 0
+        channels.record(name, False, "cooling down after repeated failures", cooldown=True)
+        log.warning("%s failing repeatedly — cooling down %ss", name, int(_MCP_COOLDOWN_S))
+
+
+def _jina_read_engine(name: str, url: str, timeout: int) -> str | None:
+    """Fetch a search-results page through Jina Reader, paced for Jina's keyless rate
+    (shared by every engine read this way). None on failure, already recorded."""
+    global _jina_last
+    if _kl_cooling(name):
+        _errors.append(f"{name}: cooling down after repeated failures")
+        return None
+    wait = _JDDG_GAP_S - (time.monotonic() - _jina_last)
+    if wait > 0:
+        time.sleep(wait)
+    _jina_last = time.monotonic()
+    try:
+        r = httpx.get(JINA + url, headers={"User-Agent": JINA_UA, "Accept": "text/plain"},
+                      timeout=timeout, follow_redirects=True)
+    except Exception as e:  # noqa: BLE001 — a dead channel is an answer, not a crash
+        _kl_fail(name, f"{type(e).__name__}: {str(e)[:120]}")
+        return None
+    if r.status_code >= 400:
+        _kl_fail(name, f"HTTP {r.status_code}")
+        return None
+    return r.text
+
+
+def _kl_ok(name: str, results: list) -> None:
+    _kl_state[name]["fails"] = 0
+    channels.record(name, True, f"{len(results)} results")
+    if not results:
+        _errors.append(f"{name}: no results on the page")
+
+
 _JDDG_HIT = re.compile(r"^## \[(?P<title>.+?)\]\((?P<href>[^)\s]+)\)\s*$", re.M)
 
 
 def _jina_ddg_search(query: str, limit: int, timeout: int) -> list[SearchResult]:
     from urllib.parse import quote_plus
 
-    global _jddg_last
-    if time.monotonic() < _jddg_state["cool_until"]:
-        _errors.append("jina-ddg: cooling down after repeated failures")
+    text = _jina_read_engine("jina-ddg", DDG_HTML + "?q=" + quote_plus(query), timeout)
+    if text is None:
         return []
-    wait = _JDDG_GAP_S - (time.monotonic() - _jddg_last)
-    if wait > 0:
-        time.sleep(wait)
-    _jddg_last = time.monotonic()
-    try:
-        r = httpx.get(JINA + DDG_HTML + "?q=" + quote_plus(query),
-                      headers={"User-Agent": JINA_UA, "Accept": "text/plain"},
-                      timeout=timeout, follow_redirects=True)
-    except Exception as e:  # noqa: BLE001 — a dead channel is an answer, not a crash
-        _jddg_fail(f"{type(e).__name__}: {str(e)[:120]}")
-        return []
-    if r.status_code >= 400:
-        _jddg_fail(f"HTTP {r.status_code}")
-        return []
-    if "bots use DuckDuckGo" in r.text[:2000] or "complete the following challenge" in r.text[:2000]:
+    if "bots use DuckDuckGo" in text[:2000] or "complete the following challenge" in text[:2000]:
         # DuckDuckGo challenged Jina's address: a failure (so the cooldown engages), not "no results"
-        _jddg_fail("DuckDuckGo bot challenge")
+        _kl_fail("jina-ddg", "DuckDuckGo bot challenge")
         return []
-    results = _parse_jina_ddg(r.text, limit)
-    _jddg_state["fails"] = 0
-    channels.record("jina-ddg", True, f"{len(results)} results")
-    if not results:
-        _errors.append("jina-ddg: no results on the page")
+    results = _parse_jina_ddg(text, limit)
+    _kl_ok("jina-ddg", results)
     return results
+
+
+# ------------------------------------------------------------------ jina-startpage
+#
+# Startpage serves Google's results without a bot wall to Jina Reader, in the same
+# Markdown shape as DuckDuckGo's: `## [title](url)` then a snippet that opens with the
+# date. Sponsored rows sit above a "Web results" heading and go through an ad redirect.
+
+STARTPAGE = "https://www.startpage.com/do/search"
+_SP_DATE = re.compile(r"^(?P<d>[A-Z][a-z]{2} \d{1,2}, \d{4})\s*(?:\*\*)?\.\.\.(?:\*\*)?\s*")
+
+
+def _jina_startpage_search(query: str, limit: int, timeout: int) -> list[SearchResult]:
+    from urllib.parse import quote_plus
+
+    text = _jina_read_engine("jina-startpage", STARTPAGE + "?q=" + quote_plus(query), timeout)
+    if text is None:
+        return []
+    results = _parse_jina_startpage(text, limit)
+    _kl_ok("jina-startpage", results)
+    return results
+
+
+def _parse_jina_startpage(text: str, limit: int) -> list[SearchResult]:
+    from datetime import datetime as _dt
+
+    cut = text.find("Web results")
+    body = text[cut:] if cut >= 0 else text
+    out: list[SearchResult] = []
+    hits = list(_JDDG_HIT.finditer(body))
+    seen: set[str] = set()
+    for i, m in enumerate(hits):
+        url = m.group("href")
+        if (not url.startswith("http") or "startpage.com" in url or "admarketplace" in url
+                or url in seen):
+            continue
+        seen.add(url)
+        block = body[m.end(): hits[i + 1].start() if i + 1 < len(hits) else len(body)]
+        snip = next((ln.strip() for ln in block.splitlines()
+                     if ln.strip() and not ln.lstrip().startswith(("[", "!", "#"))), "")
+        published = None
+        d = _SP_DATE.match(snip)
+        if d:
+            try:
+                published = _dt.strptime(d.group("d"), "%b %d, %Y").date().isoformat()
+            except ValueError:
+                published = None
+            snip = snip[d.end():]
+        out.append(SearchResult(title=_unbold(m.group("title")), url=url, snippet=_unbold(snip) or None,
+                                published=published, source="jina-startpage"))
+        if len(out) >= limit:
+            break
+    return out
 
 
 def _unbold(text: str) -> str:
@@ -414,7 +502,7 @@ def search(
 ) -> dict:
     """Semantic web search. Returns {query, backend, results: [...], error?}.
 
-    `only` restricts the backends tried (e.g. KEYLESS — DuckDuckGo via Jina, then the hosted MCP —
+    `only` restricts the backends tried (e.g. KEYLESS — DuckDuckGo and Startpage via Jina, then the hosted MCP —
     so an hourly free job never falls through to the metered Exa API).
 
     `include_domains` restricts hits to those hosts (e.g. ["reddit.com"] to read what
@@ -454,11 +542,12 @@ def search(
             text = _exa_mcp_call("web_search_exa", {"query": query, "numResults": limit}, timeout)
             if text:
                 results = _parse_exa_text(text)
-        elif backend == "jina-ddg":
+        elif backend in ("jina-ddg", "jina-startpage"):
             if category or days or include_domains:
-                continue   # DDG has no index categories or date filter; do not answer a different question
+                continue   # no index categories or date filter here; do not answer a different question
             tried.append(backend)
-            results = _jina_ddg_search(query, limit, timeout)
+            run = _jina_ddg_search if backend == "jina-ddg" else _jina_startpage_search
+            results = run(query, limit, timeout)
         elif backend == "exa-api":
             tried.append(backend)
             results = _exa_api_search(query, limit, timeout, category=category, days=days,

@@ -40,7 +40,7 @@ TIMEOUT = int(RESEARCH.get("timeout", 90))
 DEFAULT_ROUTES: dict[str, list[str]] = {
     # keyless first: DuckDuckGo read through Jina Reader, then the hosted Exa MCP; the
     # metered Exa API last, because it costs money and has a daily cap
-    "web_search": ["jina-ddg", "exa-mcp", "exa-api"],
+    "web_search": ["jina-ddg", "jina-startpage", "exa-mcp", "exa-api"],
     "page_read": ["jina", "direct", "scrapedo"],
     "github": ["gh-cli", "github-api"],
     "reddit": ["rdt", "opencli"],

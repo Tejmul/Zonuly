@@ -274,3 +274,14 @@ def test_a_nameless_address_is_not_a_referrer():
                    affiliation="likely-current", email_kind="company")
     assert not g.is_ready(bare)
     assert g.email("doe@observe.ai").ok is False
+
+
+def test_one_search_backend_resting_is_not_an_alert_but_all_failing_is():
+    from jobhunter import audit
+
+    resting = {"exa-mcp": {"ok": 0, "fail": 18}, "jina-ddg": {"ok": 9, "fail": 2}, "jina-startpage": {"ok": 14, "fail": 0}}
+    assert not [a for a in audit.stall_check(progress_last_hour=5, tick_ran=True, channel_rates=resting)
+                if "search" in a or "exa" in a]
+    down = {"exa-mcp": {"ok": 0, "fail": 18}, "jina-ddg": {"ok": 0, "fail": 9}, "jina-startpage": {"ok": 0, "fail": 6}}
+    assert any("web search failed" in a
+               for a in audit.stall_check(progress_last_hour=5, tick_ran=True, channel_rates=down))

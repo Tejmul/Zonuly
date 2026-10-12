@@ -60,7 +60,11 @@ FAIL_ALERT = float(_A.get("channel_fail_alert", 0.8))
 MIN_CALLS = int(_A.get("channel_min_calls", 8))
 # channels whose failure means scraping is broken (a direct fetch failing is mostly dead
 # company sites, so it is reported, never alerted on)
-ALERT_CHANNELS = tuple(_A.get("alert_channels") or ("exa-mcp", "jina", "github", "openrouter", "scrapedo"))
+ALERT_CHANNELS = tuple(_A.get("alert_channels") or ("jina", "github", "openrouter", "scrapedo"))
+#: Interchangeable search backends: one resting (Exa's free MCP is rate-limited by IP for
+#: hours at a time) is routine while another answers, so they alert as a group — only
+#: when web search as a whole is failing.
+SEARCH_GROUP = tuple(_A.get("search_channels") or ("jina-ddg", "jina-startpage", "exa-mcp"))
 KEY_LAST, KEY_HISTORY = "audit:last", "audit:history"
 
 FIELDS = ("description", "funding_stage", "funding_amount", "funding_date", "investors", "valuation",
@@ -345,6 +349,11 @@ def stall_check(*, progress_last_hour: int, tick_ran: bool, channel_rates: dict[
         ok, fail = int(h.get("ok") or 0), int(h.get("fail") or 0)
         if ok + fail >= MIN_CALLS and fail / (ok + fail) > FAIL_ALERT:
             alerts.append(f"CHANNEL: {ch} failed {fail} of {ok + fail} calls in the last hour")
+    s_ok = sum(int((channel_rates.get(ch) or {}).get("ok") or 0) for ch in SEARCH_GROUP)
+    s_fail = sum(int((channel_rates.get(ch) or {}).get("fail") or 0) for ch in SEARCH_GROUP)
+    if s_ok + s_fail >= MIN_CALLS and s_fail / (s_ok + s_fail) > FAIL_ALERT:
+        alerts.append(f"CHANNEL: web search failed {s_fail} of {s_ok + s_fail} calls in the last hour "
+                      f"across {', '.join(SEARCH_GROUP)}")
     if openrouter:
         ok, fail = int(openrouter.get("ok") or 0), int(openrouter.get("fail") or 0)
         if ok + fail >= MIN_CALLS and fail / (ok + fail) > FAIL_ALERT:
