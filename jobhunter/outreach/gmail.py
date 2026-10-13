@@ -225,6 +225,30 @@ def thread_messages(thread_id: str, *, message_id: str | None = None) -> list[di
                 "is_bounce": _is_bounce(msg),
                 "is_ours": parseaddr(sender)[1].lower() == ADDRESS.lower(),
             })
+        # All Mail holds every archived / filtered / labelled message, but not Spam: a reply
+        # Gmail filed as spam is still a reply (2026-10-14). Only messages that reference
+        # our own Message-ID are read there.
+        if ref:
+            try:
+                typ, _ = conn.select('"[Gmail]/Spam"', readonly=True)
+                if typ == "OK":
+                    _, spam = conn.search(None, "OR", "HEADER", "In-Reply-To", ref, "HEADER", "References", ref)
+                    for num in (spam[0] or b"").split():
+                        _, fetched = conn.fetch(num, "(X-GM-MSGID BODY.PEEK[])")
+                        if not fetched or not isinstance(fetched[0], tuple):
+                            continue
+                        meta, raw = fetched[0]
+                        gm = re.search(rb"X-GM-MSGID (\d+)", meta)
+                        msg = email_lib.message_from_bytes(raw, policy=email.policy.default)
+                        sender = (msg.get("From") or "").strip()
+                        mid = gm.group(1).decode() if gm else (msg.get("Message-ID") or f"spam:{num.decode()}")
+                        if any(o["id"] == mid for o in out):
+                            continue
+                        out.append({"id": mid, "from": sender, "date": msg.get("Date"), "text": _plain_text(msg),
+                                    "is_bounce": _is_bounce(msg),
+                                    "is_ours": parseaddr(sender)[1].lower() == ADDRESS.lower(), "spam": True})
+            except imaplib.IMAP4.error as e:
+                log.debug("spam folder search failed: %s", e)
     out.sort(key=_when)
     return out
 

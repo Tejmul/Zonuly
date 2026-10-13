@@ -257,6 +257,16 @@ def _email_dict(e: Email, *, contact: Contact | None = None, company: Company | 
         "stale": bool(e.expires_at and e.expires_at < datetime.utcnow()),
         "address_confidence": e.address_confidence,
         "candidate_id": e.candidate_id,
+        # the composer's record (outreach/compose.py)
+        "structure": e.structure,
+        "subject_pattern": e.subject_pattern,
+        "hook_type": e.hook_type,
+        "words": e.words,
+        "quality": e.quality,
+        "quality_detail": _json_or(e.quality_detail, None),
+        "writer": e.writer,
+        "polish_pending": e.polish_pending,
+        "contract": _json_or(e.contract, None),
     })
 
 
@@ -1100,11 +1110,14 @@ class DraftIn(BaseModel):
 def create_draft(payload: DraftIn) -> dict:
     from jobhunter.outreach import drafter
 
-    return {
-        "task_id": _run_task(
-            f"draft:{payload.contact_id}", drafter.draft_for, payload.contact_id, payload.job_id
-        )
-    }
+    def _go():
+        from jobhunter import proposals
+
+        if payload.job_id:
+            proposals.ensure_briefs([payload.job_id])
+        return drafter.draft_for(payload.contact_id, payload.job_id)
+
+    return {"task_id": _run_task(f"draft:{payload.contact_id}", _go)}
 
 
 @app.post("/api/emails/draft-batch")
@@ -1354,7 +1367,65 @@ def outreach_batch(payload: BatchRequest) -> dict:
 
     if payload.dry_run:
         return batch.build(payload.n, dry_run=True)
-    return {"task_id": _run_task("outreach-batch", batch.build, payload.n, research=payload.research)}
+    def _go():
+        from jobhunter import proposals
+
+        proposals.ensure_briefs([t["job_id"] for t in batch.plan(limit=200)["targets"]])
+        return batch.build(payload.n, research=payload.research)
+
+    return {"task_id": _run_task("outreach-batch", _go)}
+
+
+@app.get("/api/outreach/track")
+def outreach_track(status: str | None = None, sentiment: str | None = None) -> dict:
+    """Every cold email with its lifecycle (draft → approved → sent → waiting → replied /
+    bounced / opted out), the reply sentiment and snippet, and the counts on top."""
+    from jobhunter.outreach import tracker
+
+    return tracker.track(status=status, sentiment=sentiment)
+
+
+@app.get("/api/outreach/thread/{email_id}")
+def outreach_thread(email_id: int) -> dict:
+    """One conversation: our email exactly as sent, the follow-ups, their replies with
+    sentiment and the classifier's reason, and the draft's contract and quality."""
+    from jobhunter.outreach import tracker
+
+    t = tracker.thread(email_id)
+    if t is None:
+        raise HTTPException(404, "email not found")
+    return t
+
+
+@app.get("/api/outreach/proposals")
+def outreach_proposals() -> dict:
+    """How the pipeline would write to the best targets — proposals, not drafts: nothing
+    here is in the review queue or can be sent."""
+    from jobhunter import proposals
+
+    return proposals.latest()
+
+
+class ProposalRequest(BaseModel):
+    n: int = 10
+    use_model: bool = True
+
+
+@app.post("/api/outreach/proposals")
+def outreach_proposals_build(payload: ProposalRequest | None = None) -> dict:
+    """Regenerate the proposals (replaces the previous run). Never drafts, approves or sends."""
+    from jobhunter import proposals
+
+    payload = payload or ProposalRequest()
+    return {"task_id": _run_task("outreach-proposals", proposals.build, payload.n, use_model=payload.use_model)}
+
+
+@app.post("/api/outreach/polish")
+def outreach_polish(limit: int = 10) -> dict:
+    """Re-write template drafts with the model now that it is available (still drafts)."""
+    from jobhunter.outreach import drafter
+
+    return {"task_id": _run_task("outreach-polish", drafter.polish_pending, limit)}
 
 
 @app.get("/api/outreach/pipeline")

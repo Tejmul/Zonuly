@@ -52,6 +52,9 @@ _OPERATOR_ONLY = (
     "/api/gmail",     # mailbox status and the OAuth trigger
     "/api/research",  # live outbound research; every call costs money
     "/api/outreach/preflight",  # the sending address, the do-not-contact list, the launch state
+    "/api/outreach/track",      # every email with its replies' snippets (2026-10-14)
+    "/api/outreach/thread",     # one full conversation, their replies included
+    "/api/outreach/proposals",  # real recipients' names, addresses and evidence
 )
 
 #: Set by the middleware for the duration of one request. A serialiser deep inside a

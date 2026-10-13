@@ -13,7 +13,7 @@ import re
 
 from sqlmodel import col, select
 
-from jobhunter import CONFIG, guardrails, openrouter
+from jobhunter import CONFIG, admission, guardrails, openrouter
 from jobhunter.db import Company, Contact, Email, Job, get_session, init_db, utcnow
 
 log = logging.getLogger(__name__)
@@ -23,65 +23,6 @@ USER_NAME = _O.get("user_name") or "(set outreach.user_name in config.yaml)"
 USER_HEADLINE = _O.get("user_headline") or ""
 USER_LINKS = _O.get("user_links") or []
 USER_EMAIL = _O.get("user_email") or ""
-
-DRAFT_SYSTEM = """You write short, plain, human referral-request emails from a student/early-career
-engineer to someone who works at a company they want to join.
-
-Absolute rules:
-- Never invent a project, number, employer, or shared connection. Only use facts you are given.
-- No flattery ("I'm a huge fan", "your incredible work"), no buzzwords, no "I hope this finds you well".
-- No em-dashes. Short sentences. Contractions are fine.
-- 90-130 words in the body. A busy engineer should be able to read it in 20 seconds.
-- Ask for exactly one thing, and make it easy to say yes or no to.
-- Do not attach or promise attachments; the resume link goes in the signature.
-
-Reply with JSON only."""
-
-DRAFT_PROMPT = """WRITE AN EMAIL.
-
-FROM (the candidate):
-Name: {user_name}
-Headline: {user_headline}
-Background (only use what's here):
-{profile}
-
-TO:
-Name: {contact_name}
-Their role: {contact_role}
-Company: {company}
-
-RESEARCH ON THEM (may be empty — if so, write a good email without pretending to know their work):
-Hook: {hook}
-Shared ground: {shared_ground}
-Their notable repos: {repos}
-What we know they do there: {contact_evidence}
-
-THE COMPANY (their own words; use only these facts):
-{company_facts}
-
-THE JOB THE CANDIDATE WANTS:
-{job_title}{job_where}
-Why it fits (from the matcher): {match_reasons}
-
-WHAT THEY ACTUALLY NEED, AND WHAT OF IT THE CANDIDATE HAS DONE (from the needs brief; use
-these as the hook — their words, then the candidate's matching line):
-{needs_block}
-Suggested angle: {needs_angle}
-NEVER claim experience with any of these (the role asks, the resume does not have it): {needs_forbidden}
-
-Every proper noun and number you write must come from the facts above or the candidate's
-background. If a fact is not there, do not write it.
-
-ASK: a referral for this role, or if they'd rather not, 10 minutes of advice.
-
-Structure the body as:
-1. One line saying who you are and why you're writing to THEM specifically.
-2. One or two lines connecting your real, specific experience to what this team does.
-3. The ask, phrased so "no" is easy.
-4. Sign-off.
-
-Reply with exactly:
-{{"subject": "<6-9 words, specific, no clickbait, no 'Re:'>", "body": "<the email body, plain text, no signature block>"}}"""
 
 FOLLOWUP_SYSTEM = """You write one short, polite, low-pressure follow-up to an unanswered email.
 It must be 40-60 words, must not guilt the recipient, must not repeat the original pitch at
@@ -250,182 +191,368 @@ def _cooldown(session, contact_id: int, company_id: int, candidate_id: int) -> s
     return None
 
 
-def _draft_call(prompt: str) -> dict | None:
+POLISH_SYSTEM = """You polish a short cold email from a student engineer. Every fact in the draft is verified:
+keep all of them and add none. No flattery, no buzzwords, no "I hope this finds you well", no "I'm reaching out",
+no em-dashes. Short sentences (under 18 words), plain words, 60-110 words. Exactly one question: the ask.
+Reply with JSON only."""
+
+POLISH_PROMPT = """STRUCTURE: {label}. Why: {why}.
+TO: {first}, {role} at {company}
+
+THE DRAFT:
+---
+{message}
+---
+
+Make it read like one person writing to another. Keep, word for word: the greeting "Hi {first},", {keep}every
+number, the role name "{role_title}", and the ask: "{ask}". {bullets}
+Do not add a signature, a sign-off, a note to forward, links or a P.S.
+
+Reply with exactly: {{"message": "<the polished message, plain text, starting with Hi {first},>"}}"""
+
+
+def _polish_call(prompt: str) -> dict | None:
     from jobhunter import llm
 
-    return llm.chat_json(
-        prompt,
-        DRAFT_SYSTEM,
-        temperature=0.6,
-        num_predict=600,
-        alias="writer",         # a human reads this one; it is worth the better model
-        purpose="draft",
-        default=None,
-    )
+    return llm.chat_json(prompt, POLISH_SYSTEM, temperature=0.4, num_predict=500, alias="writer",
+                         purpose="draft", default=None)
 
 
-def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = True,
-              candidate_id: int = 1, force: bool = False) -> dict:
-    """Create one draft email in the review queue, gated: the facts it may use are
-    recorded, and anything in the body that is not among them is flagged for review."""
-    init_db()
-    from datetime import timedelta
+# ------------------------------------------------------------------ the evidence for one email
 
+_ENG_TITLE = re.compile(r"engineer|developer|\bsde\b|\bswe\b|scientist|machine learning|\bml\b|\bai\b|\bllm|data\b|"
+                        r"backend|back-end|front.?end|full.?stack|software|platform|devops|\bsre\b|research|programmer|"
+                        r"graduate|new grad|fresher|trainee", re.I)
+_NOT_ENG_TITLE = re.compile(r"manager|director|head of|\bvp\b|sales|account|design|marketing|recruit|finance|legal|pilot|"
+                            r"mechanical|manufacturing|hardware|firmware|field|operations|support|success|solutions? "
+                            r"(?:engineer|consultant|architect)|technician|electrical|civil|fpga|\brf\b|embedded|analog|"
+                            r"asic|chief|principal|staff\b|\blead\b|android|ios\b|telecom|chemical|process engineer|structural|"
+                            r"construction|automotive|quality|\bqa\b|test engineer|network engineer|sales", re.I)
+
+
+def pick_job(session, company_id: int) -> Job | None:
+    """The role to ask about: an engineering title (not sales, design, hardware, management),
+    fresher before senior, remote-from-anywhere first, then selection score, then match."""
+    jobs = session.exec(select(Job).where(Job.company_id == company_id)).all()
+    ok = [j for j in jobs if _ENG_TITLE.search(j.title or "") and not _NOT_ENG_TITLE.search(j.title or "")]
+    ok.sort(key=lambda j: (bool(j.is_senior), not j.remote_anywhere, -(j.selection_score if j.selection_score is not None else -1),
+                           -(j.match_score if j.match_score is not None else -1), j.id))
+    return ok[0] if ok else None
+
+
+def me() -> dict:
+    """The sender, from the profile and config: name, school, year, resume link, the places
+    that count as shared ground."""
     from jobhunter import resume
-    from jobhunter.outreach import gates
 
+    p = resume.load_profile()
+    edu = (p.get("education") or [{}])[0]
+    school = (edu.get("institution") or "").split(",")[0].strip() or "my university"
+    year = (re.findall(r"(20\d\d)\s*$", edu.get("years") or "") or [""])[0]
+    full = p.get("name") if USER_NAME.startswith("(") else USER_NAME
+    resume_link = next((l.split(":", 1)[1].strip() for l in USER_LINKS if l.lower().startswith("resume")), None)
+    employers = [re.sub(r"\s*\(.*?\)|\s+(LLC|Inc\.?|Ltd\.?)$", "", e.get("company") or "").strip()
+                 for e in p.get("experience") or []]
+    rest = [x.strip() for x in (edu.get("institution") or "").split(",")[1:]]
+    return {"full_name": full, "first_name": (full or "").split()[0], "school": school, "year": year,
+            "resume_link": resume_link, "bond": f"CS+AI '{year[-2:]} grad" if year else "CS+AI grad",
+            "shared_places": [school, *rest, *[e for e in employers if e]]}
+
+
+def cold_signature() -> str:
+    """Name, headline, LinkedIn. The resume link is in the forwardable note, so the mail
+    carries two links in all (playbook: 1–2 links, a LinkedIn link in the signature)."""
+    lines = [USER_NAME]
+    if USER_HEADLINE:
+        lines.append(USER_HEADLINE)
+    lines += [l for l in USER_LINKS if "linkedin" in l.lower()][:1]
+    return "\n".join(lines)
+
+
+def _repos_for(contact: Contact, brief: dict, research: bool) -> list[dict]:
+    """Their own public repos: cached on the contact, else read from GitHub (no model)."""
+    if brief.get("repos"):
+        return brief["repos"]
+    if not (research and contact.github):
+        return []
+    import asyncio
+
+    from jobhunter.outreach.researcher import github_work
+    from jobhunter.scrapers.base import make_client
+
+    async def _go():
+        async with make_client() as http:
+            return await github_work(http, contact.github)
+
+    try:
+        work = asyncio.run(_go()) or {}
+    except Exception as e:  # noqa: BLE001 — a hook source failing is not a draft failing
+        log.debug("github repos for %s: %s", contact.github, e)
+        return []
+    return work.get("repos") or []
+
+
+def gather(contact_id: int, job_id: int | None = None, *, research: bool = True) -> dict:
+    """Everything one email may use, read from the DB (and the person's public repos).
+    {"error": ...} when no email may go to this person at all."""
+    init_db()
     with get_session() as session:
         contact = session.get(Contact, contact_id)
         if contact is None or not contact.email:
             return {"error": "contact not found or has no email"}
         if not guardrails.is_ready(contact):
-            # a referral ask goes only to someone the evidence places there now
             return {"error": f"not a confirmed-current referrer ({contact.affiliation or 'unchecked'}: "
                              f"{contact.affiliation_evidence or 'no evidence on record'})"}
         company = session.get(Company, contact.company_id)
-        # the targeting decision holds here too: no asks into an overrated, merged or
-        # quarantined company — the hand-picked list is the exception, as everywhere, except
-        # for the India pay floor, which holds for list rows too (india.py, 2026-10-08)
         if company is not None and (company.status == "below_pay_bar" or (
                 not company.list_key and (company.overrated or company.status))):
             why = (company.status_reason if company.status == "below_pay_bar" else None) or \
                 company.overrated_reason or company.status_reason or company.status or "overrated"
             return {"error": f"{company.name} is not a target ({why})"}
+        if company is not None and not company.list_key and admission.body_shop(company.name, industry=company.description):
+            return {"error": f"{company.name} is not a target (staffing / recruitment agency or body shop)"}
         job = session.get(Job, job_id) if job_id else None
         if job is None:
-            # fresher roles first, then remote-from-anywhere, then the matcher's score
-            job = session.exec(
-                select(Job).where(Job.company_id == contact.company_id)
-                .order_by(col(Job.is_senior), col(Job.remote_anywhere).desc(), col(Job.match_score).desc())
-            ).first()
+            job = pick_job(session, contact.company_id)
+        notes: dict = {}
+        if contact.research_notes:
+            try:
+                notes = json.loads(contact.research_notes)
+                notes = notes if isinstance(notes, dict) else {}
+            except json.JSONDecodeError:
+                notes = {}
+        repos = _repos_for(contact, notes, research)
+        if repos and not notes.get("repos") and (not contact.research_notes or notes):
+            notes["repos"] = repos            # cache only over empty or JSON notes, never over prose
+            contact.research_notes = json.dumps(notes)[:4000]
+            contact.researched_at = utcnow()
+            session.add(contact)
+            session.commit()
+        brief = None
+        if job is not None and job.needs_brief:
+            try:
+                brief = json.loads(job.needs_brief)
+            except json.JSONDecodeError:
+                brief = None
+        person = {"id": contact.id, "name": contact.name, "role": contact.role, "role_class": contact.role_class,
+                  "role_evidence": contact.role_evidence, "affiliation_evidence": contact.affiliation_evidence,
+                  "x_handle": contact.x_handle, "github": contact.github, "linkedin": contact.linkedin,
+                  "repos": repos, "email": contact.email, "confidence": contact.confidence,
+                  "affiliation": contact.affiliation, "role_source": contact.linkedin or contact.github}
+        comp = {"id": company.id if company else None, "name": company.name if company else None,
+                "website": company.website if company else None, "description": company.description if company else None,
+                "funding_stage": company.funding_stage if company else None,
+                "funding_amount_usd_m": company.funding_amount_usd_m if company else None,
+                "funding_evidence": company.funding_evidence if company else None,
+                "team_size": company.team_size if company else None,
+                "hiring_claim_by": company.hiring_claim_by if company else None,
+                "hiring_claim_source": company.hiring_claim_source if company else None,
+                "hiring_claim_url": company.hiring_claim_url if company else None,
+                "hiring_evidence": company.hiring_evidence if company else None,
+                "list_key": company.list_key if company else None, "story": company.story if company else None}
+        jd = None
+        if job is not None:
+            jd = {"id": job.id, "title": job.title, "url": job.url, "location": job.location, "remote": job.remote,
+                  "remote_anywhere": job.remote_anywhere, "market": job.selection_market,
+                  "selection_score": job.selection_score, "is_senior": job.is_senior}
+    return {"person": person, "company": comp, "job": jd, "brief": brief, "me": me(),
+            "research_hook": notes.get("hook")}
 
-        dup = session.exec(
-            select(Email).where(
-                Email.contact_id == contact_id,
-                Email.kind == "cold",
-                col(Email.status).in_(["draft", "approved", "sent", "replied"]),
-            )
-        ).first()
+
+def _corpus(g: dict, c) -> str:
+    from jobhunter import resume
+
+    prof = resume.load_profile()
+    p, co, j = g["person"], g["company"], g["job"] or {}
+    bits = [prof.get("_resume_text") or "", resume.profile_summary(max_chars=6000), USER_NAME, USER_HEADLINE,
+            " ".join(USER_LINKS), p.get("name"), p.get("role"), p.get("role_evidence"), p.get("affiliation_evidence"),
+            " ".join(f"{r.get('name')} {r.get('description') or ''}" for r in p.get("repos") or []),
+            co.get("name"), co.get("description"), co.get("funding_stage"), co.get("funding_evidence"),
+            f"{co['funding_amount_usd_m']:g}" if co.get("funding_amount_usd_m") else None,
+            j.get("title"), g["me"].get("school"), g["me"].get("year")]
+    for b in (g.get("brief") or {}).get("building") or []:
+        bits += [b.get("text"), b.get("quote")]
+    for n in c.proofs:
+        bits += [n.get("quote"), n.get("resume_line"), n.get("what"), n.get("need")]
+    return "\n".join(x for x in bits if x)
+
+
+def write(g: dict, *, use_model: bool = True, key=None) -> dict:
+    """One email from gathered evidence: the contract, the deterministic fill, the model's
+    polish when it is available and keeps the contract, the gate and the quality score.
+    Nothing is stored here. `incomplete` = a slot is missing and no email is written."""
+    from jobhunter.outreach import compose, gates, suppress
+
+    c = compose.contract(g["person"], g["company"], g["job"], g["brief"], g["me"])
+    out: dict = {"contract": c.as_dict(), "structure": c.structure, "structure_why": c.structure_why,
+                 "not_claimed": compose.not_claimed(g["brief"], c)}
+    if not c.complete:
+        out.update(incomplete=True, missing=c.missing, missing_labels=[compose.CONTRACT_LABEL[m] for m in c.missing])
+        return out
+    me_ = g["me"]
+    filled = compose.fill(c, me_)
+    subjects = compose.subject_options(c, me_)
+    i = compose.pick(subjects, key if key is not None else g["person"]["id"])
+    subject = subjects[i]["subject"] if i >= 0 else f"{c.target_role} at {c.company}"
+    pattern = subjects[i]["pattern"] if i >= 0 else "role_plain"
+    sig = cold_signature()
+    corpus = _corpus(g, c)
+    forbidden = [str(x) for x in ((g["brief"] or {}).get("forbidden") or [])]
+    opt = suppress.OPT_OUT_LINE or None
+
+    def evaluate(message: str) -> dict:
+        body = compose.assemble(message, filled["blurb_intro"], filled["blurb"], sig, opt)
+        v = gates.check(body, corpus=corpus, signature=sig, address_confidence=g["person"].get("confidence"),
+                        affiliation=g["person"].get("affiliation"), forbidden=forbidden,
+                        exclude=[filled["blurb_intro"], filled["blurb"], opt or ""], subject=subject)
+        q = compose.quality(message, subject, c, v.flags, v.words, has_blurb=True, has_resume=bool(c.resume_link))
+        return {"message": message, "body": body, "flags": v.flags, "words": v.words, "quality": q,
+                "blocked": v.blocked}
+
+    tpl = evaluate(filled["message"])
+    chosen, writer, model_note, model_version = tpl, "template", None, None
+    if use_model:
+        keep = f"the words \"{c.hook['anchor']}\", " if c.hook.get("anchor") else ""
+        prompt = POLISH_PROMPT.format(
+            label=compose.STRUCTURES[c.structure]["label"], why=c.structure_why, first=c.first_name,
+            role=c.recipient_role, company=c.company, message=filled["message"], keep=keep,
+            role_title=c.target_role, ask=compose.ask_line(c),
+            bullets="Keep the bulleted list of shipped work as a list." if c.structure == "proof_opinion" else "")
+        try:
+            data = _polish_call(prompt)
+        except openrouter.BudgetExceeded as e:
+            data, model_note = None, f"model ceiling: {str(e)[:120]}"
+            out["budget"] = True
+        except Exception as e:  # noqa: BLE001 — the template stands
+            data, model_note = None, f"model error: {type(e).__name__}"
+        msg = str((data or {}).get("message") or "").strip() if isinstance(data, dict) else ""
+        if msg:
+            msg = _EM_DASH.sub(", ", msg)
+            msg = re.sub(r"\n+\s*(best|thanks|regards|cheers|sincerely|thank you)[,!.]?\s*(\n.*)?$", "", msg,
+                         flags=re.I | re.DOTALL).strip()
+            dropped = compose.keeps_contract(msg, c)
+            if dropped:
+                model_note = "model draft dropped: " + ", ".join(dropped)
+            else:
+                model_version = evaluate(msg)
+                bad = {"faithfulness", "uncovered_claim", "ai_tell"} & {f["kind"] for f in model_version["flags"]}
+                if bad:
+                    model_note = "model draft flagged: " + ", ".join(sorted(bad))
+                elif model_version["quality"]["score"] >= tpl["quality"]["score"]:
+                    chosen, writer = model_version, "model"
+                else:
+                    model_note = "model draft scored lower than the template"
+        elif model_note is None:
+            model_note = "model gave nothing usable"
+    out.update(subject=subject, subject_pattern=pattern, subjects=subjects, hook_type=c.hook["type"],
+               writer=writer, polish_pending=bool(use_model and writer == "template" and out.get("budget")),
+               model_note=model_note, template=tpl, model=model_version, **{k: chosen[k] for k in (
+                   "message", "body", "flags", "words", "quality", "blocked")},
+               blurb=filled["blurb"], blurb_intro=filled["blurb_intro"], signature=sig, opt_out=opt)
+    return out
+
+
+def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = True,
+              candidate_id: int = 1, force: bool = False, use_model: bool = True,
+              record_incomplete: bool = True, mark_polish: bool = False) -> dict:
+    """Create one draft email in the review queue (never approved): the personalisation
+    contract filled from evidence, the structure for who they are, the gate's flags and
+    the quality score stored with it. A missing slot writes no email — an "incomplete"
+    row says what is missing instead (it can never be approved or sent)."""
+    from datetime import timedelta
+
+    init_db()
+    with get_session() as session:
+        dup = session.exec(select(Email).where(
+            Email.contact_id == contact_id, Email.kind == "cold",
+            col(Email.status).in_(["draft", "approved", "sending", "sent", "replied"]))).first()
         if dup:
             return {"error": "already drafted for this contact", "email_id": dup.id}
-        if not force:
+        contact = session.get(Contact, contact_id)
+        if not force and contact is not None:
             why = _cooldown(session, contact_id, contact.company_id, candidate_id)
             if why:
                 return {"error": why}
 
-        contact_name, contact_role, contact_email = contact.name, contact.role, contact.email
-        contact_name = greeting_name(contact_name, contact_email) if contact_name is None or _HANDLE.search(contact_name.lower()) else contact_name
-        contact_evidence = contact.role_evidence or ""
-        contact_conf = contact.confidence
-        contact_aff, contact_aff_ev = contact.affiliation, contact.affiliation_evidence
-        company_name = company.name if company else "your company"
-        company_id = contact.company_id
-        notes = contact.research_notes
-        job_title = job.title if job else "engineering roles"
-        job_where = ""
-        if job and (job.location or job.remote):
-            job_where = f" ({job.location or 'remote'})"
-        job_reasons = ""
-        if job and job.match_reasons:
-            try:
-                job_reasons = "; ".join(json.loads(job.match_reasons).get("reasons", [])[:2])
-            except (json.JSONDecodeError, AttributeError):
-                job_reasons = ""
-        job_db_id = job.id if job else None
-        company_facts_text, company_facts = _company_facts(company, job)
-        hook = needs_hook(job.needs_brief if job else None)
-
-    brief: dict = {}
-    if notes:
-        try:
-            brief = json.loads(notes)
-        except json.JSONDecodeError:
-            brief = {}
-    if research and not brief.get("hook"):
-        import asyncio
-
-        from jobhunter.outreach.researcher import research_contact
-
-        try:
-            brief = asyncio.run(research_contact(contact_id, job_db_id)) or {}
-        except openrouter.BudgetExceeded as e:
-            # the drafting call below would be refused for the same reason: say so, don't crash
-            return {"error": f"model budget: {e}", "budget": True}
-        except Exception as e:  # noqa: BLE001 — research only adds a hook; the gate still checks the draft
-            log.warning("research for contact %s failed, drafting without it: %s", contact_id, e)
-            brief = {}
-
-    repos = ", ".join(r.get("name", "") for r in (brief.get("repos") or [])[:3]) or "(none found)"
-    profile_text = resume.profile_summary(max_chars=1400)
-
-    try:
-        data = _draft_call(DRAFT_PROMPT.format(
-            user_name=USER_NAME,
-            user_headline=USER_HEADLINE,
-            profile=profile_text,
-            contact_name=contact_name or "there",
-            contact_role=contact_role or "engineer",
-            company=company_name,
-            hook=brief.get("hook") or "(none — do not pretend to know their work)",
-            shared_ground=brief.get("shared_ground") or "(none)",
-            repos=repos,
-            contact_evidence=contact_evidence or "(nothing beyond their address)",
-            company_facts=company_facts_text,
-            job_title=job_title,
-            job_where=job_where,
-            match_reasons=job_reasons or "(not scored)",
-            needs_block=hook["block"],
-            needs_angle=hook["angle"],
-            needs_forbidden=", ".join(hook["forbidden"]) or "(none)",
-        ))
-    except openrouter.BudgetExceeded as e:
-        return {"error": f"model budget: {e}", "budget": True}
-    if not isinstance(data, dict) or not data.get("body"):
-        return {"error": "LLM produced no usable draft"}
-
-    subject = _EM_DASH.sub(", ", str(data.get("subject") or f"Referral for {job_title} at {company_name}"))
-    body = _compose(str(data["body"]), contact_name)
-
-    # ---- the gate: what the draft was allowed to say, and whether it stayed inside it
-    corpus = "\n".join(filter(None, [
-        profile_text, USER_NAME, USER_HEADLINE, " ".join(USER_LINKS), USER_EMAIL,
-        contact_name, contact_role, contact_evidence, company_name, job_title, job_where,
-        brief.get("hook"), brief.get("shared_ground"), repos, job_reasons,
-        company_facts_text, " ".join(f["text"] for f in company_facts.values()),
-        *hook["corpus"],      # the brief's quotes and the resume lines that cover them
-    ]))
-    verdict = gates.check(body, corpus=corpus, signature=signature(), address_confidence=contact_conf,
-                          affiliation=contact_aff, affiliation_evidence=contact_aff_ev,
-                          forbidden=hook["forbidden"])
-    evidence = {
-        "person": {"evidence": contact_evidence or None, "hook": brief.get("hook"), "shared_ground": brief.get("shared_ground"), "repos": repos},
-        "company": company_facts,
-        "role": {"title": job_title, "where": job_where.strip(" ()") or None, "why_it_fits": job_reasons or None},
-        "needs": hook["evidence"],
-    }
-
+    g = gather(contact_id, job_id, research=research)
+    if g.get("error"):
+        return g
+    r = write(g, use_model=use_model)
+    p, co, j = g["person"], g["company"], g["job"]
     with get_session() as session:
+        for old in session.exec(select(Email).where(Email.contact_id == contact_id, Email.status == "incomplete")).all():
+            session.delete(old)
+        if r.get("incomplete"):
+            if not record_incomplete:
+                session.commit()
+                return {"incomplete": True, "missing": r["missing"], "missing_labels": r["missing_labels"]}
+            row = Email(contact_id=contact_id, company_id=co["id"], job_id=j["id"] if j else None, to_email=p["email"],
+                        subject="", body="", kind="cold", status="incomplete", candidate_id=candidate_id,
+                        review_flags=json.dumps([{"kind": "incomplete", "detail": m} for m in r["missing_labels"]]),
+                        contract=json.dumps(r["contract"], default=str), structure=r["structure"],
+                        address_confidence=p.get("confidence"), expires_at=utcnow() + timedelta(days=DRAFT_EXPIRY_DAYS))
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            return {"incomplete": True, "email_id": row.id, "missing": r["missing"], "missing_labels": r["missing_labels"]}
+        evidence = {"person": {"evidence": p.get("role_evidence"), "hook": r["contract"]["hook"],
+                               "repos": [x.get("name") for x in p.get("repos") or []][:3]},
+                    "company": {"name": co["name"], "description": co.get("description"),
+                                "funding": co.get("funding_evidence")},
+                    "role": {"title": j["title"], "url": j.get("url")} if j else None,
+                    "needs": {"covered": r["contract"]["proofs"], "not_claimed": r["not_claimed"]}}
         email = Email(
-            contact_id=contact_id,
-            company_id=company_id,
-            job_id=job_db_id,
-            to_email=contact_email,
-            subject=subject[:180],
-            body=body,
-            kind="cold",
-            status="draft",
-            review_flags=json.dumps(verdict.as_list()),
-            evidence=json.dumps(evidence, default=str),
-            expires_at=utcnow() + timedelta(days=DRAFT_EXPIRY_DAYS),
-            address_confidence=contact_conf,
-            candidate_id=candidate_id,
+            contact_id=contact_id, company_id=co["id"], job_id=j["id"] if j else None, to_email=p["email"],
+            subject=r["subject"][:180], body=r["body"], kind="cold", status="draft",
+            review_flags=json.dumps(r["flags"]), evidence=json.dumps(evidence, default=str),
+            expires_at=utcnow() + timedelta(days=DRAFT_EXPIRY_DAYS), address_confidence=p.get("confidence"),
+            candidate_id=candidate_id, structure=r["structure"], subject_pattern=r["subject_pattern"],
+            hook_type=r["hook_type"], words=r["words"], quality=r["quality"]["score"],
+            quality_detail=json.dumps(r["quality"]), writer=r["writer"], polish_pending=bool(r["polish_pending"] or (mark_polish and r["writer"] == "template")),
+            contract=json.dumps(r["contract"], default=str),
         )
         session.add(email)
         session.commit()
         session.refresh(email)
-        log.info("drafted email %s -> %s (%s) flags=%d", email.id, contact_email, company_name, len(verdict.flags))
-        return {"email_id": email.id, "subject": email.subject, "to": email.to_email,
-                "flags": verdict.as_list(), "words": verdict.words}
+        log.info("drafted email %s -> %s (%s) q=%s %s", email.id, p["email"], co["name"], r["quality"]["score"], r["writer"])
+        out = {"email_id": email.id, "subject": email.subject, "to": email.to_email, "flags": r["flags"],
+               "words": r["words"], "quality": r["quality"]["score"], "verdict": r["quality"]["verdict"],
+               "structure": r["structure"], "writer": r["writer"]}
+        if r.get("budget"):
+            out["budget"] = True
+        return out
+
+
+def polish_pending(limit: int = 10) -> dict:
+    """Re-write template drafts with the model once it is available again. Still drafts;
+    the old one is replaced only when the model's version keeps the contract and scores
+    at least as well."""
+    init_db()
+    with get_session() as session:
+        rows = session.exec(select(Email).where(Email.status == "draft", Email.polish_pending == True)  # noqa: E712
+                            .limit(limit)).all()
+        ids = [(e.id, e.contact_id, e.job_id) for e in rows]
+    out = {"tried": 0, "polished": 0, "stopped": None}
+    for eid, cid, jid in ids:
+        g = gather(cid, jid, research=False)
+        if g.get("error"):
+            continue
+        r = write(g)
+        out["tried"] += 1
+        if r.get("budget"):
+            out["stopped"] = "model ceiling"
+            break
+        if r.get("writer") == "model":
+            with get_session() as session:
+                e = session.get(Email, eid)
+                if e and e.status == "draft":
+                    e.body, e.review_flags, e.words = r["body"], json.dumps(r["flags"]), r["words"]
+                    e.quality, e.quality_detail = r["quality"]["score"], json.dumps(r["quality"])
+                    e.writer, e.polish_pending = "model", False
+                    session.add(e)
+                    session.commit()
+                    out["polished"] += 1
+    return out
 
 
 def draft_for_bets(limit: int = 10, *, candidate_id: int = 1) -> list[dict]:

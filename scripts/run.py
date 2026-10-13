@@ -1441,20 +1441,74 @@ def outreach_preflight(
 def outreach_batch(
     n: int = typer.Option(None, help="How many drafts (default: the warm-up week minus what is approved or in review)"),
     dry_run: bool = typer.Option(False, help="Only show who would be written to"),
-    no_research: bool = typer.Option(False, help="Skip the per-person research call (saves model budget)"),
+    no_research: bool = typer.Option(False, help="Skip reading the person's public repos"),
+    no_model: bool = typer.Option(False, help="Write every draft with the deterministic template (marked for polish)"),
 ) -> None:
     """Build the week's drafts — ★ India first, then the best complete companies, one ask per
     company — into the review queue. Nothing is approved: you read and approve each one."""
     _setup_logging()
+    from jobhunter import proposals
     from jobhunter.outreach import batch
 
-    out = batch.build(n, dry_run=dry_run, research=not no_research)
+    if not dry_run:
+        proposals.ensure_briefs([t["job_id"] for t in batch.plan(limit=200)["targets"]])
+    out = batch.build(n, dry_run=dry_run, research=not no_research, use_model=not no_model)
     if dry_run:
         for t in out.get("would_draft", []):
             typer.echo(f"{t['company'][:28]:28} {(t['person'] or '?')[:24]:24} {t['role'] or '':16} "
                        f"{t['address_confidence']:15} {t['affiliation']}")
         out = {k: v for k, v in out.items() if k != "would_draft"}
     _echo(out)
+
+
+@outreach_app.command("proposal")
+def outreach_proposal(
+    n: int = typer.Option(10, help="How many proposals (spread across structures and India / Remote)"),
+    no_model: bool = typer.Option(False, help="Template only; skip the model polish"),
+    show: bool = typer.Option(False, help="Only print the stored proposals, do not regenerate"),
+) -> None:
+    """PROPOSALS: how the pipeline would write to the best targets — evidence, structure,
+    subjects, the full email, quality and flags, what is not claimed. Never drafts, approves
+    or sends; the dashboard shows them at /outreach/proposal."""
+    _setup_logging()
+    from jobhunter import proposals
+
+    if not show:
+        _echo(proposals.build(n, use_model=not no_model))
+    d = proposals.latest()
+    for i in d["items"]:
+        head = f"#{i['rank']} {i['company']['name']} · {i['recipient']['name']} ({i['recipient']['role']}) · " \
+               f"{i['market']} · {i['structure']['id']}"
+        typer.echo("\n" + "=" * 100 + "\n" + head)
+        if not i.get("complete"):
+            typer.echo("NOT WRITTEN — " + "; ".join(i.get("missing") or []))
+            continue
+        typer.echo(f"quality {i['quality']['score']} ({i['quality']['verdict']}) · writer {i['writer']} · "
+                   f"hook {i['hook']['type']} ({i['hook']['source']})")
+        typer.echo(f"Subject: {i['subject']}\n\n{i['body']}")
+
+
+@outreach_app.command("polish")
+def outreach_polish(limit: int = typer.Option(10)) -> None:
+    """Re-write template drafts with the model now that it is available (they stay drafts)."""
+    _setup_logging()
+    from jobhunter.outreach import drafter
+
+    _echo(drafter.polish_pending(limit))
+
+
+@outreach_app.command("track")
+def outreach_track(status: str = typer.Option(None), sentiment: str = typer.Option(None)) -> None:
+    """Every cold email and where it stands: sent, waiting (days, follow-up due), replied
+    (positive / neutral / negative / closed), bounced, opted out."""
+    from jobhunter.outreach import tracker
+
+    t = tracker.track(status=status, sentiment=sentiment)
+    _echo(t["counts"])
+    for r in t["rows"]:
+        typer.echo(f"{r['email_id']:5} {(r['company_name'] or '')[:24]:24} {(r['contact_name'] or '')[:20]:20} "
+                   f"{r['stage']:10} {r['sentiment'] or '':9} {r['sent_at'] or '':20} "
+                   f"{'due ' + r['followup_due'] if r['followup_due'] else ''}")
 
 
 @outreach_app.command("week")

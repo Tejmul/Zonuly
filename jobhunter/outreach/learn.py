@@ -70,7 +70,10 @@ def report(*, days: int | None = None) -> dict:
             "kind": e.kind, "fresher_role": (not j.is_senior) if j else None,
             "anywhere": bool(j.remote_anywhere) if j else None,
             "week": e.sent_at.strftime("%G-W%V") if e.sent_at else None,
-            "words": len((e.body or "").split()),
+            "words": e.words if e.words is not None else len((e.body or "").split()),
+            "structure": e.structure, "subject_pattern": e.subject_pattern, "hook_type": e.hook_type,
+            "send_hour": e.send_hour, "writer": e.writer,
+            "quality": e.quality,
         })
 
     total = len(rows)
@@ -90,10 +93,43 @@ def report(*, days: int | None = None) -> dict:
         "by_email_kind": _bucket(rows, lambda r: r["kind"]),
         "by_role_level": _bucket(rows, lambda r: None if r["fresher_role"] is None else ("fresher role" if r["fresher_role"] else "senior role")),
         "by_remote_anywhere": _bucket(rows, lambda r: None if r["anywhere"] is None else ("says work from anywhere" if r["anywhere"] else "not stated")),
-        "by_length": _bucket(rows, lambda r: "under 100 words" if r["words"] < 100 else "100–140 words" if r["words"] <= 140 else "over 140 words"),
+        "by_length": _bucket(rows, lambda r: "under 60 words" if r["words"] < 60 else "60–90 words" if r["words"] <= 90
+                             else "91–120 words" if r["words"] <= 120 else "over 120 words"),
         "by_week": _bucket(rows, lambda r: r["week"]),
         "reading": _reading(total, replied, positive, closed),
+        "variants": variants(rows),
     }
+
+
+def variants(rows: list[dict], min_sent: int | None = None) -> dict:
+    """Reply / positive rates per writing variant — structure, subject pattern, hook type,
+    send hour, quality band, model vs template. A bucket with fewer than `min_sent` sends
+    says "not enough data yet" instead of a rate (a 1-of-3 is not a finding)."""
+    from jobhunter.outreach.compose import LEARN_MIN_SENT
+
+    n = LEARN_MIN_SENT if min_sent is None else min_sent
+    cold = [r for r in rows if r.get("kind", "cold") == "cold"]
+
+    def hour(r):
+        h = r.get("send_hour")
+        return None if h is None else f"{h:02d}:00–{(h + 1) % 24:02d}:00"
+
+    def band(r):
+        q = r.get("quality")
+        return None if q is None else ("80+" if q >= 80 else "60–79" if q >= 60 else "under 60")
+
+    out = {"min_sent": n}
+    for name, key in (("by_structure", lambda r: r.get("structure")), ("by_subject_pattern", lambda r: r.get("subject_pattern")),
+                      ("by_hook_type", lambda r: r.get("hook_type")), ("by_send_hour", hour),
+                      ("by_quality", band), ("by_writer", lambda r: r.get("writer"))):
+        b = _bucket(cold, key)
+        for v in b.values():
+            v["enough"] = v["sent"] >= n
+            v["note"] = None if v["enough"] else f"not enough data yet ({v['sent']} of {n} sends)"
+            if not v["enough"]:
+                v["reply_rate"] = v["yes_rate"] = None
+        out[name] = b
+    return out
 
 
 def _reading(total: int, replied: int, positive: int, closed: int) -> str:

@@ -23,7 +23,7 @@ from datetime import date, datetime, timedelta
 
 from sqlmodel import col, select
 
-from jobhunter import guardrails
+from jobhunter import admission, guardrails
 from jobhunter.db import Company, Contact, Email, Job, Reply, get_session, init_db, utcnow
 
 log = logging.getLogger(__name__)
@@ -113,22 +113,32 @@ def plan(limit: int = 50, *, candidate_id: int = 1, guessed_max: int | None = No
             if not c.list_key and c.overrated:
                 skipped["overrated"] = skipped.get("overrated", 0) + 1
                 continue
+            if not c.list_key and admission.body_shop(c.name, industry=c.description):
+                skipped["staffing / body shop"] = skipped.get("staffing / body shop", 0) + 1
+                continue
             if c.id in busy:
                 skipped["ask already out"] = skipped.get("ask already out", 0) + 1
                 continue
             people = [p for p in session.exec(select(Contact).where(Contact.company_id == c.id,
                                                                     col(Contact.email).is_not(None))).all()
                       if guardrails.is_ready(p) and not suppress.blocked(session, contact=p, company=c)]
+            # anyone already written to (or rejected) is not asked again; an "incomplete" row
+            # (the contract was missing a slot) does not count — the evidence may have grown
             people = [p for p in people if not session.exec(select(Email.id).where(
-                Email.contact_id == p.id, Email.kind == "cold")).first()]
+                Email.contact_id == p.id, Email.kind == "cold", Email.status != "incomplete")).first()]
             if not people:
                 skipped["no ready referrer with an address"] = skipped.get("no ready referrer with an address", 0) + 1
                 continue
             people.sort(key=_referrer_key)
             best = people[0]
             sel = _selection_score(session, c)
-            job = session.exec(select(Job).where(Job.company_id == c.id).order_by(
-                col(Job.is_senior), col(Job.remote_anywhere).desc(), col(Job.match_score).desc())).first()
+            from jobhunter.outreach.drafter import pick_job
+
+            job = pick_job(session, c.id)
+            if job is None:
+                # the contract needs a specific role to ask about (an engineering title on file)
+                skipped["no engineering role on file"] = skipped.get("no engineering role on file", 0) + 1
+                continue
             cands.append({
                 "company_id": c.id, "company": c.name, "list": c.list_key, "list_rank": c.list_rank,
                 "selection_score": sel, "priority": c.priority_score or 0,
@@ -136,6 +146,8 @@ def plan(limit: int = 50, *, candidate_id: int = 1, guessed_max: int | None = No
                 "address": best.email, "address_confidence": best.confidence, "affiliation": best.affiliation,
                 "evidence": (best.affiliation_evidence or "")[:140], "job_id": job.id if job else None,
                 "job": job.title if job else None, "alternates": len(people) - 1,
+                "alternate_ids": [p.id for p in people[1:4]],
+                "market": job.selection_market if job else None,
             })
     cands.sort(key=lambda r: (r["list"] != STAR, r["list_rank"] or 9999,
                               -(r["selection_score"] if r["selection_score"] is not None else -1),
@@ -174,7 +186,8 @@ def week(start: date | str | None = None) -> dict:
             "note": "drafts expire after outreach.draft_expiry_days — approve within the week they were written"}
 
 
-def build(n: int | None = None, *, candidate_id: int = 1, research: bool = True, dry_run: bool = False) -> dict:
+def build(n: int | None = None, *, candidate_id: int = 1, research: bool = True, dry_run: bool = False,
+          use_model: bool = True) -> dict:
     """Draft the next `n` asks (default: the warm-up week's total minus what is already
     approved or in review), one per company, into the review queue. Never approves."""
     from jobhunter.outreach import drafter, suppress
@@ -191,16 +204,33 @@ def build(n: int | None = None, *, candidate_id: int = 1, research: bool = True,
     if dry_run or n <= 0:
         out["would_draft"] = p["targets"][:n]
         return out
+    model_wanted = use_model
     for t in p["targets"]:
         if out["drafted"] >= n:
             break
-        try:
-            r = drafter.draft_for(t["contact_id"], t["job_id"], research=research, candidate_id=candidate_id)
-        except Exception as e:  # noqa: BLE001 — one target failing must not end the batch
-            r = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
+        # the best referrer first; when the personalisation contract cannot be filled for
+        # them (no real name, no hook, no covered need), the next one at the same company
+        r: dict = {}
+        tried = []
+        for cid in [t["contact_id"], *t.get("alternate_ids", [])]:
+            try:
+                r = drafter.draft_for(cid, t["job_id"], research=research, candidate_id=candidate_id,
+                                      use_model=use_model, record_incomplete=False,
+                                      mark_polish=model_wanted and not use_model)
+            except Exception as e:  # noqa: BLE001 — one target failing must not end the batch
+                r = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
+            if r.get("budget"):
+                use_model = False       # the ceiling: the rest are written by the template, marked for polish
+            if not r.get("incomplete"):
+                break
+            tried.append((cid, r.get("missing_labels") or []))
+        if r.get("incomplete") and tried:
+            r = drafter.draft_for(tried[0][0], t["job_id"], research=False, candidate_id=candidate_id,
+                                  use_model=False, record_incomplete=True)
+            r["tried"] = [{"contact_id": c, "missing": m} for c, m in tried]
         row = {"company": t["company"], "person": t["person"], "address_confidence": t["address_confidence"], **r}
         out["results"].append(row)
-        if r.get("email_id"):
+        if r.get("email_id") and not r.get("incomplete"):
             with get_session() as session:
                 e = session.get(Email, r["email_id"])
                 if e is not None:
@@ -210,9 +240,6 @@ def build(n: int | None = None, *, candidate_id: int = 1, research: bool = True,
             out["drafted"] += 1
         else:
             out["failed"] += 1
-            if r.get("budget"):
-                out["stopped"] = f"model budget: {r.get('error')}"
-                break
     log.info("batch: drafted %s of %s", out["drafted"], n)
     return out
 

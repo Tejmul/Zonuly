@@ -104,6 +104,85 @@ export type Email = {
   candidate_id?: number;
   job?: Job | null;
   replies?: Reply[];
+  // the composer's record (outreach/compose.py)
+  structure?: string | null;
+  subject_pattern?: string | null;
+  hook_type?: string | null;
+  words?: number | null;
+  quality?: number | null;
+  quality_detail?: Quality | null;
+  writer?: string | null;
+  polish_pending?: boolean | null;
+  contract?: Contract | null;
+};
+
+/* ---------------------------------------------------------------- the composer (outreach/compose.py) */
+
+export type QualityPart = { score: number; of: number; detail: string };
+export type Quality = { score: number; verdict: "good" | "ok" | "rewrite"; parts: Record<string, QualityPart> };
+export type Hook = { type: string; sentence: string; anchor: string; source: string; specificity: number };
+export type NeedProof = {
+  need: string | null; what: string; kind: string | null; status: string | null; quote: string | null;
+  url: string | null; proof: string; topic: string | null; proof_source: string | null; resume_line: string;
+};
+export type Contract = {
+  first_name: string | null; full_name: string | null; recipient_role: string | null; role_class: string | null;
+  company: string | null; target_role: string | null; target_role_full: string | null; target_role_url: string | null;
+  hook: Hook | null; hook_alternatives: Hook[]; need: NeedProof | null; proofs: NeedProof[];
+  resume_link: string | null; structure: string | null; structure_why: string | null; small: boolean;
+  missing: string[]; missing_labels: string[];
+};
+export type NotClaimed = { kind: string; what: string; quote: string | null; url: string | null };
+
+export type Proposal = {
+  id: number; run_id: string; created_at: string; rank: number; complete: boolean; missing: string[];
+  market: string;
+  recipient: { name: string | null; first_name: string | null; role: string | null; role_class: string | null;
+    email: string | null; address: string | null; affiliation: string | null; affiliation_evidence: string | null;
+    profile: string | null };
+  company: { id: number | null; name: string | null; website: string | null; description: string | null;
+    funding: string | null; team_size: number | null; list: string | null; small: boolean };
+  role: { id: number | null; title: string | null; url: string | null; location: string | null;
+    remote_anywhere: boolean | null; selection_score: number | null };
+  structure: { id: string; label?: string; for?: string; why?: string; chosen_because: string | null };
+  hook: Hook | null; hook_alternatives: Hook[] | null; needs: NeedProof[] | null; not_claimed: NotClaimed[] | null;
+  subjects?: { pattern: string; subject: string }[]; subject?: string; subject_pattern?: string;
+  body?: string; message?: string; words?: number; quality?: Quality; flags?: { kind: string; detail: string }[];
+  writer?: string; model_note?: string | null; template_body?: string; template_quality?: number;
+  model_body?: string | null; model_quality?: number | null;
+  followup?: { subject: string; body: string; after_days: number; new_value: boolean };
+};
+export type Proposals = {
+  run_id: string | null; created_at: string | null; items: Proposal[];
+  summary: { complete: number; incomplete: number; mean_quality: number | null;
+    structures: Record<string, number>; markets: Record<string, number> };
+};
+
+/* ---------------------------------------------------------------- tracking (outreach/tracker.py) */
+
+export type TrackRow = {
+  email_id: number; company_id: number; company_name: string | null; contact_name: string | null;
+  contact_email: string; contact_role: string | null; job_title: string | null; job_id: number | null;
+  subject: string; status: string; created_at: string | null; approved_at: string | null; sent_at: string | null;
+  structure: string | null; quality: number | null; quality_verdict: string | null; writer: string | null;
+  address_confidence: string | null;
+  stage: string; sentiment: string | null; days_waiting: number | null; followup_due: string | null;
+  followups: number; reply_snippet: string | null; replied_at: string | null;
+};
+export type Track = { counts: Record<string, number>; rows: TrackRow[] };
+export type ThreadMessage = {
+  type: "ours" | "theirs"; email_id: number; kind?: string; status?: string; to?: string; subject?: string;
+  body: string; at: string | null; sent?: boolean; error?: string | null; reply_id?: number; from?: string;
+  sentiment?: string | null; reason?: string | null; next?: string | null;
+};
+export type Thread = {
+  email_id: number; company_name: string | null; contact_name: string | null; contact_role: string | null;
+  to: string; job_title: string | null; job_url: string | null; structure: string | null;
+  subject_pattern: string | null; hook_type: string | null; quality: Quality | null; contract: Contract | null;
+  review_flags: { kind: string; detail: string }[] | null; writer: string | null; thread_id: string | null;
+  lifecycle: { stage: string; sentiment: string | null; days_waiting: number | null; followup_due: string | null;
+    followups: number; reply_snippet: string | null; replied_at: string | null };
+  messages: ThreadMessage[];
 };
 
 /* ---------------------------------------------------------------- selection confidence (confidence.py / needs.py) */

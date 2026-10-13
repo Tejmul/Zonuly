@@ -724,15 +724,74 @@ outreach:
   draft_expiry_days: 7
   contact_cooldown_days: 30
   company_cooldown_days: 30
+  # 2026-10-14 (knowledge/cold-email-playbook.md): the message itself, counted WITHOUT the
+  # forwardable blurb and the opt-out line. Boomerang 50–125 (75–100 peak), Gong <100,
+  # Instantly <80 — the playbook's synthesis is 60–120.
   gate:
-    min_words: 70
-    max_words: 160
+    min_words: 60
+    max_words: 120
+    blurb_max_words: 55
+    subject_min_words: 2
+    subject_max_words: 8
+    subject_max_chars: 60
+  # outreach/compose.py — the personalisation contract, the structures, the quality score
+  compose:
+    rewrite_below: 60          # quality under this: the draft is marked "rewrite" (kept, never deleted)
+    good_from: 80
+    small_team: 60             # team_size at or under this (or seed / Series A) = a small startup
+    learn_min_sent: 20         # a variant needs this many sends before its rate is shown
+    # Short, true phrasings of the resume's quantified bullets, used as the PROOF slot.
+    # `match` must appear in the resume line a covered need points at (needs brief), so a
+    # proof is only ever used where the brief says it answers what the role asks for.
+    # `line` follows "I ", `topic` can carry a subject line. Every word and number here is
+    # on the resume (profile/profile.json) — the faithfulness gate re-checks it per draft.
+    proofs:
+    - match: "Trigger.dev to Temporal"
+      line: "migrated a production pipeline from Trigger.dev to Temporal at MVRX Labs (YC-P26), cutting infra cost 95%"
+      topic: "Temporal migration, 95% cheaper"
+    - match: "Built GTM OS"
+      line: "built GTM OS at MVRX Labs, an agentic system that scrapes CEO and CTO posts and leads for 10+ YC clients (85% rise in client engagement)"
+      topic: "an agentic GTM system for 10+ YC clients"
+    - match: "Architected ChokePoints"
+      line: "architected ChokePoints, a guardrailed LLM pipeline tracking 27,000+ public companies, with human-reviewed newsletters"
+      topic: "an LLM pipeline over 27,000+ companies"
+    - match: "Shipped 3 production agentic systems"
+      line: "shipped 3 production agentic systems solo for a GTM agency serving 10+ YC clients"
+      topic: "3 agentic systems shipped solo"
+    - match: "Fine-tuned Mistral 7B"
+      line: "fine-tuned Mistral 7B with LoRA/QLoRA at eWealth Tech, lifting response accuracy from 20% to 92%"
+      topic: "Mistral 7B fine-tune, 20% to 92%"
+    - match: "latency by 88%"
+      line: "cut end-to-end AI response latency by 88% at eWealth Tech with SSE streaming"
+      topic: "88% lower LLM latency"
+    - match: "Redesigned PostgreSQL schema"
+      line: "redesigned a PostgreSQL schema and moved it to AWS Lambda at eWealth Tech, cutting infrastructure cost 95%"
+      topic: "a serverless move, 95% cheaper"
+    - match: "YOLOv11 detection accuracy"
+      line: "built a computer vision pipeline at Maverick Secure that took YOLOv11 detection accuracy from 20% to 88%"
+      topic: "YOLOv11, 20% to 88%"
+    - match: "semantic segmentation model"
+      line: "trained a semantic segmentation model to 96% accuracy at Maverick Secure"
+      topic: "a 96% segmentation model"
+    - match: "founding team at Maverick"
+      line: "led a GCP to AWS migration and set up CI/CD as part of the founding team at Maverick Secure"
+      topic: "a GCP to AWS migration"
+    - match: "RAG-powered chatbot"
+      line: "built a RAG chatbot with FAISS and LoRA that reduced support queries by 50%"
+      topic: "a RAG bot, 50% fewer tickets"
+    - match: "data pipelines using Python"
+      line: "built Python and AWS data pipelines that reduced manual processing time by 70%"
+      topic: "data pipelines, 70% less manual work"
+    - match: "multi-agent system that scraped"
+      line: "built Zonuly, a multi-agent system that mapped 3,528 companies and 19,159 referrers with resume-to-role matching"
+      topic: "a multi-agent system over 3,528 companies"
   send_window:
   - 10
   - 19
   user_name: Tejmul Movin
   user_headline: AI/ML Engineer • B.Tech CS+AI '27, Newton School of Technology
   user_links:
+  - "Resume: drive.google.com/file/d/1DJPsUTFm3dmc_OoSnawTJ3ZTQxOiBomz/view"
   - github.com/Tejmul
   - linkedin.com/in/tejmulmovin-softwareengineer
   - spylook.vercel.app

@@ -162,7 +162,7 @@ def record_reply(email_id: int, body: str, *, sender: str, message_id: str | Non
     return out
 
 
-def poll(limit: int = 50) -> dict:
+def poll(limit: int = 400) -> dict:
     """Check every sent thread for new inbound messages."""
     init_db()
     stats = {"threads_checked": 0, "new_replies": 0, "bounced": 0, "positive": 0, "negative": 0, "closed": 0, "neutral": 0}
@@ -182,7 +182,7 @@ def poll(limit: int = 50) -> dict:
         sent = session.exec(
             select(Email).where(
                 col(Email.status).in_(["sent", "replied"]), col(Email.gmail_thread_id).is_not(None)
-            ).limit(limit)
+            ).order_by(col(Email.sent_at).desc()).limit(limit)
         ).all()
         threads = [(e.id, e.gmail_thread_id, e.to_email) for e in sent]
         known = {
@@ -224,7 +224,7 @@ def poll(limit: int = 50) -> dict:
     return stats
 
 
-def _poll_imap(stats: dict, limit: int) -> dict:
+def _poll_imap(stats: dict, limit: int = 400) -> dict:
     """The same walk over IMAP: every sent thread, every message in it that is not ours.
     A bounce marks the email failed (the address is dead) and is never classified —
     a mailer-daemon is not a person saying no."""
@@ -235,7 +235,7 @@ def _poll_imap(stats: dict, limit: int) -> dict:
         sent = session.exec(
             select(Email).where(
                 col(Email.status).in_(["sent", "replied"]), col(Email.gmail_thread_id).is_not(None)
-            ).limit(limit)
+            ).order_by(col(Email.sent_at).desc()).limit(limit)
         ).all()
         threads = [(e.id, e.gmail_thread_id, e.to_email, e.gmail_message_id) for e in sent]
         known = {
@@ -299,6 +299,7 @@ def funnel() -> dict:
 
         return {
             "drafted": count_emails(Email.status == "draft"),
+            "incomplete": count_emails(Email.status == "incomplete"),
             "approved": count_emails(Email.status == "approved"),
             "rejected": count_emails(Email.status == "rejected"),
             "failed": count_emails(Email.status == "failed"),
@@ -309,3 +310,139 @@ def funnel() -> dict:
             "closed": count_replies("closed"),
             "neutral": count_replies("neutral"),
         }
+
+
+# ------------------------------------------------------------------ the lifecycle view (2026-10-14)
+
+def lifecycle(e: Email, replies: list[Reply], children: list[Email], contact=None, *, now=None) -> dict:
+    """Where one cold email stands, in the user's words:
+    draft / incomplete / approved / sent → waiting (days, follow-up due) → replied
+    (positive / neutral / negative / closed) / bounced / opted out / rejected / failed."""
+    from datetime import timedelta
+
+    from jobhunter.outreach import followup
+
+    now = now or utcnow()
+    last = max(replies, key=lambda r: r.received_at or now) if replies else None
+    opted = (contact is not None and getattr(contact, "email_status", None) == "opted_out") or any(
+        "asked not to be contacted" in (r.sentiment_reason or "") for r in replies)
+    out = {"stage": e.status, "sentiment": last.sentiment if last else None, "days_waiting": None,
+           "followup_due": None, "followups": len(children), "reply_snippet": None, "replied_at": None}
+    if e.status == "failed" and (e.error or "").startswith("bounced"):
+        out["stage"] = "bounced"
+    elif opted:
+        out["stage"] = "opted_out"
+    elif replies:
+        out["stage"] = "replied"
+        out["reply_snippet"] = re.sub(r"\s+", " ", last.body or "")[:200]
+        out["replied_at"] = last.received_at.isoformat() if last.received_at else None
+    elif e.status in ("sent", "replied"):
+        out["stage"] = "waiting"
+        sent = e.sent_at or e.created_at
+        out["days_waiting"] = (now - sent).days if sent else None
+        if not e.followup_sent and not children and followup.MAX_FOLLOWUPS > 0 and sent:
+            out["followup_due"] = (sent + timedelta(days=followup.AFTER_DAYS)).date().isoformat()
+    return out
+
+
+def track(*, status: str | None = None, sentiment: str | None = None, limit: int = 500) -> dict:
+    """Every cold email with its lifecycle, newest first, and the counts on top."""
+    import json as _json
+
+    from jobhunter.db import Company, Contact, Job
+
+    init_db()
+    with get_session() as session:
+        emails = session.exec(select(Email).where(Email.kind == "cold").order_by(col(Email.id).desc()).limit(limit)).all()
+        ids = [e.id for e in emails]
+        replies: dict[int, list[Reply]] = {}
+        children: dict[int, list[Email]] = {}
+        if ids:
+            kids = session.exec(select(Email).where(col(Email.parent_email_id).in_(ids))).all()
+            for k in kids:
+                children.setdefault(k.parent_email_id, []).append(k)
+            all_ids = ids + [k.id for k in kids]
+            parent_of = {k.id: k.parent_email_id for k in kids}
+            for r in session.exec(select(Reply).where(col(Reply.email_id).in_(all_ids))).all():
+                replies.setdefault(parent_of.get(r.email_id, r.email_id), []).append(r)
+        rows = []
+        for e in emails:
+            contact = session.get(Contact, e.contact_id)
+            company = session.get(Company, e.company_id)
+            job = session.get(Job, e.job_id) if e.job_id else None
+            lc = lifecycle(e, replies.get(e.id, []), children.get(e.id, []), contact)
+            q = None
+            if e.quality_detail:
+                try:
+                    q = _json.loads(e.quality_detail).get("verdict")
+                except (ValueError, AttributeError):
+                    q = None
+            rows.append({
+                "email_id": e.id, "company_id": e.company_id, "company_name": company.name if company else None,
+                "contact_name": contact.name if contact else None, "contact_email": e.to_email,
+                "contact_role": contact.role if contact else None,
+                "job_title": job.title if job else None, "job_id": e.job_id, "subject": e.subject,
+                "status": e.status, "created_at": e.created_at.isoformat() if e.created_at else None,
+                "approved_at": e.approved_at.isoformat() if e.approved_at else None,
+                "sent_at": e.sent_at.isoformat() if e.sent_at else None,
+                "structure": e.structure, "quality": e.quality, "quality_verdict": q, "writer": e.writer,
+                "address_confidence": e.address_confidence, **lc,
+            })
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[r["stage"]] = counts.get(r["stage"], 0) + 1
+        if r["sentiment"]:
+            counts[f"reply_{r['sentiment']}"] = counts.get(f"reply_{r['sentiment']}", 0) + 1
+    sent_total = sum(1 for r in rows if r["sent_at"])
+    counts["sent_total"] = sent_total
+    if status:
+        rows = [r for r in rows if r["stage"] == status or r["status"] == status]
+    if sentiment:
+        rows = [r for r in rows if r["sentiment"] == sentiment]
+    return {"counts": counts, "rows": rows}
+
+
+def thread(email_id: int) -> dict | None:
+    """One conversation in order: our cold email exactly as sent, every follow-up, and every
+    reply with its sentiment and the classifier's reason."""
+    from jobhunter.db import Company, Contact, Job
+
+    init_db()
+    with get_session() as session:
+        e = session.get(Email, email_id)
+        if e is None:
+            return None
+        root = session.get(Email, e.parent_email_id) if e.kind != "cold" and e.parent_email_id else e
+        kids = session.exec(select(Email).where(Email.parent_email_id == root.id).order_by(col(Email.id))).all()
+        msgs = [root, *kids]
+        reps = session.exec(select(Reply).where(col(Reply.email_id).in_([m.id for m in msgs]))).all()
+        contact = session.get(Contact, root.contact_id)
+        company = session.get(Company, root.company_id)
+        job = session.get(Job, root.job_id) if root.job_id else None
+        items = []
+        for m in msgs:
+            items.append({"type": "ours", "email_id": m.id, "kind": m.kind, "status": m.status, "to": m.to_email,
+                          "subject": m.subject, "body": m.body, "at": (m.sent_at or m.approved_at or m.created_at).isoformat()
+                          if (m.sent_at or m.approved_at or m.created_at) else None, "sent": bool(m.sent_at),
+                          "error": m.error})
+        for r in reps:
+            reason, _, action = (r.sentiment_reason or "").partition(" | next: ")
+            items.append({"type": "theirs", "reply_id": r.id, "email_id": r.email_id, "from": r.from_addr,
+                          "body": r.body, "sentiment": r.sentiment, "reason": reason or None, "next": action or None,
+                          "at": r.received_at.isoformat() if r.received_at else None})
+        items.sort(key=lambda x: x["at"] or "")
+        lc = lifecycle(root, list(reps), list(kids), contact)
+        import json as _json
+
+        def _j(raw):
+            try:
+                return _json.loads(raw) if raw else None
+            except ValueError:
+                return None
+
+        return {"email_id": root.id, "company_name": company.name if company else None,
+                "contact_name": contact.name if contact else None, "contact_role": contact.role if contact else None,
+                "to": root.to_email, "job_title": job.title if job else None, "job_url": job.url if job else None,
+                "structure": root.structure, "subject_pattern": root.subject_pattern, "hook_type": root.hook_type,
+                "quality": _j(root.quality_detail), "contract": _j(root.contract), "review_flags": _j(root.review_flags),
+                "writer": root.writer, "thread_id": root.gmail_thread_id, "lifecycle": lc, "messages": items}

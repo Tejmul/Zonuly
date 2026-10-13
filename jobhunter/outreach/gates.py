@@ -14,6 +14,10 @@ the queue. The gate never rewrites a sentence — it flags, the human decides.
     dashes        an em/en dash survived
     guessed       the address is pattern-guessed, not verified (bounces cost the account)
     affiliation   nothing on record says the person still works there (guardrails.affiliation)
+    subject       the subject line breaks the researched rules (2–8 words, ≤60 chars, no
+                  "quick question", no fake "Re:", no spam words, no "!")
+    readability   a sentence over 30 words, or an average over 22
+    blurb         the forwardable blurb is longer than blurb_max_words
     uncovered_claim  the body names a skill the needs brief marked UNCOVERED (the role asks
                   for it, the resume does not have it) — the draft may not claim it
 
@@ -28,8 +32,12 @@ from dataclasses import dataclass, field
 from jobhunter import CONFIG
 
 _G = ((CONFIG.get("outreach") or {}).get("gate") or {})
-MIN_WORDS = int(_G.get("min_words", 70))
-MAX_WORDS = int(_G.get("max_words", 160))
+MIN_WORDS = int(_G.get("min_words", 60))
+MAX_WORDS = int(_G.get("max_words", 120))
+BLURB_MAX_WORDS = int(_G.get("blurb_max_words", 55))
+SUBJECT_MIN_WORDS = int(_G.get("subject_min_words", 2))
+SUBJECT_MAX_WORDS = int(_G.get("subject_max_words", 8))
+SUBJECT_MAX_CHARS = int(_G.get("subject_max_chars", 60))
 
 # Words that read as machine-written to anyone who receives a lot of mail.
 AI_TELLS = [
@@ -59,6 +67,7 @@ _COMMON = {
     "python", "typescript", "javascript", "sql", "aws", "react", "docker", "kubernetes", "postgres",
     "github", "gmail", "google", "meet", "zoom", "calendly", "linkedin", "india", "us", "uk",
     "engineer", "engineering", "software", "ai", "ml", "llm", "rag", "api", "apis", "backend",
+    "your", "my", "some", "congrats", "interested", "resume", "posting", "role",
 }
 
 
@@ -90,7 +99,8 @@ def _body_only(body: str, signature: str | None) -> str:
 
 def check(body: str, *, corpus: str, signature: str | None = None,
           address_confidence: str | None = None, affiliation: str | None = None,
-          affiliation_evidence: str | None = None, forbidden: list[str] | None = None) -> GateResult:
+          affiliation_evidence: str | None = None, forbidden: list[str] | None = None,
+          exclude: list[str] | None = None, subject: str | None = None) -> GateResult:
     """Run every gate over `body` against the facts in `corpus`.
 
     `forbidden` are skills the needs brief marked uncovered (needs.forbidden_terms): the
@@ -119,10 +129,15 @@ def check(body: str, *, corpus: str, signature: str | None = None,
         phrase = re.sub(r"^(?:I'm|I’m|I've|I’ve|I'd|I’d|I'll|I’ll)\s+", "", phrase).strip()
         if not phrase:
             continue
+        # "Your Backend Engineer posting": the leading ordinary word is not part of the name
+        lead = phrase.split()
+        while len(lead) > 1 and lead[0].lower() in _COMMON:
+            lead = lead[1:]
+        phrase = " ".join(lead)
         words = phrase.split()
         # a capitalised word at the start of a sentence is not a proper noun claim
         start = m.start()
-        at_sentence_start = start == 0 or text[max(0, start - 2):start].strip() in ("", ".", "!", "?", ",")
+        at_sentence_start = start == 0 or text[max(0, start - 2):start].strip() in ("", ".", "!", "?", ",", "-", "•", ":", "(", "\"")
         if len(words) == 1 and (at_sentence_start or words[0].lower() in _COMMON):
             continue
         key = _normalise(phrase).strip()
@@ -144,7 +159,8 @@ def check(body: str, *, corpus: str, signature: str | None = None,
         if re.search(r"\b(min|mins|minutes?)\b", text[m.end(): m.end() + 12], re.I):
             continue
         digits = re.sub(r"[^\d.]", "", num)
-        if digits and digits not in re.sub(r"[^\d.\s]", " ", corpus):
+        # "27,000+" is 27000 in a corpus that may write it "27,000" or "27000"
+        if digits and digits not in re.sub(r"[^\d.\s]", " ", re.sub(r"(?<=\d),(?=\d{3})", "", corpus)):
             r.unsupported.append(num)
     if r.unsupported:
         r.flags.append({"kind": "faithfulness",
@@ -156,8 +172,13 @@ def check(body: str, *, corpus: str, signature: str | None = None,
     if tells:
         r.flags.append({"kind": "ai_tell", "detail": "reads machine-written: " + ", ".join(tells[:5])})
 
-    # ---- length
-    r.words = len(_WORD.findall(text))
+    # ---- length: the message itself — the forwardable blurb and the opt-out line are
+    # counted apart (`exclude`), they are skimmed, not read
+    counted = text
+    for seg in exclude or []:
+        if seg:
+            counted = counted.replace(seg, " ")
+    r.words = len(_WORD.findall(counted))
     if r.words < MIN_WORDS:
         r.flags.append({"kind": "length", "detail": f"{r.words} words — under {MIN_WORDS}, may read as thin"})
     elif r.words > MAX_WORDS:
@@ -167,6 +188,23 @@ def check(body: str, *, corpus: str, signature: str | None = None,
     asks = len(_ASK.findall(text))
     if asks > 2:
         r.flags.append({"kind": "one_ask", "detail": f"{asks} questions/requests — make it one"})
+
+    # ---- readability: short sentences (Boomerang: 3rd-grade reading level +36% replies)
+    long_s, avg = readability(counted)
+    if long_s or avg > 22:
+        r.flags.append({"kind": "readability",
+                        "detail": (f"{long_s} sentence(s) over 30 words" if long_s else "") +
+                                  (f"{'; ' if long_s else ''}average {avg:.0f} words a sentence" if avg > 22 else "")})
+
+    # ---- subject line
+    if subject is not None:
+        for problem in subject_problems(subject):
+            r.flags.append({"kind": "subject", "detail": problem})
+
+    # ---- the blurb has its own limit
+    for seg in exclude or []:
+        if seg and seg.lstrip().startswith('"') and len(_WORD.findall(seg)) > BLURB_MAX_WORDS:
+            r.flags.append({"kind": "blurb", "detail": f"forwardable blurb is {len(_WORD.findall(seg))} words — over {BLURB_MAX_WORDS}"})
 
     # ---- dashes
     if _DASH.search(text):
@@ -186,4 +224,46 @@ def check(body: str, *, corpus: str, signature: str | None = None,
     return r
 
 
-__all__ = ["GateResult", "check", "AI_TELLS", "MIN_WORDS", "MAX_WORDS"]
+_SENT = re.compile(r"(?<=[.!?:])\s+|\n+")
+_SPAM = re.compile(r"\b(free|guarantee[d]?|urgent|act now|limited time|winner|click here|100%|risk[- ]free|earn|\$\$)\b", re.I)
+
+
+def sentences(text: str) -> list[str]:
+    """Sentences (and bullet lines) of a plain-text body, greeting and sign-off included."""
+    return [s.strip(" -•\t") for s in _SENT.split(text or "") if len(_WORD.findall(s)) >= 2]
+
+
+def readability(text: str) -> tuple[int, float]:
+    """(sentences over 30 words, average words per sentence)."""
+    lens = [len(_WORD.findall(s)) for s in sentences(text)]
+    if not lens:
+        return 0, 0.0
+    return sum(1 for n in lens if n > 30), sum(lens) / len(lens)
+
+
+def subject_problems(subject: str) -> list[str]:
+    """What breaks the researched subject rules (playbook §1): 2–8 words / ≤60 chars, no
+    "quick question" (Hunter: 2.5% vs 2.9% reply), no fake reply/forward prefix on a cold
+    mail, no spam words, no exclamation marks, no shouting."""
+    s = (subject or "").strip()
+    out = []
+    n = len(s.split())
+    if n < SUBJECT_MIN_WORDS or n > SUBJECT_MAX_WORDS:
+        out.append(f"{n} words — keep it {SUBJECT_MIN_WORDS}–{SUBJECT_MAX_WORDS}")
+    if len(s) > SUBJECT_MAX_CHARS:
+        out.append(f"{len(s)} characters — over {SUBJECT_MAX_CHARS}, it gets cut off on a phone")
+    if re.search(r"quick question", s, re.I):
+        out.append('"quick question" underperforms (Hunter 2026)')
+    if re.match(r"^\s*(re|fwd?)\s*:", s, re.I):
+        out.append("a fake Re:/Fwd: on a first mail reads as a trick")
+    if "!" in s:
+        out.append("no exclamation marks")
+    if _SPAM.search(s):
+        out.append(f'spam-filter word: "{_SPAM.search(s).group(0)}"')
+    if any(len(w) > 4 and w.isupper() and w.isalpha() for w in s.split()):
+        out.append("a shouted word in capitals")
+    return out
+
+
+__all__ = ["GateResult", "check", "AI_TELLS", "MIN_WORDS", "MAX_WORDS", "BLURB_MAX_WORDS", "readability",
+           "sentences", "subject_problems"]

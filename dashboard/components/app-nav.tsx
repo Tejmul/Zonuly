@@ -26,6 +26,8 @@ const LINKS = [
   { href: "/queue", label: "Queue", icon: Inbox },
   // The send pipeline end to end — counts are public, so it is offered everywhere
   { href: "/outreach", label: "Outreach", icon: Workflow },
+  // how each email would be written, before anything is drafted (outreach/proposal) — names real people
+  { href: "/outreach/proposal", label: "Email proposal", icon: Mail, operatorOnly: true },
   // Replies is real inbound mail from real people; the public instance refuses it, so
   // the tab is not offered there rather than leading to a 403.
   { href: "/replies", label: "Replies", icon: MessageSquare, operatorOnly: true },
@@ -41,7 +43,9 @@ function useLinks() {
   return LINKS.filter((l) => !(l.operatorOnly && publicInstance)).map((l) => ({
     ...l,
     // /companies/12 belongs to the atlas, so the atlas tab stays lit there
-    active: path === l.href || path.startsWith(l.href + "/") || (l.href === "/companies" && path.startsWith("/companies")),
+    // a deeper link of its own ("/outreach/proposal") wins over its parent ("/outreach")
+    active: path === l.href || (path.startsWith(l.href + "/") && !LINKS.some((o) => o.href.startsWith(l.href + "/") && path.startsWith(o.href)))
+      || (l.href === "/companies" && path.startsWith("/companies")),
   }));
 }
 

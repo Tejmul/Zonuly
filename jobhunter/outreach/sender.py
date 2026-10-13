@@ -142,6 +142,8 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
             return {"error": "already sent", "email_id": email_id}
         if email.status != "approved":
             return {"error": f"email is '{email.status}', only approved emails are sent"}
+        if not (email.body or "").strip() or not (email.subject or "").strip():
+            return {"error": "empty subject or body — nothing is sent", "email_id": email_id}
         why = _referrer_problem(session, email)
         if why:
             return {"error": why, "email_id": email_id}
@@ -211,6 +213,8 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
         email = session.get(Email, email_id)
         email.status = "sent"
         email.sent_at = utcnow()
+        local = datetime.now()
+        email.send_hour, email.send_weekday = local.hour, local.strftime("%a")   # for learn.py
         email.gmail_message_id = result.get("id")
         email.gmail_thread_id = result.get("threadId") or thread_id
         email.error = None
@@ -334,6 +338,8 @@ def approve(email_id: int, *, subject: str | None = None, body: str | None = Non
             return {"error": f"no email {email_id}"}
         if email.status not in ("draft", "rejected"):
             return {"error": f"cannot approve an email that is '{email.status}'"}
+        if not (body if body is not None else email.body or "").strip() or not (subject if subject is not None else email.subject or "").strip():
+            return {"error": "this draft has no subject or body — the personalisation contract was not filled; re-draft it"}
         if email.expires_at and email.expires_at < utcnow():
             return {"error": "this draft is stale (older than the expiry window) — re-draft it; the facts may have changed"}
         why = _referrer_problem(session, email)

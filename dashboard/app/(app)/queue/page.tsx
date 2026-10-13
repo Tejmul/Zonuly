@@ -22,12 +22,18 @@ import {
 
 const FLAG_LABEL: Record<string, string> = {
   faithfulness: "unsupported claim", ai_tell: "reads machine-written", length: "length", one_ask: "more than one ask",
-  dashes: "dashes", guessed: "guessed address", conflict: "calendar clash",
+  dashes: "dashes", guessed: "guessed address", conflict: "calendar clash", subject: "subject line",
+  readability: "long sentences", blurb: "blurb too long", uncovered_claim: "claims an uncovered need",
+};
+const STRUCTURE_LABEL: Record<string, string> = {
+  proof_opinion: "Proof of work → their opinion", referral_engineer: "Referral ask · engineer",
+  founder_direct: "Direct ask · founder", recruiter_direct: "Direct ask · recruiter",
 };
 
 export default function QueuePage() {
   const drafts = useApi<Email[]>("/api/emails?status=draft");
   const approved = useApi<Email[]>("/api/emails?status=approved");
+  const incomplete = useApi<Email[]>("/api/emails?status=incomplete");
   const { data: quota } = useApi<Quota>("/api/gmail/status");
   const { tasks, watch, dismiss } = useTaskWatcher();
 
@@ -167,7 +173,15 @@ export default function QueuePage() {
                         <Badge className="border-line-strong/40 text-ink">follow-up</Badge>
                       ) : null}
                     </div>
-                    <div className="mt-0.5 truncate text-xs text-ink-3">{email.company_name}</div>
+                    <div className="mt-0.5 flex items-center gap-2 truncate text-xs text-ink-3">
+                      <span className="truncate">{email.company_name}</span>
+                      {email.quality != null ? (
+                        <span className={email.quality_detail?.verdict === "rewrite" ? "chip chip-strike" : "chip text-ink"}>
+                          <span className="tnum">{email.quality}</span>
+                          {email.quality_detail?.verdict === "rewrite" ? " · rewrite" : ""}
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="mt-1.5 truncate text-xs text-ink-2">{email.subject}</div>
                   </button>
                 </li>
@@ -212,6 +226,28 @@ export default function QueuePage() {
                   </ul>
                 </div>
               )}
+              {active.contract ? (
+                <div className="rounded-sm border border-line px-3 py-2.5 text-xs leading-relaxed text-ink-2">
+                  <p className="eyebrow">
+                    {STRUCTURE_LABEL[active.structure ?? ""] ?? active.structure} · quality {active.quality ?? "—"}
+                    {active.quality_detail ? ` (${active.quality_detail.verdict})` : ""} · {active.writer}
+                    {active.polish_pending ? " · waiting for the model to polish" : ""}
+                  </p>
+                  <p className="mt-1"><b className="text-ink">Why this structure:</b> {active.contract.structure_why}</p>
+                  {active.contract.hook ? (
+                    <p><b className="text-ink">Hook ({active.contract.hook.type}):</b> {active.contract.hook.sentence}{" "}
+                      <span className="text-ink-3">· {String(active.contract.hook.source).replace(/^https?:\/\//, "").slice(0, 60)}</span></p>
+                  ) : null}
+                  {active.contract.proofs.slice(0, 3).map((n, i) => (
+                    <p key={i}><b className="text-ink">Need → proof:</b> {n.what} → I {n.proof}</p>
+                  ))}
+                  {active.quality_detail ? (
+                    <p className="mt-1 text-ink-3">
+                      {Object.entries(active.quality_detail.parts).map(([k, v]) => `${k} ${v.score}/${v.of}`).join(" · ")}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               {active.evidence && (
                 <details className="text-xs text-ink-2">
                   <summary className="cursor-pointer select-none text-ink-3 hover:text-ink">
@@ -291,6 +327,27 @@ export default function QueuePage() {
           </Panel>
         )}
       </div>
+
+      {(incomplete.data?.length ?? 0) > 0 ? (
+        <Panel className="mt-4">
+          <PanelHead
+            eyebrow="Not written"
+            title={`${incomplete.data?.length} target${incomplete.data?.length === 1 ? "" : "s"} missing evidence`}
+          />
+          <p className="px-4 pt-2 text-xs text-ink-3">
+            The personalisation contract could not be filled, so no generic email was written. The next batch retries
+            them when the evidence has grown.
+          </p>
+          <ul className="divide-y divide-line">
+            {(incomplete.data ?? []).map((e) => (
+              <li key={e.id} className="px-4 py-2.5 text-xs">
+                <span className="text-ink">{e.company_name}</span> · {e.contact_name ?? e.to_email}
+                <span className="ml-2 text-ink-3">{(e.review_flags ?? []).map((f) => f.detail).join(" · ")}</span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
 
       <TaskStrip tasks={tasks} onDismiss={dismiss} />
     </>

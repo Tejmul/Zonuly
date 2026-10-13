@@ -312,7 +312,7 @@ class Email(SQLModel, table=True):
     body: str
     kind: str = "cold"                    # cold | followup
     parent_email_id: Optional[int] = None
-    status: str = Field(default="draft", index=True)  # draft | approved | rejected | sent | replied | failed
+    status: str = Field(default="draft", index=True)  # draft | incomplete | approved | rejected | sent | replied | failed
     error: Optional[str] = None
     gmail_thread_id: Optional[str] = None
     gmail_message_id: Optional[str] = None
@@ -326,6 +326,19 @@ class Email(SQLModel, table=True):
     expires_at: Optional[datetime] = None   # a draft older than this is stale and cannot be approved
     address_confidence: Optional[str] = None  # verified | pattern-guessed | scraped, frozen at draft time
     candidate_id: int = Field(default=1, index=True)   # which of us this is from (two profiles, one machine)
+    # ---- the composer's variant record (outreach/compose.py, 2026-10-14) — so learn.py can
+    # say which structure / subject / hook earns replies once there is enough data
+    structure: Optional[str] = Field(default=None, index=True)   # proof_opinion | referral_engineer | founder_direct | recruiter_direct
+    subject_pattern: Optional[str] = None
+    hook_type: Optional[str] = None       # person_post | shared_ground | person_commit | person_repo | person_bio | company_*
+    words: Optional[int] = None           # the message, without the blurb and the opt-out line
+    quality: Optional[int] = None         # 0–100 (compose.quality)
+    quality_detail: Optional[str] = None  # JSON: verdict + parts
+    writer: Optional[str] = None          # model | template
+    polish_pending: Optional[bool] = None # written by the template while the model was unavailable
+    contract: Optional[str] = None        # JSON: the personalisation slots and what was missing
+    send_hour: Optional[int] = None       # local hour it left (for learn)
+    send_weekday: Optional[str] = None
 
 
 class SendLedger(SQLModel, table=True):
@@ -373,6 +386,24 @@ class Candidate(SQLModel, table=True):
     gmail_token_file: Optional[str] = None
     daily_cap: int = 25
     active: bool = True
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class EmailProposal(SQLModel, table=True):
+    """A PROPOSAL of how one cold email would be written (outreach/proposal.py) — shown to
+    the user to judge the writing, NEVER in the send pipeline: no status, no approval, no
+    sender reads this table. Regenerated on demand (a run replaces the previous run)."""
+    __tablename__ = "email_proposal"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_id: str = Field(index=True)
+    rank: int = 0
+    contact_id: Optional[int] = Field(default=None, index=True)
+    company_id: Optional[int] = Field(default=None, index=True)
+    job_id: Optional[int] = None
+    market: Optional[str] = None          # india | remote | abroad
+    structure: Optional[str] = None
+    complete: bool = True                 # False: the contract is missing a slot, no email written
+    payload: str = "{}"                   # JSON: evidence, contract, subjects, body, quality, flags, not claimed
     created_at: datetime = Field(default_factory=utcnow)
 
 
