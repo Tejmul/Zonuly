@@ -616,7 +616,7 @@ def affiliation(*, company_name: str, domain: str | None = None, email_kind: str
                 employer_claim: str | None = None, last_commit_at: datetime | None = None,
                 commit_repo: str | None = None, team_page: str | None = None,
                 linkedin_headline: str | None = None, published_at: str | None = None,
-                now: datetime | None = None) -> Affiliation:
+                public_mention: str | None = None, now: datetime | None = None) -> Affiliation:
     """Does the evidence place this person at this company NOW?
 
     verified-current  public member of their GitHub org; their own profile names the
@@ -624,7 +624,8 @@ def affiliation(*, company_name: str, domain: str | None = None, email_kind: str
                       a commit to the company's own repo inside 12 months
     likely-current    a commit to the company's own repo inside 12 months; a public
                       LinkedIn headline naming the company; a company address published
-                      on the web
+                      on the web; a dated public page inside 12 months naming them at the
+                      company (a talk, a byline, a podcast — contacts/public_mentions.py)
     unconfirmed       anything else — an old commit, a fork, an address at another company
     generic           a shared inbox (info@, careers@) — a company contact, never a referrer
     """
@@ -648,6 +649,8 @@ def affiliation(*, company_name: str, domain: str | None = None, email_kind: str
         return Affiliation("likely-current", "linkedin-headline", f"public LinkedIn headline: {linkedin_headline[:120]}")
     if email_kind == "company" and published_at:
         return Affiliation("likely-current", "company-address", f"company address published at {published_at[:160]}")
+    if public_mention and names_company(public_mention, company_name, domain) and not _EX.search(public_mention):
+        return Affiliation("likely-current", "public-mention", public_mention[:300])
     why = []
     if employer_claim:
         why.append(f"profile says '{employer_claim[:60]}'")
@@ -1000,9 +1003,10 @@ def vet_contact(session, *, company: Company, name: str | None, email_addr: str 
                 last_commit_at: datetime | None = None, commit_repo: str | None = None,
                 team_page: str | None = None, linkedin_headline: str | None = None,
                 published_at: str | None = None, smtp: str | None = None,
-                profile_email: bool = False) -> dict | None:
+                profile_email: bool = False, public_mention: str | None = None) -> dict | None:
     """The guarded fields for a new Contact, or None when nothing usable is left (no
-    valid address AND no valid name). Refused parts become extraction_reject rows."""
+    valid address AND no valid name). Refused parts become extraction_reject rows. An
+    address that bounced before (contact.dead_email anywhere) is never stored again."""
     out: dict = {"handle": handle, "name_source": name_source}
     nm = person_name(name) if name else None
     if nm is not None and not nm:
@@ -1012,6 +1016,10 @@ def vet_contact(session, *, company: Company, name: str | None, email_addr: str 
             out["handle"] = name.strip()      # the login it was, kept apart
     out["name"] = nm.value if nm else None
     kind = None
+    if email_addr and _dead(session, email_addr):
+        reject(session, company_id=company.id, field="contact.email", value=email_addr,
+               reason="bounced before — a dead address is never stored again", source=url, channel=channel or source)
+        email_addr = None
     if email_addr:
         em = email(email_addr, domain=company.domain)
         if em:
@@ -1028,7 +1036,8 @@ def vet_contact(session, *, company: Company, name: str | None, email_addr: str 
     aff = affiliation(company_name=company.name, domain=company.domain, email_kind=kind,
                       email_addr=out["email"], org_member=org_member, employer_claim=employer_claim,
                       last_commit_at=last_commit_at, commit_repo=commit_repo, team_page=team_page,
-                      linkedin_headline=linkedin_headline, published_at=published_at)
+                      linkedin_headline=linkedin_headline, published_at=published_at,
+                      public_mention=public_mention)
     out.update({"affiliation": aff.label, "affiliation_source": aff.source,
                 "affiliation_evidence": aff.evidence[:300], "affiliation_checked_at": utcnow(),
                 "last_commit_at": last_commit_at})
@@ -1041,6 +1050,16 @@ def vet_contact(session, *, company: Company, name: str | None, email_addr: str 
         # a shared inbox reaches the company, never a person who can refer
         out["role_class"], out["referral_rank"] = "other", 9
     return out
+
+
+def _dead(session, addr: str) -> bool:
+    """Has this address bounced (outreach/suppress.mark_bounced)?"""
+    from sqlmodel import col, select
+
+    try:
+        return session.exec(select(Contact.id).where(col(Contact.dead_email) == addr.strip().lower())).first() is not None
+    except Exception:  # noqa: BLE001 — an old file without the column: nothing has bounced there
+        return False
 
 
 _GH_LOGIN = re.compile(r"github\.com/([A-Za-z0-9][A-Za-z0-9\-]{0,38})/?$")
@@ -1095,7 +1114,8 @@ def relabel_contact(p: Contact, company: Company | None) -> dict:
     # a label the GitHub pass already proved (membership, a dated commit) is not lowered
     # — unless the address it rested on is now known to be an inbox or a format example
     keep = (p.affiliation in READY and p.affiliation_source in ("org-member", "recent-commit",
-                                                                "company-address", "profile-company")
+                                                                "company-address", "profile-company",
+                                                                "public-mention")
             and kind != "generic" and "_email_reject" not in out)
     if not keep:
         out.update({"affiliation": aff.label, "affiliation_source": aff.source,
@@ -1119,6 +1139,8 @@ def is_ready(contact: Contact) -> bool:
     grows (a new role-mailbox word) protects rows labelled before it existed."""
     if contact.affiliation not in READY or contact.email_kind == "generic":
         return False
+    if getattr(contact, "do_not_contact", None):
+        return False      # they asked not to be written to (outreach/suppress.py)
     # a referral is asked of a person: an address with no name and no profile behind it
     # is a mailbox someone pasted on a page, whatever domain it is on
     if not (contact.name or contact.handle or contact.github or contact.linkedin):

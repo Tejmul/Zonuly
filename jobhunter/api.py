@@ -573,6 +573,90 @@ def update_job(job_id: int, payload: JobStatusIn) -> dict:
         return {"ok": True, "id": job_id, "status": payload.status}
 
 
+# ---------------------------------------------------------------- roles by selection confidence
+
+@app.get("/api/roles")
+def list_roles(
+    sort: Literal["selection", "recent", "match"] = "selection",
+    market: Literal["india", "remote", "abroad", "all"] = "all",
+    band: str | None = None,
+    q: str | None = None,
+    limit: int = Query(50, le=500),
+    offset: int = 0,
+) -> dict:
+    """Roles by the odds of getting selected (confidence.py): score, band, the top three
+    reasons and the main blocker. `band` is one or more of high,medium,low,long_shot."""
+    from jobhunter import confidence
+
+    with get_session() as session:
+        stmt = select(Job).where(col(Job.selection_score).is_not(None))
+        if market != "all":
+            stmt = stmt.where(Job.selection_market == market)
+        if band:
+            stmt = stmt.where(col(Job.selection_band).in_([b.strip() for b in band.split(",") if b.strip()]))
+        if q:
+            like = f"%{q}%"
+            stmt = stmt.where(col(Job.title).like(like) | col(Job.company_name).like(like))
+        total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
+        order = {"selection": (col(Job.selection_score).desc(), col(Job.id)),
+                 "recent": (col(Job.scraped_at).desc(),),
+                 "match": (col(Job.match_score).desc(), col(Job.selection_score).desc())}[sort]
+        rows = session.exec(stmt.order_by(*order).offset(offset).limit(limit)).all()
+        cids = {j.company_id for j in rows if j.company_id}
+        comps = {c.id: c for c in session.exec(select(Company).where(col(Company.id).in_(cids))).all()} if cids else {}
+        counts: dict[str, dict[str, int]] = {}
+        for m, b, n in session.exec(select(Job.selection_market, Job.selection_band, func.count())
+                                    .where(col(Job.selection_score).is_not(None))
+                                    .group_by(Job.selection_market, Job.selection_band)).all():
+            counts.setdefault(m or "-", {})[b or "-"] = n
+        return {"total": total, "counts": counts, "bands": confidence.BANDS,
+                "items": [confidence.role_row(j, comps.get(j.company_id)) for j in rows]}
+
+
+@app.get("/api/roles/{job_id}/brief")
+def role_brief(job_id: int) -> dict:
+    """The full selection breakdown and the needs brief for one role. A role with no stored
+    brief gets a deterministic one built now (no network, no model), marked stored=false."""
+    from jobhunter import confidence, needs
+
+    with get_session() as session:
+        job = session.get(Job, job_id)
+        if job is None:
+            raise HTTPException(404, "job not found")
+        company = session.get(Company, job.company_id) if job.company_id else None
+        selection = None
+        if job.selection_why:
+            try:
+                selection = json.loads(job.selection_why)
+            except json.JSONDecodeError:
+                selection = None
+        brief = needs.brief_for(job, company)
+        return {"role": confidence.role_row(job, company), "selection": selection, "brief": brief,
+                "brief_at": job.needs_brief_at.isoformat() if job.needs_brief_at else None}
+
+
+@app.post("/api/roles/{job_id}/brief")
+def rebuild_role_brief(job_id: int, synth: bool = True, web: bool = True) -> dict:
+    """(Re)build one role's needs brief in the background: public context + model synthesis
+    within the model budget; falls back to the deterministic brief at the ceiling."""
+    def run() -> dict:
+        from jobhunter import confidence, needs
+
+        with get_session() as session:
+            job = session.get(Job, job_id)
+            if job is None:
+                return {"error": "job not found"}
+            company = session.get(Company, job.company_id) if job.company_id else None
+            ctx = needs.context_for(session, company, network=web) if company else None
+            brief = needs.build_brief(job, company, context=ctx, synth=synth)
+            needs.store_brief(session, job, brief)
+            session.commit()
+        confidence.recompute(job_ids=[job_id], force=True)
+        return {"job_id": job_id, "synthesis": brief.get("synthesis"), "coverage": brief.get("coverage")}
+
+    return {"task_id": _run_task(f"brief-{job_id}", run)}
+
+
 class CompanyUpdateIn(BaseModel):
     notes: Optional[str] = None
 
@@ -861,7 +945,20 @@ def company_detail(company_id: int) -> dict:
     out = network.company_detail(company_id)
     if out.get("error"):
         raise HTTPException(status_code=404, detail=out["error"])
+    out["best_role"] = _best_role(company_id)
     return out
+
+
+def _best_role(company_id: int) -> dict | None:
+    """The company's best role by selection confidence (confidence.rollup), with its reasons."""
+    from jobhunter import confidence
+
+    with get_session() as session:
+        company = session.get(Company, company_id)
+        if company is None or not company.best_selection_job_id:
+            return None
+        job = session.get(Job, company.best_selection_job_id)
+        return confidence.role_row(job, company) if job else None
 
 
 @app.get("/api/contacts")
@@ -1234,6 +1331,32 @@ def poll_replies() -> dict:
     return {"task_id": _run_task("poll-replies", tracker.poll)}
 
 
+@app.get("/api/outreach/preflight")
+def outreach_preflight(sign_in: bool = True) -> dict:
+    """The launch checklist: every check red / amber / green with its fix, the warm-up
+    week and what the review queue holds for it, and what the user must do (operator only)."""
+    from jobhunter.outreach import preflight
+
+    return preflight.run(sign_in=sign_in)
+
+
+class BatchRequest(BaseModel):
+    n: int | None = None
+    dry_run: bool = False
+    research: bool = True
+
+
+@app.post("/api/outreach/batch")
+def outreach_batch(payload: BatchRequest) -> dict:
+    """Build the week's drafts into the review queue (never approved). A task: drafting
+    calls the model once or twice per draft."""
+    from jobhunter.outreach import batch
+
+    if payload.dry_run:
+        return batch.build(payload.n, dry_run=True)
+    return {"task_id": _run_task("outreach-batch", batch.build, payload.n, research=payload.research)}
+
+
 @app.get("/api/outreach/pipeline")
 def outreach_pipeline() -> dict:
     """The send pipeline in one read: every stage's count, reply sentiment, today's cap,
@@ -1414,9 +1537,9 @@ def patch_config(payload: ConfigPatch) -> dict:
     if mode is not None:
         from jobhunter.outreach import sender
 
-        mode = str(mode).lower()
+        mode = {"live": "gmail"}.get(str(mode).lower(), str(mode).lower())
         if mode not in ("dryrun", "gmail"):
-            raise HTTPException(status_code=422, detail="send_mode must be 'dryrun' or 'gmail'")
+            raise HTTPException(status_code=422, detail="send_mode must be 'dryrun' or 'gmail' (live)")
         CONFIG.setdefault("outreach", {})["send_mode"] = mode
         sender.SEND_MODE = mode
         restart_required = set(updates) != {"outreach"} or set(updates["outreach"]) != {"send_mode"}

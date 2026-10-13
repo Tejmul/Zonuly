@@ -134,6 +134,8 @@ def plan_company(session, company: Company, *, check_mx: bool = True) -> Plan:
     elif old:
         plan.pattern_change = "cleared"
     taken = {(p.email or "").lower() for p in rows if p.email}
+    # an address that bounced is never made again (outreach/suppress.mark_bounced)
+    dead = {(p.dead_email or "").lower() for p in rows if getattr(p, "dead_email", None)}
     sent_to = set(session.exec(select(Email.contact_id).where(
         col(Email.contact_id).in_([p.id for p in rows]))).all()) if rows else set()
     pat = v.pattern if v.status == "confirmed" else None
@@ -167,6 +169,9 @@ def plan_company(session, company: Company, *, check_mx: bool = True) -> Plan:
             continue
         if addr in taken:
             plan.skipped["taken"] = plan.skipped.get("taken", 0) + 1
+            continue
+        if addr in dead:
+            plan.skipped["bounced"] = plan.skipped.get("bounced", 0) + 1
             continue
         taken.add(addr)
         plan.add.append((p.id, addr))

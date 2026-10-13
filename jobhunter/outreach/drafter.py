@@ -63,6 +63,12 @@ THE JOB THE CANDIDATE WANTS:
 {job_title}{job_where}
 Why it fits (from the matcher): {match_reasons}
 
+WHAT THEY ACTUALLY NEED, AND WHAT OF IT THE CANDIDATE HAS DONE (from the needs brief; use
+these as the hook — their words, then the candidate's matching line):
+{needs_block}
+Suggested angle: {needs_angle}
+NEVER claim experience with any of these (the role asks, the resume does not have it): {needs_forbidden}
+
 Every proper noun and number you write must come from the facts above or the candidate's
 background. If a fact is not there, do not write it.
 
@@ -186,6 +192,42 @@ def _company_facts(company: Company | None, job: Job | None) -> tuple[str, dict]
     return ("\n".join(lines) or "(nothing beyond the name)"), facts
 
 
+def needs_hook(raw: str | None) -> dict:
+    """The covered needs, angle and forbidden skills from a role's stored needs brief
+    (Job.needs_brief, written by needs.py). Read as JSON — the drafter never imports the
+    analysis layer. Only COVERED (or partly covered) needs with a resume line are offered;
+    uncovered ones become the forbidden list the gate enforces."""
+    empty = {"block": "(no needs brief for this role — write from the facts above)", "angle": "(none)",
+             "forbidden": [], "corpus": [], "evidence": None}
+    if not raw:
+        return empty
+    try:
+        brief = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return empty
+    needs = [n for n in (brief.get("implied") or []) + (brief.get("stated") or [])
+             if n.get("status") in ("covered", "partial") and n.get("evidence")]
+    needs.sort(key=lambda n: (n.get("status") != "covered", -(n.get("weight") or 0), n.get("kind") != "implied"))
+    lines, corpus, used = [], [], []
+    for n in needs:
+        if len(lines) >= 4:
+            break
+        what = ", ".join(n.get("evidence_skills") or []) or n.get("text") or ""
+        lines.append(f"- They need {what}. Their words: \"{(n.get('quote') or '')[:180]}\" "
+                     f"The candidate: \"{n['evidence'][:280]}\" ({n.get('evidence_where')})")
+        corpus += [n.get("quote") or "", n["evidence"], n.get("evidence_where") or "", what]
+        used.append({"need": n.get("text"), "status": n.get("status"), "quote": n.get("quote"), "url": n.get("url"),
+                     "evidence": n["evidence"], "where": n.get("evidence_where")})
+    angles = brief.get("angles") or []
+    forbidden = [str(x) for x in (brief.get("forbidden") or [])]
+    if not lines:
+        return {**empty, "forbidden": forbidden}
+    return {"block": "\n".join(lines), "angle": angles[0] if angles else "(none)", "forbidden": forbidden,
+            "corpus": corpus + angles[:1],
+            "evidence": {"covered": used, "angle": angles[0] if angles else None, "forbidden": forbidden,
+                         "synthesis": brief.get("synthesis")}}
+
+
 def _cooldown(session, contact_id: int, company_id: int, candidate_id: int) -> str | None:
     """MOTIV §6: never both of us to one person in a month; one ask per company per month."""
     from datetime import timedelta
@@ -291,6 +333,7 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
                 job_reasons = ""
         job_db_id = job.id if job else None
         company_facts_text, company_facts = _company_facts(company, job)
+        hook = needs_hook(job.needs_brief if job else None)
 
     brief: dict = {}
     if notes:
@@ -331,6 +374,9 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
             job_title=job_title,
             job_where=job_where,
             match_reasons=job_reasons or "(not scored)",
+            needs_block=hook["block"],
+            needs_angle=hook["angle"],
+            needs_forbidden=", ".join(hook["forbidden"]) or "(none)",
         ))
     except openrouter.BudgetExceeded as e:
         return {"error": f"model budget: {e}", "budget": True}
@@ -346,13 +392,16 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
         contact_name, contact_role, contact_evidence, company_name, job_title, job_where,
         brief.get("hook"), brief.get("shared_ground"), repos, job_reasons,
         company_facts_text, " ".join(f["text"] for f in company_facts.values()),
+        *hook["corpus"],      # the brief's quotes and the resume lines that cover them
     ]))
     verdict = gates.check(body, corpus=corpus, signature=signature(), address_confidence=contact_conf,
-                          affiliation=contact_aff, affiliation_evidence=contact_aff_ev)
+                          affiliation=contact_aff, affiliation_evidence=contact_aff_ev,
+                          forbidden=hook["forbidden"])
     evidence = {
         "person": {"evidence": contact_evidence or None, "hook": brief.get("hook"), "shared_ground": brief.get("shared_ground"), "repos": repos},
         "company": company_facts,
         "role": {"title": job_title, "where": job_where.strip(" ()") or None, "why_it_fits": job_reasons or None},
+        "needs": hook["evidence"],
     }
 
     with get_session() as session:

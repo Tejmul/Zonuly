@@ -8,7 +8,8 @@ import { rise } from "@/components/anim";
 import {
   ArrowLeft, ExternalLink, GitBranch, Loader2, MapPin, ShieldAlert, ShieldCheck, ShieldQuestion, Users,
 } from "lucide-react";
-import { api, useApi, useTaskWatcher } from "@/lib/api";
+import { api, useApi, useTaskWatcher, type RoleRow } from "@/lib/api";
+import { BandChip } from "@/components/selection";
 import { TierPill } from "@/components/ui/tier";
 import { ErrorNote, Loading } from "@/components/ui/primitives";
 import { FundingCell } from "@/components/funding";
@@ -49,6 +50,7 @@ type Detail = {
   funding_round_label?: string | null; overrated?: boolean | null; city?: string | null;
   priority_score?: number | null; priority_why?: string | null;
   hiring: { status: string | null; evidence: string | null; careers_url: string | null; roles_on_their_page: string[]; checked_at: string | null };
+  best_role?: RoleRow | null;
   jobs: Job[];
   people: Person[];
   leads: number;
@@ -229,6 +231,32 @@ export default function CompanyPage() {
             Re-check on their site
           </ActionButton>
         </div>
+      </Section>
+
+      {/* ---------------------------------------------------------- the best bet here */}
+      <Section title="Best bet here" sub="The role with the best odds of selecting you (India and Remote first), and why.">
+        {data.best_role ? (
+          <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
+            <div className="flex shrink-0 flex-col items-start gap-1">
+              <span className="tnum text-2xl font-semibold">{data.best_role.score}</span>
+              <BandChip band={data.best_role.band} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <Link href={`/roles/${data.best_role.id}`} className="text-[13px] font-medium hover:underline">
+                {data.best_role.title}
+              </Link>
+              <span className="ml-2 text-xs text-ink-3">
+                {data.best_role.market === "india" ? "India" : data.best_role.market === "remote" ? "Remote" : "On-site abroad"}
+              </span>
+              <ul className="mt-1.5 space-y-0.5 text-xs text-ink-2">
+                {data.best_role.top_reasons.map((r, i) => <li key={i}>+ {r}</li>)}
+                {data.best_role.main_blocker && <li className="text-ink-3">− {data.best_role.main_blocker}</li>}
+              </ul>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[13px] text-ink-3">No role scored here yet.</p>
+        )}
       </Section>
 
       {/* ---------------------------------------------------------- 3. the roles */}

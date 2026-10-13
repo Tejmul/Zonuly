@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { ArrowLeft, ExternalLink, GitBranch, Mail, UserSearch } from "lucide-react";
-import { api, useApi, useTaskWatcher, type Job } from "@/lib/api";
+import { api, useApi, useTaskWatcher, type Job, type RoleBrief } from "@/lib/api";
 import { lpa, relTime } from "@/lib/utils";
 import { TaskStrip } from "@/components/shell";
 import { ConfidenceBadge, Odds } from "@/components/signals";
 import { OperatorOnly } from "@/components/access";
+import { NeedsBriefView, SelectionBreakdown } from "@/components/selection";
 import {
   Badge,
   Button,
@@ -59,6 +60,7 @@ export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const { data: job, error, reload } = useApi<Job>(id ? `/api/jobs/${id}` : null);
+  const brief = useApi<RoleBrief>(id ? `/api/roles/${id}/brief` : null);
   const { tasks, watch, dismiss } = useTaskWatcher();
 
   const [companyType, setCompanyType] = useState("");
@@ -108,6 +110,12 @@ export default function JobDetailPage() {
     } finally {
       setSavingNotes(false);
     }
+  }
+
+  async function rebuildBrief() {
+    if (!id) return;
+    const { task_id } = await api.post<{ task_id: string }>(`/api/roles/${id}/brief`);
+    watch(task_id, () => void brief.reload());
   }
 
   async function findContacts() {
@@ -198,6 +206,47 @@ export default function JobDetailPage() {
 
       <div className="grid gap-4 xl:grid-cols-3">
         <div className="flex flex-col gap-4 xl:col-span-2">
+          <Panel>
+            <PanelHead
+              eyebrow="Selection confidence"
+              title="The odds of getting selected, term by term"
+            />
+            <div className="p-4">
+              {brief.data?.selection ? (
+                <SelectionBreakdown sel={brief.data.selection} />
+              ) : brief.error ? (
+                <ErrorNote message={brief.error} onRetry={brief.reload} />
+              ) : brief.loading ? (
+                <Loading label="Reading the breakdown" rows={4} />
+              ) : (
+                <Empty title="Not scored yet" hint="The tick scores new roles within a few minutes." />
+              )}
+            </div>
+          </Panel>
+
+          <Panel>
+            <PanelHead
+              eyebrow="Needs brief"
+              title="What they actually need, and what of it you have done"
+              action={
+                <OperatorOnly>
+                  <Button size="sm" variant="quiet" onClick={rebuildBrief}>
+                    Rebuild brief
+                  </Button>
+                </OperatorOnly>
+              }
+            />
+            <div className="p-4">
+              {brief.data?.brief ? (
+                <NeedsBriefView brief={brief.data.brief} />
+              ) : brief.loading ? (
+                <Loading label="Reading the posting" rows={4} />
+              ) : (
+                <Empty title="No brief yet" hint="Briefs are built for the best roles first, a few per tick." />
+              )}
+            </div>
+          </Panel>
+
           <Panel>
             <PanelHead eyebrow="The read" title="Why this scored the way it did" />
             <div className="p-4">

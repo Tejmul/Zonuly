@@ -71,6 +71,16 @@ L = {
     # new Bengaluru / Hyderabad startups per tick (india.py), after the ★ list and fill work
     "india": int(_T.get("india_discovery_per_tick", 30)),
 }
+# 2026-10-14 "leads first": a tick's working time and how it is split. Leads (the people
+# step, address resolution, re-verification) run first inside their share; the company
+# steps share the rest, starting where the last tick stopped (a rotating cursor), so
+# discovery, websites, facts and careers each get their turn and never stop.
+BUDGET_S = int(_T.get("budget_seconds", 2400))
+_SHARE = _T.get("share") or {}
+SHARE_LEADS = float(_SHARE.get("leads", 0.7))
+SHARE_COMPANIES = float(_SHARE.get("companies", round(1 - SHARE_LEADS, 3)))
+SEND_INTERVAL_S = int(_T.get("send_interval_seconds", 300))
+SEND_LOCK = ROOT / "data" / "send.lock"
 PAID_HOURLY = bool(_T.get("paid_hourly", True))
 # the one-off cleanup's merge/quarantine pass, hourly. Off until the first
 # `scripts/cleanup_companies.py --apply` has been reviewed and run by hand.
@@ -98,9 +108,12 @@ def last(kind: str) -> dict | None:
 
 
 class _Lock:
+    def __init__(self, path: Path = LOCK):
+        self.path = path
+
     def __enter__(self):
-        LOCK.parent.mkdir(exist_ok=True)
-        self.fh = open(LOCK, "w")
+        self.path.parent.mkdir(exist_ok=True)
+        self.fh = open(self.path, "w")
         try:
             fcntl.flock(self.fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -180,7 +193,30 @@ def poll_replies() -> dict:
             set_setting(session, "outreach:last_poll_error", str(out.get("error") or ""))
     except Exception as e:  # noqa: BLE001
         log.warning("reply poll: could not record the poll time: %s", e)
+    # a thread silent for followup_after_days gets ONE follow-up drafted into the review
+    # queue (model, or the fixed template when the free models are out) — never approved
+    try:
+        from jobhunter.outreach import followup
+
+        f = followup.queue()
+        if f.get("due"):
+            out["followups"] = {k: v for k, v in f.items() if k != "ids"}
+    except Exception as e:  # noqa: BLE001
+        log.warning("follow-ups failed: %s", e)
+        out["followups_error"] = str(e)[:200]
     return out
+
+
+def run_send() -> dict:
+    """The send agent's run (launchd every SEND_INTERVAL_S): send the approved mail today's
+    warm-up slots say is due — one or two, minutes apart — and nothing else. Its own lock,
+    so it never waits behind a 30-minute tick. Approved mail only; dry-run unless the user
+    switched send_mode to live."""
+    from jobhunter.outreach import sender
+
+    out = sender.send_due()
+    out.pop("results", None) if not out.get("sent") else None
+    return {"kind": "send", "mode": sender.SEND_MODE, **out}
 
 
 def hygiene_step() -> dict:
@@ -235,90 +271,168 @@ def _saturated(s: dict) -> bool:
     return sum(_work(s.get(k)) for k in steps) < L["saturated_below"]
 
 
-def run_free(budget_s: int = 1800) -> dict:
-    """Keyless work, in the order the 2,000-target needs it: leads, then proof, then fresh companies."""
-    from jobhunter import enrich, harvest, hiring_verify, targeting
+CURSOR_KEY = "tick:company_cursor"
 
-    s: dict = {"kind": "free", "started": datetime.now().isoformat(timespec="seconds")}
+
+def _company_steps() -> list[tuple[str, object]]:
+    """The company work, as (name, callable) — run in rotation inside the companies share."""
+    from jobhunter import enrich, harvest, hiring_verify
+
+    steps: list[tuple[str, object]] = [
+        ("funding_rss", harvest.admit_funding_rss),
+        ("websites", lambda: enrich.find_websites(limit=L["websites"], keyless=True)),
+    ]
+    if L["facts_keyless"]:
+        steps.append(("facts_keyless", lambda: _count(enrich.facts_pending(limit=L["facts_keyless"], keyless=True))))
+    steps.append(("boards", lambda: {"probe": harvest.probe_ats(), "roles": harvest.scrape_roles()}))
+    if L["careers"]:
+        def _careers():
+            from jobhunter import careers
+
+            return {k: v for k, v in careers.run(limit=L["careers"]).items() if k != "lines"}
+        steps.append(("careers", _careers))
+    steps.append(("revalidate", lambda: _ref().revalidate_companies(
+        limit=L["revalidate"], budget_s=max(120, int(BUDGET_S * SHARE_COMPANIES) // 3))))
+    steps.append(("verify", lambda: {"checked": len(hiring_verify.verify_pending(
+        limit=L["verify"], tiers=("tier1", "tier2", "prospect", "unknown")))}))
+    steps.append(("yc", lambda: {"yc": _as(harvest.admit_yc()), "probe": harvest.probe_ats(),
+                                 "roles": harvest.scrape_roles()}))
+    if L["india"]:
+        def _india():
+            from jobhunter import india
+
+            return {k: v for k, v in india.discover(L["india"]).items() if k != "new_ids"}
+        steps.append(("india_discovery", _india))
+
+    def _india_jobs():
+        from jobhunter import india_jobs
+
+        return {k: v for k, v in india_jobs.run().items() if k not in ("new_companies", "top_new_by_stated_pay")}
+    steps.append(("india_jobs", _india_jobs))
+    return steps
+
+
+def _ref():
+    from jobhunter import referrals
+
+    return referrals
+
+
+def _as(v):
+    return v if isinstance(v, (dict, int, str)) else (v.as_dict() if hasattr(v, "as_dict") else v)
+
+
+def _cursor(n: int) -> int:
+    from jobhunter.db import get_session, get_setting
+
+    try:
+        with get_session() as s:
+            return int(get_setting(s, CURSOR_KEY, "0") or 0) % max(1, n)
+    except (ValueError, Exception):  # noqa: BLE001
+        return 0
+
+
+def _set_cursor(i: int) -> None:
+    from jobhunter.db import get_session, set_setting
+
+    with get_session() as s:
+        set_setting(s, CURSOR_KEY, str(i))
+
+
+def _addresses_step(touched: list[int], limit: int = 400) -> dict:
+    """Address resolution right after the people step: the pattern learned from every
+    company's own confirmed addresses, applied to the ready referrers without one — the
+    companies the people step just worked on, then every company with a ready referrer
+    and no address (cheap: the database and an MX lookup, no search)."""
+    from jobhunter import guardrails
+    from jobhunter.db import get_session
+
+    with get_session() as session:
+        counts = guardrails.ready_counts(session)
+    rest = [cid for cid, (r, e) in counts.items() if r > 0 and e == 0 and cid not in touched]
+    ids = list(dict.fromkeys(touched + rest))[:limit]
+    out = _ref().pattern_step(dry_run=False, company_ids=ids, sample=0)
+    return {k: v for k, v in out.items() if k not in ("samples", "skipped")}
+
+
+def run_free(budget_s: int | None = None) -> dict:
+    """Keyless work, LEADS FIRST (2026-10-14): replies and follow-ups, the guard, then the
+    people step + address resolution + re-verification inside `share.leads` of the
+    budget, then the company steps in rotation inside `share.companies`, then the cheap
+    tail (pay, grade, the complete bar)."""
+    from jobhunter import harvest, targeting
+
+    budget_s = budget_s or BUDGET_S
+    leads_s = int(budget_s * SHARE_LEADS)
+    companies_s = max(300, int(budget_s * SHARE_COMPANIES))
+    s: dict = {"kind": "free", "started": datetime.now().isoformat(timespec="seconds"),
+               "budget": {"total": budget_s, "leads": leads_s, "companies": companies_s}}
     t0 = time.time()
     # replies first: cheap, and a "yes" should never wait behind a scrape
     _step(s, "poll_replies", poll_replies)
-    # the daily refresh of every board goes first: it is the one thing that must happen
-    # today, and the budget checks below would otherwise let a slow tick starve it
+    # the daily refresh of every board: the one thing that must happen today
     _step(s, "full_scrape", full_scrape_if_due)
     _step(s, "hygiene", hygiene_step)
-    # the guard: stale hiring verdicts downgraded, completeness recomputed — the fill
-    # queues below order by what is actually missing (db.fill_order)
+    # the guard: stale hiring verdicts downgraded, completeness recomputed
     _step(s, "guard", _guard)
-    # the companies we hold nothing about go to the front of every queue below
     _step(s, "scrape_first", _mark_empty)
-    # priority before the queues read it: overrated, priority score, city for every row
     _step(s, "priority", targeting.refresh_priority)
-    # REFERRERS FIRST (2026-10-08): the ★ list, then companies complete except for a
-    # referrer with an address, then the rest by priority — GitHub, team pages via Jina,
-    # public LinkedIn through the keyless search, the confirmed address pattern
-    from jobhunter import referrals
 
-    _step(s, "people", referrals.people_step, limit=L["people"], budget_s=L["people_budget"])
-    # referrers whose evidence is older than 90 days re-confirmed; ~30 companies re-checked
-    _step(s, "reverify", referrals.reverify_referrers, limit=L["reverify"])
-    _step(s, "revalidate", referrals.revalidate_companies, limit=L["revalidate"])
-    # free discovery: funding-news RSS (amounts + dates, no Exa) then its boards/roles
-    _step(s, "funding_rss", harvest.admit_funding_rss)
-    # name-only companies (funding feeds, X, directories) get a verified website, keyless:
-    # the hosted Exa MCP search + a direct fetch that must name the company
-    _step(s, "websites", enrich.find_websites, limit=L["websites"], keyless=True)
-    if L["facts_keyless"]:
-        _step(s, "facts_keyless", lambda: _count(enrich.facts_pending(limit=L["facts_keyless"], keyless=True)))
-    _step(s, "probe", harvest.probe_ats)
-    _step(s, "roles", harvest.scrape_roles)
-    # the careers page for everyone the board probe missed — list rows first (careers.py)
-    if L["careers"]:
-        from jobhunter import careers
-
-        _step(s, "careers", lambda: {k: v for k, v in careers.run(limit=L["careers"]).items() if k != "lines"})
-    if time.time() - t0 < budget_s:
-        _step(s, "verify", lambda: {"checked": len(hiring_verify.verify_pending(limit=L["verify"], tiers=("tier1", "tier2", "prospect", "unknown")))})
-    if time.time() - t0 < budget_s:
-        _step(s, "yc", harvest.admit_yc)
-        _step(s, "probe", harvest.probe_ats)
-        _step(s, "roles", harvest.scrape_roles)
-    # is each GitHub-found person still there? org membership, recent commits, profiles
-    if L["affiliation"] and time.time() - t0 < budget_s:
+    # ---- LEADS: the ★ list, then companies complete except for a referrer with an address,
+    # then the rest by priority (referrals.people_queue) — GitHub inside its hourly budget,
+    # team pages via Jina, public LinkedIn, podcasts / talks / bylines, the confirmed pattern
+    referrals = _ref()
+    t_leads = time.time()
+    reserve = min(240, leads_s // 6)          # address resolution + re-verification after people
+    _step(s, "people", referrals.people_step, limit=L["people"], budget_s=max(60, leads_s - reserve))
+    touched = []
+    try:
+        touched = [int(x) for x in ((s.get("people") or {}).pop("touched", None) or [])]
+    except (TypeError, ValueError, AttributeError):
+        touched = []
+    _step(s, "addresses", _addresses_step, touched)
+    if time.time() - t_leads < leads_s:
+        _step(s, "reverify", referrals.reverify_referrers, limit=L["reverify"])
+    if L["affiliation"] and time.time() - t_leads < leads_s:
         from jobhunter.contacts import affiliation
 
         _step(s, "affiliation", lambda: {k: v for k, v in affiliation.run(
             L["affiliation"], reserve=L["affiliation_reserve"]).items() if k != "labels"})
-    # India discovery (2026-10-08): underrated Bengaluru / Hyderabad startups, keyless, each
-    # admitted only with a quote placing it in one of the two cities. After the ★ list and
-    # the fill work above; the new rows are filled first next tick (db.fill_order).
-    if L["india"] and time.time() - t0 < budget_s:
-        from jobhunter import india
+    s["leads_seconds"] = round(time.time() - t_leads)
 
-        _step(s, "india_discovery", lambda: {k: v for k, v in india.discover(L["india"]).items() if k != "new_ids"})
-    # India postings (2026-10-13): LinkedIn Jobs (guest), jobfound, Instahyre, offer-post
-    # leads — every india_jobs.every_hours, gently; LinkedIn backs off on 429 / 999 / walls
-    if time.time() - t0 < budget_s:
-        from jobhunter import india_jobs
-
-        _step(s, "india_jobs", lambda: {k: v for k, v in india_jobs.run().items()
-                                        if k not in ("new_companies", "top_new_by_stated_pay")})
-    # the existing companies are as complete as the channels allow (everything left is in
-    # backoff): go further — new companies through the keyless Exa MCP and the gate
-    if _saturated(s) and time.time() - t0 < budget_s:
+    # ---- COMPANIES: a fixed share, steps in rotation so each gets its turn
+    steps = _company_steps()
+    t_co = time.time()
+    first = _cursor(len(steps))
+    ran = 0
+    for k in range(len(steps)):
+        name, fn = steps[(first + k) % len(steps)]
+        if k and time.time() - t_co > companies_s:
+            break
+        _step(s, name, fn)
+        ran += 1
+    _set_cursor((first + ran) % len(steps))
+    s["companies_seconds"] = round(time.time() - t_co)
+    s["company_steps_ran"] = ran
+    # the existing companies are as complete as the channels allow: find new ones
+    if _saturated(s) and time.time() - t_co < companies_s + 120:
         _step(s, "discover", lambda: harvest.admit_exa_keyless(L["discover_queries"]).as_dict())
         _step(s, "probe_new", harvest.probe_ats)
+
+    # ---- the cheap tail
     _step(s, "pay", targeting.extract_job_pay, only_missing=True)
     _step(s, "grade", targeting.grade_companies, regrade=False)
-    # the India ₹20L pay floor, re-checked every tick: new evidence hides or brings back
     from jobhunter import india as _india
 
     _step(s, "pay_floor", lambda: {k: v for k, v in _india.apply_pay_floor().items()
                                    if k not in ("sample_hidden",)})
     _step(s, "priority_after", targeting.refresh_priority)
-    # the complete bar (what the dashboard shows) after this tick's people and re-checks
+
+    # SELECTION CONFIDENCE (confidence.py, 2026-10-14): re-score roles whose inputs changed, then a few needs briefs within the model budget
+    _step(s, "selection", lambda: __import__("jobhunter.confidence", fromlist=["tick"]).tick())
+
     _step(s, "complete", _complete)
-    if PAID_HOURLY and time.time() - t0 < budget_s:
+    if PAID_HOURLY and time.time() - t0 < budget_s + 600:
         s["paid_slice"] = run_paid(hourly=True)
     s["status"] = harvest.status()
     return s
@@ -437,12 +551,24 @@ def _kg_sync() -> dict:
     return {"synced": True, **({k: v for k, v in out.items() if isinstance(v, int)} if isinstance(out, dict) else {})}
 
 
+class _UseSendLock(Exception):
+    """The send agent has its own lock: it must never wait behind a long free tick."""
+
+
 def run(kind: str = "free") -> dict:
     """Entry point for launchd and the CLI. Takes the lock, runs one slice, records it."""
     LOGS.mkdir(exist_ok=True)
     try:
         with _Lock():
+            if kind == "send":
+                raise _UseSendLock()
             summary = run_free() if kind == "free" else run_paid() if kind == "paid" else {**run_free(), "paid": run_paid()}
+    except _UseSendLock:
+        try:
+            with _Lock(SEND_LOCK):
+                summary = run_send()
+        except RuntimeError as e:
+            return {"kind": kind, "skipped": str(e)}
     except RuntimeError as e:
         return {"kind": kind, "skipped": str(e)}
     summary["finished"] = datetime.now().isoformat(timespec="seconds")
@@ -472,6 +598,9 @@ def _plist(kind: str) -> dict:
     }
     if kind == "free":
         base["StartInterval"] = FREE_INTERVAL_S      # every 10 min (config); a missed interval fires on wake
+    elif kind == "send":
+        base["StartInterval"] = SEND_INTERVAL_S      # every 5 min: sends only approved mail whose slot is due
+        base["RunAtLoad"] = False
     else:
         base["StartCalendarInterval"] = {"Hour": PAID_HOUR, "Minute": PAID_MINUTE}   # daily, after the caps reset
     return base
@@ -481,7 +610,7 @@ def install() -> dict:
     """Write both LaunchAgents and load them, and the hourly audit beside them. Idempotent."""
     LOGS.mkdir(exist_ok=True)
     out = {}
-    for kind in ("free", "paid"):
+    for kind in ("free", "paid", "send"):
         path = _agents_dir() / f"{LABEL}.{kind}.plist"
         path.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(["launchctl", "unload", str(path)], capture_output=True)
@@ -496,7 +625,7 @@ def install() -> dict:
 
 def uninstall() -> dict:
     out = {}
-    for kind in ("free", "paid"):
+    for kind in ("free", "paid", "send"):
         path = _agents_dir() / f"{LABEL}.{kind}.plist"
         r = subprocess.run(["launchctl", "unload", str(path)], capture_output=True, text=True)
         if path.exists():
@@ -511,14 +640,17 @@ def status() -> dict:
     loaded = {ln.split("\t")[-1]: ln.split("\t")[0] for ln in r.stdout.splitlines() if LABEL in ln}
     out["pacing"] = {"paid_hourly": PAID_HOURLY, "used_today": _used_today(),
                      "per_day": {k: L[k] for k in ("facts", "describe", "story", "levels")}}
-    for kind in ("free", "paid"):
+    out["share"] = {"budget_seconds": BUDGET_S, "leads": SHARE_LEADS, "companies": SHARE_COMPANIES}
+    for kind in ("free", "paid", "send"):
         label = f"{LABEL}.{kind}"
         out[kind] = {
             "loaded": label in loaded, "pid": loaded.get(label) if loaded.get(label, "-") != "-" else None,
-            "schedule": f"every {FREE_INTERVAL_S // 60} min + on login/wake" if kind == "free" else f"daily {PAID_HOUR:02d}:{PAID_MINUTE:02d} + on login",
+            "schedule": f"every {FREE_INTERVAL_S // 60} min + on login/wake" if kind == "free" else
+            f"every {SEND_INTERVAL_S // 60} min (approved mail whose slot is due)" if kind == "send" else
+            f"daily {PAID_HOUR:02d}:{PAID_MINUTE:02d} + on login",
             "last": last(kind), "log": str(LOGS / f"tick-{kind}.log"),
         }
     return out
 
 
-__all__ = ["run", "run_free", "run_paid", "install", "uninstall", "status", "last"]
+__all__ = ["run", "run_free", "run_paid", "run_send", "install", "uninstall", "status", "last"]

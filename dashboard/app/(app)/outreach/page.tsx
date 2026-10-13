@@ -22,6 +22,7 @@ import { PageHead } from "@/components/shell";
 import { BudgetMeter, SentimentBadge } from "@/components/signals";
 import { SentimentSplit, count } from "@/components/outreach";
 import { ErrorNote, Loading } from "@/components/ui/primitives";
+import { LaunchChecklist } from "@/components/launch";
 
 const STATUS: Record<string, string> = {
   approved: "approved, waiting to send", sent: "sent", replied: "replied", failed: "failed to send",
@@ -97,6 +98,9 @@ export default function OutreachPage() {
           </Link>
         </section>
       )}
+
+      {/* -------------------------------------------- launch: what is ready, what you do */}
+      {!publicInstance && <LaunchChecklist />}
 
       {/* -------------------------------------------- the stage strip */}
       <section data-anim className="plate overflow-x-auto">

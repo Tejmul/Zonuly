@@ -232,11 +232,11 @@ def poll(followups: bool = typer.Option(True, help="Also queue follow-ups for si
     """Poll Gmail for replies and classify them."""
     _setup_logging()
     from jobhunter import notify
-    from jobhunter.outreach import drafter, tracker
+    from jobhunter.outreach import followup, tracker
 
     _echo(tracker.poll())
     if followups:
-        _echo(drafter.queue_followups())
+        _echo(followup.queue())
     notify.notify_replies()
 
 
@@ -1178,7 +1178,7 @@ app.add_typer(tick_app, name="tick")
 
 
 @tick_app.command("run")
-def tick_run(kind: str = typer.Option("free", help="free | paid | all")) -> None:
+def tick_run(kind: str = typer.Option("free", help="free | paid | all | send")) -> None:
     """Run one bounded slice now (what launchd calls). Takes the lock; skips if another tick is running."""
     _setup_logging()
     from jobhunter import tick
@@ -1188,7 +1188,8 @@ def tick_run(kind: str = typer.Option("free", help="free | paid | all")) -> None
 
 @tick_app.command("install")
 def tick_install() -> None:
-    """Write and load both LaunchAgents: com.zonuly.tick.free (hourly + on wake) and .paid (daily 06:15 + on login)."""
+    """Write and load the LaunchAgents: com.zonuly.tick.free (every 10 min + on wake), .paid (daily 06:15 + on login)
+    and .send (every 5 min: approved mail whose warm-up slot is due), plus the hourly audit."""
     from jobhunter import tick
 
     _echo(tick.install())
@@ -1416,6 +1417,107 @@ def outreach_confirm(event_id: int) -> None:
     from jobhunter.outreach import schedule
 
     _echo(schedule.confirm(event_id))
+
+
+@outreach_app.command("preflight")
+def outreach_preflight(
+    as_json: bool = typer.Option(False, "--json", help="The raw report"),
+    no_sign_in: bool = typer.Option(False, help="Do not sign in to Gmail (offline check)"),
+) -> None:
+    """Is everything in place for live sending? Red / amber / green, with the exact fix for each."""
+    from jobhunter.outreach import preflight
+
+    report = preflight.run(sign_in=not no_sign_in)
+    if as_json:
+        _echo(report)
+        return
+    typer.echo(preflight.text(report))
+    typer.echo("\nBefore Monday, you:")
+    for i, step in enumerate(report["user_checklist"], 1):
+        typer.echo(f"  {i}. {step}")
+
+
+@outreach_app.command("batch")
+def outreach_batch(
+    n: int = typer.Option(None, help="How many drafts (default: the warm-up week minus what is approved or in review)"),
+    dry_run: bool = typer.Option(False, help="Only show who would be written to"),
+    no_research: bool = typer.Option(False, help="Skip the per-person research call (saves model budget)"),
+) -> None:
+    """Build the week's drafts — ★ India first, then the best complete companies, one ask per
+    company — into the review queue. Nothing is approved: you read and approve each one."""
+    _setup_logging()
+    from jobhunter.outreach import batch
+
+    out = batch.build(n, dry_run=dry_run, research=not no_research)
+    if dry_run:
+        for t in out.get("would_draft", []):
+            typer.echo(f"{t['company'][:28]:28} {(t['person'] or '?')[:24]:24} {t['role'] or '':16} "
+                       f"{t['address_confidence']:15} {t['affiliation']}")
+        out = {k: v for k, v in out.items() if k != "would_draft"}
+    _echo(out)
+
+
+@outreach_app.command("week")
+def outreach_week(start: str = typer.Option(None, help="YYYY-MM-DD; default the warm-up start")) -> None:
+    """The warm-up week: each day's quota, and what the review queue holds for it."""
+    from jobhunter.outreach import batch
+
+    _echo(batch.week(start))
+
+
+@outreach_app.command("send-due")
+def outreach_send_due() -> None:
+    """What the send agent does every 5 minutes: send the approved mail whose slot is due."""
+    _setup_logging()
+    from jobhunter.outreach import sender
+
+    _echo(sender.send_due())
+
+
+@outreach_app.command("followups")
+def outreach_followups(
+    after_days: int = typer.Option(None, help="Silent this many days (default outreach.followup_after_days)"),
+    no_model: bool = typer.Option(False, help="Use the fixed template, not the model"),
+) -> None:
+    """Draft one follow-up per silent thread into the review queue."""
+    _setup_logging()
+    from jobhunter.outreach import followup
+
+    _echo(followup.queue(after_days=after_days, use_model=not no_model))
+
+
+@outreach_app.command("rehearse-week")
+def outreach_rehearse_week(
+    start: str = typer.Option("2026-10-19", help="The Monday to start on"),
+    days: int = typer.Option(9, help="Calendar days to simulate (9 = Mon..next Tue, so follow-ups show)"),
+) -> None:
+    """The whole week on a COPY of the database (sqlite backup → data/backups/): warm-up caps,
+    jittered slots, a bounce, an opt-out, a yes, follow-ups after 5 days. Live DB untouched."""
+    from jobhunter.outreach import rehearse
+
+    out = rehearse.run_on_copy(start=start, days=days)
+    typer.echo(rehearse.table(out))
+    _echo({k: v for k, v in out.items() if k not in ("days",)})
+
+
+@outreach_app.command("unsuppress")
+def outreach_unsuppress(
+    company: int = typer.Option(None, help="Company id"), contact: int = typer.Option(None, help="Contact id"),
+) -> None:
+    """Clear a do-not-contact flag set by an opt-out (only when they asked to hear from you again)."""
+    from jobhunter.db import Company, Contact, get_session
+
+    with get_session() as session:
+        for model, rid in ((Company, company), (Contact, contact)):
+            if rid:
+                row = session.get(model, rid)
+                if row is not None:
+                    row.do_not_contact, row.dnc_reason = None, None
+                    if model is Contact and row.email_status == "opted_out":
+                        row.email_status = None
+                    session.add(row)
+        session.commit()
+    _echo({"cleared": {"company": company, "contact": contact}})
 
 
 @outreach_app.command("learn")
@@ -1937,6 +2039,93 @@ def india_discover(
     _echo(india.discover(limit, searches=searches, dir_pages=dir_pages, rss_pages=rss_pages, rss_reads=rss_reads,
                          ats_queries=ats, budget_s=budget, force=force,
                          sources=tuple(x.strip() for x in sources.split(",") if x.strip())))
+
+
+# ---------------------------------------------------------------- selection confidence + needs briefs
+
+selection_app = typer.Typer(help="Selection confidence per role (confidence.py) and needs briefs (needs.py)", no_args_is_help=True)
+app.add_typer(selection_app, name="selection")
+
+
+@selection_app.command("recompute")
+def selection_recompute(all_: bool = typer.Option(False, "--all", help="Re-score every role, changed or not")) -> None:
+    """Score roles whose inputs changed (or all of them), then roll up the best role per company."""
+    _setup_logging()
+    from jobhunter import confidence
+
+    _echo(confidence.recompute(force=all_))
+    _echo(confidence.distribution())
+
+
+@selection_app.command("top")
+def selection_top(market: str = typer.Option("india", help="india | remote | abroad"),
+                  limit: int = typer.Option(15), json_: bool = typer.Option(False, "--json")) -> None:
+    """The best bets in one market: score, band, top reasons, main blocker."""
+    _setup_logging()
+    from sqlmodel import col, select
+
+    from jobhunter import confidence
+    from jobhunter.db import Company, Job, get_session
+
+    with get_session() as s:
+        rows = s.exec(select(Job).where(Job.selection_market == market, col(Job.selection_score).is_not(None))
+                      .order_by(col(Job.selection_score).desc(), col(Job.id)).limit(limit)).all()
+        out = [confidence.role_row(j, s.get(Company, j.company_id) if j.company_id else None) for j in rows]
+    if json_:
+        _echo(out)
+        return
+    for r in out:
+        typer.secho(f"  {r['score']:3} {r['band_label']:9} {r['company_name']} — {r['title']} (job {r['id']})", bold=True)
+        for reason in r["top_reasons"]:
+            typer.echo(f"        + {reason[:120]}")
+        if r["main_blocker"]:
+            typer.echo(f"        - {r['main_blocker'][:120]}")
+
+
+@selection_app.command("briefs")
+def selection_briefs(market: str = typer.Option(None, help="india | remote (default: both)"),
+                     top: int = typer.Option(50, help="Top N roles per market"),
+                     synth: int = typer.Option(100, help="Model syntheses allowed this run (0 = deterministic only)"),
+                     web: int = typer.Option(100, help="Companies whose public context may be fetched"),
+                     refresh: bool = typer.Option(False, help="Rebuild fresh briefs too")) -> None:
+    """Build needs briefs for the best roles, within the model and search budgets."""
+    _setup_logging()
+    from jobhunter import confidence
+
+    _echo(confidence.build_briefs(market=market, top=top, synth=synth, web=web, refresh=refresh))
+
+
+@selection_app.command("brief")
+def selection_brief(job_id: int, json_: bool = typer.Option(False, "--json")) -> None:
+    """One role's selection breakdown and needs brief."""
+    _setup_logging()
+    from jobhunter import needs
+    from jobhunter.db import Company, Job, get_session
+
+    with get_session() as s:
+        job = s.get(Job, job_id)
+        if job is None:
+            raise typer.Exit(1)
+        company = s.get(Company, job.company_id) if job.company_id else None
+        brief = needs.brief_for(job, company)
+        why = json.loads(job.selection_why) if job.selection_why else {}
+    if json_:
+        _echo({"selection": why, "brief": brief})
+        return
+    typer.secho(f"{job.title} @ {brief['company']} — {why.get('score')} {why.get('band_label')} ({why.get('market')})", bold=True)
+    for t in why.get("terms") or []:
+        typer.echo(f"  {t['label']:26} {t['points']:5}/{t['weight']:g}  {t['why'][:100]}")
+    for b in why.get("blockers") or []:
+        typer.secho(f"  BLOCKER cap {b['cap']}: {b['why']}", fg=typer.colors.RED)
+    typer.echo(f"\n  coverage {brief['coverage']}  synthesis={brief.get('synthesis')}")
+    for n in (brief.get("implied") or []) + (brief.get("stated") or []):
+        mark = {"covered": "✓", "partial": "~", "uncovered": "✗"}.get(n["status"], "?")
+        typer.echo(f"  {mark} [{n['kind']}] {n['text'][:90]}")
+        if n.get("evidence"):
+            typer.echo(f"      ← {n['evidence'][:100]} ({n.get('evidence_where')})")
+    typer.echo(f"\n  helps: {brief.get('helps_model') or brief.get('helps')}")
+    for a in brief.get("angles") or []:
+        typer.echo(f"  angle: {a}")
 
 
 if __name__ == "__main__":

@@ -185,10 +185,14 @@ def _thread_of(message_id: str, attempts: int = 4) -> str | None:
     return None
 
 
-def thread_messages(thread_id: str) -> list[dict]:
+def thread_messages(thread_id: str, *, message_id: str | None = None) -> list[dict]:
     """Every message Gmail files under a thread, oldest first, as
     {id, from, date, text, is_bounce, is_ours}. `id` is Gmail's X-GM-MSGID, stable
-    across polls, so a reply is recorded once."""
+    across polls, so a reply is recorded once.
+
+    With `message_id` (our mail's Message-ID), anything that references it is read too,
+    whatever thread Gmail filed it under — a colleague answering from another address
+    with a new subject, a bounce Gmail did not thread."""
     out: list[dict] = []
     with _imap() as conn:
         conn.select('"[Gmail]/All Mail"', readonly=True)
@@ -197,7 +201,15 @@ def thread_messages(thread_id: str) -> list[dict]:
         else:
             # not yet resolved to a Gmail thread: anything referencing our Message-ID
             _, data = conn.search(None, "OR", "HEADER", "In-Reply-To", thread_id, "HEADER", "References", thread_id)
-        for num in (data[0] or b"").split():
+        nums = list(dict.fromkeys((data[0] or b"").split()))
+        ref = message_id if (message_id or "").startswith("<") else None
+        if ref and ref != thread_id:
+            try:
+                _, more = conn.search(None, "OR", "HEADER", "In-Reply-To", ref, "HEADER", "References", ref)
+                nums += [n for n in (more[0] or b"").split() if n not in nums]
+            except imaplib.IMAP4.error as e:
+                log.debug("reference search failed: %s", e)
+        for num in nums:
             _, fetched = conn.fetch(num, "(X-GM-MSGID BODY.PEEK[])")
             if not fetched or not isinstance(fetched[0], tuple):
                 continue

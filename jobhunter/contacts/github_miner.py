@@ -305,8 +305,9 @@ async def mine(
 
     ordered = sorted(people.values(), key=lambda p: p.email is None)[:limit]
 
-    # 3. enrich the ones we're most likely to write to — bio gives us their role
-    for person in ordered[:PROFILES_TO_ENRICH]:
+    # 3. enrich the ones we're most likely to write to — bio gives us their role. Without a
+    # token (60 calls an hour) only the first few: the budget is for addresses, not bios
+    for person in ordered[:PROFILES_TO_ENRICH if token() else 4]:
         profile = await user_profile(http, person.login)
         if profile is None:
             continue
@@ -325,6 +326,28 @@ async def mine(
     found = sum(1 for p in ordered if p.email)
     log.info("github: %s (org=%s) -> %d people, %d with emails", company_name, org, len(ordered), found)
     return org, ordered
+
+
+_LEFT: dict = {"at": 0.0, "remaining": None, "limit": None, "reset": None}
+
+
+def calls_left(max_age_s: int = 60) -> dict:
+    """GitHub's core budget right now — {remaining, limit, reset, authenticated}. The
+    /rate_limit call itself costs nothing; cached for a minute. Unauthenticated (no
+    separate-account GITHUB_TOKEN) the limit is 60 an hour, so the people step mines a
+    company only while enough calls are left (tick.github_min_remaining)."""
+    import time as _t
+
+    if _LEFT["at"] and _t.time() - _LEFT["at"] < max_age_s:
+        return {k: _LEFT[k] for k in ("remaining", "limit", "reset")} | {"authenticated": bool(token())}
+    try:
+        r = httpx.get(f"{API}/rate_limit", headers=headers(), timeout=15)
+        core = (r.json().get("resources") or {}).get("core") or {}
+        _LEFT.update(at=_t.time(), remaining=core.get("remaining"), limit=core.get("limit"), reset=core.get("reset"))
+    except Exception as e:  # noqa: BLE001 — unknown budget: let the call path find out
+        log.debug("github rate_limit unreadable: %s", e)
+        _LEFT.update(at=_t.time(), remaining=None, limit=None, reset=None)
+    return {k: _LEFT[k] for k in ("remaining", "limit", "reset")} | {"authenticated": bool(token())}
 
 
 async def rate_limit(http: httpx.AsyncClient) -> dict:

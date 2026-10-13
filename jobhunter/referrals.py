@@ -20,8 +20,10 @@ to. This module is the work that gets us there, run by the tick before anything 
                 lists roles. A failed part drops the company out of complete.
     measure     the numbers the report and the audit read.
 
-Every write goes through guardrails. Free channels only: GitHub via the authenticated
-gh login, Jina Reader, DuckDuckGo-through-Jina and the hosted Exa MCP (web.KEYLESS).
+Every write goes through guardrails. Free channels only, none through the user's own
+accounts: GitHub through GITHUB_TOKEN (a separate account's; 60 calls an hour without one,
+budgeted per company), Jina Reader, the keyless web search (web.KEYLESS), yt-dlp's public
+YouTube metadata (contacts/public_mentions.py).
 
 Layering: db, guardrails, contacts, research, hiring_verify — the pipeline layer.
 """
@@ -54,6 +56,10 @@ REVALIDATE_PER_TICK = int(_R.get("revalidate_per_tick", 30))
 REST_DAYS = tuple(_R.get("rest_days") or (3, 7, 21))
 #: re-run GitHub + site discovery only when the last run is older than this
 DISCOVER_FRESH_DAYS = int(_R.get("discover_fresh_days", 7))
+#: GitHub mining for a company needs about this many calls of the hourly budget
+GITHUB_MIN_REMAINING = int(((CONFIG.get("tick") or {}).get("github_min_remaining", 20)))
+#: the public-mention channels (contacts/public_mentions.py)
+MENTIONS = bool(_R.get("public_mentions", True))
 MARK = "[refer]"
 STAR = "india-star"
 LOG_KEY = "referrals:runs"
@@ -313,7 +319,7 @@ def people_for_company(cid: int, *, linkedin: bool = True) -> dict:
     one with an address: GitHub + their site → team pages via Jina → addresses on the open
     web (only while nobody confirmed there has one) → LinkedIn (keyless search, best
     referrers first, until TARGET) → the confirmed pattern."""
-    from jobhunter.contacts import addresses, discover_for_company, linkedin_public, web_emails
+    from jobhunter.contacts import addresses, discover_for_company, github_miner, linkedin_public, web_emails
     from jobhunter.research import web
 
     with get_session() as session:
@@ -326,10 +332,16 @@ def people_for_company(cid: int, *, linkedin: bool = True) -> dict:
             days=REST_DAYS[0] if listed else DISCOVER_FRESH_DAYS)
     r0, e0 = _counts(cid)
     out: dict = {"company": name, "before": [r0, e0], "github_site": 0, "team_pages": 0, "web": 0, "linkedin": 0,
-                 "by_pattern": 0, "channels": []}
+                 "mentions": 0, "by_pattern": 0, "channels": []}
     if has_site and not fresh:
+        # GitHub at 60 calls an hour without a separate-account token: mine only while the
+        # hourly budget has room for a company (~20 calls); the site scrape runs either way
+        left = github_miner.calls_left().get("remaining")
+        gh_ok = left is None or left >= GITHUB_MIN_REMAINING
+        if not gh_ok:
+            out["github_skipped"] = f"GitHub budget: {left} calls left this hour"
         try:
-            s = asyncio.run(discover_for_company(cid))
+            s = asyncio.run(discover_for_company(cid, github=gh_ok))
             out["github_site"] = s.get("added", 0)
             out["by_pattern"] += s.get("by_pattern", 0)
             out["channels"].append("github+site")
@@ -367,6 +379,18 @@ def people_for_company(cid: int, *, linkedin: bool = True) -> dict:
                     break
                 continue
             out["linkedin"] += res.get("added", 0)
+    # 2026-10-14: people named in public — podcasts / YouTube (yt-dlp, works while the web
+    # search cools down), talks and meetups (keyless search), bylines on their own blog
+    if MENTIONS and _short(cid):
+        from jobhunter.contacts import public_mentions
+
+        try:
+            chans = ("youtube", "blog") if web.search_down() else ("youtube", "talks", "blog")
+            m = public_mentions.find(cid, channels=chans if has_site else tuple(c for c in chans if c != "blog"))
+            out["mentions"] = m.get("added", 0)
+            out["channels"].append("mentions")
+        except Exception as e:  # noqa: BLE001
+            out["mentions_error"] = str(e)[:160]
     res = addresses.fill(cid)
     out["by_pattern"] += res.get("added", 0)
     out["pattern_status"] = res.get("status")
@@ -413,6 +437,7 @@ def people_step(limit: int = 100, *, budget_s: int = 1500, ids: list[int] | None
             out["errors"] += 1
             continue
         out["companies"] += 1
+        out.setdefault("touched", []).append(cid)
         if r.get("search_down"):
             out["linkedin_down"] = r.get("linkedin_error") or "keyless search cooling down"
         b, a = r.get("before") or [0, 0], r.get("after") or [0, 0]
@@ -422,6 +447,9 @@ def people_step(limit: int = 100, *, budget_s: int = 1500, ids: list[int] | None
         out["linkedin_added"] += r.get("linkedin", 0)
         out["github_site_added"] += r.get("github_site", 0)
         out["team_added"] += r.get("team_pages", 0)
+        out["mentions_added"] = out.get("mentions_added", 0) + r.get("mentions", 0)
+        if r.get("github_skipped"):
+            out["github_skipped"] = out.get("github_skipped", 0) + 1
         out["reached_target"] += (a[0] >= TARGET and a[1] >= 1) and not (b[0] >= TARGET and b[1] >= 1)
         out["gained_email"] += a[1] >= 1 and b[1] == 0
     out["seconds"] = round(time.time() - t0)
@@ -583,8 +611,11 @@ def _site_answers(url: str) -> tuple[bool, str]:
     return False, f"does not answer ({why}; Jina: {page.get('error') or 'empty'})"
 
 
-def revalidate_companies(limit: int = REVALIDATE_PER_TICK, *, hiring_recheck_days: int = 14) -> dict:
-    """The rolling re-check: never-checked first, then oldest validated_at."""
+def revalidate_companies(limit: int = REVALIDATE_PER_TICK, *, hiring_recheck_days: int = 14,
+                         budget_s: int | None = None) -> dict:
+    """The rolling re-check: never-checked first, then oldest validated_at. Stops after
+    `budget_s` seconds (the tick's companies share) — the rest are next tick's."""
+    t0 = time.time()
     from jobhunter import hiring_verify
 
     init_db()
@@ -597,6 +628,9 @@ def revalidate_companies(limit: int = REVALIDATE_PER_TICK, *, hiring_recheck_day
     out = {"checked": 0, "never_checked_before": never, "passed": 0, "failed": Counter(), "newly_failed": 0,
            "recovered": 0, "hiring_reverified": 0}
     for cid in ids:
+        if budget_s and time.time() - t0 > budget_s:
+            out["stopped"] = f"time budget ({budget_s}s)"
+            break
         with get_session() as session:
             c = session.get(Company, cid)
             website, desc_ok = c.website, bool(c.description) and bool(

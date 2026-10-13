@@ -246,6 +246,8 @@ def test_pattern_guessed_addresses_spend_the_5_a_day_guessed_cap(tmp_path, monke
     engine = create_engine(f"sqlite:///{tmp_path / 'l.db'}")
     SQLModel.metadata.create_all(engine)
     monkeypatch.setattr(ledger, "DB_PATH", tmp_path / "l.db")
+    # the guessed cap on its own — the warm-up quota (tests/test_launch.py) is a separate ceiling
+    monkeypatch.setattr(ledger, "effective_cap", lambda day: ledger.DAILY_CAP)
     # the sender counts anything not `verified` — pattern-guessed included — as guessed
     assert 'guessed = (email.address_confidence or "verified") != "verified"' in inspect.getsource(sender)
     for _ in range(ledger.GUESSED_CAP):

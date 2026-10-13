@@ -142,6 +142,21 @@ class Company(SQLModel, table=True):
     # the rolling re-check (referrals.revalidate_companies): JSON {part: reason} for the
     # parts that failed it — website | description | hiring. A failed part is missing.
     recheck_failed: Optional[str] = None
+    # ---- outreach suppression (outreach/suppress.py). 2026-10-14. Someone there asked not
+    # to be written to again (or the company is on outreach.do_not_contact): no draft, no
+    # approval, no send to anyone at the company — ever, unless a person clears it by hand.
+    do_not_contact: Optional[bool] = Field(default=None, index=True)
+    dnc_reason: Optional[str] = None
+    # ---- selection confidence (jobhunter/confidence.py). 2026-10-14. The company's best
+    # role by selection score — what the company page and the Best bets view lead with.
+    best_selection_score: Optional[int] = Field(default=None, index=True)
+    best_selection_band: Optional[str] = None
+    best_selection_job_id: Optional[int] = None
+    best_selection_market: Optional[str] = None
+    # ---- needs analysis (jobhunter/needs.py): public context — keyless search results and
+    # public GitHub repos, JSON {at, web: [...], repos: [...], errors}, cached for days
+    needs_context: Optional[str] = None
+    needs_context_at: Optional[datetime] = None
 
 
 class Job(SQLModel, table=True):
@@ -179,6 +194,19 @@ class Job(SQLModel, table=True):
     scored_at: Optional[datetime] = None
     status: str = Field(default="new", index=True)  # new | scored | high_match | ignored | applied
     notified: bool = False
+    # ---- selection confidence (jobhunter/confidence.py). 2026-10-14. 0–100 odds of getting
+    # selected, one engine with a weight profile per market (india | remote | abroad), its
+    # band (high | medium | low | long_shot) and the itemised, evidence-linked breakdown.
+    selection_score: Optional[int] = Field(default=None, index=True)
+    selection_band: Optional[str] = Field(default=None, index=True)
+    selection_market: Optional[str] = Field(default=None, index=True)
+    selection_why: Optional[str] = None          # JSON: terms, blockers, cap, top reasons
+    selection_inputs: Optional[str] = None       # hash of the inputs — recompute only on change
+    selection_at: Optional[datetime] = None
+    # ---- needs brief (jobhunter/needs.py): what they actually need, mapped to the resume
+    needs_brief: Optional[str] = None            # JSON brief (quotes + URLs, covered / uncovered)
+    needs_brief_at: Optional[datetime] = None
+    needs_synthesis: Optional[str] = Field(default=None, index=True)   # none | done | pending | rejected | skipped
 
 
 class Contact(SQLModel, table=True):
@@ -220,6 +248,13 @@ class Contact(SQLModel, table=True):
     affiliation_source: Optional[str] = None
     affiliation_checked_at: Optional[datetime] = None
     last_commit_at: Optional[datetime] = None   # their latest commit to the company's own (non-fork) repos
+    # ---- outreach suppression (outreach/suppress.py). 2026-10-14.
+    # bounced | opted_out — what the mailbox told us about this person
+    email_status: Optional[str] = Field(default=None, index=True)
+    # an address that bounced: taken off `email`, kept here so no writer ever stores it again
+    dead_email: Optional[str] = Field(default=None, index=True)
+    do_not_contact: Optional[bool] = Field(default=None, index=True)
+    dnc_reason: Optional[str] = None
 
 
 class ExtractionReject(SQLModel, table=True):

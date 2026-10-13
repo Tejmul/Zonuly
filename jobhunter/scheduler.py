@@ -78,12 +78,13 @@ def _sync_graph() -> dict:
 def reply_cycle() -> dict:
     """Poll Gmail, classify replies, queue follow-ups, notify."""
     from jobhunter import notify
-    from jobhunter.outreach import drafter, tracker
+    from jobhunter.outreach import followup, tracker
 
     summary: dict = {}
     try:
         summary["poll"] = tracker.poll()
-        summary["followups"] = len([r for r in drafter.queue_followups() if not r.get("error")])
+        # model first, the fixed template when the free models are out; drafts, never approved
+        summary["followups"] = followup.queue().get("drafted", 0)
         summary["notified"] = notify.notify_replies()
         _record("reply_cycle", summary)
     except Exception as e:  # noqa: BLE001

@@ -106,6 +106,73 @@ export type Email = {
   replies?: Reply[];
 };
 
+/* ---------------------------------------------------------------- selection confidence (confidence.py / needs.py) */
+
+export type SelectionBand = "high" | "medium" | "low" | "long_shot";
+export type Market = "india" | "remote" | "abroad";
+
+export type RoleRow = {
+  id: number;
+  title: string;
+  company_id: number | null;
+  company_name: string;
+  location: string | null;
+  url: string;
+  source: string;
+  posted_at: string | null;
+  scraped_at: string | null;
+  salary_min_lpa: number | null;
+  salary_max_lpa: number | null;
+  salary_raw: string | null;
+  market: Market | null;
+  score: number | null;
+  band: SelectionBand | null;
+  band_label: string | null;
+  city: string | null;
+  top_reasons: string[];
+  main_blocker: string | null;
+  cap: number | null;
+  has_brief: boolean;
+  synthesis: string | null;
+  match_score: number | null;
+  remote_anywhere: boolean;
+};
+
+export type SelectionTerm = {
+  key: string; label: string; weight: number; value: number; points: number; why: string;
+  quote: string | null; url: string | null;
+};
+export type SelectionBlocker = { kind: string; cap: number; why: string; quote: string | null; url: string | null };
+export type SelectionWhy = {
+  market: Market; score: number; raw: number; band: SelectionBand; band_label: string; cap: number | null;
+  city: string | null; terms: SelectionTerm[]; blockers: SelectionBlocker[]; top_reasons: string[];
+  main_blocker: string | null; notes: string[]; bands: Record<string, number>;
+};
+
+export type NeedItem = {
+  text: string; kind: "stated" | "implied" | "building"; section: string; weight: number;
+  quote: string; url: string | null; source: string; skills: string[]; trait: string | null;
+  status: "covered" | "partial" | "uncovered"; evidence: string | null; evidence_where: string | null;
+  covered_skills: string[]; missing_skills: string[]; evidence_skills?: string[];
+  more_evidence?: { id: string; text: string; where: string; skill: string }[];
+};
+export type BuildingItem = { text: string; quote: string; url: string | null; source: string; published?: string | null };
+export type NeedsBrief = {
+  company: string; title: string; url: string;
+  experience: { min_years: number | null; max_years: number | null; fresher: boolean; quote: string | null; fresher_quote: string | null };
+  stated: NeedItem[]; implied: NeedItem[]; building: BuildingItem[];
+  coverage: { share: number | null; covered: number; partial: number; uncovered: number; total: number };
+  forbidden: string[]; helps: string | null; helps_model?: string; angles: string[];
+  synthesis: string; stored?: boolean; built_at: string;
+  model?: { building?: string; implied?: { need: string; quote: string; url: string | null; source: string }[]; rejected?: string[] };
+  context?: { web: number; repos: number; errors: string[]; at: string | null };
+};
+export type RoleBrief = { role: RoleRow; selection: SelectionWhy | null; brief: NeedsBrief; brief_at: string | null };
+export type RolesPage = {
+  total: number; items: RoleRow[]; bands: Record<string, number>;
+  counts: Record<string, Partial<Record<SelectionBand, number>>>;
+};
+
 export type EventRow = {
   id: number; kind: string; status: string; company: string | null; company_id: number;
   contact: string | null; email_id: number; starts_at: string | null; ends_at: string | null;

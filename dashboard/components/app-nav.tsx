@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity, Building2, Calendar, Globe, Inbox, LayoutGrid, Mail, MessageSquare, PanelLeft, Send, Settings, Star, Users, Workflow,
+  Activity, Building2, Calendar, Crosshair, Globe, Inbox, LayoutGrid, Mail, MessageSquare, PanelLeft, Send, Settings, Star, Users, Workflow,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme";
 import { SearchBox } from "@/components/search-box";
@@ -17,6 +17,8 @@ import { useApi, type GmailSetup } from "@/lib/api";
 const LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
   { href: "/companies", label: "Companies", icon: Building2 },
+  // roles by the odds of getting selected — India and Remote (confidence.py)
+  { href: "/best-bets", label: "Best bets", icon: Crosshair },
   // The hand-picked list — a page of its own so it is never one filter among seven
   { href: "/lists/india-star", label: "★ India", icon: Star },
   { href: "/atlas", label: "Atlas", icon: Globe },

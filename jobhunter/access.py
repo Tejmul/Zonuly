@@ -51,6 +51,7 @@ _OPERATOR_ONLY = (
     "/api/models",    # model choice and, at /costs, what has been spent
     "/api/gmail",     # mailbox status and the OAuth trigger
     "/api/research",  # live outbound research; every call costs money
+    "/api/outreach/preflight",  # the sending address, the do-not-contact list, the launch state
 )
 
 #: Set by the middleware for the duration of one request. A serialiser deep inside a

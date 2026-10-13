@@ -115,8 +115,16 @@ def record_reply(email_id: int, body: str, *, sender: str, message_id: str | Non
     operator's "record a reply" action (a pasted reply, or a dry-run rehearsal)."""
     import uuid
 
+    from jobhunter.outreach import suppress
+
     init_db()
-    verdict = classify(body, sender)
+    # "unsubscribe", "please don't email me": suppressed forever, whatever the classifier says
+    stop = suppress.is_opt_out(_strip_quoted(body) or body)
+    if stop:
+        verdict = {"sentiment": "negative", "reason": f"asked not to be contacted again (\"{stop}\")",
+                   "action": "nothing — they and their company are suppressed"}
+    else:
+        verdict = classify(body, sender)
     sentiment = verdict["sentiment"]
     with get_session() as session:
         reply = Reply(
@@ -133,11 +141,20 @@ def record_reply(email_id: int, body: str, *, sender: str, message_id: str | Non
         if email and email.status == "sent":
             email.status = "replied"
             session.add(email)
+        # a reply to a follow-up is a reply to the ask it follows: the cold mail is answered
+        if email and email.kind != "cold" and email.parent_email_id:
+            parent = session.get(Email, email.parent_email_id)
+            if parent and parent.status == "sent":
+                parent.status = "replied"
+                session.add(parent)
+        suppressed = suppress.opt_out(session, email, phrase=stop, sender=sender) if (stop and email) else None
         session.commit()
         session.refresh(reply)
         reply_id = reply.id
 
     out = {"reply_id": reply_id, "sentiment": sentiment, "reason": verdict.get("reason"), "action": verdict.get("action")}
+    if suppressed:
+        out["opted_out"] = suppressed
     if sentiment == "positive":
         from jobhunter.outreach import schedule
 
@@ -220,19 +237,19 @@ def _poll_imap(stats: dict, limit: int) -> dict:
                 col(Email.status).in_(["sent", "replied"]), col(Email.gmail_thread_id).is_not(None)
             ).limit(limit)
         ).all()
-        threads = [(e.id, e.gmail_thread_id, e.to_email) for e in sent]
+        threads = [(e.id, e.gmail_thread_id, e.to_email, e.gmail_message_id) for e in sent]
         known = {
             r.gmail_message_id for r in session.exec(
                 select(Reply).where(col(Reply.gmail_message_id).is_not(None))
             ).all()
         }
 
-    for email_id, thread_id, to_email in threads:
+    for email_id, thread_id, to_email, message_id in threads:
         if str(thread_id).startswith("dryrun:"):
             continue
         stats["threads_checked"] += 1
         try:
-            messages = gmail.thread_messages(str(thread_id))
+            messages = gmail.thread_messages(str(thread_id), message_id=message_id)
         except gmail.GmailNotConfigured as e:
             return {**stats, "error": str(e)}
         except Exception as e:  # noqa: BLE001 — transient IMAP error; next poll retries
@@ -243,12 +260,13 @@ def _poll_imap(stats: dict, limit: int) -> dict:
             if msg["is_ours"] or msg["id"] in known:
                 continue
             if msg["is_bounce"]:
+                from jobhunter.outreach import suppress
+
                 with get_session() as session:
                     email = session.get(Email, email_id)
-                    if email and email.status == "sent":
-                        email.status = "failed"
-                        email.error = f"bounced: {msg['text'][:200]}"
-                        session.add(email)
+                    if email and email.status in ("sent", "replied"):
+                        # the address is dead: the contact loses it, nobody retries it
+                        suppress.mark_bounced(session, email, msg["text"])
                         session.commit()
                 known.add(msg["id"])
                 stats["bounced"] += 1

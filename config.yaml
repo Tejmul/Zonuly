@@ -399,6 +399,9 @@ targeting:
       - gitlab
       - digitalocean
       - freshworks
+      # large and established without a VC round on record — profitable or PE-owned (2026-10-14)
+      - tether
+      - beyondtrust
       ai_labs:
       - openai
       - anthropic
@@ -734,6 +737,37 @@ outreach:
   - linkedin.com/in/tejmulmovin-softwareengineer
   - spylook.vercel.app
   user_email: tejmulmovin9@gmail.com
+  # ---- launch (2026-10-14, first live sends Mon 2026-10-19) — outreach/warmup.py,
+  # outreach/suppress.py, outreach/preflight.py. These only ever LOWER what goes out:
+  # the 25/day cap, the 5/day guessed cap and the review gate are untouched.
+  # A fresh sending pattern on a personal Gmail ramps up: the day's quota is
+  # min(daily_send_cap, first + step * (sending_day // every)) — Mon 5, Tue 5, Wed 10,
+  # Thu 10, Fri 15, then 15, 20, 20, 25 (25 from Thu of the second week).
+  warmup:
+    start: '2026-10-19'
+    first: 5
+    step: 5
+    every: 2
+  send_days: [mon, tue, wed, thu, fri]   # no cold mail at weekends
+  # sends are spread across the window at jittered times (no bursts): ±jitter_fraction
+  # of the gap between two slots, and at most max_per_run in one run of the send agent
+  pacing:
+    jitter_fraction: 0.35
+    max_per_run: 2
+  # every cold email carries this line, above the signature (added on approval)
+  opt_out_line: If this isn't something you can help with, no worries, and if you'd rather I didn't write again, just reply "stop" and I won't.
+  # a guessed address that bounces hurts the account: this many bounces inside window_days
+  # and no guessed address is sent to until they age out (verified addresses still go)
+  bounce_brake:
+    window_days: 7
+    max_bounces: 2
+  # never written to, whatever the pipeline finds: addresses, whole domains, company names
+  do_not_contact:
+    emails: []
+    domains: []
+    companies: []
+  # the review queue should hold at least this many approved drafts the evening before a send day
+  min_approved_for_day: 5
 gmail:
   # app_password: SMTP + IMAP with a Gmail app password in .env (GMAIL_APP_PASSWORD).
   # oauth: the Gmail API through a desktop-app client (needed only for the Calendar push).
@@ -770,6 +804,15 @@ tick:
   free_interval_seconds: 600   # 2026-10-07: round the clock — a tick holds a lock, so a start that finds one running just exits
   paid_hour: 6
   paid_minute: 15
+  # 2026-10-14 "leads first": a tick's working time is split — leads (people, addresses,
+  # re-verification) get `leads` of budget_seconds and run first; the company steps
+  # (discovery, websites, facts, careers, hiring proof, India) share the rest and take
+  # turns across ticks (a rotating start), so company discovery never stops.
+  budget_seconds: 2400
+  share:
+    leads: 0.7
+    companies: 0.3
+  github_min_remaining: 20      # GitHub mining for a company only while this many calls are left (60/h unauthenticated)
   people_per_tick: 150          # 2026-10-08: referrers first — the people step runs before every other fill step (referrals.py)
   people_budget_seconds: 1500   # …and stops after 25 min of a tick; the keyless search paces itself (Jina ≈ 20/min)
   reverify_per_tick: 150        # ready referrers whose evidence is > 90 days old, re-confirmed
@@ -859,3 +902,68 @@ india_jobs:
   large_headcount: 5000        # a size band starting at this or more (LinkedIn "5,001-10,000", "10,001+"; Instahyre "5000+") is an enterprise, not a target
   seed_companies:              # looked up by name once (Tejmul, 2026-10-13)
   - Gitforce
+# SELECTION CONFIDENCE (jobhunter/confidence.py, 2026-10-14): the odds THIS role selects us,
+# 0-100, one engine with a weight profile per market. Each profile's weights sum to 100; a
+# term is a value 0..1 times its weight, and every term says why (quote + URL). Blockers CAP
+# the score; the band is the threshold table. Roles on-site abroad use the remote profile
+# and the onsite_elsewhere cap. Changing any number here re-scores every role next tick.
+confidence:
+  bands:            # score >= high -> High, >= medium -> Medium, >= low -> Low, else Long shot
+    high: 65
+    medium: 48
+    low: 30
+  india:            # Bengaluru / Hyderabad, on-site or hybrid
+    weights:
+      fresher: 22   # experience bar / title vs a 2027 grad — the biggest single filter
+      skills: 16    # resume↔JD stack (skill dictionary + lexical fit; the judge rubric refines)
+      gap: 8        # share of the needs brief the resume covers
+      pay: 12       # ≥ ₹20 L evidence
+      stage: 8      # smaller company / earlier stage = fewer applicants
+      recency: 7
+      referral: 15  # a ready referrer with an address — the strongest lever
+      city: 6
+      hiring: 6     # hiring proven on their own careers page / board
+  remote:           # remote-anywhere / remote-from-India
+    weights:
+      remote_terms: 14   # the posting's own remote-anywhere / no-visa language
+      timezone: 8        # IST overlap
+      async: 4           # async / written culture
+      skills: 15
+      gap: 8
+      seniority: 13
+      intl_hiring: 6     # contractors, EOR, other remote-anywhere roles
+      stage: 6
+      referral: 13
+      competition: 5     # famous / hyped / public board -> lower
+      recency: 4
+      hiring: 4
+  caps:             # a blocker caps the score at this
+    visa: 10
+    onsite_elsewhere: 20
+    remote_country: 15
+    india_other_city: 20
+    years_5plus: 30
+    years_3to4: 60
+    senior_title: 35
+    overrated: 30
+    below_pay: 35
+    language: 25
+    not_authorized: 40
+    stale_posting: 40
+    low_stipend: 30
+    inactive_company: 10
+    off_target_title: 40
+    gig: 45
+  tick:
+    recompute_per_tick: 3000     # roles re-scored per tick (only those whose inputs changed)
+    recompute_seconds: 240
+    briefs_per_tick: 4           # needs briefs (re)built per tick, best roles first
+    brief_top: 50                # per market: briefs are kept for the top N roles
+    synth_per_tick: 2            # model syntheses per tick (free chain; stops at the daily ceiling)
+    context_per_tick: 2          # companies whose public context (keyless search + GitHub) is fetched
+    brief_seconds: 120
+# NEEDS ANALYSIS (jobhunter/needs.py): what they actually need, mapped to the resume
+needs:
+  context_ttl_days: 14     # public context per company (search results, repos) is reused this long
+  brief_ttl_days: 14
+  web_results: 6

@@ -32,15 +32,28 @@ def _conn() -> sqlite3.Connection:
     return c
 
 
+def effective_cap(day: str) -> int:
+    """The day's cap: the warm-up quota (outreach.warmup), never above daily_send_cap."""
+    from jobhunter.outreach import warmup
+
+    return min(DAILY_CAP, warmup.quota(day))
+
+
 def _row(c: sqlite3.Connection, candidate_id: int, day: str) -> tuple:
+    """(id, cap, used, guessed_cap, guessed_used) for the day. The cap is the lower of the
+    stored one and today's warm-up quota, and the guessed cap never exceeds the cap — a
+    row written before the warm-up existed is read through the same ceiling."""
     row = c.execute("select id, cap, used, guessed_cap, guessed_used from sendledger where candidate_id=? and day=?",
                     (candidate_id, day)).fetchone()
+    cap = effective_cap(day)
     if row is None:
         c.execute("insert into sendledger (candidate_id, day, cap, used, guessed_cap, guessed_used, updated_at) "
-                  "values (?, ?, ?, 0, ?, 0, datetime('now'))", (candidate_id, day, DAILY_CAP, GUESSED_CAP))
+                  "values (?, ?, ?, 0, ?, 0, datetime('now'))", (candidate_id, day, cap, min(GUESSED_CAP, cap)))
         row = c.execute("select id, cap, used, guessed_cap, guessed_used from sendledger where candidate_id=? and day=?",
                         (candidate_id, day)).fetchone()
-    return row
+    rid, stored, used, gcap, gused = row
+    cap = min(int(stored), cap)
+    return rid, cap, used, min(int(gcap), GUESSED_CAP, cap), gused
 
 
 def status(candidate_id: int = 1) -> dict:
@@ -82,4 +95,4 @@ def release(candidate_id: int = 1, *, guessed: bool = False) -> None:
         c.execute("COMMIT")
 
 
-__all__ = ["status", "reserve", "release", "DAILY_CAP", "GUESSED_CAP"]
+__all__ = ["status", "reserve", "release", "effective_cap", "DAILY_CAP", "GUESSED_CAP"]

@@ -35,8 +35,10 @@ def _looks_recruiter(text: str | None) -> bool:
     return bool(text) and any(h in text.lower() for h in _RECRUITER_HINT)
 
 
-async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_COMPANY) -> dict:
-    """Run every free source for one company and persist the results."""
+async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_COMPANY, github: bool = True) -> dict:
+    """Run every free source for one company and persist the results. `github=False`
+    (the hourly GitHub budget is spent) skips the mining and leaves the company un-rested
+    (contacts_found_at untouched) so the next pass mines it."""
     init_db()
     with get_session() as session:
         company = session.get(Company, company_id)
@@ -47,6 +49,8 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
         github_org, known_pattern = company.github_org, patterns.confirmed(company)
         held = session.exec(select(Contact).where(Contact.company_id == company_id)).all()
         existing = {c.email.lower() for c in held if c.email}
+        # an address that bounced is never stored again (outreach/suppress.py)
+        existing |= {c.dead_email.lower() for c in held if getattr(c, "dead_email", None)}
         # a person found without an address is kept by their GitHub login (dedup)
         existing_logins = {(c.handle or "").lower() for c in held if c.handle} | {
             (c.github or "").rstrip("/").split("/")[-1].lower() for c in held if c.github}
@@ -56,7 +60,8 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
 
     async with make_client() as http:
         # ---- 1. GitHub
-        org, gh_people = await github_miner.mine(http, name, website, org=github_org, limit=max_contacts)
+        org, gh_people = (await github_miner.mine(http, name, website, org=github_org, limit=max_contacts)
+                          if github else (github_org, []))
         for p in gh_people:
             people.append(
                 {
@@ -215,7 +220,8 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
         if company:
             company.github_org = company.github_org or org
             company.domain = company.domain or domain
-            company.contacts_found_at = utcnow()
+            if github:
+                company.contacts_found_at = utcnow()
             session.add(company)
         session.commit()
 

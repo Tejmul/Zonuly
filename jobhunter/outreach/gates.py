@@ -14,6 +14,8 @@ the queue. The gate never rewrites a sentence — it flags, the human decides.
     dashes        an em/en dash survived
     guessed       the address is pattern-guessed, not verified (bounces cost the account)
     affiliation   nothing on record says the person still works there (guardrails.affiliation)
+    uncovered_claim  the body names a skill the needs brief marked UNCOVERED (the role asks
+                  for it, the resume does not have it) — the draft may not claim it
 
 Pure functions; no I/O, no model.
 """
@@ -64,12 +66,13 @@ _COMMON = {
 class GateResult:
     flags: list[dict] = field(default_factory=list)
     unsupported: list[str] = field(default_factory=list)
+    forbidden_hits: list[str] = field(default_factory=list)
     words: int = 0
 
     @property
     def blocked(self) -> bool:
         """Blocked means "read this before approving", not "cannot send"."""
-        return any(f["kind"] in ("faithfulness", "affiliation") for f in self.flags)
+        return any(f["kind"] in ("faithfulness", "affiliation", "uncovered_claim") for f in self.flags)
 
     def as_list(self) -> list[dict]:
         return self.flags
@@ -87,11 +90,25 @@ def _body_only(body: str, signature: str | None) -> str:
 
 def check(body: str, *, corpus: str, signature: str | None = None,
           address_confidence: str | None = None, affiliation: str | None = None,
-          affiliation_evidence: str | None = None) -> GateResult:
-    """Run every gate over `body` against the facts in `corpus`."""
+          affiliation_evidence: str | None = None, forbidden: list[str] | None = None) -> GateResult:
+    """Run every gate over `body` against the facts in `corpus`.
+
+    `forbidden` are skills the needs brief marked uncovered (needs.forbidden_terms): the
+    body naming one is a claim the resume cannot back, whatever the corpus contains."""
     r = GateResult()
     text = _body_only(body or "", signature)
     norm_corpus = " " + _normalise(corpus) + " "
+
+    # ---- uncovered needs: the role asks for it, the resume does not have it
+    if forbidden:
+        from jobhunter.skills import pattern
+
+        for skill in forbidden:
+            if re.search(pattern(skill), text, re.I):
+                r.forbidden_hits.append(skill)
+        if r.forbidden_hits:
+            r.flags.append({"kind": "uncovered_claim",
+                            "detail": "names what the resume does not cover (needs brief): " + ", ".join(r.forbidden_hits[:6])})
 
     # ---- faithfulness: proper nouns and numbers must exist in the corpus
     seen: set[str] = set()
