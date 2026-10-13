@@ -887,6 +887,9 @@ tick:
   facts_keyless_per_tick: 40   # funding/HQ/website via the hosted Exa MCP (paced; retries a 429, cools down, resumes)
   careers_per_tick: 40         # 2026-10-07: careers page + roles for any company (careers.py), list rows first
   india_discovery_per_tick: 30 # 2026-10-08: new Bengaluru/Hyderabad startups per tick (india.py), after the ★ list and fill work
+  fill_per_tick: 8             # 2026-10-14: companies scraped completely per tick (fill.py): ★ list → India → remote
+  fill_budget_seconds: 360     # …at most this long
+  fill_linkedin_reads_per_tick: 6    # public LinkedIn company + jobs pages (guest, via Jina, paced, 12h stop on a block)
   # The paid per-day totals above (facts/describe/story/levels) and the research caps
   # (exa_daily_cap, scrapedo_daily) are spread across the day: by hour h at most
   # total * (h+1)/24 is spent. paid_hourly runs that slice at the end of each free tick.

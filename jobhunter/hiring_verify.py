@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import json
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -349,6 +350,24 @@ def verify_company(company_id: int, *, claimed_role: str | None = None, fresh: b
 
     v = verify(name, website=website, ats=ats, slug=slug, claimed_role=claim, fresh=fresh,
                careers_url=careers_url)
+    if v.status != VERIFIED and v.status != ROLE_MISSING:
+        # 2026-10-14: the probes above read hiring LANGUAGE; the careers pass reads the roles
+        # themselves (board JSON, JSON-LD, posting links, headings — no model). Any open role
+        # on their own page is proof, so it gets the last word before a downgrade.
+        from jobhunter import careers
+
+        try:
+            r = careers.run_company(company_id, use_model=False)
+        except Exception as e:  # noqa: BLE001
+            r = {"error": f"{type(e).__name__}"}
+        if r.get("found"):
+            with get_session() as session:
+                company = session.get(Company, company_id)
+                if company.hiring_status == VERIFIED:
+                    log.info("hiring: %s -> verified by the careers pass", name)
+                    return {"company": name, "status": VERIFIED, "careers_url": company.careers_url,
+                            "roles": json.loads(company.hiring_roles or "[]"), "evidence": company.hiring_evidence,
+                            "via": "careers pass"}
 
     with get_session() as session:
         company = session.get(Company, company_id)

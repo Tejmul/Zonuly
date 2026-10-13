@@ -1274,6 +1274,22 @@ features:
     stage: stage:contacts
     serves: [guarantee:confidence-labels, guarantee:no-fabrication, guarantee:human-gate]
     implemented_in: [module:jobhunter.guardrails, module:jobhunter.contacts, module:jobhunter.enrich]
+  - id: feature:fill-pass
+    label: Fill pass — each company scraped COMPLETELY, no model needed
+    summary: >
+      2026-10-14, Tejmul: "if you go to a company, scrape it COMPLETELY". jobhunter/fill.py,
+      every tick before the company rotation, ★ list → Bengaluru/Hyderabad → top-300 remote.
+      Description from meta / og / twitter / JSON-LD / first paragraph / About page / the
+      public LinkedIn About (guest, Jina, paced, 12h stop on a wall); a list `what` + a site
+      line combined only when nothing passes alone, both sources kept. Hiring proof = ANY
+      open role on their own page or ATS (careers.run_company use_model=False; Darwinbox JSON
+      feed, labelled titles), open_roles_count / relevant_roles_count on the row; LinkedIn
+      jobs page count is a second signal only. LinkedIn size band / members / founded / HQ,
+      funding via keyless search. Why a part is still missing: company.fill_state.
+    status: built
+    stage: stage:contacts
+    serves: [guarantee:no-fabrication, guarantee:confidence-labels]
+    implemented_in: [module:jobhunter.guardrails, module:jobhunter.enrich]
   - id: feature:hourly-scrape-audit
     label: Hourly audit — is scraping still filling fields, and is every channel answering?
     summary: >

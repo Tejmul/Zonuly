@@ -302,6 +302,35 @@ async def _breezy(http, slug, name):
     return HIT, out
 
 
+async def _darwinbox(http, slug, name):
+    """Darwinbox's candidate portal is a JS app; its own JSON feed lists every opening
+    (2026-10-14: Red.Health's 20 roles were invisible to the page reader)."""
+    out: list[RawJob] = []
+    for page in range(1, 7):
+        st, data = await _get(http, f"https://{slug}.darwinbox.in/ms/candidateapi/job?page={page}&limit=50",
+                              headers={"Accept": "application/json"})
+        if st != HIT:
+            if page == 1:
+                return st, [] if st == MISS else data
+            break
+        msg = (data or {}).get("message") if isinstance(data, dict) else None
+        jobs = (msg or {}).get("jobs") if isinstance(msg, dict) else None
+        if not jobs:
+            break
+        for j in jobs:
+            title = (j.get("title") or j.get("designation_display_name") or "").strip()
+            if not title or not j.get("id"):
+                continue
+            where = re.sub(r"[\[\]']", "", str(j.get("tool_tip_locations") or j.get("officelocation_show_arr") or "")).strip() or None
+            out.append(RawJob(company_name=name, title=title,
+                              url=f"https://{slug}.darwinbox.in/ms/candidatev2/main/careers/jobDetails/{j['id']}",
+                              source="darwinbox", location=where, remote=looks_remote(where, title),
+                              ats="darwinbox", ats_slug=slug))
+        if len(jobs) < 50:
+            break
+    return (HIT, out) if out else (MISS, [])
+
+
 def _existing(fetch):
     """Greenhouse / Lever / Ashby: the fetchers in this package. They swallow errors into
     an empty list, so an empty answer is reported as a MISS."""
@@ -322,6 +351,7 @@ API_FETCHERS = {
     "recruitee": _recruitee,
     "bamboohr": _bamboohr,
     "breezy": _breezy,
+    "darwinbox": _darwinbox,
 }
 
 # The board's own page, for the ones read as text — and for careers_url on every board.

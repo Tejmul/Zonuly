@@ -70,6 +70,11 @@ L = {
     "saturated_below": int(_T.get("saturated_below", 10)),
     # new Bengaluru / Hyderabad startups per tick (india.py), after the ★ list and fill work
     "india": int(_T.get("india_discovery_per_tick", 30)),
+    # 2026-10-14 "scrape it COMPLETELY": the fill pass (fill.py) — description with no model,
+    # hiring proof from any role, LinkedIn guest facts, funding — ★ list → India → remote
+    "fill": int(_T.get("fill_per_tick", 8)),
+    "fill_budget": int(_T.get("fill_budget_seconds", 360)),
+    "fill_linkedin": int(_T.get("fill_linkedin_reads_per_tick", 16)),
 }
 # 2026-10-14 "leads first": a tick's working time and how it is split. Leads (the people
 # step, address resolution, re-verification) run first inside their share; the company
@@ -267,7 +272,7 @@ def _work(v) -> int:
 def _saturated(s: dict) -> bool:
     """True when this tick's fill steps found (almost) nothing left to do: every gap is in
     backoff or filled, so the hour is better spent finding new companies."""
-    steps = ("websites", "facts_keyless", "careers", "people", "verify")
+    steps = ("websites", "facts_keyless", "careers", "people", "verify", "fill")
     return sum(_work(s.get(k)) for k in steps) < L["saturated_below"]
 
 
@@ -399,6 +404,15 @@ def run_free(budget_s: int | None = None) -> dict:
         _step(s, "affiliation", lambda: {k: v for k, v in affiliation.run(
             L["affiliation"], reserve=L["affiliation_reserve"]).items() if k != "labels"})
     s["leads_seconds"] = round(time.time() - t_leads)
+
+    # ---- FILL (2026-10-14): every tick, before the rotation — the ★ list, then India, then
+    # the remote targets, each company scraped completely (fill.py; referrers are the people
+    # step's, above, which reads the same order)
+    if L["fill"]:
+        from jobhunter import fill
+
+        _step(s, "fill", fill.run, limit=L["fill"], budget_s=L["fill_budget"],
+              linkedin_reads=L["fill_linkedin"], people=False)
 
     # ---- COMPANIES: a fixed share, steps in rotation so each gets its turn
     steps = _company_steps()

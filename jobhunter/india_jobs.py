@@ -167,6 +167,11 @@ def _linkedin(session, rep: Report, url: str, kind: str) -> str | None:
     rep.pages[kind] = rep.pages.get(kind, 0) + 1
     if kind == "search" and not text.strip():
         return ""                     # an empty result page (no more cards) is an answer
+    if not text.strip():
+        # an empty body from the reader is its hiccup, not LinkedIn's wall (2026-10-14: one
+        # empty company page stopped LinkedIn for 12h; the same page read fine a minute later)
+        rep.problems.append(f"jina: empty body on a {kind} page")
+        return None
     if ij.walled(text):
         _block(session, rep, f"login wall / challenge on a {kind} page")
         raise Blocked("wall")

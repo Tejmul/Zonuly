@@ -141,7 +141,10 @@ def discover(name: str, website: str | None, careers_url: str | None = None, *,
     with httpx.Client(headers={**HEADERS, "Accept": "text/html,*/*;q=0.8"}, timeout=TIMEOUT,
                       follow_redirects=True) as http:
         candidates: list[tuple[str, str]] = []           # (url, via)
-        if careers_url and "api." not in (urlparse(careers_url).hostname or ""):
+        # an aggregator page on record (instahyre, cutshort…) is not theirs: look for their own first
+        on_record = careers_url and "api." not in (urlparse(careers_url).hostname or "") and \
+            not guardrails._AGGREGATOR.search(urlparse(careers_url).hostname or "")
+        if on_record:
             candidates.append((careers_url, "on record"))
         if site:
             f.checked.append(site)
@@ -378,9 +381,28 @@ def roles_from_lines(text: str, page_url: str, name: str) -> list[RawJob]:
     return out
 
 
-def _read_roles(f: Find, name: str) -> tuple[list[RawJob], str, str | None]:
+_LABEL = re.compile(r"(?im)^[\s*_#>-]*(?:job title|position|role|designation|opening|vacancy)\s*[*_]*\s*[:\-–]\s*[*_]*\s*"
+                    r"([^*_\n|]{3,80}?)\s*(?:[*_|]|$)")
+
+
+def roles_from_labels(text: str, page_url: str, name: str) -> list[RawJob]:
+    """Postings written as "Job Title: InfoSec Compliance Manager" — a labelled title, no model."""
+    out: list[RawJob] = []
+    seen: set[str] = set()
+    for m in _LABEL.finditer(text or ""):
+        title, place = _split_title(m.group(1))
+        if not (3 <= len(title) <= 80) or not _TITLE_WORD.search(title) or title.lower() in seen:
+            continue
+        seen.add(title.lower())
+        out.append(RawJob(company_name=name, title=title, url=f"{page_url.split('#')[0]}#{ca._slug(title)}",
+                          source="careers", location=place, remote=looks_remote(place, title)))
+    return out
+
+
+def _read_roles(f: Find, name: str, *, use_model: bool = True) -> tuple[list[RawJob], str, str | None]:
     """(jobs, how, error) — the board's JSON, the page's JSON-LD, the posting links on the
-    page, the page text read by the model, and last its title-only headings."""
+    page, the page text read by the model (unless `use_model` is False — the deterministic
+    fill pass, 2026-10-14), and last its title-only headings."""
     if f.ats in ca.API_FETCHERS and f.slug:
         async def run():
             async with make_client() as http:
@@ -404,27 +426,31 @@ def _read_roles(f: Find, name: str) -> tuple[list[RawJob], str, str | None]:
     if board and board.rstrip("/") != url.rstrip("/"):
         # their page embeds a hosted board (Keka, Darwinbox, Zoho …): the board's own page
         # lists the postings as links, which the reader renders
-        bp = web.read(board, timeout=40, prefer="jina")
+        bp = web.read(board, timeout=40, prefer="jina", max_chars=80000)
         jobs = roles_from_links(bp.get("text") or "", board, name)
         if jobs:
             return jobs, f"{f.ats} board page links", None
-    page = web.read(url, timeout=40, prefer="jina")
+    page = web.read(url, timeout=40, prefer="jina", max_chars=80000)
     if page.get("backend") != "jina" and len(page.get("text") or "") < 2500:
         # a cached direct fetch of a JS page is its nav bar; the reader renders the roles
-        page = web.read(url, timeout=40, prefer="jina", fresh=True)
+        page = web.read(url, timeout=40, prefer="jina", fresh=True, max_chars=80000)
     text = page.get("text") or (html_to_text(f.html, limit=12000) if f.html else "")
     if not text:
         return [], "page text", "careers page unreadable"
     jobs = roles_from_links(text, url, name)
     if jobs:
         return jobs, "posting links (reader)", None
-    jobs, err = roles_from_text(name, url, text)
+    jobs, err = roles_from_text(name, url, text) if use_model else ([], "model not used")
     if jobs or not err:
         return jobs, "page text + model", None
     jobs = roles_from_lines(text, url, name)
     if jobs:
         return jobs, "title headings", None
-    return [], "page text", err
+    jobs = roles_from_labels(text, url, name)
+    if jobs:
+        return jobs, "labelled titles", None
+    # without the model a page whose roles are prose is read as "none listed", not as a failure
+    return [], "page text", err if use_model else None
 
 
 # ------------------------------------------------------------------ one company
@@ -442,8 +468,13 @@ def _note(notes: str | None, line: str) -> str:
     return "\n".join(kept + [line]).strip()
 
 
-def run_company(company_id: int, *, use_search: bool = True) -> dict:
-    """Find one company's careers page and roles; write what was found."""
+def run_company(company_id: int, *, use_search: bool = True, use_model: bool = True) -> dict:
+    """Find one company's careers page and roles; write what was found.
+
+    Every role on their own page counts as hiring proof (any kind, any location); only the
+    relevant ones (pipeline.persist's gates) are stored as jobs. Both counts go on the
+    company — open_roles_count / relevant_roles_count — so the card can say "hiring: 17
+    roles, 0 engineering in BLR/HYD"."""
     init_db()
     with get_session() as session:
         c = session.get(Company, company_id)
@@ -459,12 +490,12 @@ def run_company(company_id: int, *, use_search: bool = True) -> dict:
     if ats in ca.API_FETCHERS and slug and _slug_fits(name, slug):
         f = Find(ats=ats, slug=slug, via="board on record",
                  careers_url=careers_url if careers_url and "api." not in careers_url else ca.BOARD_PAGES[ats].format(slug=slug))
-        jobs, how, err = _read_roles(f, name)
+        jobs, how, err = _read_roles(f, name, use_model=use_model)
         if not jobs and not err:
             f = Find()          # a dead slug (a guess that once matched): look for the real page
     if not f.careers_url:
         f = discover(name, website, careers_url, use_search=use_search)
-        jobs, how, err = _read_roles(f, name) if f.careers_url else ([], "", None)
+        jobs, how, err = _read_roles(f, name, use_model=use_model) if f.careers_url else ([], "", None)
 
     out.update({"careers_url": f.careers_url, "ats": f.ats, "via": f.via, "how": how, "found": len(jobs)})
     kept = {}
@@ -482,10 +513,21 @@ def run_company(company_id: int, *, use_search: bool = True) -> dict:
             c.careers_url = f.careers_url
             if f.ats and (not c.ats or c.ats != f.ats and f.via != "board on record"):
                 c.ats, c.ats_slug = f.ats, f.slug
+            if jobs or not err:
+                # a careers page read to the end: its count is an answer, 0 included
+                c.open_roles_count = len(jobs)
+                c.relevant_roles_count = int(kept.get("kept", 0)) if jobs else 0
+                c.roles_counted_at = utcnow()
             if jobs:
                 titles = [j.title for j in jobs][:40]
+                # proof is read where it was published: a careers page on a sister domain
+                # (coupang.jobs for coupang.com) that embeds a hosted board is the board's proof
+                proof_url = f.careers_url
+                board = ca.BOARD_PAGES.get(f.ats or "", "").format(slug=f.slug) if f.slug else ""
+                if board and not guardrails.own_careers_url(proof_url, domain=c.domain):
+                    proof_url = board
                 guardrails.set_hiring(
-                    session, c, "verified", roles=titles, careers_url=f.careers_url,
+                    session, c, "verified", roles=titles, careers_url=proof_url,
                     evidence=f"{len(jobs)} open role(s) listed on their own careers page ({how}): {', '.join(titles[:5])}"[:300],
                     channel=f"careers:{how or f.via}"[:40])
                 if not c.hiring_claim_url or c.hiring_claim_source in ("yc", None):
@@ -540,7 +582,8 @@ def pending(limit: int | None = 40, *, list_key: str | None = None, force: bool 
 
 
 def run(limit: int | None = 40, *, list_key: str | None = None, force: bool = False,
-        company_ids: list[int] | None = None, concurrency: int = 4, use_search: bool = True) -> dict:
+        company_ids: list[int] | None = None, concurrency: int = 4, use_search: bool = True,
+        use_model: bool = True) -> dict:
     """The careers pass over `pending(...)`. Each company commits on its own."""
     ids = pending(limit, list_key=list_key, force=force, company_ids=company_ids)
     out: dict = {"companies": len(ids), "careers_found": 0, "with_roles": 0, "roles_found": 0,
@@ -548,7 +591,7 @@ def run(limit: int | None = 40, *, list_key: str | None = None, force: bool = Fa
 
     def one(cid: int) -> dict:
         try:
-            return run_company(cid, use_search=use_search)
+            return run_company(cid, use_search=use_search, use_model=use_model)
         except Exception as e:  # noqa: BLE001 — one company must not end the pass
             log.exception("careers: company %s failed", cid)
             return {"id": cid, "error": f"{type(e).__name__}: {str(e)[:120]}"}

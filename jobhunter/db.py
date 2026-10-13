@@ -157,6 +157,20 @@ class Company(SQLModel, table=True):
     # public GitHub repos, JSON {at, web: [...], repos: [...], errors}, cached for days
     needs_context: Optional[str] = None
     needs_context_at: Optional[datetime] = None
+    # ---- the fill pass (jobhunter/fill.py). 2026-10-14: "if you go to a company, scrape it
+    # COMPLETELY". Every open role on their own careers page / ATS (any kind, any place) and
+    # the relevant ones (engineering, Bengaluru / Hyderabad / remote — stored as jobs).
+    open_roles_count: Optional[int] = None
+    relevant_roles_count: Optional[int] = None
+    roles_counted_at: Optional[datetime] = None
+    # their public LinkedIn company page, read as a guest through Jina Reader
+    linkedin_url: Optional[str] = None
+    size_band: Optional[str] = None           # LinkedIn's "51-200 employees"
+    linkedin_jobs: Optional[int] = None       # postings on the guest job search for the company (second signal)
+    linkedin_checked_at: Optional[datetime] = None
+    # JSON {part: reason} — why a part is still missing after the pass looked everywhere
+    fill_state: Optional[str] = None
+    filled_at: Optional[datetime] = Field(default=None, index=True)
 
 
 class Job(SQLModel, table=True):
