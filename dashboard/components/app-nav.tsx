@@ -62,7 +62,10 @@ export function Sidebar() {
   const { publicInstance } = useAccess();
   const { open } = useSidebar();
   const gmail = useApi<GmailSetup>(publicInstance ? null : "/api/gmail/status");
-  const live = gmail.data?.send_mode === "gmail" && gmail.data.authorized;
+  // three states, not two: connected-but-dry-run is the normal state before launch, and
+  // it used to read as "not connected" because only a live send mode counted
+  const connected = !!gmail.data?.authorized;
+  const live = gmail.data?.send_mode === "gmail" && connected;
 
   if (!open) return null;
 
@@ -103,15 +106,17 @@ export function Sidebar() {
         <div className="mt-auto rounded-xl border border-line p-3.5">
           <h3 className="flex items-center gap-2 text-[13px] font-semibold">
             <Mail size={14} className="text-ink-2" />
-            {live ? "Sending is live" : "Sending is in dry run"}
+            {live ? "Sending is live" : connected ? "Gmail connected · dry run" : "Gmail not connected"}
           </h3>
           <p className="mt-1 mb-3 text-[12px] leading-relaxed text-ink-2">
             {live
               ? `Approved emails leave from ${gmail.data?.address ?? "your Gmail"} inside the daily cap.`
-              : "Drafts are written and gated, but nothing leaves the machine until Gmail is connected."}
+              : connected
+                ? `Signed in as ${gmail.data?.address ?? "your Gmail"}; replies are read back. Nothing leaves the machine until you switch sending to live.`
+                : "Drafts are written and gated, but nothing leaves the machine until Gmail is connected."}
           </p>
           <Link href="/settings" className="btn-ink w-full">
-            {live ? "Sending settings" : "Connect Gmail"}
+            {connected ? "Sending settings" : "Connect Gmail"}
           </Link>
         </div>
       ) : null}
