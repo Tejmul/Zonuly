@@ -152,19 +152,31 @@ export default function ListPage() {
           <button onClick={() => setOpen(isOpen ? null : c.id)} aria-expanded={isOpen} aria-label="Details" className="cursor-pointer">
             <ChevronRight size={13} className={`text-ink-3 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
           </button>
-          <button onClick={() => setOpen(isOpen ? null : c.id)} className="min-w-0 cursor-pointer text-left">
-            <span className="flex items-center gap-2">
-              <span className="truncate text-[13px] font-medium">{c.name}</span>
-              {c.ready && <span className="chip chip-solid">ready</span>}
-              {c.complete === false && (c.missing ?? []).filter((m) => m !== "website").map((m) => <span key={m} className="chip">{MISSING[m] ?? m}</span>)}
-              {c.category === "large-tech" && <span className="chip">large tech</span>}
-              {!c.website && <span className="chip" title={c.website_note ?? ""}>no website</span>}
-              {c.overrated && <span className="chip chip-strike" title={c.hype_reason ?? "Too well known to be underrated"}>overrated</span>}
+          {/* The name always wins its line: badges sit after it and never push it out, and
+              what is still missing gets a line of its own, clipped to this column — the chips
+              used to share the name's line, squeeze it to nothing and spill into City. */}
+          <button onClick={() => setOpen(isOpen ? null : c.id)} className="min-w-0 cursor-pointer overflow-hidden text-left">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="min-w-[4rem] truncate text-[13px] font-medium" title={c.name}>{c.name}</span>
+              {c.ready && <span className="chip chip-solid shrink-0">ready</span>}
+              {c.category === "large-tech" && <span className="chip shrink-0">large tech</span>}
+              {c.overrated && <span className="chip chip-strike shrink-0" title={c.hype_reason ?? "Too well known to be underrated"}>overrated</span>}
               {typeof c.priority_score === "number" && Number.isFinite(c.priority_score) && (
-                <span className="chip tnum" title={c.priority_why ?? "Priority score"}>P{Math.round(c.priority_score)}</span>
+                <span className="chip tnum shrink-0" title={c.priority_why ?? "Priority score"}>P{Math.round(c.priority_score)}</span>
               )}
             </span>
             <span className="block truncate text-[11.5px] text-ink-3">{c.what ?? "—"}</span>
+            {(() => {
+              const gaps = [
+                ...(c.complete === false ? (c.missing ?? []).filter((m) => m !== "website").map((m) => MISSING[m] ?? m) : []),
+                ...(!c.website ? ["no website"] : []),
+              ];
+              return gaps.length ? (
+                <span className="mt-0.5 block truncate text-[10.5px] text-ink-3" title={gaps.join(" · ")}>
+                  still filling: {gaps.map((g) => g.replace(/^no /, "")).join(" · ")}
+                </span>
+              ) : null;
+            })()}
           </button>
           <span className="truncate text-[12px] text-ink-2">{c.city ?? "—"}</span>
           <span className="min-w-0"><ListFunding c={c} /></span>
