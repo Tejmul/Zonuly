@@ -457,6 +457,23 @@ P_RECENT = int(_P.get("recent_months", 18))
 _PW = _P.get("weights") or {}
 W_FUNDING, W_HIRING = float(_PW.get("funding", 35)), float(_PW.get("hiring", 35))
 W_PAY, W_VALUATION = float(_PW.get("pay", 20)), float(_PW.get("valuation", 10))
+# 2026-10-13: a non-senior posting that itself states ≥ ₹30 LPA ("posting states ₹37 LPA
+# for SDE-1") is the strongest pay evidence there is — a boost on top of the four parts
+STATED_BOOST_LPA = float(_P.get("stated_pay_boost_lpa", 30))
+W_STATED = float(_P.get("stated_pay_boost", 15))
+
+
+def stated_pay(jobs) -> tuple[float, str] | None:
+    """(₹ LPA, title) — the highest full-time figure a non-senior, non-internship posting
+    states itself. A board's estimate is never on the row, so never here."""
+    best = None
+    for j in jobs:
+        if getattr(j, "is_senior", False) or getattr(j, "is_internship", False):
+            continue
+        v = getattr(j, "salary_max_lpa", None) or getattr(j, "salary_min_lpa", None)
+        if v and (best is None or v > best[0]):
+            best = (float(v), (getattr(j, "title", None) or "a role")[:80])
+    return best
 STAGE_VALUATION_MAX = {admission.normalize_stage(k): float(v) for k, v in (_P.get("stage_valuation_max_usd_m") or {
     "Pre-seed": 30, "Seed": 80, "Series A": 300, "Series B": 1000, "Series C": 3000}).items()}
 
@@ -464,7 +481,7 @@ STAGE_VALUATION_MAX = {admission.normalize_stage(k): float(v) for k, v in (_P.ge
 def priority(*, overrated: admission.Overrated | None, stage: str | None, announced: str | None,
              amount_usd_m: float | None, valuation_usd_m: float | None, hiring_verified: bool,
              roles: int, fresher_roles: int, anywhere_roles: int, pay_score: int | None,
-             pay_band: str | None) -> tuple[int, str]:
+             pay_band: str | None, stated: tuple[float, str] | None = None) -> tuple[int, str]:
     """(0–100, why). Who to chase first among the companies that are not overrated:
     recently funded at an early round, visibly hiring people like us (fresher and
     remote-anywhere roles weigh most), able to pay, and priced sanely for its stage.
@@ -516,9 +533,13 @@ def priority(*, overrated: admission.Overrated | None, stage: str | None, announ
         v, vwhy = 0.5, "unknown"
     vs = round(W_VALUATION * v)
     parts.append(f"valuation: {vwhy} (+{vs})")
+    boost = 0
+    if stated and stated[0] >= STATED_BOOST_LPA:
+        boost = round(W_STATED)
+        parts.append(f"posting states ₹{stated[0]:g} LPA for {stated[1]} (+{boost})")
     if overrated is not None and overrated.borderline:
         parts.append(f"borderline: {overrated.reason}")
-    return max(0, min(100, fs + hs + ps + vs)), " · ".join(parts)
+    return max(0, min(100, fs + hs + ps + vs + boost)), " · ".join(parts)
 
 
 # ------------------------------------------------------------------ company grading
@@ -555,11 +576,12 @@ def evidence_for(session, company: Company) -> dict:
         "fresher": sum(1 for j in jobs if not j.is_senior),
         "anywhere": sum(1 for j in jobs if j.remote_anywhere),
         "locations": locations,
+        "stated": stated_pay(jobs),
     }
 
 
 def _judge(company: Company, *, jobs: int, fresher: int, anywhere: int, locations: str,
-           pay_band: str | None, pay_score: int | None) -> tuple[admission.Overrated, int, str, str | None, str | None]:
+           pay_band: str | None, pay_score: int | None, stated: tuple[float, str] | None = None) -> tuple[admission.Overrated, int, str, str | None, str | None]:
     """(overrated verdict, priority, why, India city, non-target India city) for one row —
     shared by the full grade and the hourly priority refresh."""
     f = admission.funding_facts(
@@ -574,7 +596,7 @@ def _judge(company: Company, *, jobs: int, fresher: int, anywhere: int, location
     score, why = priority(
         overrated=o, stage=f["stage"], announced=f["announced"], amount_usd_m=f["amount_usd_m"],
         valuation_usd_m=f["valuation_usd_m"], hiring_verified=verified, roles=jobs,
-        fresher_roles=fresher, anywhere_roles=anywhere, pay_score=pay_score, pay_band=pay_band)
+        fresher_roles=fresher, anywhere_roles=anywhere, pay_score=pay_score, pay_band=pay_band, stated=stated)
     texts = (locations, company.description, company.story)
     return o, score, why, admission.india_city(*texts), admission.india_other_city(*texts)
 
@@ -615,7 +637,7 @@ def grade_company(session, company: Company) -> Grade:
     )
     o, score, why, city, other = _judge(
         company, jobs=ev["jobs"], fresher=ev["fresher"], anywhere=ev["anywhere"],
-        locations=ev["locations"], pay_band=pp.band, pay_score=pp.score)
+        locations=ev["locations"], pay_band=pp.band, pay_score=pp.score, stated=ev["stated"])
     g = grade(
         company.name,
         region=company.hq_region or ev["region"],
@@ -702,6 +724,10 @@ def refresh_priority(*, dry_run: bool = False, batch: int = 200) -> dict:
         for cid, loc in session.exec(select(Job.company_id, Job.location).where(col(Job.location).is_not(None))).all():
             if len(locs.setdefault(cid, [])) < 40:
                 locs[cid].append(loc)
+        paid: dict[int, list] = {}
+        for j in session.exec(select(Job).where(
+                (col(Job.salary_max_lpa).is_not(None)) | (col(Job.salary_min_lpa).is_not(None)))).all():
+            paid.setdefault(j.company_id, []).append(j)
         rows = session.exec(select(Company).where(col(Company.status).is_(None))).all()
         dirty = 0
         for c in rows:
@@ -709,7 +735,7 @@ def refresh_priority(*, dry_run: bool = False, batch: int = 200) -> dict:
             n, fr, an = agg.get(c.id, (0, 0, 0))
             o, score, why, city, other = _judge(
                 c, jobs=n, fresher=int(fr or 0), anywhere=int(an or 0), locations=" ; ".join(locs.get(c.id, [])),
-                pay_band=c.pay_power_band, pay_score=c.pay_power)
+                pay_band=c.pay_power_band, pay_score=c.pay_power, stated=stated_pay(paid.get(c.id, [])))
             off = _india_off_target(c, city, other, int(an or 0))
             if off:
                 score, why = 0, off

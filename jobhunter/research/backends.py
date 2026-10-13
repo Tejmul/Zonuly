@@ -236,6 +236,8 @@ def plausible(backend: str) -> bool:
     exe = BACKEND_EXE.get(backend)
     if exe and not resolve(exe):
         return False
+    if backend == "gh-cli" and not bool((CONFIG.get("research") or {}).get("use_personal_github_login", False)):
+        return False   # the gh CLI runs as the user's own GitHub account: not for scraping
     need = BACKEND_SECRET.get(backend)
     if need and not has_secret(need):
         return False

@@ -149,9 +149,22 @@ def fix_mojibake(text: str | None) -> str | None:
 def fingerprint(company: str, title: str) -> str:
     """Stable key for the same role posted to several sources."""
     norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())  # noqa: E731
-    # strip location/req-id suffixes boards tack onto titles
-    t = re.sub(r"\s*[\(\[\-–|].*$", "", title or "")
+    # strip location/req-id suffixes boards tack onto titles — but only those: a dash
+    # suffix that names the role ("Software Engineer – AI (Backend)" vs "Software Engineer –
+    # Frontend Focus") is a different role, and collapsing it overwrote one with the other
+    # (2026-10-13, Gitforce's three roles became one)
+    t = re.sub(r"\s*[\(\[|].*$", "", title or "")
+    t = re.sub(rf"\s+[-–—]\s+(?:{_SUFFIX_NOISE})\s*$", "", t, flags=re.I)
     return hashlib.sha1(f"{norm(company)}|{norm(t)}".encode()).hexdigest()[:16]
+
+
+# what a board appends after " - ": a place, a work mode, or an id
+_SUFFIX_NOISE = (r"remote|hybrid|on-?site|in-?office|wfh|full[- ]time|part[- ]time|contract|"
+                 r"\S*\d\S*(?:\s+\S+)?|"
+                 r"(?:[A-Z][a-zA-Z.]+(?:\s[A-Z][a-zA-Z.]+)?\s*,\s*)*(?:india|usa?|uk|united states|united kingdom|"
+                 r"europe|emea|apac|latam|canada|germany|singapore|bengaluru|bangalore|hyderabad|secunderabad|pune|"
+                 r"mumbai|chennai|delhi|new delhi|ncr|gurgaon|gurugram|noida|kolkata|london|berlin|new york|"
+                 r"san francisco|sf|nyc|toronto|amsterdam|dublin|paris|anywhere|worldwide|global)")
 
 
 # ---------------------------------------------------------------- salary
@@ -184,6 +197,8 @@ _MONEY = re.compile(
 )
 _RANGE = re.compile(
     rf"(?P<cur1>{_CUR_PAT})?\s*(?P<n1>{_NUM_PAT})\s*(?P<u1>{_UNIT_PAT})?\s*"
+    # LinkedIn writes "₹2,500,000.00/yr - ₹3,500,000.00/yr": a period between the two ends
+    rf"(?:/\s*(?:yr|year|annum)\s*)?"
     rf"(?:-|–|—|to|up to|and)\s*"
     rf"(?P<cur2>{_CUR_PAT})?\s*(?P<n2>{_NUM_PAT})\s*(?P<u2>{_UNIT_PAT})?\s*(?P<curafter>{_CUR_PAT})?",
     re.I,

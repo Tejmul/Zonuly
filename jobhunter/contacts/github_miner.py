@@ -69,7 +69,11 @@ def token() -> str:
     global _resolved
     if _resolved is not None:
         return _resolved
-    for name, cand in (("GITHUB_TOKEN", TOKEN), ("gh auth token", _gh_cli_token())):
+    # the personal `gh` login is never borrowed for mining unless the operator says so:
+    # bulk collection through someone's own account is how an account gets flagged
+    personal = bool((CONFIG.get("research") or {}).get("use_personal_github_login", False))
+    creds = [("GITHUB_TOKEN", TOKEN)] + ([("gh auth token", _gh_cli_token())] if personal else [])
+    for name, cand in creds:
         if not cand:
             continue
         try:

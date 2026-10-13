@@ -1743,6 +1743,41 @@ def harvest_discover(
     _echo(harvest.discover_funded(topics=topic or None, max_searches=max_searches).as_dict())
 
 
+@harvest_app.command("india-jobs")
+def harvest_india_jobs(
+    force: bool = typer.Option(True, "--force/--if-due", help="Run now, or only when india_jobs.every_hours has passed"),
+    searches: int = typer.Option(None, help="LinkedIn search pages (default india_jobs.searches_per_run)"),
+    page_reads: int = typer.Option(None, help="LinkedIn job pages to read"),
+    company_reads: int = typer.Option(None, help="LinkedIn company pages to read"),
+    lead_searches: int = typer.Option(None, help="LinkedIn searches by company name (seeds + leads)"),
+    community: int = typer.Option(None, help="Keyless offer-post searches"),
+    source: list[str] = typer.Option(None, "--source", "-s", help="linkedin | jobfound | instahyre | community"),
+    city: list[str] = typer.Option(None, "--city", help="Bengaluru | Hyderabad"),
+    lead: list[str] = typer.Option(None, "--lead", help="Queue a company name for the LinkedIn name search"),
+    last: bool = typer.Option(False, "--last", help="Print the last run's report and exit"),
+) -> None:
+    """Bengaluru / Hyderabad companies found by their postings: LinkedIn Jobs (public, no
+    login), jobfound, Instahyre, and community offer posts as leads (india_jobs.py)."""
+    _setup_logging()
+    from jobhunter import india_jobs
+
+    if last:
+        _echo(india_jobs.last_report())
+        return
+    if lead:
+        from jobhunter.db import get_session, init_db
+
+        init_db()
+        with get_session() as session:
+            for name in lead:
+                india_jobs.add_lead(session, name, "manual")
+    kw = {"sources": tuple(source)} if source else {}
+    if city:
+        kw["cities"] = tuple(city)
+    _echo(india_jobs.run(force=force, searches=searches, page_reads=page_reads, company_reads=company_reads,
+                         lead_searches=lead_searches, community=community, **kw))
+
+
 @harvest_app.command("discover-parallel")
 def harvest_discover_parallel(minutes: int = typer.Option(20)) -> None:
     """Three discovery branches at once (Exa · RSS · scrape.do), each finding new funded companies."""

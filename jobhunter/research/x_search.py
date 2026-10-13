@@ -47,6 +47,12 @@ _LOGIN_WALL = re.compile(r"(log in|sign up|suspended|something went wrong)", re.
 
 
 def session_present() -> bool:
+    """A logged-in X session is used only when the operator has switched it on in
+    config (research.x_session_enabled) AND put a throwaway account's cookies in .env.
+    Off by default, 2026-10-13: scraping through a real account is how it gets banned,
+    and nothing here should ever risk the user's own accounts."""
+    if not bool((CONFIG.get("research") or {}).get("x_session_enabled", False)):
+        return False
     return bool(secret("X_AUTH_TOKEN") and secret("X_CT0"))
 
 

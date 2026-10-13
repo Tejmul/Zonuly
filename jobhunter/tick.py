@@ -296,6 +296,13 @@ def run_free(budget_s: int = 1800) -> dict:
         from jobhunter import india
 
         _step(s, "india_discovery", lambda: {k: v for k, v in india.discover(L["india"]).items() if k != "new_ids"})
+    # India postings (2026-10-13): LinkedIn Jobs (guest), jobfound, Instahyre, offer-post
+    # leads — every india_jobs.every_hours, gently; LinkedIn backs off on 429 / 999 / walls
+    if time.time() - t0 < budget_s:
+        from jobhunter import india_jobs
+
+        _step(s, "india_jobs", lambda: {k: v for k, v in india_jobs.run().items()
+                                        if k not in ("new_companies", "top_new_by_stated_pay")})
     # the existing companies are as complete as the channels allow (everything left is in
     # backoff): go further — new companies through the keyless Exa MCP and the gate
     if _saturated(s) and time.time() - t0 < budget_s:

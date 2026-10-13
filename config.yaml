@@ -327,6 +327,8 @@ targeting:
       - confluent
       - goldman sachs
       - jpmorgan
+      - jpmorganchase
+      - jpmorgan chase
       - morgan stanley
       - jane street
       - citadel
@@ -638,6 +640,10 @@ targeting:
       hiring: 35         # verified hiring, open roles; fresher and remote-anywhere weigh most
       pay: 20            # pay power band
       valuation: 10      # valuation (or round size) sane for the stage
+    # 2026-10-13: a non-senior, full-time posting that itself states at least this much
+    # (₹ LPA) adds the boost on top ("posting states ₹37 LPA for SDE-1 (+15)")
+    stated_pay_boost_lpa: 30
+    stated_pay_boost: 15
     # the most a round of this stage is usually valued at, $M — above it, the company is
     # priced like a later one (hype), and the valuation part scores low
     stage_valuation_max_usd_m:
@@ -799,6 +805,13 @@ api:
   - http://localhost:3002
   - http://127.0.0.1:3000
 research:
+  # Logged-in X search uses the cookies in .env. Off: no scraper may run through a real
+  # account (a ban costs the user the very network they are building). Turn on only with
+  # a throwaway account's cookies. Without it, X posts come from keyless web search.
+  x_session_enabled: false
+  # The `gh` CLI is signed in as the user's own GitHub account. Scrapers do not borrow it:
+  # GitHub mining uses only GITHUB_TOKEN in .env — make that a token of a separate account.
+  use_personal_github_login: false
   timeout: 90
   cache_ttl_hours: 24
   max_chars: 12000
@@ -829,3 +842,20 @@ research:
 db_path: jobhunter.db
 profile_path: profile/profile.json
 resume_path: profile/resume.pdf
+# India job postings (jobhunter/india_jobs.py, 2026-10-13): LinkedIn's public guest job
+# search + job pages (no login, read through Jina Reader), jobfound.org's India list,
+# Instahyre's city pages, and community offer posts as leads. Gentle: a few pages a run,
+# one run every `every_hours`, ≥ gap_seconds between two requests to one host, and a
+# LinkedIn 429 / 999 / login wall stops the source for backoff_hours.
+india_jobs:
+  every_hours: 6
+  searches_per_run: 4          # LinkedIn search pages (keyword × city, rotated by a cursor)
+  page_reads_per_run: 10       # LinkedIn job pages read for description + stated pay
+  company_reads_per_run: 8     # LinkedIn company pages read for website / industry / size / HQ
+  lead_searches_per_run: 4     # companies looked up on LinkedIn by name (seeds, community and jobfound leads, unread cards) — ≤ 2 searches each
+  community_queries_per_run: 1
+  gap_seconds: 4
+  backoff_hours: 12
+  large_headcount: 5000        # a size band starting at this or more (LinkedIn "5,001-10,000", "10,001+"; Instahyre "5000+") is an enterprise, not a target
+  seed_companies:              # looked up by name once (Tejmul, 2026-10-13)
+  - Gitforce

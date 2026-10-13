@@ -162,7 +162,7 @@ constraints:
   - id: constraint:no-linkedin-automation
     label: No logged-in LinkedIn automation, ever
     order: 6
-    summary: A banned LinkedIn destroys the exact asset being built — the ability to be referred. LinkedIn is in no scraper module.
+    summary: A banned LinkedIn destroys the exact asset being built — the ability to be referred. No scraper logs in or touches the user's account. Public guest pages (job postings, company pages, search-result headlines) are read without a session, through Jina Reader, paced, stopping for 12h on any block (decided 2026-10-13).
   - id: constraint:single-user-laptop
     label: One user, one machine, one SQLite file
     order: 7

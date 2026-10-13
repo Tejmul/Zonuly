@@ -609,6 +609,59 @@ def india_other_city(*texts: str | None) -> str | None:
     return None
 
 
+# ------------------------------------------------------------------ body shops (2026-10-13)
+# A job board posting is often not the employer's: a staffing or recruitment agency posts
+# "for a client", or the company is hidden ("Confidential"). Neither is a company to chase,
+# and an IT-services body shop is not the underrated product company this is for.
+
+_CONFIDENTIAL = re.compile(r"(?i)^\s*(?:confidential|undisclosed|stealth(?: mode)?(?: startup| company)?|"
+                           r"hiring (?:for|on behalf of)|a (?:leading|top|reputed)\b|(?:leading|top|reputed) \w+ (?:company|firm|startup)|"
+                           r"(?:our|a) client|client of)\b")
+_STAFFING_NAME = re.compile(
+    r"(?i)\b(staffing|recruit\w*|manpower|placements?|headhunt\w*|talent (?:solutions|acquisition|hub|partners)|"
+    r"hr (?:solutions|services|consult\w*)|human resources?|workforce|outsourc\w*|careers? (?:pvt|private)|"
+    r"jobs? (?:hub|pvt|private)|consultants?)\b")
+# platforms and agencies that post roles for their clients under their own name
+_STAFFING_KNOWN = re.compile(
+    r"(?i)^(?:weekday|uplers|collabera|randstad|teamlease|adecco|abc consultants|michael page|xpheno|quess|ciel hr|"
+    r"careernet|antal|kelly services|manpowergroup|turing|toptal|crossover|instahyre|cutshort|hirist|iimjobs|"
+    r"naukri|foundit|scaler|talent500|hireginie|hirequotient|recruitcrm|taggd|alp consulting|people prime|"
+    r"peopleprime|zyoin|elevate talent|spectraforce|mynd integrated|v support solutions|itc infotech|"
+    r"tekpillar|tekwissen|insight global|robert half|hays|allegis|aston carter|teksystems)\b")
+_CLIENT_POST = re.compile(
+    r"(?i)\b(hiring for (?:one of )?(?:our|a|its|their) (?:esteemed |reputed |leading )?(?:client|customer)s?|"
+    r"on behalf of (?:our|a|one of our|its) (?:client|customer)|(?:our|a) client(?:,| is| -| based| in)|"
+    r"for (?:a|our) (?:leading|reputed|top|esteemed) client|client of ours|(?:our|the) client (?:company|organi[sz]ation)|"
+    r"we are a (?:staffing|recruitment|recruiting) (?:firm|agency|company))")
+_STAFFING_INDUSTRY = re.compile(r"(?i)\b(staffing|recruit\w*|human resources services|employment (?:placement|services))\b")
+_IT_SERVICES_NAME = re.compile(r"(?i)\b(infotech|info ?systems|infosystems|consultancy|consulting|softech|soft solutions|"
+                               r"it solutions|it services|technologies pvt|global services|business solutions)\b")
+_IT_SERVICES_TEXT = re.compile(r"(?i)\b((?:it|software|technology|tech) (?:services|outsourcing|consulting) "
+                               r"(?:company|firm|provider|partner|organi[sz]ation)|offshore development|"
+                               r"staff augmentation|body ?shop|onsite[- ]offshore)\b")
+
+
+def body_shop(name: str | None, text: str | None = None, *, industry: str | None = None,
+              headcount: int | None = None) -> str | None:
+    """Why this poster is not a company to chase — 'confidential poster', 'staffing /
+    recruitment agency', 'posts on behalf of a client', 'IT-services body shop' — or None."""
+    n = (name or "").strip()
+    if not n or _CONFIDENTIAL.search(n):
+        return "confidential poster"
+    if _STAFFING_KNOWN.search(n) or _STAFFING_NAME.search(n):
+        return "staffing / recruitment agency"
+    if industry and _STAFFING_INDUSTRY.search(industry):
+        return f"staffing / recruitment agency (LinkedIn industry: {industry.strip()[:60]})"
+    if text and _CLIENT_POST.search(text[:8000]):
+        return "posts on behalf of a client"
+    it_industry = bool(industry and re.search(r"(?i)it services|it consulting|outsourcing", industry))
+    if it_industry and _IT_SERVICES_NAME.search(n):
+        return "IT-services body shop"
+    if text and _IT_SERVICES_TEXT.search(text[:8000]) and (headcount or 0) >= 500:
+        return "IT-services body shop"
+    return None
+
+
 # ------------------------------------------------------------------ dedup
 
 def _index(session) -> dict[str, int]:
