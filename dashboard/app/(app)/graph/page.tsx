@@ -1,22 +1,19 @@
 "use client";
 
-/*  Graph — the knowledge graph as a map (2026-10-14).
+/*  Graph — the knowledge graph as a star atlas (2026-10-14).
  *
  *  Tejmul: "Why can't I see the knowledge graph? Show it in the UI, like ChokePoints …
  *  I want to directly see which companies are still pending — what I still need to scrape."
+ *  Then: "it feels like a small kid drew something on paper. Make it a lot better."
  *
- *  Three views of one canvas, all pre-shaped by the API (/api/graph/map, jobhunter/graphmap.py):
- *    Market    industry layers → segments → companies, left to right like the chokepoints
- *              chain; dotted wires join companies that share an investor
- *    Pipeline  Discovered → Described → Hiring proven → Referrer found → Email ready ·
- *              complete → Drafted / sent; each company sits at the furthest stage it reached
- *    Project   the context layer: stages, the features and gaps at each, the rules they serve
+ *  One job: show where the good bets are and what is still unfinished, at a glance.
+ *    Atlas     you at the centre; angle = industry (layers → segments), distance = how
+ *              good a bet. Filled stars are complete; rings are still filling.
+ *    Pipeline  the same stars, travelled into one column per stage they reached
+ *    Project   the context layer on the atlas grammar: built near the centre, open at the rim
  *
- *  Pending is the point: a complete company is a solid dot, one still filling is a hollow
- *  ring whose weight is how much is missing, dashed when nothing has been read yet, and any
- *  layer or segment holding a pending ★ company wears a dashed roll-up ring. Click a company
- *  for what is missing and why; "Fill now" runs the fill pass on it.
- *
+ *  Data: /api/graph/map (jobhunter/graphmap.py). Atlas and Pipeline are both fetched so
+ *  the switch between them can move every star rather than swap pictures.
  *  Everything that changes what you see is in the URL: ?view=&node=&pending=1&m=&star=1&part=&q=
  */
 
@@ -26,18 +23,18 @@ import { useSearchParams } from "next/navigation";
 import { gsap } from "gsap";
 import { ArrowUpRight, Loader2, Search, X } from "lucide-react";
 import { api, useApi, type Task } from "@/lib/api";
-import { GraphCanvas } from "@/components/graph-canvas";
+import { GraphCanvas, type Mode } from "@/components/graph-canvas";
 import { OperatorOnly } from "@/components/access";
 import { ErrorNote } from "@/components/ui/primitives";
 import {
-  LEGEND, PART_LABEL, DEFAULT_STATE, paintNode, readPalette, screenRadius, styleForNode,
-  type Agg, type Bucket, type GraphMap, type Leaf, type ViewKey,
+  LEGEND, MAG_R, PART_LABEL, DEFAULT_STATE, paintStar, readPalette, styleForNode,
+  type Agg, type Bucket, type GraphMap, type LegendEntry, type Leaf, type ViewKey,
 } from "@/lib/graph-style";
 
 export default function GraphPage() {
   // useSearchParams needs a Suspense boundary (node_modules/next/dist/docs, use-search-params)
   return (
-    <Suspense fallback={<MapFrame><Calm>Reading the graph…</Calm></MapFrame>}>
+    <Suspense fallback={<MapFrame><Calm busy>Reading the graph…</Calm></MapFrame>}>
       <GraphView />
     </Suspense>
   );
@@ -48,10 +45,10 @@ export default function GraphPage() {
 type Market = "india" | "remote";
 type UrlState = { view: ViewKey; node: string | null; pending: boolean; markets: Market[]; star: boolean; part: string | null; q: string };
 
-const VIEWS: { key: ViewKey; label: string; hint: string }[] = [
-  { key: "market", label: "Market", hint: "Industry layers → segments → companies" },
-  { key: "pipeline", label: "Pipeline", hint: "How far each company got, stage by stage" },
-  { key: "project", label: "Project", hint: "Stages, features, gaps and the rules they serve" },
+const VIEWS: { key: ViewKey; label: string; hint: string; mode: Mode }[] = [
+  { key: "market", label: "Atlas", hint: "You at the centre: industry round the dial, the best bets nearest you", mode: "atlas" },
+  { key: "pipeline", label: "Pipeline", hint: "How far each company got, one column per stage", mode: "transit" },
+  { key: "project", label: "Project", hint: "Stages, features, gaps and decisions from the context layer", mode: "project" },
 ];
 
 function readUrl(p: URLSearchParams): UrlState {
@@ -100,9 +97,17 @@ function GraphView() {
   const [part, setPart] = useState<string | null>(init.part);
   const [q, setQ] = useState(init.q);
 
-  const map = useApi<GraphMap>(`/api/graph/map?view=${view}`);
-  // the payload held may still be the previous view's while the new one loads
-  const data = map.data && map.data.view === view ? map.data : null;
+  const isCompanies = view !== "project";
+  // both company payloads, so Atlas ⇄ Pipeline can move the stars rather than swap pictures
+  const market = useApi<GraphMap>(isCompanies ? "/api/graph/map?view=market" : null);
+  const pipe = useApi<GraphMap>(isCompanies ? "/api/graph/map?view=pipeline" : null);
+  const proj = useApi<GraphMap>(isCompanies ? null : "/api/graph/map?view=project");
+  const current = view === "market" ? market : view === "pipeline" ? pipe : proj;
+  // the payload held may still be another view's while this one loads
+  const data = current.data && current.data.view === view ? current.data : null;
+  const atlasData = market.data?.view === "market" ? market.data : null;
+  const transitData = pipe.data?.view === "pipeline" ? pipe.data : null;
+  const projectData = proj.data?.view === "project" ? proj.data : null;
 
   useEffect(() => {
     const qs = writeUrl({ view, node, pending, markets, star, part, q });
@@ -110,7 +115,14 @@ function GraphView() {
     if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", next);
   }, [view, node, pending, markets, star, part, q]);
 
-  const isCompanies = view !== "project";
+  // Escape lets go of the selection
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !(e.target instanceof HTMLInputElement)) setNode(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // ---- filters: which leaves are shown, and the roll-up of what is shown
   const shownLeaves = useMemo(() => {
@@ -158,17 +170,21 @@ function GraphView() {
     return {
       total: shownLeaves.length, complete: shownLeaves.length - pend.length, filling: pend.length, miss,
       star: pend.filter((l) => l.star).length, india: pend.filter((l) => l.market === "india").length,
-      never: pend.filter((l) => l.kind === "company" && !l.filled_at).length,
     };
   }, [shownLeaves]);
 
-  const fill = useFill(map.reload);
+  const reloadMarket = market.reload;
+  const reloadPipe = pipe.reload;
+  const reloadAll = useCallback(() => { void reloadMarket(); void reloadPipe(); }, [reloadMarket, reloadPipe]);
+  const fill = useFill(reloadAll);
 
   const changeView = (v: ViewKey) => {
     if (v === view) return;
+    const bothCompanies = v !== "project" && isCompanies;
     setView(v);
-    setNode(null);
-    setPart(null);
+    // a company stays picked across Atlas ⇄ Pipeline — it is the same star
+    if (!bothCompanies || !node?.startsWith("company:")) setNode(null);
+    if (!bothCompanies) setPart(null);
   };
   const flip = (m: Market) => setMarkets((xs) => (xs.includes(m) ? xs.filter((x) => x !== m) : [...xs, m]));
   const anyFilter = pending || star || markets.length > 0 || part !== null;
@@ -189,18 +205,29 @@ function GraphView() {
   }, [data]);
   const picked = node ? byId.get(node) ?? null : null;
 
+  const noun = isCompanies ? "companies" : "items";
+  const summary = !data
+    ? "Reading the graph…"
+    : isCompanies
+      ? [`${fmt(counts.total)} ${noun}`, `${fmt(counts.complete)} complete`,
+        counts.india ? `${fmt(counts.india)} India still filling` : `${fmt(counts.filling)} still filling`,
+        counts.star ? `${fmt(counts.star)} ★ still filling` : ""].filter(Boolean).join(" · ")
+      : `${fmt(counts.total)} ${noun} · ${fmt(counts.complete)} built or adopted · ${fmt(counts.filling)} still to build`;
+  const mode = VIEWS.find((v) => v.key === view)!.mode;
+  const aria = `${VIEWS.find((v) => v.key === view)!.label} chart. ${summary}. ${
+    mode === "atlas" ? "Industries run round the dial; the nearer a company is to the centre, the stronger the bet."
+      : mode === "transit" ? "One column per pipeline stage, strongest bet first."
+        : "Stages round the dial; built work near the centre, open work at the rim."
+  } The list beside the chart holds the same items.`;
+
   return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+    <div className="flex flex-col gap-3">
+      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
           <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-[-0.02em]">Graph</h1>
-          <p className="mt-1 max-w-[76ch] text-[12.5px] leading-relaxed text-ink-2">
-            The knowledge graph as a map. Solid dots are complete; hollow rings are still being filled — the
-            heavier the ring, the more is missing, dashed when nothing has been read yet. A dashed ring around a
-            layer or segment means a ★ India company under it is still pending. Click anything.
-          </p>
+          <p className="tnum mt-1 text-[12px] text-ink-2" aria-live="polite">{summary}</p>
         </div>
-        <div role="tablist" aria-label="View" className="flex rounded-lg border border-line bg-surface p-0.5">
+        <div role="tablist" aria-label="Chart" className="flex rounded-lg border border-line bg-surface p-0.5">
           {VIEWS.map((v) => (
             <button
               key={v.key}
@@ -208,7 +235,7 @@ function GraphView() {
               aria-selected={view === v.key}
               title={v.hint}
               onClick={() => changeView(v.key)}
-              className={`h-8 cursor-pointer rounded-md px-3 text-[12.5px] font-medium transition-colors ${
+              className={`h-7 cursor-pointer rounded-md px-3 text-[12.5px] font-medium transition-colors ${
                 view === v.key ? "bg-ink text-on-ink" : "text-ink-2 hover:text-ink"
               }`}
             >
@@ -219,8 +246,8 @@ function GraphView() {
       </header>
 
       {/* ---- the toolbar: filters and search */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Toggle on={pending} onClick={() => setPending(!pending)}>Only pending</Toggle>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+        <Toggle on={pending} onClick={() => setPending(!pending)}>Show only unfinished</Toggle>
         {isCompanies ? (
           <>
             <Toggle on={markets.includes("india")} onClick={() => flip("india")}>India</Toggle>
@@ -228,105 +255,108 @@ function GraphView() {
             <Toggle on={star} onClick={() => setStar(!star)}>★ list</Toggle>
           </>
         ) : null}
+        {data ? (
+          <div role="group" aria-label="Show only those missing" className="flex flex-wrap items-center gap-1.5">
+            <span className="marginal ml-1 mr-0.5">Missing</span>
+            {data.parts.map((p) => (
+              <button
+                key={p.key}
+                aria-pressed={part === p.key}
+                onClick={() => setPart(part === p.key ? null : p.key)}
+                className={`h-7 cursor-pointer rounded-md border px-2 text-[12px] transition-colors ${
+                  part === p.key ? "border-ink bg-ink text-on-ink" : "border-transparent text-ink-2 hover:border-line hover:text-ink"
+                }`}
+              >
+                {PART_LABEL[p.key] ?? p.label} <span className="tnum text-[11px] opacity-70">{fmt(counts.miss[p.key] ?? 0)}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         {anyFilter ? (
           <button
             onClick={() => { setPending(false); setMarkets([]); setStar(false); setPart(null); }}
-            className="h-8 cursor-pointer px-2 text-[12px] text-ink-3 underline-offset-2 hover:text-ink hover:underline"
+            className="h-7 cursor-pointer px-1.5 text-[12px] text-ink-3 underline-offset-2 hover:text-ink hover:underline"
           >
             Clear filters
           </button>
         ) : null}
-        <label className="relative ml-auto w-full sm:w-[260px]">
+        <label className="relative w-full sm:ml-auto sm:w-[240px]">
           <Search size={14} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-ink-3" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") searchFirst(); }}
-            placeholder={isCompanies ? "Find a company — Enter to fly there" : "Find a feature or gap"}
-            aria-label="Search the map"
-            className="h-8 w-full rounded-lg border border-line bg-surface pr-8 pl-8 text-[12.5px] outline-none placeholder:text-ink-3 focus:border-ink"
+            placeholder={isCompanies ? "Find a company — Enter to go there" : "Find a feature or gap"}
+            aria-label="Search the chart"
+            className="h-8 w-full rounded-lg border border-line bg-surface pr-16 pl-8 text-[12.5px] outline-none placeholder:text-ink-3 focus:border-ink"
           />
+          {matches ? (
+            <span className="tnum pointer-events-none absolute top-1/2 right-7 -translate-y-1/2 text-[10.5px] text-ink-3">{fmt(matches.size)}</span>
+          ) : null}
           {q ? (
             <button aria-label="Clear search" onClick={() => setQ("")} className="absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer text-ink-3 hover:text-ink">
               <X size={14} />
             </button>
           ) : null}
-          {matches ? (
-            <span className="absolute -bottom-4 left-1 text-[10.5px] text-ink-3">{fmt(matches.size)} match{matches.size === 1 ? "" : "es"}</span>
-          ) : null}
         </label>
       </div>
 
-      {/* ---- the counts strip: complete / filling / by missing part (click a part to see only those) */}
-      {data ? (
-        <div className="flex flex-wrap items-stretch gap-px overflow-hidden rounded-xl border border-line bg-line">
-          <Stat label="Complete" value={counts.complete} total={counts.total} />
-          <Stat label={isCompanies ? "Still filling" : "Not built"} value={counts.filling} total={counts.total} strong />
-          {data.parts.map((p) => (
-            <Stat
-              key={p.key}
-              label={`No ${PART_LABEL[p.key]?.toLowerCase() ?? p.label.toLowerCase()}`}
-              value={counts.miss[p.key] ?? 0}
-              total={counts.total}
-              on={part === p.key}
-              onClick={() => setPart(part === p.key ? null : p.key)}
-            />
-          ))}
-          {isCompanies ? (
-            <>
-              <Stat label="★ pending" value={counts.star} on={star && pending} onClick={() => { setStar(true); setPending(true); }} />
-              <Stat label="India pending" value={counts.india} />
-              <Stat label="Never filled" value={counts.never} />
-            </>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* ---- map + panel */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <MapFrame>
-          {data ? (
-            data.leaves.length === 0 && data.hubs.length === 0 ? (
-              <Calm>
-                {view === "project"
-                  ? "The context layer is empty. Run `python scripts/run.py kg build` to load knowledge/context.yaml."
-                  : "No companies yet. The tick fills this map as it scrapes."}
-              </Calm>
+      {/* ---- the chart + the panel */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0">
+          <MapFrame>
+            {data ? (
+              data.leaves.length === 0 && data.hubs.length === 0 ? (
+                <Calm>
+                  {view === "project"
+                    ? "The context layer is empty. Run `python scripts/run.py kg build` to load knowledge/context.yaml."
+                    : "No companies yet. The tick fills this chart as it scrapes."}
+                </Calm>
+              ) : (
+                <>
+                  <GraphCanvas
+                    mode={mode}
+                    atlas={atlasData}
+                    transit={transitData}
+                    project={projectData}
+                    shown={shown}
+                    matches={matches}
+                    agg={agg}
+                    selected={node}
+                    onSelect={setNode}
+                    summary={aria}
+                  />
+                  {shownLeaves.length === 0 ? (
+                    <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center">
+                      <span className="rounded-md border border-line bg-surface px-3 py-1.5 text-[12px] text-ink-2">Nothing passes these filters.</span>
+                    </div>
+                  ) : null}
+                </>
+              )
+            ) : current.error ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <ErrorNote message={current.error} onRetry={current.reload} title="The graph can’t be loaded right now" />
+              </div>
             ) : (
-              <>
-                <GraphCanvas data={data} shown={shown} matches={matches} agg={agg} selected={node} onSelect={setNode} />
-                <Legend view={view} />
-                {shownLeaves.length === 0 ? (
-                  <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center">
-                    <span className="rounded-lg border border-line bg-surface px-3 py-1.5 text-[12px] text-ink-2">
-                      Nothing passes these filters.
-                    </span>
-                  </div>
-                ) : null}
-              </>
-            )
-          ) : map.error ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <ErrorNote message={map.error} onRetry={map.reload} title="The graph can’t be loaded right now" />
-            </div>
-          ) : (
-            <Calm busy>Reading the graph…</Calm>
-          )}
-          {map.loading && data ? (
-            <span className="absolute top-3 right-3 flex items-center gap-1.5 text-[11px] text-ink-3">
-              <Loader2 size={12} className="animate-spin motion-reduce:animate-none" /> refreshing
-            </span>
-          ) : null}
-        </MapFrame>
+              <Calm busy>Reading the graph…</Calm>
+            )}
+            {current.loading && data ? (
+              <span className="absolute top-3 right-3 flex items-center gap-1.5 text-[11px] text-ink-3">
+                <Loader2 size={12} className="animate-spin motion-reduce:animate-none" /> refreshing
+              </span>
+            ) : null}
+          </MapFrame>
+          <Legend mode={mode} />
+        </div>
 
         <Panel open={!!picked} onClose={() => setNode(null)} panelKey={node ?? "overview"}>
           {!data ? (
-            <p className="text-[12.5px] text-ink-3">Waiting for the map…</p>
+            <p className="text-[12.5px] text-ink-3">Waiting for the chart…</p>
           ) : picked?.kind === "leaf" ? (
             picked.v.kind === "company" ? (
               <CompanyCard leaf={picked.v} data={data} fill={fill} onPick={setNode} />
             ) : (
-              <ProjectCard leaf={picked.v} />
+              <ProjectCard leaf={picked.v} data={data} onPick={setNode} />
             )
           ) : picked?.kind === "bucket" ? (
             <BucketCard
@@ -339,7 +369,7 @@ function GraphView() {
               onPick={setNode}
             />
           ) : (
-            <Overview data={data} leaves={shownLeaves} companies={isCompanies} fill={fill} onPick={setNode} />
+            <Overview data={data} agg={agg} leaves={shownLeaves} companies={isCompanies} fill={fill} onPick={setNode} />
           )}
         </Panel>
       </div>
@@ -444,7 +474,8 @@ function FillOutcome({ st }: { st: FillState }) {
   );
 }
 
-/* ---------------------------------------------------------------- panel cards */
+/* ---------------------------------------------------------------- panel cards
+   Typography, not boxes: a kicker, a name, a sentence of state, hairline-ruled facts. */
 
 function CompanyCard({ leaf, data, fill, onPick }: { leaf: Leaf; data: GraphMap; fill: Fill; onPick: (id: string) => void }) {
   const hub = data.hubs.find((h) => h.id === leaf.hub);
@@ -452,25 +483,26 @@ function CompanyCard({ leaf, data, fill, onPick }: { leaf: Leaf; data: GraphMap;
   const peers = data.investors.filter((i) => i.companies.includes(leaf.id));
   const names = new Map(data.leaves.map((l) => [l.id, l.label]));
   const pending = leaf.status !== "complete";
+  const miss = leaf.missing ?? [];
+  const where = leaf.city ?? (leaf.market === "india" ? "India" : leaf.market === "remote" ? "Remote" : leaf.market === "abroad" ? "Abroad" : null);
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
         <div className="marginal">{[hub?.label, sub?.label].filter(Boolean).join(" · ")}</div>
-        <h2 className="mt-1 text-[16px] font-semibold tracking-[-0.01em]">
+        <h2 className="mt-1.5 text-[17px] font-semibold tracking-[-0.01em]">
           {leaf.star ? <span title="On the ★ India list">★ </span> : null}{leaf.label}
         </h2>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <span className={pending ? "pill pill-warn" : "pill pill-good"}>{pending ? "Still filling" : "Complete"}</span>
-          {leaf.market ? <span className="pill pill-muted">{leaf.city ?? (leaf.market === "india" ? "India" : leaf.market === "remote" ? "Remote" : "Abroad")}</span> : null}
-          {leaf.drafted ? <span className="pill pill-note">Drafted</span> : null}
-        </div>
+        <p className="mt-1 text-[12.5px] text-ink-2">
+          {pending ? `Still filling — ${miss.length} of 4 parts missing` : "Complete — ready for a referral ask"}
+          {where ? ` · ${where}` : ""}{leaf.drafted ? " · drafted" : ""}
+        </p>
       </div>
 
       {pending ? (
         <section>
-          <h3 className="marginal mb-1.5">What is missing</h3>
-          <ul className="space-y-2">
-            {(leaf.missing ?? []).map((p) => (
+          <h3 className="marginal mb-2">What is missing</h3>
+          <ul className="space-y-2.5">
+            {miss.map((p) => (
               <li key={p} className="text-[12.5px] leading-snug">
                 <span className="font-medium">{PART_LABEL[p] ?? p}</span>
                 <span className="block text-[11.5px] text-ink-3">
@@ -482,6 +514,16 @@ function CompanyCard({ leaf, data, fill, onPick }: { leaf: Leaf; data: GraphMap;
         </section>
       ) : null}
 
+      {leaf.cid && pending ? <FillButton cid={leaf.cid} fill={fill} /> : null}
+
+      <dl className="divide-y divide-line border-y border-line text-[12px]">
+        <Fact k="Bet strength" v={leaf.best_selection != null ? `${leaf.best_selection}${leaf.best_selection_band ? ` · ${leaf.best_selection_band}` : ""}` : "—"} />
+        <Fact k="Priority" v={leaf.priority ?? "—"} />
+        <Fact k="Referrers ready" v={`${fmt(leaf.referrers)} · ${fmt(leaf.referrers_email)} with email`} />
+        <Fact k="Roles" v={`${fmt(leaf.roles)} stored${leaf.open_roles != null ? ` · ${fmt(leaf.open_roles)} open` : ""}`} />
+        <Fact k="Last filled" v={leaf.filled_at ? leaf.filled_at.replace("T", " ").slice(0, 16) : "never"} />
+      </dl>
+
       {leaf.notes && Object.keys(leaf.notes).length ? (
         <section>
           <h3 className="marginal mb-1.5">Also noted</h3>
@@ -492,16 +534,6 @@ function CompanyCard({ leaf, data, fill, onPick }: { leaf: Leaf; data: GraphMap;
           </ul>
         </section>
       ) : null}
-
-      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line text-[12px]">
-        <Fact k="Priority" v={leaf.priority ?? "—"} />
-        <Fact k="Best selection" v={leaf.best_selection != null ? `${leaf.best_selection}${leaf.best_selection_band ? ` · ${leaf.best_selection_band}` : ""}` : "—"} />
-        <Fact k="Referrers ready" v={`${fmt(leaf.referrers)} · ${fmt(leaf.referrers_email)} with email`} />
-        <Fact k="Roles" v={`${fmt(leaf.roles)} stored${leaf.open_roles != null ? ` · ${fmt(leaf.open_roles)} open` : ""}`} />
-      </dl>
-      <p className="text-[11px] text-ink-3">
-        {leaf.filled_at ? `Last filled ${leaf.filled_at.replace("T", " ").slice(0, 16)}` : "Never filled"}
-      </p>
 
       {peers.length ? (
         <section>
@@ -525,10 +557,10 @@ function CompanyCard({ leaf, data, fill, onPick }: { leaf: Leaf; data: GraphMap;
       ) : null}
 
       <div className="space-y-2">
-        {leaf.cid ? <FillButton cid={leaf.cid} fill={fill} /> : null}
+        {leaf.cid && !pending ? <FillButton cid={leaf.cid} fill={fill} /> : null}
         {leaf.cid ? (
-          <Link href={`/companies/${leaf.cid}`} className="flex h-9 items-center justify-center gap-1 rounded-[9px] border border-line text-[13px] font-medium hover:border-ink">
-            Company page <ArrowUpRight size={14} />
+          <Link href={`/companies/${leaf.cid}`} className="inline-flex items-center gap-1 text-[12.5px] font-medium underline decoration-line-strong underline-offset-4 hover:decoration-ink">
+            Open the company page <ArrowUpRight size={13} />
           </Link>
         ) : null}
       </div>
@@ -536,16 +568,41 @@ function CompanyCard({ leaf, data, fill, onPick }: { leaf: Leaf; data: GraphMap;
   );
 }
 
-function ProjectCard({ leaf }: { leaf: Leaf }) {
+function ProjectCard({ leaf, data, onPick }: { leaf: Leaf; data: GraphMap; onPick: (id: string) => void }) {
   const done = leaf.status === "complete";
+  const names = new Map<string, string>([...data.hubs.map((h) => [h.id, h.label] as const), ...data.leaves.map((l) => [l.id, l.label] as const)]);
+  const rel = data.links.filter((l) => l.kind !== "chain" && (l.source === leaf.id || l.target === leaf.id));
   return (
-    <div className="space-y-3">
-      <div className="marginal">{leaf.kind} · {leaf.id}</div>
-      <h2 className="text-[16px] font-semibold tracking-[-0.01em]">{leaf.label}</h2>
-      <span className={done ? "pill pill-good" : "pill pill-warn"}>
-        {leaf.kind === "decision" ? "Adopted" : done ? "Built" : PART_LABEL[leaf.feature_status ?? ""] ?? leaf.feature_status ?? "Open"}
-      </span>
+    <div className="space-y-4">
+      <div>
+        <div className="marginal">{leaf.kind} · {names.get(leaf.hub) ?? leaf.hub}</div>
+        <h2 className="mt-1.5 text-[17px] font-semibold tracking-[-0.01em]">{leaf.label}</h2>
+        <p className="mt-1 text-[12.5px] text-ink-2">
+          {leaf.kind === "decision" ? "Adopted" : done ? "Built" : PART_LABEL[leaf.feature_status ?? ""] ?? leaf.feature_status ?? "Open"}
+        </p>
+      </div>
       {leaf.summary ? <p className="text-[12.5px] leading-relaxed text-ink-2">{leaf.summary}</p> : null}
+      {rel.length ? (
+        <section>
+          <h3 className="marginal mb-1.5">Linked to</h3>
+          <ul className="space-y-1 text-[12px]">
+            {rel.map((l) => {
+              const other = l.source === leaf.id ? l.target : l.source;
+              const isLeaf = data.leaves.some((x) => x.id === other);
+              return (
+                <li key={`${l.kind}-${other}`}>
+                  <span className="text-ink-3">{l.kind.replace("_", " ")} · </span>
+                  {isLeaf ? (
+                    <button onClick={() => onPick(other)} className="cursor-pointer underline decoration-line-strong underline-offset-2 hover:decoration-ink">
+                      {names.get(other) ?? other}
+                    </button>
+                  ) : names.get(other) ?? other}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
       <p className="text-[11px] text-ink-3">
         From knowledge/context.yaml. <code className="tnum">python scripts/run.py kg show {leaf.id}</code> lists everything it links to.
       </p>
@@ -565,54 +622,73 @@ function BucketCard({
   return (
     <div className="space-y-4">
       <div>
-        <div className="marginal">{tier === "hub" ? bucket.code ?? "Hub" : "Segment"}</div>
-        <h2 className="mt-1 text-[16px] font-semibold tracking-[-0.01em]">{bucket.label}</h2>
+        <div className="marginal">{tier === "hub" ? bucket.code ?? "Layer" : "Segment"}</div>
+        <h2 className="mt-1.5 text-[17px] font-semibold tracking-[-0.01em]">{bucket.label}</h2>
         {bucket.blurb ? <p className="mt-1 text-[12px] leading-relaxed text-ink-2">{bucket.blurb}</p> : null}
       </div>
-      <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-line bg-line text-[12px]">
-        <Fact k="Shown" v={fmt(a.count)} />
-        <Fact k="Complete" v={fmt(a.complete)} />
-        <Fact k={companies ? "Filling" : "Not built"} v={fmt(a.pending)} />
-      </dl>
+      <p className="tnum text-[12px] text-ink-2">
+        {fmt(a.count)} shown · {fmt(a.complete)} complete · {fmt(a.pending)} {companies ? "still filling" : "not built"}
+        {a.star_pending ? ` · ★ ${fmt(a.star_pending)} pending` : ""}
+      </p>
       {Object.keys(miss).length ? (
-        <p className="text-[11.5px] leading-relaxed text-ink-2">
+        <p className="text-[11.5px] leading-relaxed text-ink-3">
           Missing: {Object.entries(miss).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${PART_LABEL[k] ?? k} ${fmt(n)}`).join(" · ")}
         </p>
       ) : null}
-      <PendingList title={companies ? "Pending here — ★ first, then priority" : "Not built here"} leaves={pend} fill={companies ? fill : null} onPick={onPick} />
+      <PendingList title={companies ? "Unfinished here — ★ first, then priority" : "Not built here"} leaves={pend} fill={companies ? fill : null} onPick={onPick} />
     </div>
   );
 }
 
-function Overview({ data, leaves, companies, fill, onPick }: { data: GraphMap; leaves: Leaf[]; companies: boolean; fill: Fill; onPick: (id: string) => void }) {
+function Overview({ data, agg, leaves, companies, fill, onPick }: {
+  data: GraphMap; agg: Map<string, Agg>; leaves: Leaf[]; companies: boolean; fill: Fill; onPick: (id: string) => void;
+}) {
   const pend = leaves.filter((l) => l.status !== "complete").sort(pendingOrder);
+  const sectors = data.hubs.filter((h) => (h.row ?? 0) === 0);
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
         <div className="marginal">Overview · {data.generated_at.replace("T", " ").slice(0, 16)}</div>
-        <h2 className="mt-1 text-[16px] font-semibold tracking-[-0.01em]">
-          {companies ? "What still needs scraping" : "What is still to build"}
+        <h2 className="mt-1.5 text-[17px] font-semibold tracking-[-0.01em]">
+          {companies ? "What is still unfinished" : "What is still to build"}
         </h2>
         <p className="mt-1 text-[12px] leading-relaxed text-ink-2">
           {companies
-            ? "Pending companies under the current filters, ★ India list first, then by priority. Click one to fly to it."
+            ? "Pick a star, a sector, or a name below. Unfinished companies are listed ★ India first, then by priority."
             : "Features not built yet and open gaps, from the context layer."}
         </p>
       </div>
-      <PendingList title={`${fmt(pend.length)} pending`} leaves={pend} fill={companies ? fill : null} onPick={onPick} />
+      <section>
+        <h3 className="marginal mb-1.5">{data.view === "pipeline" ? "Stages" : data.view === "project" ? "Stages" : "Industries"}</h3>
+        <ul className="divide-y divide-line border-y border-line">
+          {sectors.map((h) => {
+            const a = agg.get(h.id);
+            return (
+              <li key={h.id}>
+                <button onClick={() => onPick(h.id)} className="flex w-full cursor-pointer items-baseline gap-2 py-1.5 text-left text-[12.5px] hover:text-ink">
+                  <span className="min-w-0 flex-1 truncate">{h.label}</span>
+                  {a?.star_pending ? <span className="tnum text-[11px] text-ink-2">★{a.star_pending}</span> : null}
+                  <span className="tnum text-[11px] text-ink-3">{fmt(a?.count ?? 0)}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+      <PendingList title={`${fmt(pend.length)} unfinished`} leaves={pend} fill={companies ? fill : null} onPick={onPick} />
     </div>
   );
 }
 
 function PendingList({ title, leaves, fill, onPick }: { title: string; leaves: Leaf[]; fill: Fill | null; onPick: (id: string) => void }) {
   const [n, setN] = useState(40);
-  if (!leaves.length) return <p className="text-[12px] text-ink-3">Nothing pending here.</p>;
+  if (!leaves.length) return <p className="text-[12px] text-ink-3">Nothing unfinished here.</p>;
   return (
     <section>
       <h3 className="marginal mb-1.5">{title}</h3>
-      <ul className="divide-y divide-line rounded-lg border border-line">
+      <ul className="divide-y divide-line border-y border-line">
         {leaves.slice(0, n).map((l) => (
-          <li key={l.id} className="flex items-center gap-2 px-2.5 py-2">
+          <li key={l.id} className="flex items-center gap-2 py-1.5">
             <button onClick={() => onPick(l.id)} className="min-w-0 flex-1 cursor-pointer text-left">
               <span className="block truncate text-[12.5px] font-medium">{l.star ? "★ " : ""}{l.label}</span>
               <span className="block truncate text-[11px] text-ink-3">
@@ -637,7 +713,7 @@ function PendingList({ title, leaves, fill, onPick }: { title: string; leaves: L
 
 function MapFrame({ children }: { children: ReactNode }) {
   return (
-    <div className="relative h-[min(76dvh,820px)] min-h-[440px] overflow-hidden rounded-xl border border-line bg-surface">
+    <div className="relative h-[calc(100dvh-240px)] max-h-[960px] min-h-[420px] overflow-hidden rounded-xl border border-line bg-surface">
       {children}
     </div>
   );
@@ -658,7 +734,7 @@ function Calm({ children, busy = false }: { children: ReactNode; busy?: boolean 
   );
 }
 
-/** Beside the map on a laptop; a bottom sheet on a phone, only while something is picked. */
+/** Beside the chart on a laptop; a bottom sheet on a phone, only while something is picked. */
 function Panel({ open, onClose, panelKey, children }: { open: boolean; onClose: () => void; panelKey: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -668,10 +744,10 @@ function Panel({ open, onClose, panelKey, children }: { open: boolean; onClose: 
   return (
     <aside
       aria-label="Details"
-      className={`${open ? "fixed" : "hidden"} inset-x-0 bottom-0 z-40 max-h-[62dvh] overflow-y-auto rounded-t-2xl border-t border-line bg-surface px-4 pt-3 pb-6 shadow-[0_-8px_24px_rgb(0_0_0/0.12)]
-        lg:static lg:block lg:max-h-[min(76dvh,820px)] lg:min-h-[440px] lg:rounded-xl lg:border lg:pt-4 lg:shadow-none`}
+      className={`${open ? "fixed" : "hidden"} inset-x-0 bottom-0 z-40 max-h-[62dvh] overflow-y-auto rounded-t-2xl border-t border-line bg-surface px-4 pt-3 pb-6
+        lg:static lg:block lg:max-h-[calc(100dvh-240px)] lg:rounded-none lg:border-t-0 lg:border-l lg:bg-transparent lg:px-0 lg:pt-0 lg:pl-5`}
     >
-      <div className="mb-2 flex justify-end">
+      <div className="mb-1 flex justify-end">
         {open ? (
           <button onClick={onClose} aria-label="Close details" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink">
             <X size={15} />
@@ -688,7 +764,7 @@ function Toggle({ on, onClick, children }: { on: boolean; onClick: () => void; c
     <button
       aria-pressed={on}
       onClick={onClick}
-      className={`h-8 cursor-pointer rounded-lg border px-3 text-[12.5px] font-medium transition-colors ${
+      className={`h-7 cursor-pointer rounded-md border px-2.5 text-[12px] font-medium transition-colors ${
         on ? "border-ink bg-ink text-on-ink" : "border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink"
       }`}
     >
@@ -697,81 +773,61 @@ function Toggle({ on, onClick, children }: { on: boolean; onClick: () => void; c
   );
 }
 
-function Stat({ label, value, total, strong, on, onClick }: { label: string; value: number; total?: number; strong?: boolean; on?: boolean; onClick?: () => void }) {
-  const body = (
-    <>
-      <span className="marginal block">{label}</span>
-      <span className={`tnum mt-0.5 block text-[15px] ${strong ? "font-semibold" : "font-medium"}`}>{fmt(value)}</span>
-      {total ? (
-        <span aria-hidden className="mt-1.5 block h-[3px] w-full bg-surface-3">
-          <span className="block h-full bg-ink" style={{ width: `${Math.round((value / Math.max(1, total)) * 100)}%` }} />
-        </span>
-      ) : null}
-    </>
-  );
-  const cls = `min-w-[112px] flex-1 px-3 py-2 text-left ${on ? "bg-surface-3" : "bg-surface"}`;
-  return onClick ? (
-    <button aria-pressed={on} onClick={onClick} className={`${cls} cursor-pointer hover:bg-surface-2`}>{body}</button>
-  ) : (
-    <div className={cls}>{body}</div>
-  );
-}
-
 function Fact({ k, v }: { k: string; v: ReactNode }) {
   return (
-    <div className="bg-surface px-2.5 py-2">
-      <dt className="marginal">{k}</dt>
-      <dd className="tnum mt-0.5 text-[12.5px]">{v}</dd>
+    <div className="flex items-baseline justify-between gap-3 py-1.5">
+      <dt className="text-ink-3">{k}</dt>
+      <dd className="tnum text-right text-[12px]">{v}</dd>
     </div>
   );
 }
 
-/* The legend: every swatch painted by styleForNode + paintNode, the canvas's own pair. */
-function Legend({ view }: { view: ViewKey }) {
-  const [open, setOpen] = useState(true);
+/* The key: every glyph painted by styleForNode + paintStar, the canvas's own pair. */
+function Legend({ mode }: { mode: Mode }) {
+  const companies = mode !== "project";
   return (
-    <div className="absolute bottom-3 left-3 max-w-[calc(100%-24px)] rounded-lg border border-line bg-surface/95 px-3 py-2 text-[11px] backdrop-blur-sm">
-      <button onClick={() => setOpen(!open)} aria-expanded={open} className="marginal cursor-pointer hover:text-ink">
-        Legend {open ? "–" : "+"}
-      </button>
-      {open ? (
-        <ul className="mt-1.5 grid gap-1">
-          {LEGEND.filter((e) => view !== "project" || !["star", "bare"].includes(e.key)).map((e) => (
-            <li key={e.key} className="flex items-center gap-2 text-ink-2">
-              <Swatch entry={e} />
-              {view === "project" && e.key === "complete" ? "Built / adopted" : e.label}
-            </li>
-          ))}
-          <li className="pt-1 text-ink-3">Scroll to zoom · drag to pan · dots appear as you zoom in</li>
-        </ul>
-      ) : null}
-    </div>
+    <ul aria-label="Key" className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-ink-2">
+      {LEGEND.filter((e) => companies || !e.companiesOnly).map((e) => (
+        <li key={e.key} className="flex items-center gap-1.5">
+          <Swatch entry={e} />
+          {!companies && e.key === "complete" ? "Built or adopted" : !companies && e.key === "filling" ? "Not built yet" : e.label}
+        </li>
+      ))}
+      <li className="text-ink-3">
+        {mode === "atlas" ? "Nearer the centre = stronger bet" : mode === "transit" ? "Columns = furthest stage reached · strongest first" : "Nearer the centre = built"}
+        <span className="hidden sm:inline"> · scroll to zoom, drag to pan</span>
+      </li>
+    </ul>
   );
 }
 
-function Swatch({ entry }: { entry: (typeof LEGEND)[number] }) {
+function Swatch({ entry }: { entry: LegendEntry }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const step = 13;
+  const width = entry.leaves.length * step + 5;
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
     const paint = () => {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
-      const size = 22;
-      c.width = size * dpr;
-      c.height = size * dpr;
+      const h = 18;
+      c.width = width * dpr;
+      c.height = h * dpr;
       const ctx = c.getContext("2d");
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, size, size);
-      const st = styleForNode(entry.node, { ...DEFAULT_STATE, ...entry.state });
-      // leaves at a readable zoom; hubs and segments at a fixed small size
-      const r = entry.node.tier === "leaf" ? screenRadius(entry.node, st, 1.6) : 6;
-      paintNode(ctx, size / 2, size / 2, r, { ...st, haloGap: Math.min(st.haloGap, 3) }, readPalette());
+      ctx.clearRect(0, 0, width, h);
+      const pal = readPalette();
+      entry.leaves.forEach((l, i) => {
+        const st = styleForNode(l, DEFAULT_STATE);
+        paintStar(ctx, 2.5 + step / 2 + i * step, h / 2, st.r * (entry.key === "mag" ? 1.3 : MAG_R[2] / st.r * 1.1), st, pal, dpr);
+      });
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
     };
     paint();
     const mo = new MutationObserver(paint);
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme", "style"] });
     return () => mo.disconnect();
-  }, [entry]);
-  return <canvas ref={ref} aria-hidden className="h-[22px] w-[22px] shrink-0" />;
+  }, [entry, width]);
+  return <canvas ref={ref} aria-hidden style={{ width, height: 18 }} className="shrink-0" />;
 }

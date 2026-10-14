@@ -1,19 +1,23 @@
 /*  The graph map's visual contract (CHOKEPOINTS §13.3).
  *
- *  Every visual difference on the /graph canvas funnels through ONE pure function,
- *  styleForNode(). The canvas and the legend both call it, and both paint through
- *  paintNode(), so they can never disagree. Change the look here, never in the render
- *  loop.
+ *  Every visual difference between two stars on the /graph canvas funnels through ONE
+ *  pure function, styleForNode(). The canvas and the legend both call it, and both paint
+ *  through paintStar(), so they can never disagree. Change the look here, never in the
+ *  render loop.
  *
- *  Black and white only: state is weight, opacity, rings and dashes — never colour.
+ *  Black and white only: state is fill, stroke weight, opacity and dash — never colour.
  *
- *      complete company      solid ink dot
- *      still filling         hollow ring; ring width = how many parts are missing
- *                            (1–4 of website · description · hiring · referrer email)
- *      no site / no desc.    the ring is dashed — nothing has been read about them yet
- *      on the ★ list         a thin outer halo
- *      hub / segment         ring with a progress arc (share complete); a dashed outer
- *                            "roll-up" ring when a pending ★ company sits under it
+ *      complete              filled ink dot
+ *      still filling         hollow ring; the more parts are missing (of website ·
+ *                            description · hiring · referrer email) the fainter and
+ *                            thinner the ring — one missing is a near-solid outline
+ *      nothing read yet      the ring is dashed (no site or no description, or all four
+ *                            parts missing) — the fill pass has nothing to stand on
+ *      on the ★ list         four short ticks around the star, like a reticle
+ *      magnitude             three sizes from priority, not a continuous scale
+ *
+ *  Where a star sits is not style — it is data (lib/graph-layout.ts): distance from
+ *  "you" is how good a bet it is.
  *
  *  The payload these read is pinned by tests/test_graphmap.py
  *  (test_leaf_contract_is_what_style_for_node_reads).
@@ -91,114 +95,83 @@ export type GraphMap = {
 };
 
 export type ViewKey = "market" | "pipeline" | "project";
-export type Tier = "hub" | "sub" | "leaf";
 
-/** What the canvas draws: a payload record plus its tier. `agg` is the bucket's roll-up
- *  over the leaves the filters currently let through (so rings follow the filters). */
-export type MapNode =
-  | { tier: "hub" | "sub"; id: string; data: Bucket; agg: Agg }
-  | { tier: "leaf"; id: string; data: Leaf };
-
+/** A bucket's roll-up over the leaves the filters currently let through. */
 export type Agg = { count: number; complete: number; pending: number; star_pending: number };
 
-/** Everything about the moment that can change a node's look. */
-export type NodeState = {
+/** Everything about the moment that can change a star's look. */
+export type StarState = {
   hovered: boolean;
   selected: boolean;
-  /** none: nothing is focused · in: in the focused node's neighbourhood · out: dimmed */
-  focus: "none" | "in" | "out";
   /** null: no search · true/false: matched or not */
   match: boolean | null;
   /** 0..1 — the filter fade (tweened), 1 = shown */
   visible: number;
-  /** 0..1 — leaf level of detail from zoom (hubs and subs ignore it) */
-  lod: number;
-  /** 0..1 — the slow pulse on pending rings; held at 0 under prefers-reduced-motion */
-  pulse: number;
 };
 
-export type Ink = "ink" | "ink2" | "ink3" | "surface" | "surface2" | "line";
+export const DEFAULT_STATE: StarState = { hovered: false, selected: false, match: null, visible: 1 };
 
-export type NodeStyle = {
-  r: number;                    // world units (screenRadius turns it into pixels)
-  fill: Ink | null;
-  ring: Ink | null;
+export type StarStyle = {
+  mag: 0 | 1 | 2;
+  r: number;                    // px at the home zoom
+  fill: boolean;                // solid ink: complete
+  ring: boolean;                // hollow outline: still filling
   ringWidth: number;            // px
-  dash: number[] | null;        // px
-  halo: Ink | null;             // an outer ring: ★, the roll-up, or the selection
-  haloGap: number;              // px between the node and the halo
-  haloWidth: number;
-  haloDash: number[] | null;
-  progress: number | null;      // 0..1 share complete, drawn as an arc on hubs / subs
-  ringAlpha: number;            // multiplies alpha for the ring (the pulse lives here)
-  haloAlpha: number;            // multiplies alpha for the halo (the roll-up pulse)
+  ringAlpha: number;            // multiplies alpha for the ring
+  dash: readonly number[] | null;
+  tick: boolean;                // the ★ reticle
+  halo: boolean;                // the selection ring
   alpha: number;
-  label: "always" | "focus" | "none";
 };
 
-export const DEFAULT_STATE: NodeState = {
-  hovered: false, selected: false, focus: "none", match: null, visible: 1, lod: 1, pulse: 0,
-};
+/** Magnitudes — three steps, so a size difference always means a priority band. */
+export const MAG_R = [1.55, 2.25, 3.05] as const;
+const DASH = [1.5, 1.6] as const;
+const RING_ALPHA = [1, 0.95, 0.74, 0.54, 0.38];
+const RING_WIDTH = [0, 1.25, 1.1, 0.95, 0.85];
 
-/** THE function. Pure: same node and state, same pixels. */
-export function styleForNode(n: MapNode, s: NodeState): NodeStyle {
-  let alpha = s.focus === "out" ? 0.12 : 1;
-  if (s.match === false) alpha *= 0.18;
-  const grow = (s.hovered ? 1.3 : 1) * (0.55 + 0.45 * s.visible);
-
-  if (n.tier !== "leaf") {
-    const hub = n.tier === "hub";
-    const a = n.agg;
-    const rollup = a.star_pending > 0;
-    return {
-      r: (hub ? 14 + Math.sqrt(a.count) * 0.9 : 5 + Math.sqrt(a.count) * 0.75) * grow,
-      fill: hub ? "surface" : "surface2",
-      ring: hub ? "ink" : "ink3",
-      ringWidth: hub ? 1.5 : 1,
-      // an empty chain hub (nothing passes the filters) is dashed; a rule hub never holds leaves
-      dash: a.count === 0 && (n.data.row ?? 0) === 0 ? [2, 3] : null,
-      halo: s.selected ? "ink" : rollup ? "ink" : null,
-      haloGap: s.selected ? 5 : 4,
-      haloWidth: s.selected ? 2 : 1.25,
-      haloDash: s.selected ? null : [3, 3],
-      progress: a.count ? a.complete / a.count : null,
-      haloAlpha: s.selected ? 1 : 1 - 0.55 * s.pulse,
-      ringAlpha: 1,
-      alpha: alpha * Math.max(0.35, s.visible),
-      label: hub || s.hovered || s.selected ? "always" : "focus",
-    };
+/** How good a bet, 0..100: the best-selection score, else priority. Project leaves
+ *  have no score; done things sit near the centre, open ones at the rim. */
+export function scoreOf(l: Leaf): number {
+  if (l.kind !== "company") {
+    if (l.status === "complete") return 80;
+    return l.feature_status === "partial" ? 50 : 20;
   }
+  const s = l.best_selection ?? l.priority ?? 0;
+  return Math.max(0, Math.min(100, s));
+}
 
-  const d = n.data;
-  const pending = d.status !== "complete";
-  const missing = d.missing?.length ?? (pending ? 1 : 0);
-  const thin = !!(d.no_site || d.no_description) || d.kind === "gap";
-  const prio = Math.max(0, Math.min(100, d.priority ?? 0)) / 100;
+export function magnitude(l: Leaf): 0 | 1 | 2 {
+  if (l.kind !== "company") return l.kind === "decision" ? 0 : 1;
+  const p = l.priority ?? 0;
+  return p >= 60 ? 2 : p >= 25 ? 1 : 0;
+}
+
+/** THE function. Pure: same leaf and state, same pixels. */
+export function styleForNode(l: Leaf, s: StarState): StarStyle {
+  const pending = l.status !== "complete";
+  const miss = pending ? Math.max(1, Math.min(4, l.missing?.length ?? 1)) : 0;
+  const bare = pending && (!!l.no_site || !!l.no_description || miss >= 4 || l.kind === "gap");
+  const mag = magnitude(l);
+  const grow = s.hovered || s.selected ? 1.4 : 1;
   return {
-    r: (2.4 + prio * 1.4) * grow,
-    fill: pending ? "surface" : "ink",
-    ring: pending ? "ink" : null,
-    ringWidth: pending ? 0.6 + 0.55 * Math.min(4, missing) : 0,
-    dash: pending && thin ? [1.6, 1.4] : null,
-    halo: s.selected ? "ink" : d.star ? "ink2" : null,
-    haloGap: s.selected ? 4 : 2,
-    haloWidth: s.selected ? 2 : 0.9,
-    haloDash: null,
-    progress: null,
-    haloAlpha: 1,
-    ringAlpha: pending ? 1 - 0.45 * s.pulse : 1,
-    alpha: alpha * s.lod * s.visible,
-    label: s.hovered || s.selected ? "always" : "focus",
+    mag,
+    r: MAG_R[mag] * grow,
+    fill: !pending,
+    ring: pending,
+    ringWidth: RING_WIDTH[miss],
+    ringAlpha: RING_ALPHA[miss],
+    dash: bare ? DASH : null,
+    tick: !!l.star,
+    halo: s.selected,
+    alpha: s.visible * (s.match === false ? 0.13 : 1),
   };
 }
 
-/** A leaf's world radius becomes pixels with the zoom, but never vanishes or balloons. */
-export function screenRadius(n: MapNode, st: NodeStyle, k: number): number {
-  if (n.tier === "leaf") return Math.max(1.6, Math.min(st.r * 4, st.r * k));
-  return Math.max(n.tier === "hub" ? 9 : 3.5, st.r * k);
-}
-
-export type Palette = Record<Ink, string> & { paper: string; lineStrong: string };
+export type Palette = {
+  ink: string; ink2: string; ink3: string; surface: string; surface2: string;
+  line: string; lineStrong: string; paper: string;
+};
 
 /** The canvas cannot read CSS variables, so they are read here at draw time. A token
  *  added to globals.css must be added here too, or the canvas falls back silently. */
@@ -217,68 +190,108 @@ export function readPalette(el: Element = document.documentElement): Palette {
   };
 }
 
-/** Paint one node at screen (x, y) with screen radius r. Shared by the canvas and the legend. */
-export function paintNode(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, st: NodeStyle, pal: Palette) {
-  if (st.alpha <= 0.004) return;
-  ctx.globalAlpha = st.alpha;
-  if (st.halo) {
-    ctx.globalAlpha = st.alpha * st.haloAlpha;
-    ctx.beginPath();
-    ctx.arc(x, y, r + st.haloGap, 0, Math.PI * 2);
-    ctx.setLineDash(st.haloDash ?? []);
-    ctx.lineWidth = st.haloWidth;
-    ctx.strokeStyle = pal[st.halo];
-    ctx.stroke();
+/* ---------------------------------------------------------------- glyphs
+   Path2D, built once per quantised radius and reused every frame: a star is drawn by
+   moving the origin to it and stroking or filling a cached path — no per-frame
+   allocation, whatever the star count. */
+
+const TAU = Math.PI * 2;
+const circles = new Map<number, Path2D>();
+const ticks = new Map<number, Path2D>();
+const q = (r: number) => Math.round(r * 4) / 4;
+
+function circleAt(r: number): Path2D {
+  const k = q(r);
+  let p = circles.get(k);
+  if (!p) {
+    p = new Path2D();
+    p.arc(0, 0, k, 0, TAU);
+    circles.set(k, p);
   }
-  ctx.globalAlpha = st.alpha;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
+  return p;
+}
+
+function tickAt(r: number): Path2D {
+  const k = q(r);
+  let p = ticks.get(k);
+  if (!p) {
+    p = new Path2D();
+    const a = k + 1.8;
+    const b = a + 2.6;
+    p.moveTo(0, -a); p.lineTo(0, -b);
+    p.moveTo(a, 0); p.lineTo(b, 0);
+    p.moveTo(0, a); p.lineTo(0, b);
+    p.moveTo(-a, 0); p.lineTo(-b, 0);
+    ticks.set(k, p);
+  }
+  return p;
+}
+
+/** Paint one star at screen (x, y) with screen radius r. `dpr` is the canvas's device
+ *  pixel ratio — the transform is set here so the cached paths draw at the origin.
+ *  `fade` is motion, not style: the canvas's filter fade and intro sweep (0..1).
+ *  Shared by the canvas and the legend. */
+export function paintStar(
+  ctx: CanvasRenderingContext2D, x: number, y: number, r: number, st: StarStyle, pal: Palette, dpr: number, fade = 1,
+) {
+  const alpha = st.alpha * fade;
+  if (alpha <= 0.004) return;
+  ctx.setTransform(dpr, 0, 0, dpr, dpr * x, dpr * y);
+  const body = circleAt(r);
   if (st.fill) {
-    ctx.fillStyle = pal[st.fill];
-    ctx.fill();
-  }
-  if (st.ring && st.ringWidth > 0) {
-    ctx.globalAlpha = st.alpha * st.ringAlpha;
-    ctx.setLineDash(st.dash ?? []);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = pal.ink;
+    ctx.fill(body);
+  } else if (st.ring) {
+    ctx.globalAlpha = alpha * st.ringAlpha;
+    ctx.strokeStyle = pal.ink;
     ctx.lineWidth = st.ringWidth;
-    ctx.strokeStyle = st.progress !== null ? pal.lineStrong : pal[st.ring];
-    ctx.stroke();
+    if (st.dash) ctx.setLineDash(st.dash as number[]);
+    ctx.stroke(body);
+    if (st.dash) ctx.setLineDash([]);
   }
-  if (st.progress !== null && st.progress > 0 && st.ring) {
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, st.progress));
-    ctx.lineWidth = st.ringWidth + 1.5;
-    ctx.strokeStyle = pal[st.ring];
-    ctx.stroke();
+  if (st.tick || st.halo) {
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = pal.ink;
+    if (st.tick) {
+      ctx.lineWidth = 0.9;
+      ctx.stroke(tickAt(r));
+    }
+    if (st.halo) {
+      ctx.lineWidth = 1;
+      ctx.stroke(circleAt(r + (st.tick ? 6 : 4.5)));
+    }
   }
-  ctx.setLineDash([]);
   ctx.globalAlpha = 1;
 }
 
 /* ---------------------------------------------------------------- the legend
-   Generated from styleForNode itself: each entry is a sample node in a sample state. */
+   Generated from styleForNode itself: each entry is one or more sample leaves. */
 
-const sampleLeaf = (over: Partial<Leaf>): MapNode => ({
-  tier: "leaf", id: "x",
-  data: { id: "x", kind: "company", label: "", hub: "", status: "filling", priority: 40, ...over },
-});
-const sampleBucket = (tier: "hub" | "sub", star: number): MapNode => {
-  const agg = { count: 36, complete: 12, pending: 24, star_pending: star };
-  return {
-    tier, id: "b", agg,
-    data: { id: "b", label: "", ...agg, india_pending: 0, missing: {} },
-  };
-};
+const sample = (over: Partial<Leaf>): Leaf =>
+  ({ id: "x", kind: "company", label: "", hub: "", status: "filling", priority: 40, ...over });
 
-export const LEGEND: { key: string; label: string; node: MapNode; state?: Partial<NodeState> }[] = [
-  { key: "complete", label: "Complete", node: sampleLeaf({ status: "complete", missing: [] }) },
-  { key: "one", label: "Filling · 1 part missing", node: sampleLeaf({ missing: ["referrer_email"] }) },
-  { key: "three", label: "Filling · 3 parts missing", node: sampleLeaf({ missing: ["description", "hiring", "referrer_email"] }) },
-  { key: "bare", label: "No site or description yet", node: sampleLeaf({ missing: ["website", "description"], no_site: true, no_description: true }) },
-  { key: "star", label: "★ India list", node: sampleLeaf({ missing: ["hiring"], star: true }) },
-  { key: "hub", label: "Layer / stage · arc = share complete", node: sampleBucket("hub", 0) },
-  { key: "rollup", label: "Holds a pending ★ company", node: sampleBucket("sub", 1) },
+export type LegendEntry = { key: string; label: string; leaves: Leaf[]; companiesOnly?: boolean };
+
+export const LEGEND: LegendEntry[] = [
+  { key: "complete", label: "Complete", leaves: [sample({ status: "complete", missing: [] })] },
+  {
+    key: "filling", label: "Still filling — fainter = more missing",
+    leaves: [
+      sample({ missing: ["referrer_email"] }),
+      sample({ missing: ["hiring", "referrer_email"] }),
+      sample({ missing: ["description", "hiring", "referrer_email"] }),
+    ],
+  },
+  {
+    key: "bare", label: "Nothing read yet", companiesOnly: true,
+    leaves: [sample({ missing: ["website", "description", "hiring", "referrer_email"], no_site: true, no_description: true })],
+  },
+  { key: "star", label: "★ India list", companiesOnly: true, leaves: [sample({ status: "complete", star: true })] },
+  {
+    key: "mag", label: "Size = priority", companiesOnly: true,
+    leaves: [sample({ status: "complete", priority: 10 }), sample({ status: "complete", priority: 40 }), sample({ status: "complete", priority: 80 })],
+  },
 ];
 
 export const PART_LABEL: Record<string, string> = {
