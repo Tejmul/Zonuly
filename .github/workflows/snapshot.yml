@@ -45,8 +45,9 @@ jobs:
             echo "::error::Repository secret CATALYST_TOKEN is not set (catalyst token:generate, then gh secret set CATALYST_TOKEN)"
             exit 1
           fi
-          # A fresh runner has no CLI state; .catalystrc alone does not name the org.
-          catalyst deploy --only appsail --project 84632000000013053 --org 60091917121 --token "$CATALYST_TOKEN" -ni
+          # A fresh runner has no CLI state: .catalystrc alone does not name the org, and the
+          # data centre defaults to US — this account (and its token) lives on zoho.in.
+          catalyst deploy --only appsail --dc in --project 84632000000013053 --org 60091917121 --token "$CATALYST_TOKEN" -ni
       - name: Wait for it to answer, then smoke-test it
         run: |
           for i in $(seq 1 30); do
