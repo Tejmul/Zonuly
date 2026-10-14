@@ -502,15 +502,46 @@ export class ApiError extends Error {
   }
 }
 
+/* A hosted backend that scales to zero (Catalyst AppSail) answers its first request after
+   a quiet spell with a gateway error that carries no CORS header, which the browser
+   reports as a network failure. Reads against a remote API therefore get two more tries
+   (2 s, then 5 s) before the page says it cannot reach it; writes are never retried, and
+   a request the page has already abandoned is not either. */
+const WAKE_RETRIES_MS = [2000, 5000];
+const sleep = (ms: number, signal?: AbortSignal | null) =>
+  new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => { clearTimeout(t); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
+  });
+
+async function fetchWaking(url: string, init: RequestInit): Promise<Response> {
+  const local = API_BASE.includes("127.0.0.1") || API_BASE.includes("localhost");
+  const retry = !local && (init.method ?? "GET").toUpperCase() === "GET";
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url, init);
+      if (retry && attempt < WAKE_RETRIES_MS.length && [502, 503, 504].includes(res.status)) {
+        await sleep(WAKE_RETRIES_MS[attempt], init.signal);
+        continue;
+      }
+      return res;
+    } catch (e) {
+      if (init.signal?.aborted || !retry || attempt >= WAKE_RETRIES_MS.length) throw e;
+      await sleep(WAKE_RETRIES_MS[attempt], init.signal);
+    }
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetchWaking(`${API_BASE}${path}`, {
       ...init,
       headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
       cache: "no-store",
     });
-  } catch {
+  } catch (e) {
+    if (init?.signal?.aborted) throw e;
     // Name the base it tried. On a deployed page, a local base means the build had no
     // NEXT_PUBLIC_API_BASE — the page is asking the viewer's own laptop for the API.
     const local = API_BASE.includes("127.0.0.1") || API_BASE.includes("localhost");
@@ -522,8 +553,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
           "Set NEXT_PUBLIC_API_BASE to the deployed API's URL in the hosting project's environment and redeploy (it is baked in at build time)."
         : local
           ? `Can't reach the API at ${API_BASE}. Start it with \`python scripts/run.py serve\`.`
-          : `Can't reach the API at ${API_BASE}. It is down, or it refused this page's origin — add ` +
-            `${typeof window !== "undefined" ? window.location.origin : "this origin"} to ZONULY_CORS_ORIGINS on the API and redeploy.`,
+          : `Can't reach the API at ${API_BASE} after three tries. It may still be waking up — reload in a minute. ` +
+            `If it keeps failing, it is down or refuses this page's origin (` +
+            `${typeof window !== "undefined" ? window.location.origin : "this origin"}; set ZONULY_CORS_ORIGINS on the API).`,
       0,
     );
   }
