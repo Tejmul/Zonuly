@@ -724,6 +724,11 @@ contacts:
   max_per_company: 20
   linkedin_min_gap_seconds: 35
   linkedin_max_per_company: 8
+  # 2026-10-15: keyless search returns no LinkedIn profiles any more, so the referral job
+  # starts each company with ONE Exa `category: people` search (~10 current profiles).
+  # It spends research.exa_daily_cap and always leaves this many searches for the rest.
+  exa_people_reserve: 15
+  exa_people_max_per_company: 12
   github_token: ''
   hunter_api_key: ''
   smtp_verify: false

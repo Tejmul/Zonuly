@@ -218,6 +218,48 @@ def _save(company_id: int, people: list[dict], via: str) -> int:
     return added
 
 
+#: 2026-10-15: the keyless engines (DDG, Startpage, Bing, Mojeek, Brave) all return zero
+#: linkedin.com/in results from this machine, so the referral job found 4 people in 100
+#: companies. One Exa `category: people` search returns ~10–15 profile cards for a company
+#: (Razorpay: 15 cards, 13 current). It spends the existing daily Exa cap
+#: (research.exa_daily_cap) and leaves EXA_PEOPLE_RESERVE of it for everything else.
+_LC = CONFIG.get("contacts") or {}
+EXA_PEOPLE_RESERVE = int(_LC.get("exa_people_reserve", 15))
+EXA_PEOPLE_MAX = int(_LC.get("exa_people_max_per_company", 12))
+
+
+def exa_people_available() -> bool:
+    from jobhunter.research import web
+
+    return web.exa_budget()["left"] > EXA_PEOPLE_RESERVE
+
+
+def search_people_exa(company_id: int, *, city: str | None = None, max_people: int = EXA_PEOPLE_MAX) -> dict:
+    """One metered Exa people search for one company. Every card still has to name THIS
+    company as a current position (people_from_results), exactly like a keyless hit."""
+    from jobhunter.research import web
+
+    init_db()
+    with get_session() as session:
+        c = session.get(Company, company_id)
+        if c is None:
+            return {"error": f"no company {company_id}"}
+        name, domain = c.name, c.domain
+    if not exa_people_available():
+        return {"company": name, "kind": "exa-people", "error": "exa people: daily allowance used"}
+    where = f" in {city}, India" if city else ""
+    who = f"{name} ({domain})" if domain else name
+    hits = web._exa_api_search(f"engineers, engineering leaders and founders currently working at {who}{where}",
+                               15, 60, category="people")
+    if not hits:
+        err = (web._errors[-1] if web._errors else "no results")[:160]
+        return {"company": name, "kind": "exa-people", "found": 0, "added": 0, "error": err}
+    rows = [{"url": h.url, "title": h.title, "snippet": h.snippet} for h in hits]
+    people = people_from_results(rows, name, domain)[:max_people]
+    added = _save(company_id, people, "exa-people") if people else 0
+    return {"company": name, "kind": "exa-people", "found": len(people), "added": added, "via": "exa-people"}
+
+
 def find_for_company(company_id: int, *, max_people: int = MAX_PER_COMPANY) -> dict:
     """Public LinkedIn people at one company, via search, with emails from its pattern."""
     init_db()

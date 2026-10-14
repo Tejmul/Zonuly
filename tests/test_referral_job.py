@@ -109,7 +109,10 @@ def test_run_cycle_ends_early_when_every_keyless_backend_cools(engine, monkeypat
 
     _world(engine)
     seen = []
+    from jobhunter.contacts import linkedin_public
+
     monkeypatch.setattr(web, "search_down", lambda: True)
+    monkeypatch.setattr(linkedin_public, "exa_people_available", lambda: False)
     monkeypatch.setattr(referrals, "DOWN_TAIL", 2)
     monkeypatch.setattr(referrals, "refer_company",
                         lambda cid, search_ok=True: seen.append((cid, search_ok)) or {"bucket": "Bengaluru"})
@@ -117,6 +120,22 @@ def test_run_cycle_ends_early_when_every_keyless_backend_cools(engine, monkeypat
     assert len(seen) == 2 and all(ok is False for _, ok in seen)     # no web search while it cools
     assert "ended early" in out["stopped"] and out["companies"] == 2
     assert referrals.claims() == {}                                   # the window is released
+
+
+def test_run_cycle_keeps_going_on_exa_people_while_keyless_cools(engine, monkeypatch):
+    from jobhunter.contacts import linkedin_public
+    from jobhunter.research import web
+
+    _world(engine)
+    seen = []
+    monkeypatch.setattr(web, "search_down", lambda: True)
+    monkeypatch.setattr(linkedin_public, "exa_people_available", lambda: True)
+    monkeypatch.setattr(referrals, "DOWN_TAIL", 2)
+    monkeypatch.setattr(referrals, "refer_company",
+                        lambda cid, search_ok=True: seen.append((cid, search_ok)) or {"bucket": "Bengaluru"})
+    out = referrals.run_cycle(budget_s=60, limit=10)
+    assert len(seen) > 2 and all(ok is False for _, ok in seen)      # keyless still skipped
+    assert not out["stopped"]
 
 
 def test_run_cycle_counts_by_channel(engine, monkeypatch):

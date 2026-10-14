@@ -696,8 +696,16 @@ def refer_company(cid: int, *, search_ok: bool = True) -> dict:
     def ready_now() -> int:
         return _counts(cid)[0]
 
-    # 1. public LinkedIn, search results only — the headline must name the company now
-    if search_ok:
+    # 1a. one metered Exa people search (contacts/linkedin_public.search_people_exa): ~10
+    #     current profiles per call, where the keyless engines now return none
+    if ready_now() < TARGET and linkedin_public.exa_people_available():
+        res = linkedin_public.search_people_exa(cid, city=city)
+        out["queries"] += 1
+        out["channels"].append("linkedin:exa-people")
+        if res.get("error"):
+            out["exa_people_error"] = res["error"][:160]
+    # 1b. public LinkedIn through keyless search — the headline must name the company now
+    if search_ok and ready_now() < TARGET:
         for kind in linkedin_public.REFERRAL_QUERIES:
             if ready_now() >= TARGET:
                 break
@@ -788,6 +796,8 @@ def run_cycle(*, budget_s: int | None = None, limit: int | None = None, exclude:
         prune_claims()
     except Exception as e:  # noqa: BLE001
         log.debug("prune claims: %s", e)
+    from jobhunter.contacts import linkedin_public
+
     queue = ids if ids is not None else cycle_queue(limit, exclude=exclude or set(), owner=owner)
     window = [cid for cid in queue[:limit] if claim(cid, owner, ttl_s=budget_s + 300)]
     out: dict = {"queued": len(queue), "window": len(window), "companies": 0, "added_ready": 0,
@@ -799,7 +809,7 @@ def run_cycle(*, budget_s: int | None = None, limit: int | None = None, exclude:
                 out["stopped"] = f"time budget ({budget_s}s) reached"
                 break
             down = web.search_down()
-            if down:
+            if down and not linkedin_public.exa_people_available():
                 out["search_down_companies"] += 1
                 if out["search_down_companies"] > DOWN_TAIL:
                     out["stopped"] = "every keyless search backend is cooling down — ended early"
