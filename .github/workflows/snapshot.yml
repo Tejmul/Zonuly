@@ -17,3 +17,39 @@ jobs:
       - run: uv sync --frozen --no-dev
       - run: gunzip -k demo.db.gz
       - run: uv run --frozen --no-dev python scripts/smoke.py --db demo.db
+
+  # Every push to main that passes the check above ships the read-only backend to Catalyst
+  # AppSail. The CLI can only deploy to Development (production is a console promotion),
+  # so Development is the live backend the Vercel dashboard proxies to.
+  deploy:
+    needs: smoke
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: { group: catalyst-deploy, cancel-in-progress: false }
+    env:
+      API: https://zonuly-api-50046893527.development.catalystappsail.in
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install -g zcatalyst-cli@1.28.0
+      - run: uv sync --frozen --no-dev
+      - run: uv run --frozen --no-dev python scripts/build_catalyst.py
+      - name: Deploy to Catalyst Development
+        working-directory: deploy/catalyst
+        env:
+          CATALYST_TOKEN: ${{ secrets.CATALYST_TOKEN }}
+        run: |
+          if [ -z "$CATALYST_TOKEN" ]; then
+            echo "::error::Repository secret CATALYST_TOKEN is not set (catalyst token:generate, then gh secret set CATALYST_TOKEN)"
+            exit 1
+          fi
+          catalyst deploy --only appsail --token "$CATALYST_TOKEN" -ni
+      - name: Wait for it to answer, then smoke-test it
+        run: |
+          for i in $(seq 1 30); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$API/api/health")" = 200 ] && break
+            sleep 10
+          done
+          uv run --frozen --no-dev python scripts/smoke.py "$API"
