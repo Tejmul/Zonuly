@@ -594,6 +594,17 @@ targeting:
       # a newly found India company is filled (careers, roles, facts, people) right after
       # the ★ list for this many days (db.fill_order)
       fill_first_days: 30
+      # 2026-10-14 (jobhunter/india_sources.py): companies listed by city, not by a
+      # funding headline. Work per discovery pass; 0 turns a source off. Every candidate
+      # still needs a Bengaluru / Hyderabad quote + URL and the admission gate.
+      sources:
+        order: [rss, directory, yc, github, cutshort, portfolio, search, wellfound, ats]
+        github_searches: 1        # GitHub org-search pages (100 orgs each; search quota 10/min, unauthenticated)
+        github_orgs: 25           # github.com org pages read for website + location
+        cutshort_pages: 2         # Cutshort Bengaluru / Hyderabad job-list pages (server-rendered data)
+        portfolio_companies: 20   # VC / incubator portfolio entries resolved (the company's own site read)
+        wellfound_pages: 1        # Wellfound role × city pages through Jina Reader
+        gap_seconds: 3.5          # at least this long between two requests to one host
     cities:
       Bengaluru:
       - bengaluru

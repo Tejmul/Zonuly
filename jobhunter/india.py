@@ -387,7 +387,11 @@ class Cand:
     check_age: bool = True          # False: an undated source (a YC batch) — recency is preferred, not required
 
 
-_CHANNEL = {"rss": "feed", "search": "jina-ddg", "directory": "jina", "yc": "yc", "ats": "jina-ddg"}
+_CHANNEL = {"rss": "feed", "search": "jina-ddg", "directory": "jina", "yc": "yc", "ats": "jina-ddg",
+            # india_sources.py (2026-10-14)
+            "github": "github-web", "cutshort": "cutshort", "portfolio": "direct", "wellfound": "jina"}
+# sources whose quote is a profile / an address, not "they are hiring" — no hiring claim
+_NOT_A_HIRING_CLAIM = {"yc", "github", "portfolio"}
 
 
 class Run:
@@ -465,7 +469,7 @@ def _admit(session, run: Run, c: Cand) -> Company | None:
     company = harvest._upsert(
         session, name=name, website=c.website, source=f"india-{c.kind}", description=c.description,
         region="india", note=f"India discovery ({c.kind}): {quote[:120]}", funding=fund,
-        claim={"text": quote[:200], "url": c.url, "by": None} if c.kind != "yc" else None,
+        claim={"text": quote[:200], "url": c.url, "by": None} if c.kind not in _NOT_A_HIRING_CLAIM else None,
         stats=hs, headline=c.headline, website_is_link=c.website_is_link)
     if company is None:
         why = next(iter(hs.skipped), "refused by the admission gate")
@@ -606,7 +610,10 @@ SECTORS = ["AI", "agentic AI", "SaaS", "fintech", "developer tools", "healthtech
 STAGES = ["pre-seed", "seed", "Series A", "Series B"]
 _TEMPLATES = ["{city}-based {sector} startup raises {stage} funding",
               "{sector} startup {city} raises {stage} round {year}",
-              "{city} {sector} startup secures {stage} funding {year}"]
+              "{city} {sector} startup secures {stage} funding {year}",
+              # 2026-10-14: more phrasings, so the rotation reaches articles the first three miss
+              "{city} {sector} startup {stage} round {year}",
+              "{sector} startup from {city} bags {stage} funding {year}"]
 _SEARCH_CURSOR = "india:search_cursor"
 
 
@@ -882,26 +889,48 @@ def from_ats(session, run: Run, *, queries: int = 1) -> int:
 
 # ================================================================== the step
 
+# per-pass work for the india_sources.py sources (config targeting.india.discovery.sources)
+_SRC = _D.get("sources") or {}
+SOURCES = tuple(_SRC.get("order") or ("rss", "directory", "yc", "github", "cutshort", "portfolio", "search",
+                                      "wellfound", "ats"))
+
+
 def discover(limit: int | None = None, *, searches: int = 6, dir_pages: int = 1, rss_reads: int = 10,
              rss_pages: int = 1, ats_queries: int = 1, budget_s: int = 420, force: bool = False,
-             sources: tuple[str, ...] = ("rss", "directory", "yc", "search", "ats")) -> dict:
+             sources: tuple[str, ...] = SOURCES, github_orgs: int | None = None,
+             github_searches: int | None = None, cutshort_pages: int | None = None,
+             portfolio_companies: int | None = None, wellfound_pages: int | None = None) -> dict:
     """One India discovery pass: up to `limit` NEW Bengaluru / Hyderabad companies, in
-    source order — the feeds (hourly), one directory page, YC (daily), then search."""
+    source order — the feeds (hourly), one directory page, YC (daily), GitHub orgs,
+    Cutshort posts, portfolio pages, search, Wellfound, ATS boards."""
+    from jobhunter import india_sources as more
+
     init_db()
     limit = int(limit if limit is not None else (CONFIG.get("tick") or {}).get("india_discovery_per_tick", 30))
     run = Run(limit)
     t0 = time.time()
+
+    def _n(v, key, default):
+        return int(v if v is not None else _SRC.get(key, default))
+
     steps = {
         "rss": lambda s: from_rss(s, run, pages=rss_pages, reads=rss_reads, force=force),
         "directory": lambda s: from_directory(s, run, pages=dir_pages),
         "yc": lambda s: from_yc(s, run, force=force),
         "search": lambda s: from_search(s, run, queries=searches),
         "ats": lambda s: from_ats(s, run, queries=ats_queries),
+        "github": lambda s: more.from_github(run, orgs=_n(github_orgs, "github_orgs", 25),
+                                             searches=_n(github_searches, "github_searches", 1)),
+        "cutshort": lambda s: more.from_cutshort(run, pages=_n(cutshort_pages, "cutshort_pages", 2)),
+        "portfolio": lambda s: more.from_portfolio(run, companies=_n(portfolio_companies, "portfolio_companies", 20)),
+        "wellfound": lambda s: more.from_wellfound(run, pages=_n(wellfound_pages, "wellfound_pages", 1)),
     }
     errors = {}
     for name in sources:
         if run.full or time.time() - t0 > budget_s:
             break
+        if name not in steps:
+            continue
         try:
             with get_session() as session:
                 steps[name](session)
