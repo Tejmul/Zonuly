@@ -96,7 +96,10 @@ def links(html_or_md: str, base: str) -> list[tuple[str, str]]:
         href = (href or "").strip()
         if not href or href.startswith("#") or _SKIP_LINK.search(href):
             return
-        url = urljoin(base, href)
+        try:
+            url = urljoin(base, href)
+        except ValueError:  # "Invalid IPv6 URL" — a stray "[" in scraped markup; one bad link, not the page
+            return
         if not url.startswith("http") or url in seen:
             return
         seen.add(url)

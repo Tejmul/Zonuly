@@ -601,10 +601,16 @@ def bucket(c: Company) -> int | None:
 
 def cycle_key(c: Company) -> tuple:
     """Bengaluru → Hyderabad → India → remote; inside each, the ★ list first (list order),
+    then companies with evidence of pay at or above the India floor (before pay unknown),
     then priority, then the best role's selection score."""
     b = bucket(c)
     return (9 if b is None else b, 0 if c.list_key == STAR else 1, (c.list_rank or 9999) if c.list_key else 0,
-            -(c.priority_score or 0), -(c.best_selection_score or 0), c.id or 0)
+            pay_first(c), -(c.priority_score or 0), -(c.best_selection_score or 0), c.id or 0)
+
+
+def pay_first(c: Company) -> int:
+    """0 when the pay floor found evidence the company clears it (india.apply_pay_floor), else 1."""
+    return 0 if guardrails.meta_of(c, "pay_floor").get("value") == "ok" else 1
 
 
 def cycle_queue(limit: int | None = None, *, exclude: set[int] | frozenset = frozenset(), owner: str = "referrals",

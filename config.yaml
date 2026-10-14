@@ -581,7 +581,8 @@ targeting:
     # early-career pay is under this is hidden (company.status = below_pay_bar), never
     # deleted; any evidence at or above it keeps it; unknown pay keeps it. Internship
     # stipends are not full-time pay. Re-evaluated every tick (jobhunter/india.py).
-    min_lpa: 20
+    # 2026-10-15: raised to 25 ("scrap the Indian companies where cap is 25 lpa and +").
+    min_lpa: 25
     # a stated full-time figure below this is a misparse (a monthly number read as
     # annual), not evidence — it is ignored rather than allowed to hide a company
     implausible_below_lpa: 3

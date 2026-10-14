@@ -620,8 +620,10 @@ def queue(limit: int | None = None, *, only: int | None = None, force: bool = Fa
         if k is not None and (only is None or k == only):
             groups[k].append(c)
     groups[0].sort(key=lambda c: (c.list_rank or 9999, c.id))
-    for k in (1, 2):
-        groups[k].sort(key=lambda c: (-(c.priority_score or 0), c.id))
+    # India: companies with evidence of pay at or above the floor first, then pay unknown.
+    groups[1].sort(key=lambda c: (0 if guardrails.meta_of(c, "pay_floor").get("value") == "ok" else 1,
+                                  -(c.priority_score or 0), c.id))
+    groups[2].sort(key=lambda c: (-(c.priority_score or 0), c.id))
     groups[2] = groups[2][:remote_top]
 
     def due(c: Company) -> bool:
