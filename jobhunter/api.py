@@ -1037,6 +1037,69 @@ def list_contacts(
                                           c["name"] is None))
 
 
+_LEAD_SOURCES = ("linkedin", "github", "team", "talks", "web")
+_LEAD_CITIES = {"bengaluru": 0, "hyderabad": 1, "india": 2, "remote": 3}
+
+
+@app.get("/api/leads")
+def list_leads(
+    source: str = Query("all", description="all | linkedin | github | team | talks | web"),
+    city: str = Query("all", description="all | bengaluru | hyderabad | india | remote"),
+    who: str = Query("ready", description="ready (referrers confirmed there now, guardrails.is_ready) | all"),
+    company_id: int | None = None,
+    with_email: bool = False,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+) -> dict:
+    """The People page: referrers with where they came from (LinkedIn / GitHub / team page /
+    talks & posts), the company's city (Bengaluru first), the affiliation label and its
+    evidence, the public profile URL, the address and its confidence label, and when they
+    were found. Counts on top are for the city (and company) scope, before the source
+    filter. Addresses are masked on the public instance (access.redact_contact)."""
+    from jobhunter import guardrails, referrals
+
+    source, city, who = source.lower(), city.lower(), who.lower()
+    if source != "all" and source not in _LEAD_SOURCES:
+        raise HTTPException(422, f"source must be all or one of {', '.join(_LEAD_SOURCES)}")
+    if city != "all" and city not in _LEAD_CITIES:
+        raise HTTPException(422, f"city must be all or one of {', '.join(_LEAD_CITIES)}")
+    with get_session() as session:
+        companies = {c.id: c for c in session.exec(select(Company).where(col(Company.status).is_(None))).all()}
+        stmt = select(Contact)
+        if who == "ready":
+            stmt = stmt.where(col(Contact.affiliation).in_(guardrails.READY))
+        if company_id:
+            stmt = stmt.where(Contact.company_id == company_id)
+        rows = [p for p in session.exec(stmt).all()
+                if p.company_id in companies and (who != "ready" or guardrails.is_ready(p))]
+    scoped = []
+    for p in rows:
+        b = referrals.bucket(companies[p.company_id])
+        if city != "all" and b != _LEAD_CITIES[city]:
+            continue
+        scoped.append((p, b, referrals.lead_channel(p.source, p.affiliation_source)))
+    counts = {"total": len(scoped), "linkedin": sum(1 for _, _, ch in scoped if ch == "linkedin"),
+              "with_email": sum(1 for p, _, _ in scoped if p.email),
+              "by_source": {k: sum(1 for _, _, ch in scoped if ch == k) for k in _LEAD_SOURCES}}
+    picked = [x for x in scoped if (source == "all" or x[2] == source) and (not with_email or x[0].email)]
+    aff = {"verified-current": 0, "likely-current": 1, "unconfirmed": 2, "generic": 3}
+    # Bengaluru first, then Hyderabad, India, remote; the newest first inside a city
+    picked.sort(key=lambda x: (9 if x[1] is None else x[1], aff.get(x[0].affiliation or "", 4),
+                               -(x[0].created_at.timestamp() if x[0].created_at else 0), x[0].id or 0))
+    items = []
+    for p, b, ch in picked[offset:offset + limit]:
+        c = companies[p.company_id]
+        d = _contact_dict(p, c.name)
+        linkedin = p.linkedin if p.linkedin and "linkedin.com/in/" in p.linkedin else None
+        d.update({"channel": ch, "linkedin": linkedin, "city": c.city,
+                  "bucket": referrals.BUCKETS[b] if b is not None else None,
+                  "company_star": c.list_key == referrals.STAR, "found_at": d.get("created_at")})
+        d.pop("research", None)
+        items.append(d)
+    return {"items": items, "total": len(picked), "offset": offset, "limit": limit, "counts": counts,
+            "source": source, "city": city, "who": who}
+
+
 @app.post("/api/companies/{company_id}/find-contacts")
 def find_contacts(company_id: int) -> dict:
     from jobhunter import contacts as contacts_mod

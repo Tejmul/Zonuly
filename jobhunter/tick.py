@@ -86,6 +86,14 @@ SHARE_LEADS = float(_SHARE.get("leads", 0.7))
 SHARE_COMPANIES = float(_SHARE.get("companies", round(1 - SHARE_LEADS, 3)))
 SEND_INTERVAL_S = int(_T.get("send_interval_seconds", 300))
 SEND_LOCK = ROOT / "data" / "send.lock"
+# 2026-10-14: the dedicated referral job — referral work only, India (Bengaluru first),
+# every 15 min under its own agent and its OWN lock, in parallel with the tick
+_RJ = CONFIG.get("referrals") or {}
+REFER_LABEL = "com.zonuly.referrals"
+REFER_LOCK = ROOT / "data" / "referrals.lock"
+REFER_INTERVAL_S = int(_RJ.get("interval_seconds", 900))
+#: while the referral job is loaded, the tick's people step keeps only this share of leads
+SHARE_PEOPLE_YIELD = float(_SHARE.get("people_when_referral_job", 0.3))
 PAID_HOURLY = bool(_T.get("paid_hourly", True))
 # the one-off cleanup's merge/quarantine pass, hourly. Off until the first
 # `scripts/cleanup_companies.py --apply` has been reviewed and run by hand.
@@ -113,17 +121,20 @@ def last(kind: str) -> dict | None:
 
 
 class _Lock:
-    def __init__(self, path: Path = LOCK):
+    def __init__(self, path: Path = LOCK, what: str = "tick"):
         self.path = path
+        self.what = what
 
     def __enter__(self):
         self.path.parent.mkdir(exist_ok=True)
-        self.fh = open(self.path, "w")
+        # "a" not "w": a start that finds the lock held must not blank the holder's pid line
+        self.fh = open(self.path, "a")
         try:
             fcntl.flock(self.fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             self.fh.close()
-            raise RuntimeError("another tick is running")
+            raise RuntimeError(f"another {self.what} is running")
+        self.fh.truncate(0)
         self.fh.write(f"{os.getpid()} {datetime.now().isoformat()}\n")
         self.fh.flush()
         return self
@@ -389,7 +400,19 @@ def run_free(budget_s: int | None = None) -> dict:
     referrals = _ref()
     t_leads = time.time()
     reserve = min(240, leads_s // 6)          # address resolution + re-verification after people
-    _step(s, "people", referrals.people_step, limit=L["people"], budget_s=max(60, leads_s - reserve))
+    people_s, people_n = max(60, leads_s - reserve), L["people"]
+    # the referral job (com.zonuly.referrals) owns India referrals while it is loaded: the
+    # tick's people step yields — a smaller share, and never a company in the job's claimed
+    # window (referrals.claim), so the two never search the same company at once
+    try:
+        yielding = referrals.job_active()
+    except Exception:  # noqa: BLE001
+        yielding = False
+    if yielding:
+        people_s = max(60, int(people_s * SHARE_PEOPLE_YIELD))
+        people_n = max(5, int(people_n * SHARE_PEOPLE_YIELD))
+        s["people_yield"] = {"to": REFER_LABEL, "budget_s": people_s, "limit": people_n}
+    _step(s, "people", referrals.people_step, limit=people_n, budget_s=people_s, owner="tick")
     touched = []
     try:
         touched = [int(x) for x in ((s.get("people") or {}).pop("touched", None) or [])]
@@ -565,6 +588,22 @@ def _kg_sync() -> dict:
     return {"synced": True, **({k: v for k, v in out.items() if isinstance(v, int)} if isinstance(out, dict) else {})}
 
 
+def run_referrals(**kw) -> dict:
+    """The referral job's entry point (launchd com.zonuly.referrals and `referrals run`):
+    its own lock, data/referrals.lock — parallel to the tick, never overlapping itself."""
+    LOGS.mkdir(exist_ok=True)
+    try:
+        with _Lock(REFER_LOCK, "referral cycle"):
+            summary = {"kind": "referrals", "started": datetime.now().isoformat(timespec="seconds"),
+                       **_ref().run_cycle(**kw)}
+    except RuntimeError as e:
+        return {"kind": "referrals", "skipped": str(e)}
+    summary["finished"] = datetime.now().isoformat(timespec="seconds")
+    summary.pop("reached_ids", None)
+    _record("referrals", summary)
+    return summary
+
+
 class _UseSendLock(Exception):
     """The send agent has its own lock: it must never wait behind a long free tick."""
 
@@ -620,17 +659,38 @@ def _plist(kind: str) -> dict:
     return base
 
 
+def _refer_plist() -> dict:
+    """com.zonuly.referrals: one referral cycle every REFER_INTERVAL_S (15 min) and at load,
+    the same PATH / env as the tick's agents; data/referrals.lock keeps it from overlapping
+    itself while it runs in parallel with the tick."""
+    base = _plist("free")
+    base.update({
+        "Label": REFER_LABEL,
+        "ProgramArguments": [PYTHON, str(ROOT / "scripts" / "run.py"), "referrals", "run"],
+        "StandardOutPath": str(LOGS / "referrals.log"),
+        "StandardErrorPath": str(LOGS / "referrals.log"),
+        "StartInterval": REFER_INTERVAL_S,
+        "RunAtLoad": True,
+    })
+    return base
+
+
+def _load(path: Path, plist: dict) -> dict:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["launchctl", "unload", str(path)], capture_output=True)
+    path.write_bytes(plistlib.dumps(plist))
+    r = subprocess.run(["launchctl", "load", str(path)], capture_output=True, text=True)
+    return {"plist": str(path), "loaded": r.returncode == 0, "stderr": r.stderr.strip()[:200]}
+
+
 def install() -> dict:
-    """Write both LaunchAgents and load them, and the hourly audit beside them. Idempotent."""
+    """Write the LaunchAgents and load them — the tick (free, paid, send), the referral
+    job, and the hourly audit beside them. Idempotent."""
     LOGS.mkdir(exist_ok=True)
     out = {}
     for kind in ("free", "paid", "send"):
-        path = _agents_dir() / f"{LABEL}.{kind}.plist"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["launchctl", "unload", str(path)], capture_output=True)
-        path.write_bytes(plistlib.dumps(_plist(kind)))
-        r = subprocess.run(["launchctl", "load", str(path)], capture_output=True, text=True)
-        out[kind] = {"plist": str(path), "loaded": r.returncode == 0, "stderr": r.stderr.strip()[:200]}
+        out[kind] = _load(_agents_dir() / f"{LABEL}.{kind}.plist", _plist(kind))
+    out["referrals"] = _load(_agents_dir() / f"{REFER_LABEL}.plist", _refer_plist())
     from jobhunter import audit
 
     out["audit"] = audit.install()
@@ -645,13 +705,18 @@ def uninstall() -> dict:
         if path.exists():
             path.unlink()
         out[kind] = {"unloaded": r.returncode == 0}
+    path = _agents_dir() / f"{REFER_LABEL}.plist"
+    r = subprocess.run(["launchctl", "unload", str(path)], capture_output=True, text=True)
+    if path.exists():
+        path.unlink()
+    out["referrals"] = {"unloaded": r.returncode == 0}
     return out
 
 
 def status() -> dict:
     out = {"lock": LOCK.read_text().strip() if LOCK.exists() else None, "python": PYTHON}
     r = subprocess.run(["launchctl", "list"], capture_output=True, text=True)
-    loaded = {ln.split("\t")[-1]: ln.split("\t")[0] for ln in r.stdout.splitlines() if LABEL in ln}
+    loaded = {ln.split("\t")[-1]: ln.split("\t")[0] for ln in r.stdout.splitlines() if "com.zonuly" in ln}
     out["pacing"] = {"paid_hourly": PAID_HOURLY, "used_today": _used_today(),
                      "per_day": {k: L[k] for k in ("facts", "describe", "story", "levels")}}
     out["share"] = {"budget_seconds": BUDGET_S, "leads": SHARE_LEADS, "companies": SHARE_COMPANIES}
@@ -664,7 +729,14 @@ def status() -> dict:
             f"daily {PAID_HOUR:02d}:{PAID_MINUTE:02d} + on login",
             "last": last(kind), "log": str(LOGS / f"tick-{kind}.log"),
         }
+    out["referrals"] = {
+        "loaded": REFER_LABEL in loaded,
+        "pid": loaded.get(REFER_LABEL) if loaded.get(REFER_LABEL, "-") != "-" else None,
+        "schedule": f"every {REFER_INTERVAL_S // 60} min + on login (referral work only, Bengaluru → Hyderabad → India → remote)",
+        "lock": REFER_LOCK.read_text().strip() if REFER_LOCK.exists() else None,
+        "last": last("referrals"), "log": str(LOGS / "referrals.log"),
+    }
     return out
 
 
-__all__ = ["run", "run_free", "run_paid", "run_send", "install", "uninstall", "status", "last"]
+__all__ = ["run", "run_free", "run_paid", "run_send", "run_referrals", "install", "uninstall", "status", "last"]

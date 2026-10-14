@@ -443,7 +443,8 @@ def _compact(report: dict) -> dict:
             "rejects": {"total": report["rejects"]["total"]},
             "referrals": {k: v for k, v in (report.get("referrals") or {}).items()
                           if k in ("ready_added", "ready_added_with_email", "companies_with_email",
-                                   "companies_gained_email", "companies_became_complete")}}
+                                   "companies_gained_email", "companies_became_complete",
+                                   "linkedin_added", "emails_found", "companies_reached_target")}}
 
 
 def _store(report: dict, history: list[dict]) -> None:

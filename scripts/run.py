@@ -1188,8 +1188,9 @@ def tick_run(kind: str = typer.Option("free", help="free | paid | all | send")) 
 
 @tick_app.command("install")
 def tick_install() -> None:
-    """Write and load the LaunchAgents: com.zonuly.tick.free (every 10 min + on wake), .paid (daily 06:15 + on login)
-    and .send (every 5 min: approved mail whose warm-up slot is due), plus the hourly audit."""
+    """Write and load the LaunchAgents: com.zonuly.tick.free (every 10 min + on wake), .paid (daily 06:15 + on login),
+    .send (every 5 min: approved mail whose warm-up slot is due), com.zonuly.referrals (the referral job, every
+    15 min, its own lock), plus the hourly audit."""
     from jobhunter import tick
 
     _echo(tick.install())
@@ -1254,6 +1255,38 @@ def referrals_people(
     from jobhunter import referrals
 
     _echo(referrals.people_step(limit, budget_s=budget, list_key=list_key, top=top))
+
+
+@referrals_app.command("run")
+def referrals_run(
+    budget: int = typer.Option(None, help="seconds (default: referrals.cycle_seconds, 1200)"),
+    limit: int = typer.Option(None, help="companies (default: referrals.cycle_companies)"),
+    exclude: str = typer.Option(None, help="a JSON file with {'ids': [...]} or a comma list of company ids to leave alone"),
+) -> None:
+    """One cycle of the referral job — referral work ONLY: Bengaluru (★ first) → Hyderabad → other India →
+    remote; public LinkedIn search results, team pages, GitHub (budgeted), public mentions, then the learned
+    address format. Its own lock (data/referrals.lock); launchd runs it every 15 min (com.zonuly.referrals)."""
+    _setup_logging()
+    import json as _json
+    from pathlib import Path as _P
+
+    from jobhunter import tick
+
+    ex: set[int] = set()
+    if exclude:
+        if _P(exclude).exists():
+            raw = _json.loads(_P(exclude).read_text())
+            ex = {int(x) for x in (raw.get("ids") if isinstance(raw, dict) else raw)}
+        else:
+            ex = {int(x) for x in exclude.split(",") if x.strip()}
+    kw: dict = {}
+    if budget:
+        kw["budget_s"] = budget
+    if limit:
+        kw["limit"] = limit
+    if ex:
+        kw["exclude"] = ex
+    _echo(tick.run_referrals(**kw))
 
 
 @referrals_app.command("reverify")

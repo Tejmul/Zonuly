@@ -119,21 +119,47 @@ ROLE_QUERIES = {
 }
 
 
-def search_role(company_id: int, kind: str, *, max_people: int = MAX_PER_COMPANY) -> dict:
+#: 2026-10-14, the dedicated referral job (referrals.run_cycle): several query SHAPES per
+#: company — the bare company + city first ('"Acme" Bengaluru site:linkedin.com/in'), then
+#: the role words a referrer's headline carries, best referrers first
+REFERRAL_QUERIES = {
+    "city": "",
+    "engineers": "engineer",
+    "sde": 'SDE OR "software development engineer"',
+    "ml": '"ML engineer" OR "machine learning" OR "AI engineer"',
+    "founders": "founder OR co-founder OR CTO",
+    "managers": '"engineering manager" OR "tech lead" OR "head of engineering"',
+    "recruiters": 'recruiter OR "talent acquisition"',
+}
+
+
+def _query(name: str, words: str, where: str) -> str:
+    return " ".join(x for x in (f'"{name}"', words, where.strip(), "site:linkedin.com/in") if x)
+
+
+def search_role(company_id: int, kind: str, *, max_people: int = MAX_PER_COMPANY,
+                queries: dict[str, str] | None = None, city: str | None = None) -> dict:
     """One keyless search for one kind of referrer at one company — with the city for
-    a Bengaluru / Hyderabad company, since "Acme engineer" alone finds every Acme."""
+    a Bengaluru / Hyderabad company, since "Acme engineer" alone finds every Acme.
+    `queries` picks the vocabulary (ROLE_QUERIES by default, REFERRAL_QUERIES for the
+    referral job); `city` overrides the company's own city text."""
+    queries = queries or ROLE_QUERIES
     init_db()
     with get_session() as session:
         c = session.get(Company, company_id)
         if c is None:
             return {"error": f"no company {company_id}"}
-        name, domain, city, region = c.name, c.domain, c.city, c.hq_region
+        name, domain, region = c.name, c.domain, c.hq_region
+        city = city if city is not None else c.city
     where = f" {city}" if city and (region == "india" or city in ("Bengaluru", "Bangalore", "Hyderabad")) else ""
-    query = f'"{name}" {ROLE_QUERIES[kind]}{where} site:linkedin.com/in'
+    words = queries[kind]
+    if not where and not words:
+        words = "engineer"          # a bare company name with no city is every namesake
+    query = _query(name, words, where)
     people, via, err = _search(name, query, max_people, domain)
-    if where and not people and not err:
+    if where and words and not people and not err:
         # the city narrowed it to nothing: the headline check still keeps it to this company
-        people, via, err = _search(name, f'"{name}" {ROLE_QUERIES[kind]} site:linkedin.com/in', max_people, domain)
+        people, via, err = _search(name, _query(name, words, ""), max_people, domain)
     if err:
         return {"company": name, "kind": kind, "error": err}
     added = _save(company_id, people, via) if people else 0
@@ -339,4 +365,4 @@ def find_pending(limit: int = 30, *, tiers: tuple[str, ...] = ("tier1", "tier2",
 
 
 __all__ = ["find_for_company", "find_founders", "find_pending", "search_role", "people_from_results",
-           "ROLE_QUERIES"]
+           "ROLE_QUERIES", "REFERRAL_QUERIES"]

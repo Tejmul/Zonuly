@@ -63,6 +63,19 @@ MENTIONS = bool(_R.get("public_mentions", True))
 MARK = "[refer]"
 STAR = "india-star"
 LOG_KEY = "referrals:runs"
+# ---- the dedicated referral job (2026-10-14: "it ONLY scrapes referrals, for India —
+# Bengaluru as priority"): launchd com.zonuly.referrals every 15 min, its own lock
+#: seconds of work per cycle, and companies per cycle
+CYCLE_S = int(_R.get("cycle_seconds", 1200))
+CYCLE_LIMIT = int(_R.get("cycle_companies", 40))
+#: once every keyless search backend is cooling, this many more companies get the
+#: non-search channels (team pages, GitHub, the pattern), then the cycle ends
+DOWN_TAIL = int(_R.get("search_down_tail", 6))
+#: a company someone else touched this recently (contacts_found_at) is left alone
+TOUCHED_MINUTES = int(_R.get("skip_touched_minutes", 60))
+CLAIM_PREFIX = "refer:claim:"
+INDIA_CITIES = ("Bengaluru", "Hyderabad")
+BUCKETS = ("Bengaluru", "Hyderabad", "India", "Remote")
 
 
 # ------------------------------------------------------------------ bookkeeping
@@ -409,21 +422,32 @@ def people_for_company(cid: int, *, linkedin: bool = True) -> dict:
 
 def people_step(limit: int = 100, *, budget_s: int = 1500, ids: list[int] | None = None,
                 linkedin: bool = True, list_key: str | None = None, top: int | None = None,
-                force: bool = False) -> dict:
+                force: bool = False, owner: str | None = None) -> dict:
     """The people step the tick runs first. Stops at `budget_s` seconds, and stops the
-    LinkedIn searches (not the step) once every keyless search backend is cooling down."""
+    LinkedIn searches (not the step) once every keyless search backend is cooling down.
+    With `owner` (the tick passes "tick") a company another worker has claimed — the
+    referral job's queue window — is skipped, and each company is claimed while worked."""
     from jobhunter.research import web
 
     t0 = time.time()
     queue = ids if ids is not None else people_queue(limit, list_key=list_key, top=top, force=force)
+    if owner:
+        held = claimed_by_others(owner)
+        skipped = [cid for cid in queue if cid in held]
+        queue = [cid for cid in queue if cid not in held]
     out = {"companies": 0, "queued": len(queue), "added_ready": 0, "added_with_email": 0, "by_pattern": 0,
            "reached_target": 0, "gained_email": 0, "linkedin_added": 0, "github_site_added": 0,
            "team_added": 0, "errors": 0, "stopped": None}
     out["linkedin_skipped"] = 0
+    if owner:
+        out["yielded_to_claims"] = len(skipped)
     for cid in queue[:limit] if limit else queue:
         if time.time() - t0 > budget_s:
             out["stopped"] = f"time budget ({budget_s}s) reached"
             break
+        if owner and not claim(cid, owner, ttl_s=900):
+            out["yielded_to_claims"] = out.get("yielded_to_claims", 0) + 1
+            continue
         # the keyless backends cool down for a few minutes after repeated failures; while
         # they do, LinkedIn is skipped (and the company is not rested), then tried again
         use_li = linkedin and not web.search_down()
@@ -436,6 +460,9 @@ def people_step(limit: int = 100, *, budget_s: int = 1500, ids: list[int] | None
             log.warning("referrals: company %s failed: %s", cid, e)
             out["errors"] += 1
             continue
+        finally:
+            if owner:
+                release(cid, owner)
         out["companies"] += 1
         out.setdefault("touched", []).append(cid)
         if r.get("search_down"):
@@ -456,6 +483,366 @@ def people_step(limit: int = 100, *, budget_s: int = 1500, ids: list[int] | None
     _log_run("people", out)
     log.info("referrals people: %s", out)
     return out
+
+
+# ------------------------------------------------------------------ claims (who is working a company)
+
+def _claim_key(cid: int) -> str:
+    return f"{CLAIM_PREFIX}{cid}"
+
+
+def claims(now: datetime | None = None) -> dict[int, str]:
+    """company_id -> owner, for every claim not yet expired. One `setting` row per company
+    (refer:claim:<id> = '<owner>|<until iso>'), so two writers never overwrite each other's
+    claims in one JSON blob."""
+    from jobhunter.db import Setting
+
+    now = now or utcnow()
+    out: dict[int, str] = {}
+    with get_session() as s:
+        rows = s.exec(select(Setting).where(col(Setting.key).startswith(CLAIM_PREFIX))).all()
+    for row in rows:
+        owner, _, until = (row.value or "").partition("|")
+        try:
+            if datetime.fromisoformat(until) > now:
+                out[int(row.key[len(CLAIM_PREFIX):])] = owner
+        except ValueError:
+            continue
+    return out
+
+
+def claimed_by_others(owner: str) -> set[int]:
+    return {cid for cid, who in claims().items() if who != owner}
+
+
+def claim(cid: int, owner: str, *, ttl_s: int = 900) -> bool:
+    """Claim a company for `ttl_s` seconds; False when someone else holds it."""
+    from jobhunter.db import Setting
+
+    now = utcnow()
+    for attempt in range(5):
+        try:
+            with get_session() as s:
+                row = s.get(Setting, _claim_key(cid))
+                if row is not None:
+                    who, _, until = (row.value or "").partition("|")
+                    try:
+                        live = datetime.fromisoformat(until) > now
+                    except ValueError:
+                        live = False
+                    if live and who != owner:
+                        return False
+                value = f"{owner}|{(now + timedelta(seconds=ttl_s)).isoformat(timespec='seconds')}"
+                set_setting(s, _claim_key(cid), value)
+            return True
+        except Exception as e:  # noqa: BLE001 — "database is locked" under the WAL writers: retry
+            if "locked" not in str(e) or attempt == 4:
+                log.debug("claim %s failed: %s", cid, e)
+                return True       # a claim is a courtesy, never a reason to stop the work
+            time.sleep(1 + attempt)
+    return True
+
+
+def release(cid: int, owner: str) -> None:
+    from jobhunter.db import Setting
+
+    for attempt in range(5):
+        try:
+            with get_session() as s:
+                row = s.get(Setting, _claim_key(cid))
+                if row is not None and (row.value or "").partition("|")[0] == owner:
+                    s.delete(row)
+                    s.commit()
+            return
+        except Exception as e:  # noqa: BLE001
+            if "locked" not in str(e) or attempt == 4:
+                return
+            time.sleep(1 + attempt)
+
+
+def prune_claims() -> int:
+    """Expired claim rows deleted (a killed cycle leaves its window behind)."""
+    from jobhunter.db import Setting
+
+    now, n = utcnow(), 0
+    with get_session() as s:
+        for row in s.exec(select(Setting).where(col(Setting.key).startswith(CLAIM_PREFIX))).all():
+            try:
+                live = datetime.fromisoformat((row.value or "").partition("|")[2]) > now
+            except ValueError:
+                live = False
+            if not live:
+                s.delete(row)
+                n += 1
+        s.commit()
+    return n
+
+
+# ------------------------------------------------------------------ the referral job (run_cycle)
+
+def bucket(c: Company) -> int | None:
+    """0 Bengaluru, 1 Hyderabad, 2 the rest of India, 3 a remote target; None = not ours.
+    A company in both cities counts as Bengaluru (the priority)."""
+    if c.status is not None:
+        return None
+    city = (c.city or "").lower()
+    if "bengaluru" in city or "bangalore" in city:
+        return 0
+    if "hyderabad" in city:
+        return 1
+    if c.list_key == STAR or (c.hq_region or "") == "india" or c.india_found_at is not None:
+        return 2
+    from jobhunter.fill import REMOTE_REGIONS
+
+    if (c.hq_region or "") in REMOTE_REGIONS and c.tier != "reject" and not c.overrated:
+        return 3
+    return None
+
+
+def cycle_key(c: Company) -> tuple:
+    """Bengaluru → Hyderabad → India → remote; inside each, the ★ list first (list order),
+    then priority, then the best role's selection score."""
+    b = bucket(c)
+    return (9 if b is None else b, 0 if c.list_key == STAR else 1, (c.list_rank or 9999) if c.list_key else 0,
+            -(c.priority_score or 0), -(c.best_selection_score or 0), c.id or 0)
+
+
+def cycle_queue(limit: int | None = None, *, exclude: set[int] | frozenset = frozenset(), owner: str = "referrals",
+                force: bool = False) -> list[int]:
+    """The referral job's queue: companies in a bucket, short of TARGET ready referrers or
+    of one with an address, not resting after a pass ([refer] <date>, REST_DAYS), not
+    touched by another worker in the last TOUCHED_MINUTES (contacts_found_at), not claimed
+    by someone else, and not in `exclude`."""
+    init_db()
+    now = utcnow()
+    with get_session() as session:
+        rows = session.exec(select(Company).where(col(Company.status).is_(None))).all()
+        counts = guardrails.ready_counts(session)
+    held = claimed_by_others(owner)
+    pending = []
+    for c in rows:
+        if c.id in exclude or c.id in held or bucket(c) is None:
+            continue
+        r, e = counts.get(c.id, (0, 0))
+        if r >= TARGET and e >= 1:
+            continue                                     # at target: nothing to do
+        if not c.list_key and (c.overrated or c.tier == "reject"):
+            continue
+        if not force:
+            last = _marked(c.notes)
+            if last and now - last < timedelta(days=REST_DAYS[min(_band(c), 2)]):
+                continue
+            if c.contacts_found_at and now - c.contacts_found_at < timedelta(minutes=TOUCHED_MINUTES):
+                continue
+        pending.append(c)
+    pending.sort(key=cycle_key)
+    ids = [c.id for c in pending]
+    return ids[:limit] if limit else ids
+
+
+def lead_channel(source: str | None, affiliation_source: str | None) -> str:
+    """Where a referrer came from, in the People page's words: linkedin | github | team |
+    talks | web. The evidence decides first (a LinkedIn headline is LinkedIn whatever
+    address was later attached), then the row's source."""
+    a, s = affiliation_source or "", source or ""
+    if a == "linkedin-headline" or s == "linkedin-public":
+        return "linkedin"
+    if a == "public-mention" or s == "public-page":
+        return "talks"
+    if a in ("org-member", "recent-commit", "profile-company") or s == "github":
+        return "github"
+    if a == "team-page" or s == "site":
+        return "team"
+    return "web"
+
+
+def _ready_rows(cid: int) -> dict[int, tuple[str, bool]]:
+    """contact id -> (channel, has an address), for the company's ready referrers."""
+    with get_session() as s:
+        rows = s.exec(select(Contact).where(Contact.company_id == cid,
+                                            col(Contact.affiliation).in_(guardrails.READY))).all()
+        return {p.id: (lead_channel(p.source, p.affiliation_source), bool(p.email))
+                for p in rows if guardrails.is_ready(p)}
+
+
+def refer_company(cid: int, *, search_ok: bool = True) -> dict:
+    """One company, referral work only, in the job's order: public LinkedIn (several query
+    shapes, the city first) → their team page → GitHub (inside the hourly budget) → public
+    mentions → addresses (the open web while nobody has one, then the learned format).
+    Stops searching once TARGET ready referrers are found. `search_ok=False` (every keyless
+    backend cooling) runs only the channels that need no web search."""
+    from jobhunter.contacts import addresses, discover_for_company, github_miner, linkedin_public, web_emails
+    from jobhunter.research import web
+
+    with get_session() as session:
+        c = session.get(Company, cid)
+        if c is None:
+            return {"error": f"no company {cid}"}
+        name, listed, b = c.name, bool(c.list_key), bucket(c)
+        has_site = bool(c.website or c.domain or c.github_org)
+        fresh = c.contacts_found_at and utcnow() - c.contacts_found_at < timedelta(
+            days=REST_DAYS[0] if listed else DISCOVER_FRESH_DAYS)
+    city = BUCKETS[b] if b in (0, 1) else None
+    before = _ready_rows(cid)
+    out: dict = {"company": name, "bucket": BUCKETS[b] if b is not None else None,
+                 "before": [len(before), sum(1 for _, e in before.values() if e)], "channels": [], "queries": 0}
+
+    def ready_now() -> int:
+        return _counts(cid)[0]
+
+    # 1. public LinkedIn, search results only — the headline must name the company now
+    if search_ok:
+        for kind in linkedin_public.REFERRAL_QUERIES:
+            if ready_now() >= TARGET:
+                break
+            if web.search_down():
+                out["search_down"] = True
+                break
+            res = linkedin_public.search_role(cid, kind, queries=linkedin_public.REFERRAL_QUERIES,
+                                              city=city if city else None)
+            out["queries"] += 1
+            out["channels"].append(f"linkedin:{kind}")
+            if res.get("error"):
+                out["linkedin_error"] = res["error"][:160]
+                if "rate-limited" in res["error"] or "cooling" in res["error"]:
+                    out["search_down"] = True
+                    break
+    else:
+        out["search_down"] = True
+    # 2. their own team / about page, through Jina
+    if has_site and ready_now() < TARGET:
+        try:
+            team_pages(cid)
+            out["channels"].append("team")
+        except Exception as e:  # noqa: BLE001 — one channel failing must not end the company
+            out["team_error"] = str(e)[:160]
+    # 3. GitHub (org members, recent committers, profiles) inside the hourly budget
+    if has_site and not fresh and ready_now() < TARGET:
+        left = github_miner.calls_left().get("remaining")
+        gh_ok = left is None or left >= GITHUB_MIN_REMAINING
+        if not gh_ok:
+            out["github_skipped"] = f"GitHub budget: {left} calls left this hour"
+        try:
+            asyncio.run(discover_for_company(cid, github=gh_ok))
+            out["channels"].append("github+site" if gh_ok else "site")
+        except Exception as e:  # noqa: BLE001
+            out["github_error"] = str(e)[:160]
+    # 4. named in public: podcasts / YouTube (no web search), talks, their blog's bylines
+    if MENTIONS and ready_now() < TARGET:
+        from jobhunter.contacts import public_mentions
+
+        chans = ("youtube", "talks", "blog") if search_ok and not out.get("search_down") else ("youtube", "blog")
+        try:
+            public_mentions.find(cid, channels=chans if has_site else tuple(x for x in chans if x != "blog"))
+            out["channels"].append("mentions")
+        except Exception as e:  # noqa: BLE001
+            out["mentions_error"] = str(e)[:160]
+    # 5. addresses: the open web while nobody ready has one, then the learned format
+    #    (≥2 agreeing examples; a pattern-guessed address still spends the 5/day guessed cap)
+    if has_site and _counts(cid)[1] == 0 and search_ok and not web.search_down():
+        try:
+            web_emails.find(cid)
+            out["channels"].append("web-emails")
+        except Exception as e:  # noqa: BLE001
+            out["web_error"] = str(e)[:160]
+    try:
+        res = addresses.fill(cid)
+        out["pattern_status"] = res.get("status")
+    except Exception as e:  # noqa: BLE001
+        out["pattern_error"] = str(e)[:160]
+    after = _ready_rows(cid)
+    out["after"] = [len(after), sum(1 for _, e in after.values() if e)]
+    new = {k: v for k, v in after.items() if k not in before}
+    out["added_by_channel"] = dict(Counter(ch for ch, _ in new.values()))
+    out["emails_found"] = sum(1 for k, (_, e) in after.items() if e and not (before.get(k) or (None, False))[1])
+    met = out["after"][0] >= TARGET and out["after"][1] >= 1
+    out["reached_target"] = met and not (out["before"][0] >= TARGET and out["before"][1] >= 1)
+    # rested only when every channel had its turn: a pass without the search is not a pass
+    out["marked"] = met or not out.get("search_down")
+    if out["marked"]:
+        with get_session() as session:
+            c = session.get(Company, cid)
+            _mark(session, c, f"job {out['before']}→{out['after']} via {','.join(out['channels'])}")
+            session.commit()
+    return out
+
+
+def run_cycle(*, budget_s: int | None = None, limit: int | None = None, exclude: set[int] | None = None,
+              ids: list[int] | None = None, owner: str = "referrals") -> dict:
+    """One cycle of the referral job — referral work and nothing else. Claims its queue
+    window (so the tick's people step searches other companies), works it in order inside
+    `budget_s`, and ends early once the keyless search has been cooling for DOWN_TAIL
+    companies rather than spinning."""
+    from jobhunter.research import web
+
+    budget_s = budget_s or CYCLE_S
+    limit = limit or CYCLE_LIMIT
+    t0 = time.time()
+    try:
+        prune_claims()
+    except Exception as e:  # noqa: BLE001
+        log.debug("prune claims: %s", e)
+    queue = ids if ids is not None else cycle_queue(limit, exclude=exclude or set(), owner=owner)
+    window = [cid for cid in queue[:limit] if claim(cid, owner, ttl_s=budget_s + 300)]
+    out: dict = {"queued": len(queue), "window": len(window), "companies": 0, "added_ready": 0,
+                 "added_by_channel": Counter(), "emails_found": 0, "reached_target": 0, "reached_ids": [],
+                 "buckets": Counter(), "linkedin_queries": 0, "errors": 0, "stopped": None, "search_down_companies": 0}
+    try:
+        for i, cid in enumerate(window):
+            if time.time() - t0 > budget_s:
+                out["stopped"] = f"time budget ({budget_s}s) reached"
+                break
+            down = web.search_down()
+            if down:
+                out["search_down_companies"] += 1
+                if out["search_down_companies"] > DOWN_TAIL:
+                    out["stopped"] = "every keyless search backend is cooling down — ended early"
+                    break
+            try:
+                r = refer_company(cid, search_ok=not down)
+            except Exception as e:  # noqa: BLE001 — one company must not end the cycle
+                log.warning("referral job: company %s failed: %s", cid, e)
+                out["errors"] += 1
+                continue
+            finally:
+                release(cid, owner)
+            out["companies"] += 1
+            out["buckets"][r.get("bucket") or "other"] += 1
+            out["linkedin_queries"] += r.get("queries", 0)
+            for ch, n in (r.get("added_by_channel") or {}).items():
+                out["added_by_channel"][ch] += n
+                out["added_ready"] += n
+            out["emails_found"] += r.get("emails_found", 0)
+            if r.get("reached_target"):
+                out["reached_target"] += 1
+                out["reached_ids"].append(cid)
+            if r.get("search_down") and not down:
+                out["search_down_companies"] += 1
+    finally:
+        for cid in window:
+            release(cid, owner)
+    out["added_by_channel"] = dict(out["added_by_channel"])
+    out["linkedin_added"] = out["added_by_channel"].get("linkedin", 0)
+    out["buckets"] = dict(out["buckets"])
+    out["seconds"] = round(time.time() - t0)
+    _log_run("cycle", out)
+    log.info("referral job cycle: %s", out)
+    return out
+
+
+def job_active(*, within_minutes: int = 30) -> bool:
+    """Is the referral job working? Its agent is loaded in launchd, or a cycle was logged
+    in the last `within_minutes` (a cycle run by hand counts too). The tick's people step
+    yields to it — a smaller share, and never a company the job has claimed."""
+    import subprocess
+
+    try:
+        r = subprocess.run(["launchctl", "list"], capture_output=True, text=True, timeout=10)
+        if any(ln.split("\t")[-1] == "com.zonuly.referrals" for ln in r.stdout.splitlines()):
+            return True
+    except Exception:  # noqa: BLE001 — not macOS: fall back to the run log
+        pass
+    return any(r.get("kind") == "cycle" for r in runs_since(utcnow() - timedelta(minutes=within_minutes)))
 
 
 # ------------------------------------------------------------------ re-verification
@@ -684,6 +1071,20 @@ def audit_block(session, since: datetime) -> dict:
     became = session.exec(select(Company.id).where(col(Company.complete_at) >= since,
                                                    Company.complete == True)).all()  # noqa: E712
     runs = runs_since(since)
+    cyc = [r for r in runs if r.get("kind") == "cycle"]
+    # 2026-10-14: by channel (LinkedIn separately), and the companies whose third ready
+    # referrer arrived inside the hour
+    by_channel = Counter(lead_channel(p.source, p.affiliation_source) for p in ready_new)
+    touched = {p.company_id for p in ready_new}
+    reached = 0
+    if touched:
+        rows = session.exec(select(Contact).where(col(Contact.company_id).in_(touched),
+                                                  col(Contact.affiliation).in_(guardrails.READY))).all()
+        per: dict[int, list] = {}
+        for p in rows:
+            if guardrails.is_ready(p):
+                per.setdefault(p.company_id, []).append(p.created_at or since)
+        reached = sum(1 for ts in per.values() if len(ts) >= TARGET and sorted(ts)[TARGET - 1] >= since)
     rv = [r for r in runs if r.get("kind") == "reverify"]
     rc = [r for r in runs if r.get("kind") == "revalidate"]
     ppl = [r for r in runs if r.get("kind") == "people"]
@@ -698,6 +1099,15 @@ def audit_block(session, since: datetime) -> dict:
         "ready_added": len(ready_new),
         "ready_added_with_email": sum(1 for p in ready_new if p.email),
         "addresses_found": {"by_pattern": by_pattern, "by_source": dict(by_source.most_common())},
+        "ready_by_channel": dict(by_channel.most_common()),
+        "linkedin_added": by_channel.get("linkedin", 0),
+        "emails_found": len(writes),
+        "companies_reached_target": reached,
+        "job": {"cycles": len(cyc), "companies": sum(r.get("companies", 0) for r in cyc),
+                "added_ready": sum(r.get("added_ready", 0) for r in cyc),
+                "emails_found": sum(r.get("emails_found", 0) for r in cyc),
+                "reached_target": sum(r.get("reached_target", 0) for r in cyc),
+                "stopped": next((r["stopped"] for r in reversed(cyc) if r.get("stopped")), None)},
         "companies_gained_email": len(now_ids - prev_ids) if prev_ids else None,
         "companies_lost_email": len(prev_ids - now_ids) if prev_ids else None,
         "companies_with_email": len(now_ids),
@@ -715,4 +1125,5 @@ def audit_block(session, since: datetime) -> dict:
 
 
 __all__ = ["measure", "pattern_step", "people_queue", "people_for_company", "people_step", "reverify_referrers",
-           "revalidate_companies", "audit_block", "backup", "TARGET"]
+           "revalidate_companies", "audit_block", "backup", "TARGET", "run_cycle", "cycle_queue", "refer_company",
+           "lead_channel", "bucket", "claim", "release", "claims", "job_active"]

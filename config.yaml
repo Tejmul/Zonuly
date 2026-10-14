@@ -871,6 +871,7 @@ tick:
   share:
     leads: 0.7
     companies: 0.3
+    people_when_referral_job: 0.3   # 2026-10-14: the tick's people step keeps this share while com.zonuly.referrals is loaded
   github_min_remaining: 20      # GitHub mining for a company only while this many calls are left (60/h unauthenticated)
   people_per_tick: 150          # 2026-10-08: referrers first — the people step runs before every other fill step (referrals.py)
   people_budget_seconds: 1500   # …and stops after 25 min of a tick; the keyless search paces itself (Jina ≈ 20/min)
@@ -1029,3 +1030,13 @@ needs:
   context_ttl_days: 14     # public context per company (search results, repos) is reused this long
   brief_ttl_days: 14
   web_results: 6
+
+# THE REFERRAL JOB (referrals.run_cycle, launchd com.zonuly.referrals). 2026-10-14: "activate
+# the referral-finding module so it ONLY scrapes referrals, for India — Bengaluru as priority".
+# Bengaluru (★ first) → Hyderabad → other India → remote; its own lock (data/referrals.lock).
+referrals:
+  interval_seconds: 900     # every 15 min (+ at load)
+  cycle_seconds: 1200       # the work budget of one cycle; a cycle still running blocks the next (the lock)
+  cycle_companies: 40       # companies per cycle (the claimed window)
+  search_down_tail: 6       # companies still worked (no web search) once every keyless backend cools, then stop
+  skip_touched_minutes: 60  # a company another worker touched this recently is left alone

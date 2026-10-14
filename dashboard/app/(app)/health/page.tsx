@@ -183,6 +183,8 @@ function Referrals({ r }: { r: AuditReport }) {
     );
   }
   const bySource = Object.entries(x.addresses_found?.by_source ?? {});
+  const byChannel = Object.entries(x.ready_by_channel ?? {});
+  const job = x.job;
   const rv = x.reverify;
   const rc = x.revalidate;
   return (
@@ -194,8 +196,10 @@ function Referrals({ r }: { r: AuditReport }) {
           {x.people_runs?.linkedin_down ? ` LinkedIn search paused: ${x.people_runs.linkedin_down}.` : ""}
         </p>
       </div>
-      <div className="grid grid-cols-2 divide-line sm:grid-cols-3 lg:grid-cols-6 lg:divide-x">
+      <div className="grid grid-cols-2 divide-line sm:grid-cols-4 lg:grid-cols-8 lg:divide-x">
         <Stat label="Ready referrers added" value={x.ready_added ?? 0} hero hint={`${x.ready_added_with_email ?? 0} with an address`} />
+        <Stat label="From LinkedIn" value={x.linkedin_added ?? 0} hint="public search results" />
+        <Stat label="Reached 3 ready" value={x.companies_reached_target ?? 0} hint={`companies · ${x.emails_found ?? 0} addresses found`} />
         <Stat label="Addresses by pattern" value={x.addresses_found?.by_pattern ?? 0} hint="confirmed format, MX-checked" />
         <Stat label="Gained an address" value={x.companies_gained_email ?? 0}
           hint={x.companies_gained_email == null ? "from the next audit" : "companies, 0 → ≥1"} />
@@ -203,6 +207,14 @@ function Referrals({ r }: { r: AuditReport }) {
         <Stat label="Re-confirmed" value={rv?.confirmed ?? 0} hint={`${rv?.downgraded ?? 0} downgraded · ${rv?.inconclusive ?? 0} unclear`} />
         <Stat label="Companies re-checked" value={rc?.checked ?? 0} hint={`${rc?.newly_failed ?? 0} failed · ${rc?.recovered ?? 0} recovered`} />
       </div>
+      {(byChannel.length > 0 || (job && job.cycles > 0)) && (
+        <p className="border-t border-line px-4 py-2.5 text-[12px] text-ink-3">
+          {byChannel.length > 0 ? `Ready referrers added, by channel: ${byChannel.map(([k, n]) => `${k} ${n}`).join(" · ")}. ` : ""}
+          {job && job.cycles > 0
+            ? `Referral job: ${job.cycles} cycle${job.cycles === 1 ? "" : "s"}, ${job.companies} companies, ${job.added_ready} added, ${job.reached_target} reached 3.${job.stopped ? ` Last stop: ${job.stopped}.` : ""}`
+            : ""}
+        </p>
+      )}
       {bySource.length > 0 && (
         <p className="border-t border-line px-4 py-2.5 text-[12px] text-ink-3">
           Addresses on new ready referrers, by source: {bySource.map(([k, n]) => `${k} ${n}`).join(" · ")}

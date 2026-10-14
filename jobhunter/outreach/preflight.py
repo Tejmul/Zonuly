@@ -222,9 +222,11 @@ def run(*, sign_in: bool = True, today: datetime | None = None) -> dict:
     for label, what, fix in (
         ("com.zonuly.tick.free", "The 10-minute tick (people, replies, follow-ups)", "python scripts/run.py tick install"),
         ("com.zonuly.tick.send", "The send agent (paced sends, every 5 min)", "python scripts/run.py tick install"),
+        ("com.zonuly.referrals", "The referral job (referrers only, India first, every 15 min)",
+         "python scripts/run.py tick install"),
         ("com.zonuly.audit", "The hourly audit", "python scripts/run.py audit install"),
     ):
-        checks.append(_c(label.split(".")[-1] if "tick" in label else "audit", what,
+        checks.append(_c(label.split(".")[-1] if "tick" in label or "referrals" in label else "audit", what,
                          "green" if label in agents else "red",
                          "loaded in launchd" if label in agents else "not loaded",
                          None if label in agents else f"Run `{fix}`."))

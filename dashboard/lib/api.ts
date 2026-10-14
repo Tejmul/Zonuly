@@ -71,6 +71,28 @@ export type Contact = {
   created_at: string | null;
 };
 
+/** GET /api/leads — the People page: one referrer, where they came from and where the
+ *  company is. `email` is masked on the public instance. */
+export type LeadSource = "linkedin" | "github" | "team" | "talks" | "web";
+export type Lead = Contact & {
+  channel: LeadSource;
+  city: string | null;
+  /** Bengaluru | Hyderabad | India | Remote — the referral job's queue bucket */
+  bucket: string | null;
+  company_star: boolean;
+  found_at: string | null;
+};
+export type LeadsPayload = {
+  items: Lead[];
+  total: number;
+  offset: number;
+  limit: number;
+  counts: { total: number; linkedin: number; with_email: number; by_source: Record<LeadSource, number> };
+  source: string;
+  city: string;
+  who: string;
+};
+
 export type Email = {
   id: number;
   contact_id: number;
@@ -388,6 +410,13 @@ export type AuditReferrals = {
   companies_with_email?: number;
   companies_became_complete?: number;
   people_runs?: { companies: number; linkedin_down: string | null };
+  /** 2026-10-14: ready referrers added this hour by channel (linkedin | github | team | talks | web) */
+  ready_by_channel?: Record<string, number>;
+  linkedin_added?: number;
+  emails_found?: number;
+  companies_reached_target?: number;
+  /** the referral job (com.zonuly.referrals) this hour */
+  job?: { cycles: number; companies: number; added_ready: number; emails_found: number; reached_target: number; stopped: string | null };
   reverify?: { confirmed: number; downgraded: number; inconclusive: number; affiliation_rejects: number };
   revalidate?: { checked: number; passed: number; newly_failed: number; recovered: number };
 };
