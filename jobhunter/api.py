@@ -19,6 +19,7 @@ from typing import Any, Literal
 import yaml
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
@@ -97,6 +98,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# The graph map (/api/graph/map) is a few MB of JSON for 4,000 companies; gzip takes it
+# to a few hundred KB. Outermost, so every response — refusals included — is compressed.
+app.add_middleware(GZipMiddleware, minimum_size=2048)
 
 # Web research / data acquisition (Agent Reach backends) -> /api/research/*
 app.include_router(research_router)
@@ -830,6 +835,38 @@ def companies_filling(limit: int = Query(2000, le=10000)) -> dict:
     from jobhunter import network
 
     return network.filling(limit=limit)
+
+
+@app.get("/api/graph/map")
+def graph_map(view: Literal["market", "pipeline", "project"] = "market") -> dict:
+    """The /graph page: the knowledge graph pre-shaped as hubs → subs → leaves (graphmap.py).
+    market = industry layers → segments → companies; pipeline = the fill chain, each company
+    at its furthest stage; project = the context layer. Cached until the next tick or fill."""
+    from jobhunter import graphmap
+
+    return graphmap.cached(view)
+
+
+@app.post("/api/companies/{company_id}/fill")
+def fill_company(company_id: int) -> dict:
+    """Fill one company now — description, LinkedIn, hiring proof, funding, referrers
+    (fill.run over this one id) — as a background task. A fill already running for the
+    company is returned rather than started twice. Operator-only on a public instance:
+    the access middleware refuses every POST there."""
+    from jobhunter import fill
+
+    with get_session() as session:
+        company = session.get(Company, company_id)
+        if company is None:
+            raise HTTPException(404, "unknown company")
+        name = company.name
+    task_name = f"fill:{company_id}"
+    with _lock:
+        running = next((t for t in _tasks.values() if t["name"] == task_name and t["status"] == "running"), None)
+    if running:
+        return {"task_id": running["id"], "already_running": True, "company": name}
+    task_id = _run_task(task_name, fill.run, ids=[company_id], people=True, budget_s=600)
+    return {"task_id": task_id, "already_running": False, "company": name}
 
 
 class NewCompany(BaseModel):
