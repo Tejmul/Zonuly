@@ -294,6 +294,26 @@ def _json_or(raw: str | None, default):
 
 # ---------------------------------------------------------------- health & overview
 
+
+def _sending_setup(block):
+    """The mailbox set-up as a public visitor may see it: addresses masked, hints dropped.
+
+    Health and Overview are public reads, and both carry the sender's own Gmail address,
+    in its own field and inside the set-up hint ("Turn on 2-Step Verification for …").
+    """
+    if access.can_read_private():
+        return block
+    if isinstance(block, dict):
+        return {
+            k: access.mask_email(v) if k in ("address", "sender_address") and isinstance(v, str)
+            else _sending_setup(v)
+            for k, v in block.items()
+            if k != "hint"
+        }
+    if isinstance(block, list):
+        return [_sending_setup(v) for v in block]
+    return block
+
 @app.get("/api/health")
 def health() -> dict:
     from jobhunter import llm, matcher, n8n, scheduler
@@ -305,9 +325,9 @@ def health() -> dict:
     return {
         "ok": True,
         "llm": llm.health(),
-        "gmail": gmail.status(),
+        "gmail": _sending_setup(gmail.status()),
         "n8n": n8n.status(),
-        "quota": sender.quota(),
+        "quota": _sending_setup(sender.quota()),
         "hunter": {"configured": hunter.available(), "lookups_left": hunter.budget_left()},
         # Resolved the way the callers resolve it (env first, then config). Reading
         # config alone here reported "60 requests/hour" on Settings while the people
@@ -486,7 +506,7 @@ def overview() -> dict:
     return {
         "jobs": matcher.counts(),
         "funnel": tracker.funnel(),
-        "quota": sender.quota(),
+        "quota": _sending_setup(sender.quota()),
         "by_source": by_source,
         "new_this_week": new_this_week,
         "companies": companies,
