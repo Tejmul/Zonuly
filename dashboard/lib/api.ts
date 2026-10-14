@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// On Vercel the build sets NEXT_PUBLIC_API_PROXY to "/zapi", a same-origin proxy to the
+// production API (next.config.ts); elsewhere the explicit base or the local API.
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_API_PROXY || process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
 
 /* ---------------------------------------------------------------- types */
 
