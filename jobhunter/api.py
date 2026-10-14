@@ -7,6 +7,7 @@ background tasks and reported through /api/tasks, so the UI never blocks on a
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -25,7 +26,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 from sqlmodel import col, func, select
 
-from jobhunter import CONFIG, ROOT, access
+from jobhunter import CONFIG, ROOT, access, snapshot_cache
 from jobhunter.campaigns import router as campaigns_router
 from jobhunter.db import Company, Contact, Email, Job, Reply, get_session, init_db
 from jobhunter.research.routes import router as research_router
@@ -44,7 +45,11 @@ async def lifespan(app: FastAPI):
         from jobhunter import scheduler
 
         scheduler.start()
+    # A public instance serves a frozen snapshot: compute the heavy reads once, now.
+    warm = asyncio.create_task(snapshot_cache.prewarm(app)) if access.PUBLIC else None
     yield
+    if warm is not None:
+        warm.cancel()
     from jobhunter import scheduler
 
     scheduler.stop()
@@ -75,6 +80,9 @@ async def _access_guard(request, call_next):
 # Added before CORS so that CORS ends up the outer layer: a refusal still carries
 # Access-Control-Allow-Origin, and the browser shows the reason instead of reporting
 # a CORS failure that hides it.
+# Innermost on purpose: the guard has already refused anything a public caller may not
+# read, so only answers that passed it are kept (see jobhunter/snapshot_cache.py).
+app.add_middleware(snapshot_cache.SnapshotCache)
 app.add_middleware(BaseHTTPMiddleware, dispatch=_access_guard)
 
 # Origins come from config locally and from the environment in a deployment, where the

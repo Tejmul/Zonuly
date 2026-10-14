@@ -9,17 +9,35 @@
  *  broken software, when in fact it is working exactly as intended.
  */
 
-import { createContext, useContext } from "react";
-import { useApi, type Health } from "@/lib/api";
+import { createContext, useContext, useEffect } from "react";
+import { prefetch, useApi, type Health } from "@/lib/api";
 
 type Access = { ready: boolean; publicInstance: boolean; snapshot: Health["snapshot"] | null };
+
+/** Exactly the paths the main pages ask for — a different query string is a different entry. */
+const WARM_PATHS = [
+  "/api/companies/grouped",
+  "/api/network",
+  "/api/lists/india-star",
+  "/api/graph/map?view=market",
+  "/api/graph/map?view=pipeline",
+  "/api/leads?source=all&city=all&who=ready&offset=0&limit=50",
+  "/api/companies",
+  "/api/overview",
+];
 
 const Ctx = createContext<Access>({ ready: false, publicInstance: false, snapshot: null });
 
 export function AccessProvider({ children }: { children: React.ReactNode }) {
   const { data, loading } = useApi<Health>("/api/health");
+  const publicInstance = Boolean(data?.access?.public);
+  // On the public instance the data is a snapshot that never moves, so once the API has
+  // answered, the main pages' data is fetched in the background: the next click is instant.
+  useEffect(() => {
+    if (publicInstance) void prefetch(WARM_PATHS);
+  }, [publicInstance]);
   return (
-    <Ctx.Provider value={{ ready: !loading, publicInstance: Boolean(data?.access?.public), snapshot: data?.snapshot ?? null }}>
+    <Ctx.Provider value={{ ready: !loading, publicInstance, snapshot: data?.snapshot ?? null }}>
       {children}
     </Ctx.Provider>
   );

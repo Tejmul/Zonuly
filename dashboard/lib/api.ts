@@ -505,16 +505,18 @@ export class ApiError extends Error {
 }
 
 /* A hosted backend that scales to zero (Catalyst AppSail) answers its first request after
-   a quiet spell with a gateway error that carries no CORS header, which the browser
-   reports as a network failure. Reads against a remote API therefore get two more tries
-   (2 s, then 5 s) before the page says it cannot reach it; writes are never retried, and
-   a request the page has already abandoned is not either. */
-const WAKE_RETRIES_MS = [2000, 5000];
+   a quiet spell with a gateway error, and a cold start (unpacking the snapshot, loading
+   the app) can take 20 s or more. Reads against a remote API are therefore retried for
+   about half a minute before the page says it cannot reach it; writes are never retried,
+   and a request the page has already abandoned is not either. */
+const WAKE_RETRIES_MS = [2000, 4000, 8000, 15000];
 const sleep = (ms: number, signal?: AbortSignal | null) =>
   new Promise<void>((resolve, reject) => {
     const t = setTimeout(resolve, ms);
     signal?.addEventListener("abort", () => { clearTimeout(t); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
   });
+
+const REMOTE = !API_BASE.includes("127.0.0.1") && !API_BASE.includes("localhost");
 
 async function fetchWaking(url: string, init: RequestInit): Promise<Response> {
   const local = API_BASE.includes("127.0.0.1") || API_BASE.includes("localhost");
@@ -540,7 +542,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     res = await fetchWaking(`${API_BASE}${path}`, {
       ...init,
       headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-      cache: "no-store",
+      // The deployed API serves a frozen snapshot marked cacheable, so its reads may come
+      // from the browser or the CDN; a local API moves under the scheduler and never does.
+      cache: REMOTE && (init?.method ?? "GET").toUpperCase() === "GET" ? "default" : "no-store",
     });
   } catch (e) {
     if (init?.signal?.aborted) throw e;
@@ -555,7 +559,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
           "Set NEXT_PUBLIC_API_BASE to the deployed API's URL in the hosting project's environment and redeploy (it is baked in at build time)."
         : local
           ? `Can't reach the API at ${API_BASE}. Start it with \`python scripts/run.py serve\`.`
-          : `Can't reach the API at ${API_BASE} after three tries. It may still be waking up — reload in a minute. ` +
+          : `Can't reach the API at ${API_BASE} after half a minute of tries. It may still be waking up — reload in a minute. ` +
             `If it keeps failing, it is down or refuses this page's origin (` +
             `${typeof window !== "undefined" ? window.location.origin : "this origin"}; set ZONULY_CORS_ORIGINS on the API).`,
       0,
@@ -594,6 +598,23 @@ type Slot<T> = { key: string | null; data: T | null; error: string | null; statu
  *  effect, which React 19 flags as a cascading render. Now every request is numbered and
  *  aborted when superseded, only the latest may write, and "loading" is derived: the
  *  page is loading whenever the result it holds is not for the request it last made. */
+/* The last answer per path, kept for the life of the tab. A page opened a second time
+   shows it at once and refreshes quietly behind it, instead of a spinner on every visit. */
+const lastAnswer = new Map<string, unknown>();
+
+/** Load paths into the tab's memory one after another, skipping any already there, so the
+ *  pages a visitor opens next render at once. Failures are dropped: the page asks again. */
+export async function prefetch(paths: string[]): Promise<void> {
+  for (const p of paths) {
+    if (lastAnswer.has(p)) continue;
+    try {
+      lastAnswer.set(p, await request<unknown>(p));
+    } catch {
+      /* the page itself will retry and say so */
+    }
+  }
+}
+
 export function useApi<T>(path: string | null, deps: unknown[] = []) {
   const key = path === null ? null : [path, ...deps.map(String)].join("\u0000");
   const [slot, setSlot] = useState<Slot<T>>({ key: null, data: null, error: null, status: null });
@@ -609,6 +630,7 @@ export function useApi<T>(path: string | null, deps: unknown[] = []) {
     return request<T>(p, { signal: ctrl.signal })
       .then(
         (data) => {
+          lastAnswer.set(p, data);
           if (id === seq.current) setSlot({ key: k, data, error: null, status: 200 });
         },
         (e: unknown) => {
@@ -639,8 +661,10 @@ export function useApi<T>(path: string | null, deps: unknown[] = []) {
     return run(path, key);
   }, [path, key, run]);
 
-  const loading = key !== null && (slot.key !== key || refreshing);
-  return { data: slot.data, error: slot.key === key ? slot.error : null, status: slot.status, loading, reload };
+  const remembered = path !== null && slot.key !== key && lastAnswer.has(path) ? (lastAnswer.get(path) as T) : undefined;
+  const data = remembered !== undefined ? remembered : slot.data;
+  const loading = key !== null && ((slot.key !== key && remembered === undefined) || refreshing);
+  return { data, error: slot.key === key ? slot.error : null, status: slot.status, loading, reload };
 }
 
 /**
