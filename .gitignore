@@ -20,3 +20,6 @@ demo.db
 
 # run-time locks of the tick and the send agent
 data/*.lock
+
+# Catalyst AppSail build output (scripts/build_catalyst.py) — regenerated, never committed
+deploy/catalyst/appsail/build/

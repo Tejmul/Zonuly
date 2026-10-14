@@ -1,0 +1,30 @@
+{
+  "defaults": {
+    "project": 1,
+    "env": 1
+  },
+  "actives": {
+    "project": 1,
+    "env": 1
+  },
+  "projects": [
+    {
+      "idx": 1,
+      "id": "84632000000013053",
+      "name": "Zonuly",
+      "domain": {
+        "id": "50046893527",
+        "name": "zonuly-60091917121.development"
+      },
+      "timezone": "Asia/Kolkata",
+      "env": [
+        {
+          "idx": 1,
+          "id": "60091917121",
+          "name": "Development",
+          "type": 3
+        }
+      ]
+    }
+  ]
+}
