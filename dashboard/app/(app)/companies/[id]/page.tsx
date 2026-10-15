@@ -15,6 +15,7 @@ import { ErrorNote, Loading } from "@/components/ui/primitives";
 import { FundingCell } from "@/components/funding";
 import { AffiliationBadge } from "@/components/signals";
 import { fundingOf, money, roundWhen } from "@/lib/funding";
+import { SimilarCompanies, WarmPaths } from "@/components/kg-warm";
 
 /* One page per company, in the order you read it: who they are → the hiring post →
    the roles → the people to ask → the money. Every number sits next to the sentence
@@ -340,6 +341,22 @@ export default function CompanyPage() {
             </ul>
           </details>
         )}
+      </Section>
+
+      {/* ---------------------------------------------------------- warm paths (knowledge graph) */}
+      <Section
+        title="Warm paths"
+        sub="Why a person here might answer you — read from their own profile, headline or repos, never inferred. Strongest first; the quote is the evidence."
+      >
+        <WarmPaths cid={data.id} />
+      </Section>
+
+      {/* ---------------------------------------------------------- similar companies (knowledge graph) */}
+      <Section
+        title="Similar companies"
+        sub="If this one is a good bet, these are its neighbours in the graph: shared investors (a small fund counts more) and the skills their roles ask for."
+      >
+        <SimilarCompanies cid={data.id} />
       </Section>
 
       {/* ---------------------------------------------------------- 5. the story */}

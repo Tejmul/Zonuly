@@ -25,6 +25,7 @@ import { ArrowUpRight, Loader2, Search, X } from "lucide-react";
 import { api, useApi, type Task } from "@/lib/api";
 import { GraphCanvas, type Mode } from "@/components/graph-canvas";
 import { OperatorOnly } from "@/components/access";
+import { SimilarCompanies, WarmPaths } from "@/components/kg-warm";
 import { ErrorNote } from "@/components/ui/primitives";
 import {
   LEGEND, MAG_R, PART_LABEL, DEFAULT_STATE, paintStar, readPalette, styleForNode,
@@ -553,6 +554,20 @@ function CompanyCard({ leaf, data, fill, onPick }: { leaf: Leaf; data: GraphMap;
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {/* the graph's point, for this company: who might answer you, and what is like it */}
+      {leaf.cid ? (
+        <section>
+          <h3 className="marginal mb-1.5">Warm paths</h3>
+          <WarmPaths cid={leaf.cid} compact />
+        </section>
+      ) : null}
+      {leaf.cid ? (
+        <section>
+          <h3 className="marginal mb-1.5">If you like this one</h3>
+          <SimilarCompanies cid={leaf.cid} limit={4} onPick={(c) => (names.has(`company:${c}`) ? onPick(`company:${c}`) : window.location.assign(`/companies/${c}`))} />
         </section>
       ) : null}
 

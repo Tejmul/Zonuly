@@ -105,8 +105,18 @@ HYGIENE_HOURLY = bool(_T.get("company_hygiene", False))
 def _record(kind: str, summary: dict) -> None:
     from jobhunter.db import get_session, set_setting
 
+    raw = json.dumps({"at": datetime.now().isoformat(timespec="seconds"), **summary}, default=str)
+    if len(raw) > 4000:
+        # 2026-10-16: slicing the JSON made it unparseable, so last("free") was None and the
+        # audit's stall check never saw a tick run. Keep the small top-level fields instead.
+        small = {k: v for k, v in summary.items() if len(json.dumps(v, default=str)) <= 300}
+        raw = json.dumps({"at": datetime.now().isoformat(timespec="seconds"), **small, "truncated": True},
+                         default=str)[:4000]
+        if len(raw) >= 4000:
+            raw = json.dumps({"at": datetime.now().isoformat(timespec="seconds"), "kind": summary.get("kind"),
+                              "finished": summary.get("finished"), "truncated": True}, default=str)
     with get_session() as s:
-        set_setting(s, f"tick:last:{kind}", json.dumps({"at": datetime.now().isoformat(timespec="seconds"), **summary}, default=str)[:4000])
+        set_setting(s, f"tick:last:{kind}", raw)
 
 
 def last(kind: str) -> dict | None:
@@ -230,6 +240,11 @@ def run_send() -> dict:
     switched send_mode to live."""
     from jobhunter.outreach import sender
 
+    from jobhunter import notify_bot
+
+    paused = notify_bot.is_paused()   # a `pause` reply to a ZoNuLy notification mail
+    if paused:
+        return {"kind": "send", "mode": sender.SEND_MODE, "sent": 0, "skipped": f"sending {paused}"}
     out = sender.send_due()
     out.pop("results", None) if not out.get("sent") else None
     return {"kind": "send", "mode": sender.SEND_MODE, **out}
@@ -592,6 +607,7 @@ def run_referrals(**kw) -> dict:
     """The referral job's entry point (launchd com.zonuly.referrals and `referrals run`):
     its own lock, data/referrals.lock — parallel to the tick, never overlapping itself."""
     LOGS.mkdir(exist_ok=True)
+    _net_timeout()
     try:
         with _Lock(REFER_LOCK, "referral cycle"):
             summary = {"kind": "referrals", "started": datetime.now().isoformat(timespec="seconds"),
@@ -608,20 +624,51 @@ class _UseSendLock(Exception):
     """The send agent has its own lock: it must never wait behind a long free tick."""
 
 
+def _net_timeout() -> None:
+    """A safety net for any socket opened without a timeout (2026-10-15: a job hung for
+    hours). httpx already defaults to 5 s; this covers raw sockets and libraries that block."""
+    import socket
+
+    if socket.getdefaulttimeout() is None:
+        socket.setdefaulttimeout(float(_T.get("socket_timeout_seconds", 120)))
+
+
+NOTIFY_LOCK = ROOT / "data" / "notify.lock"
+
+
+def _notify_cycle() -> dict:
+    """The notification bot (notify_bot.cycle) after each send run, under its own lock, so
+    a stuck free tick or referral job cannot silence it. Never raises."""
+    try:
+        from jobhunter import notify_bot
+
+        if not notify_bot.ENABLED:
+            return {"skipped": "notify.email is off"}
+        with _Lock(NOTIFY_LOCK, "notification run"):
+            return notify_bot.cycle()
+    except Exception as e:  # noqa: BLE001
+        log.warning("notification cycle failed: %s", e)
+        return {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+
+
 def run(kind: str = "free") -> dict:
     """Entry point for launchd and the CLI. Takes the lock, runs one slice, records it."""
     LOGS.mkdir(exist_ok=True)
+    _net_timeout()
     try:
+        # 2026-10-16: the send agent used to take tick.lock first, so it skipped every run
+        # while a free tick held it (288 of 323 runs) and overwrote tick.lock's pid line
+        if kind == "send":
+            raise _UseSendLock()
         with _Lock():
-            if kind == "send":
-                raise _UseSendLock()
             summary = run_free() if kind == "free" else run_paid() if kind == "paid" else {**run_free(), "paid": run_paid()}
     except _UseSendLock:
         try:
             with _Lock(SEND_LOCK):
                 summary = run_send()
         except RuntimeError as e:
-            return {"kind": kind, "skipped": str(e)}
+            return {"kind": kind, "skipped": str(e), "notify": _notify_cycle()}
+        summary["notify"] = _notify_cycle()
     except RuntimeError as e:
         return {"kind": kind, "skipped": str(e)}
     summary["finished"] = datetime.now().isoformat(timespec="seconds")

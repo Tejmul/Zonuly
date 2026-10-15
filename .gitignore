@@ -20,6 +20,9 @@ demo.db
 
 # run-time locks of the tick and the send agent
 data/*.lock
+# the notification bot's and the watchdog's state (jobhunter/notify_bot.py, watchdog.py)
+data/notify_state.json
+data/watchdog.json
 
 # Catalyst AppSail build output (scripts/build_catalyst.py) — regenerated, never committed
 deploy/catalyst/appsail/build/

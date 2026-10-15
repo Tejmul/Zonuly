@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import {
   Activity, Building2, Calendar, Crosshair, Globe, Inbox, LayoutGrid, Mail, MessageSquare, Network, PanelLeft, Send, Settings, Star, Users, Workflow,
 } from "lucide-react";
@@ -39,6 +40,45 @@ const LINKS = [
   { href: "/health", label: "Scraping health", icon: Activity },
 ];
 
+/* How many drafts wait for the user (2026-10-16: "I don't see any notification").
+   Polled every minute, and at once when a review action anywhere fires the
+   "zonuly:review-changed" event (app/(app)/outreach/_review). */
+type ReviewCount = { waiting: number; approved_unsent: number; auto_approved_unsent: number };
+
+function useReviewCount() {
+  const { publicInstance } = useAccess();
+  const path = usePathname();
+  const { data, reload } = useApi<ReviewCount>(publicInstance ? null : "/api/outreach/review/count");
+  useEffect(() => {
+    if (publicInstance) return;
+    const t = setInterval(() => void reload(), 60_000);
+    const on = () => void reload();
+    window.addEventListener("zonuly:review-changed", on);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("zonuly:review-changed", on);
+    };
+  }, [publicInstance, reload]);
+  // a page change is a cheap moment to refresh
+  useEffect(() => {
+    if (!publicInstance) void reload();
+  }, [path, publicInstance, reload]);
+  return data;
+}
+
+function QueueBadge({ count }: { count: ReviewCount | null }) {
+  if (!count || count.waiting <= 0) return null;
+  return (
+    <span
+      className="tnum ml-auto rounded-full bg-ink px-1.5 py-px text-[11px] font-semibold leading-4 text-on-ink"
+      title={`${count.waiting} draft${count.waiting === 1 ? "" : "s"} waiting for your review`}
+      aria-label={`${count.waiting} waiting for your review`}
+    >
+      {count.waiting}
+    </span>
+  );
+}
+
 function useLinks() {
   const path = usePathname();
   const { publicInstance } = useAccess();
@@ -60,6 +100,7 @@ function useLinks() {
 
 export function Sidebar() {
   const links = useLinks();
+  const review = useReviewCount();
   const onSettings = usePathname().startsWith("/settings");
   const { publicInstance } = useAccess();
   const { open } = useSidebar();
@@ -89,6 +130,7 @@ export function Sidebar() {
             >
               <Icon size={16} strokeWidth={1.8} className="shrink-0" />
               {l.label}
+              {l.href === "/queue" ? <QueueBadge count={review} /> : null}
             </Link>
           );
         })}
@@ -128,6 +170,7 @@ export function Sidebar() {
 
 export function AppNav() {
   const links = useLinks();
+  const review = useReviewCount();
   const { open, toggle } = useSidebar();
 
   return (
@@ -176,6 +219,9 @@ export function AppNav() {
               }`}
             >
               {l.label}
+              {l.href === "/queue" && review && review.waiting > 0 ? (
+                <span className="tnum ml-1.5 rounded-full bg-ink px-1.5 text-[11px] font-semibold text-on-ink">{review.waiting}</span>
+              ) : null}
             </Link>
           ))}
         </nav>

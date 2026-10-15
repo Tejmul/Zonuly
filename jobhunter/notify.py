@@ -1,4 +1,8 @@
-"""macOS notifications for the things worth interrupting the user about."""
+"""macOS notifications for the things worth interrupting the user about.
+
+Mail (positive replies, URGENT alerts, the morning digest, reply-to-act commands) is
+jobhunter/notify_bot.py; `urgent()` below does both.
+"""
 
 from __future__ import annotations
 
@@ -103,3 +107,14 @@ def notify_queue(threshold: int = 1) -> int:
     if n >= threshold:
         send("Review queue", f"{n} draft{'s' if n != 1 else ''} waiting for your approval")
     return n
+
+
+def urgent(key: str, title: str, detail: str) -> dict:
+    """An emergency: this macOS notification plus an URGENT mail (notify_bot), at most one
+    per `key` per notify.urgent_dedup_hours. Mail only when notify.email is on."""
+    from jobhunter import notify_bot
+
+    if not notify_bot.ENABLED:
+        send("ZoNuLy: urgent", title)
+        return {"skipped": "notify.email is off"}
+    return notify_bot.urgent(key, title, detail)

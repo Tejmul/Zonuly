@@ -593,7 +593,8 @@ def email(raw: str | None, *, domain: str | None = None) -> Check:
     return Check(True, (e, "other"), confidence="low")
 
 
-_EX = re.compile(r"\b(ex[- ]|former(?:ly)?|previously|alum(?:ni|nus)?|past)\b", re.I)
+# "Ex- Flipkart" (a space after the hyphen) slipped past the old trailing \b and read as current
+_EX = re.compile(r"\b(?:ex\s*[-–]\s*(?=\w)|ex\s+(?=\w)|(?:former(?:ly)?|previously|alum(?:ni|nus)?|past)\b)", re.I)
 
 
 @dataclass

@@ -632,7 +632,6 @@ def _exa_api_search(
                        "(research.exa_daily_cap in config.yaml)")
         log.warning("exa api: daily cap %d reached, not searching", budget["cap"])
         return []
-    _spend_exa()
     body: dict = {
         "query": query,
         "numResults": limit,
@@ -652,6 +651,10 @@ def _exa_api_search(
             json=body,
             timeout=timeout,
         )
+        # Exa does not bill a request it rejects (400 INVALID_FLAGS cost 7 of the day's cap
+        # on 2026-10-16), so only an answered or failed-upstream request counts
+        if not 400 <= r.status_code < 500:
+            _spend_exa()
         if r.status_code >= 400:
             # Exa says why in the body ("category no longer supported", bad key,
             # out of credits). That sentence is the answer; a bare status hides it.

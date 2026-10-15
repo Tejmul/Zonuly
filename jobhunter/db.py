@@ -353,6 +353,11 @@ class Email(SQLModel, table=True):
     contract: Optional[str] = None        # JSON: the personalisation slots and what was missing
     send_hour: Optional[int] = None       # local hour it left (for learn)
     send_weekday: Optional[str] = None
+    # ---- pattern approval (outreach/patterns.py, 2026-10-16): approve a kind of email once
+    segment: Optional[str] = Field(default=None, index=True)   # "<structure>:<market>", e.g. referral_engineer:india
+    pattern_id: Optional[int] = Field(default=None, index=True)  # the pattern whose template wrote / approved it
+    approved_by: Optional[str] = None     # None = you, by hand; "pattern" = auto-approved by pattern_id
+    pattern_note: Optional[str] = None    # why a matching pattern did or did not approve it
 
 
 class SendLedger(SQLModel, table=True):
@@ -419,6 +424,26 @@ class EmailProposal(SQLModel, table=True):
     complete: bool = True                 # False: the contract is missing a slot, no email written
     payload: str = "{}"                   # JSON: evidence, contract, subjects, body, quality, flags, not claimed
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class EmailPattern(SQLModel, table=True):
+    """An approved KIND of email (outreach/patterns.py): one segment (structure x market)
+    and the template the user approved for it, with his edits. When outreach.pattern_approval
+    is on, a new draft in an active pattern's segment is written from the template and, if it
+    passes every gate, approved without a per-email click — marked so it can be undone
+    before its send slot. Revoking sends every unsent one back to review."""
+    __tablename__ = "email_pattern"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    segment: str = Field(index=True)          # "<structure>:<market>"
+    structure: Optional[str] = None
+    market: Optional[str] = None
+    status: str = Field(default="active", index=True)   # active | revoked | replaced
+    subject_template: str = ""                # {{slot}} markers: first_name, company, role, hook, proof1...
+    body_template: str = ""
+    source_email_id: Optional[int] = None     # the draft it was approved from
+    edited: bool = False                      # the user changed the draft before approving the pattern
+    created_at: datetime = Field(default_factory=utcnow)
+    revoked_at: Optional[datetime] = None
 
 
 class Reply(SQLModel, table=True):

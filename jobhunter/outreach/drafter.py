@@ -452,13 +452,42 @@ def write(g: dict, *, use_model: bool = True, key=None) -> dict:
     return out
 
 
+def evaluate_body(g: dict, r: dict, subject: str, body: str) -> dict:
+    """Gate and score a whole body written some other way than write() — the proposal's
+    exact text, or a pattern's template filled for this person — against the same facts,
+    signature, blurb and opt-out line write() used. `dropped` = what the contract needs
+    that the message lost (compose.keeps_contract)."""
+    from dataclasses import fields
+
+    from jobhunter.outreach import compose, gates
+
+    names = {f.name for f in fields(compose.Contract)}
+    c = compose.Contract(**{k: v for k, v in (r.get("contract") or {}).items() if k in names})
+    intro, note, sig, opt = r.get("blurb_intro") or "", r.get("blurb") or "", r.get("signature") or cold_signature(), r.get("opt_out")
+    message = body.split(intro)[0] if intro and intro in body else body.split("\n\nThanks,")[0]
+    message = message.strip()
+    forbidden = [str(x) for x in ((g.get("brief") or {}).get("forbidden") or [])]
+    v = gates.check(body, corpus=_corpus(g, c), signature=sig, address_confidence=g["person"].get("confidence"),
+                    affiliation=g["person"].get("affiliation"), forbidden=forbidden,
+                    exclude=[intro, note, opt or ""], subject=subject)
+    q = compose.quality(message, subject, c, v.flags, v.words, has_blurb=bool(note and note in body),
+                        has_resume=bool(c.resume_link))
+    return {"message": message, "body": body, "flags": v.flags, "words": v.words, "quality": q,
+            "blocked": v.blocked, "dropped": compose.keeps_contract(message, c)}
+
+
 def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = True,
               candidate_id: int = 1, force: bool = False, use_model: bool = True,
-              record_incomplete: bool = True, mark_polish: bool = False) -> dict:
+              record_incomplete: bool = True, mark_polish: bool = False, text: dict | None = None) -> dict:
     """Create one draft email in the review queue (never approved): the personalisation
     contract filled from evidence, the structure for who they are, the gate's flags and
     the quality score stored with it. A missing slot writes no email — an "incomplete"
-    row says what is missing instead (it can never be approved or sent)."""
+    row says what is missing instead (it can never be approved or sent).
+
+    `text` ({subject, body, writer}) stores that exact email instead of the one written
+    here — the proposal the user already read — re-gated against the same facts. When
+    outreach.pattern_approval is on and an approved pattern covers this kind of email,
+    the pattern writes it and may approve it (outreach/patterns.py); it says so on the row."""
     from datetime import timedelta
 
     init_db()
@@ -478,6 +507,20 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
     if g.get("error"):
         return g
     r = write(g, use_model=use_model)
+    from jobhunter.outreach import patterns
+
+    decision = None
+    if not r.get("incomplete"):
+        if text and text.get("subject") and text.get("body"):
+            v = evaluate_body(g, r, text["subject"], text["body"])
+            r.update(subject=text["subject"], body=v["body"], flags=v["flags"], words=v["words"],
+                     quality=v["quality"], writer=text.get("writer") or r["writer"])
+        else:
+            decision = patterns.decide(g, r)
+            if decision and decision.get("text"):
+                t = decision["text"]
+                r.update(subject=t["subject"], body=t["body"], flags=t["flags"], words=t["words"], quality=t["quality"])
+    seg = patterns.segment(r.get("structure"), patterns.market(g.get("job"), g.get("company")))
     p, co, j = g["person"], g["company"], g["job"]
     with get_session() as session:
         for old in session.exec(select(Email).where(Email.contact_id == contact_id, Email.status == "incomplete")).all():
@@ -509,7 +552,7 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
             candidate_id=candidate_id, structure=r["structure"], subject_pattern=r["subject_pattern"],
             hook_type=r["hook_type"], words=r["words"], quality=r["quality"]["score"],
             quality_detail=json.dumps(r["quality"]), writer=r["writer"], polish_pending=bool(r["polish_pending"] or (mark_polish and r["writer"] == "template")),
-            contract=json.dumps(r["contract"], default=str),
+            contract=json.dumps(r["contract"], default=str), segment=seg,
         )
         session.add(email)
         session.commit()
@@ -520,7 +563,10 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
                "structure": r["structure"], "writer": r["writer"]}
         if r.get("budget"):
             out["budget"] = True
-        return out
+    f = patterns.finish(out["email_id"], decision)
+    if f:
+        out["pattern"] = f
+    return out
 
 
 def polish_pending(limit: int = 10) -> dict:
@@ -545,7 +591,7 @@ def polish_pending(limit: int = 10) -> dict:
         if r.get("writer") == "model":
             with get_session() as session:
                 e = session.get(Email, eid)
-                if e and e.status == "draft":
+                if e and e.status == "draft" and not e.pattern_id:   # a pattern's text is the user's own: kept
                     e.body, e.review_flags, e.words = r["body"], json.dumps(r["flags"]), r["words"]
                     e.quality, e.quality_detail = r["quality"]["score"], json.dumps(r["quality"])
                     e.writer, e.polish_pending = "model", False

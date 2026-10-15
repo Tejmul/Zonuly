@@ -74,6 +74,45 @@ DOWN_TAIL = int(_R.get("search_down_tail", 6))
 #: a company someone else touched this recently (contacts_found_at) is left alone
 TOUCHED_MINUTES = int(_R.get("skip_touched_minutes", 60))
 CLAIM_PREFIX = "refer:claim:"
+#: 2026-10-16: a pass that could not run every channel (the keyless search cooling, the Exa
+#: allowance spent) rests the company this many hours — "[refer-partial] <time>" — so the
+#: head of the queue moves on instead of the job re-working the same 40 companies forever
+PARTIAL_REST_H = int(_R.get("partial_rest_hours", 20))
+PARTIAL = "[refer-partial]"
+#: keyless LinkedIn searches that may come back empty in one process before the job stops
+#: spending time on them (every engine returned zero linkedin.com/in results, 2026-10-15)
+KEYLESS_TRIP = int(_R.get("keyless_trip_queries", 4))
+_keyless = {"queries": 0, "people": 0}
+#: the most one company may take in the referral job: a site that trickles bytes forever
+#: (httpx's timeouts are per read) cannot hold the cycle — SIGALRM ends it, main thread only
+COMPANY_MAX_S = int(_R.get("company_max_seconds", 240))
+
+
+class CompanyTimeout(BaseException):
+    """One company ran past COMPANY_MAX_S. A BaseException, like KeyboardInterrupt, so the
+    channels' own `except Exception` (one channel failing must not end the company) cannot
+    swallow it and carry on to the next channel."""
+
+
+def with_deadline(fn, seconds: int):
+    """fn() with a wall-clock deadline (SIGALRM) when called on the main thread; a plain
+    call elsewhere (the API's scheduler thread), where the per-request timeouts still hold."""
+    import signal
+    import threading
+
+    if seconds <= 0 or not hasattr(signal, "SIGALRM") or threading.current_thread() is not threading.main_thread():
+        return fn()
+
+    def _ring(signum, frame):  # noqa: ARG001
+        raise CompanyTimeout(f"over {seconds}s on one company")
+
+    old = signal.signal(signal.SIGALRM, _ring)
+    signal.alarm(int(seconds))
+    try:
+        return fn()
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
 INDIA_CITIES = ("Bengaluru", "Hyderabad")
 BUCKETS = ("Bengaluru", "Hyderabad", "India", "Remote")
 
@@ -122,9 +161,39 @@ def _marked(notes: str | None) -> datetime | None:
 
 
 def _mark(session, c: Company, summary: str) -> None:
-    kept = [ln for ln in (c.notes or "").splitlines() if not ln.startswith(MARK)]
+    kept = [ln for ln in (c.notes or "").splitlines() if not ln.startswith(MARK) and not ln.startswith(PARTIAL)]
     c.notes = "\n".join(kept + [f"{MARK} {utcnow():%Y-%m-%d}: {summary}"[:200]]).strip()
     session.add(c)
+
+
+def _partial(notes: str | None) -> datetime | None:
+    m = re.search(r"\[refer-partial\] (\d{4}-\d{2}-\d{2}T\d{2}:\d{2})", notes or "")
+    return datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M") if m else None
+
+
+def _mark_partial(session, c: Company, summary: str) -> None:
+    kept = [ln for ln in (c.notes or "").splitlines() if not ln.startswith(PARTIAL)]
+    c.notes = "\n".join(kept + [f"{PARTIAL} {utcnow():%Y-%m-%dT%H:%M}: {summary}"[:200]]).strip()
+    session.add(c)
+
+
+def keyless_tripped() -> bool:
+    """The keyless LinkedIn search has run KEYLESS_TRIP queries in this process and found
+    nobody: the engines are answering without LinkedIn results — stop spending time on it."""
+    return _keyless["queries"] >= KEYLESS_TRIP and _keyless["people"] == 0
+
+
+#: names that are a directory row, not a company — an Exa people search on them is wasted
+_EXA_SKIP = re.compile(r"\b(capital|ventures?|partners|fund|investments?|holdings|advisors|associates|"
+                       r"angels?|accelerator|incubator|foundation|university|college|institute|government)\b|"
+                       r"[:|/]|\b(a|an|the)\s+\w+\s+(startup|company)\b", re.I)
+
+
+def exa_worth_it(name: str | None) -> bool:
+    """Spend one of the day's Exa searches on this company? Not on an investment firm or a
+    headline fragment saved as a name ("MetaShot a gaming startup in Bangalore")."""
+    n = (name or "").strip()
+    return bool(n) and len(n.split()) <= 5 and not _EXA_SKIP.search(n)
 
 
 # ------------------------------------------------------------------ measure
@@ -638,10 +707,17 @@ def cycle_queue(limit: int | None = None, *, exclude: set[int] | frozenset = fro
             last = _marked(c.notes)
             if last and now - last < timedelta(days=REST_DAYS[min(_band(c), 2)]):
                 continue
+            part = _partial(c.notes)
+            if part and now - part < timedelta(hours=PARTIAL_REST_H):
+                continue
             if c.contacts_found_at and now - c.contacts_found_at < timedelta(minutes=TOUCHED_MINUTES):
                 continue
         pending.append(c)
-    pending.sort(key=cycle_key)
+    # inside a bucket's ★ / non-★ group, companies short of referrers come before those
+    # that only lack an address (2026-10-16: 40 Bengaluru companies with 3+ referrers and
+    # no address held the head of the queue for hours while 492 had nobody)
+    pending.sort(key=lambda c: (*cycle_key(c)[:3], 0 if counts.get(c.id, (0, 0))[0] < TARGET else 1,
+                                *cycle_key(c)[3:]))
     ids = [c.id for c in pending]
     return ids[:limit] if limit else ids
 
@@ -653,6 +729,8 @@ def lead_channel(source: str | None, affiliation_source: str | None) -> str:
     a, s = affiliation_source or "", source or ""
     if a == "linkedin-headline" or s == "linkedin-public":
         return "linkedin"
+    if s == "yc-page":
+        return "team"           # the company's own YC listing of its active founders
     if a == "public-mention" or s == "public-page":
         return "talks"
     if a in ("org-member", "recent-commit", "profile-company") or s == "github":
@@ -672,12 +750,15 @@ def _ready_rows(cid: int) -> dict[int, tuple[str, bool]]:
 
 
 def refer_company(cid: int, *, search_ok: bool = True) -> dict:
-    """One company, referral work only, in the job's order: public LinkedIn (several query
-    shapes, the city first) → their team page → GitHub (inside the hourly budget) → public
-    mentions → addresses (the open web while nobody has one, then the learned format).
-    Stops searching once TARGET ready referrers are found. `search_ok=False` (every keyless
-    backend cooling) runs only the channels that need no web search."""
-    from jobhunter.contacts import addresses, discover_for_company, github_miner, linkedin_public, web_emails
+    """One company, referral work only, in the job's order (2026-10-16, cheapest yield
+    first): their YC page's active founders and their own team / about pages
+    (contacts/team_people.py — no web search, no login) → one metered Exa people search
+    while still short → public LinkedIn through the keyless search (until it proves dead
+    in this process) → their team page's named addresses → GitHub (inside the hourly
+    budget) → public mentions → addresses (the open web while nobody has one, then the
+    learned format). Stops looking for people once TARGET ready referrers are found.
+    `search_ok=False` (every keyless backend cooling) skips the keyless web search."""
+    from jobhunter.contacts import addresses, discover_for_company, github_miner, linkedin_public, team_people, web_emails
     from jobhunter.research import web
 
     with get_session() as session:
@@ -691,46 +772,92 @@ def refer_company(cid: int, *, search_ok: bool = True) -> dict:
     city = BUCKETS[b] if b in (0, 1) else None
     before = _ready_rows(cid)
     out: dict = {"company": name, "bucket": BUCKETS[b] if b is not None else None,
-                 "before": [len(before), sum(1 for _, e in before.values() if e)], "channels": [], "queries": 0}
+                 "before": [len(before), sum(1 for _, e in before.values() if e)], "channels": [], "queries": 0,
+                 "exa": 0, "skipped": []}
 
     def ready_now() -> int:
         return _counts(cid)[0]
 
-    # 1a. one metered Exa people search (contacts/linkedin_public.search_people_exa): ~10
-    #     current profiles per call, where the keyless engines now return none
-    if ready_now() < TARGET and linkedin_public.exa_people_available():
-        res = linkedin_public.search_people_exa(cid, city=city)
-        out["queries"] += 1
-        out["channels"].append("linkedin:exa-people")
-        if res.get("error"):
-            out["exa_people_error"] = res["error"][:160]
-    # 1b. public LinkedIn through keyless search — the headline must name the company now
-    if search_ok and ready_now() < TARGET:
-        for kind in linkedin_public.REFERRAL_QUERIES:
-            if ready_now() >= TARGET:
-                break
-            if web.search_down():
-                out["search_down"] = True
-                break
-            res = linkedin_public.search_role(cid, kind, queries=linkedin_public.REFERRAL_QUERIES,
-                                              city=city if city else None)
-            out["queries"] += 1
-            out["channels"].append(f"linkedin:{kind}")
-            if res.get("error"):
-                out["linkedin_error"] = res["error"][:160]
-                if "rate-limited" in res["error"] or "cooling" in res["error"]:
-                    out["search_down"] = True
-                    break
-    else:
-        out["search_down"] = True
-    # 2. their own team / about page, through Jina
+    t_last = [time.time(), "start"]
+    out["seconds_by_step"] = {}
+
+    def _lap(step: str) -> None:
+        now = time.time()
+        if now - t_last[0] >= 0.5:
+            out["seconds_by_step"][t_last[1]] = round(now - t_last[0], 1)
+        t_last[0], t_last[1] = now, step
+
+    _lap("yc+team_start")
+    # 1. free and search-free: the YC page's active founders, then their own team pages
+    if ready_now() < TARGET:
+        try:
+            r = team_people.find_yc(cid)
+            if not r.get("skipped"):
+                out["channels"].append("yc")
+            if r.get("error"):
+                out["yc_error"] = r["error"][:160]
+        except Exception as e:  # noqa: BLE001 — one channel failing must not end the company
+            out["yc_error"] = str(e)[:160]
     if has_site and ready_now() < TARGET:
+        try:
+            r = team_people.find_team(cid)
+            out["channels"].append("team-people")
+            if r.get("error"):
+                out["team_people_error"] = r["error"][:160]
+        except Exception as e:  # noqa: BLE001
+            out["team_people_error"] = str(e)[:160]
+    _lap("exa")
+    # 2. one metered Exa people search (contacts/linkedin_public.search_people_exa): ~6
+    #    current profiles per call — only while short, never on a fund or a headline name
+    if ready_now() < TARGET:
+        if not exa_worth_it(name):
+            out["skipped"].append("exa: not a company name worth a search")
+        elif not linkedin_public.exa_people_available():
+            out["skipped"].append("exa: daily allowance used")
+        else:
+            res = linkedin_public.search_people_exa(cid, city=city)
+            out["queries"] += 1
+            out["exa"] += 1
+            out["channels"].append("linkedin:exa-people")
+            if res.get("error"):
+                out["exa_people_error"] = res["error"][:160]
+    _lap("keyless")
+    # 3. public LinkedIn through keyless search — the headline must name the company now
+    keyless_skipped = False
+    if ready_now() < TARGET:
+        if not search_ok or web.search_down():
+            keyless_skipped = True
+        elif keyless_tripped():
+            out["skipped"].append("keyless linkedin: no results from any engine in this run")
+        else:
+            for kind in linkedin_public.REFERRAL_QUERIES:
+                if ready_now() >= TARGET or keyless_tripped():
+                    break
+                if web.search_down():
+                    keyless_skipped = True
+                    break
+                res = linkedin_public.search_role(cid, kind, queries=linkedin_public.REFERRAL_QUERIES,
+                                                  city=city if city else None)
+                out["queries"] += 1
+                _keyless["queries"] += 1
+                _keyless["people"] += res.get("found", 0) or 0
+                out["channels"].append(f"linkedin:{kind}")
+                if res.get("error"):
+                    out["linkedin_error"] = res["error"][:160]
+                    if "rate-limited" in res["error"] or "cooling" in res["error"]:
+                        keyless_skipped = True
+                        break
+    out["search_down"] = keyless_skipped
+    _lap("team_addr")
+    # 4. their own team / about page's named addresses, through Jina — while nobody has one
+    if has_site and _counts(cid)[1] == 0:
         try:
             team_pages(cid)
             out["channels"].append("team")
-        except Exception as e:  # noqa: BLE001 — one channel failing must not end the company
+        except Exception as e:  # noqa: BLE001
             out["team_error"] = str(e)[:160]
-    # 3. GitHub (org members, recent committers, profiles) inside the hourly budget
+    _lap("github")
+    # 5. GitHub (org members, recent committers, profiles) inside the hourly budget
     if has_site and not fresh and ready_now() < TARGET:
         left = github_miner.calls_left().get("remaining")
         gh_ok = left is None or left >= GITHUB_MIN_REMAINING
@@ -741,17 +868,20 @@ def refer_company(cid: int, *, search_ok: bool = True) -> dict:
             out["channels"].append("github+site" if gh_ok else "site")
         except Exception as e:  # noqa: BLE001
             out["github_error"] = str(e)[:160]
-    # 4. named in public: podcasts / YouTube (no web search), talks, their blog's bylines
+    _lap("mentions")
+    # 6. named in public: podcasts / YouTube (no web search), talks, their blog's bylines
     if MENTIONS and ready_now() < TARGET:
         from jobhunter.contacts import public_mentions
 
-        chans = ("youtube", "talks", "blog") if search_ok and not out.get("search_down") else ("youtube", "blog")
+        talks_ok = search_ok and not keyless_skipped and not keyless_tripped()
+        chans = ("youtube", "talks", "blog") if talks_ok else ("youtube", "blog")
         try:
             public_mentions.find(cid, channels=chans if has_site else tuple(x for x in chans if x != "blog"))
             out["channels"].append("mentions")
         except Exception as e:  # noqa: BLE001
             out["mentions_error"] = str(e)[:160]
-    # 5. addresses: the open web while nobody ready has one, then the learned format
+    _lap("addresses")
+    # 7. addresses: the open web while nobody ready has one, then the learned format
     #    (≥2 agreeing examples; a pattern-guessed address still spends the 5/day guessed cap)
     if has_site and _counts(cid)[1] == 0 and search_ok and not web.search_down():
         try:
@@ -764,6 +894,7 @@ def refer_company(cid: int, *, search_ok: bool = True) -> dict:
         out["pattern_status"] = res.get("status")
     except Exception as e:  # noqa: BLE001
         out["pattern_error"] = str(e)[:160]
+    _lap("end")
     after = _ready_rows(cid)
     out["after"] = [len(after), sum(1 for _, e in after.values() if e)]
     new = {k: v for k, v in after.items() if k not in before}
@@ -771,13 +902,20 @@ def refer_company(cid: int, *, search_ok: bool = True) -> dict:
     out["emails_found"] = sum(1 for k, (_, e) in after.items() if e and not (before.get(k) or (None, False))[1])
     met = out["after"][0] >= TARGET and out["after"][1] >= 1
     out["reached_target"] = met and not (out["before"][0] >= TARGET and out["before"][1] >= 1)
-    # rested only when every channel had its turn: a pass without the search is not a pass
-    out["marked"] = met or not out.get("search_down")
-    if out["marked"]:
-        with get_session() as session:
-            c = session.get(Company, cid)
-            _mark(session, c, f"job {out['before']}→{out['after']} via {','.join(out['channels'])}")
-            session.commit()
+    # rested for REST_DAYS when every channel had its turn; a pass that missed one (the
+    # keyless search cooling, the Exa allowance spent while still short) rests only
+    # PARTIAL_REST_H, so the queue moves on and the company comes back tomorrow
+    missed = keyless_skipped or (out["after"][0] < TARGET and "exa: daily allowance used" in out["skipped"])
+    out["marked"] = met or not missed
+    with get_session() as session:
+        c = session.get(Company, cid)
+        note = f"job {out['before']}→{out['after']} via {','.join(out['channels'])}"
+        if out["marked"]:
+            _mark(session, c, note)
+        else:
+            _mark_partial(session, c, note)
+            out["partial"] = True
+        session.commit()
     return out
 
 
@@ -803,6 +941,7 @@ def run_cycle(*, budget_s: int | None = None, limit: int | None = None, exclude:
     out: dict = {"queued": len(queue), "window": len(window), "companies": 0, "added_ready": 0,
                  "added_by_channel": Counter(), "emails_found": 0, "reached_target": 0, "reached_ids": [],
                  "buckets": Counter(), "linkedin_queries": 0, "errors": 0, "stopped": None, "search_down_companies": 0}
+    dry = 0
     try:
         for i, cid in enumerate(window):
             if time.time() - t0 > budget_s:
@@ -811,14 +950,26 @@ def run_cycle(*, budget_s: int | None = None, limit: int | None = None, exclude:
             down = web.search_down()
             if down and not linkedin_public.exa_people_available():
                 out["search_down_companies"] += 1
-                if out["search_down_companies"] > DOWN_TAIL:
+                # the search-free channels (YC page, team pages) still work: end early only
+                # once DOWN_TAIL companies in a row have come back with nobody
+                if dry >= DOWN_TAIL:
                     out["stopped"] = "every keyless search backend is cooling down — ended early"
                     break
             try:
-                r = refer_company(cid, search_ok=not down)
-            except Exception as e:  # noqa: BLE001 — one company must not end the cycle
+                r = with_deadline(lambda: refer_company(cid, search_ok=not down), COMPANY_MAX_S)
+            except (Exception, CompanyTimeout) as e:  # noqa: BLE001 — one company must not end the cycle
                 log.warning("referral job: company %s failed: %s", cid, e)
                 out["errors"] += 1
+                if isinstance(e, CompanyTimeout):
+                    out["timeouts"] = out.get("timeouts", 0) + 1
+                    try:
+                        with get_session() as session:
+                            c = session.get(Company, cid)
+                            if c is not None:
+                                _mark_partial(session, c, "timed out")
+                                session.commit()
+                    except Exception:  # noqa: BLE001
+                        pass
                 continue
             finally:
                 release(cid, owner)
@@ -828,6 +979,9 @@ def run_cycle(*, budget_s: int | None = None, limit: int | None = None, exclude:
             for ch, n in (r.get("added_by_channel") or {}).items():
                 out["added_by_channel"][ch] += n
                 out["added_ready"] += n
+            dry = 0 if (r.get("added_by_channel") or {}) else dry + 1
+            out["exa_searches"] = out.get("exa_searches", 0) + r.get("exa", 0)
+            out["partial"] = out.get("partial", 0) + (1 if r.get("partial") else 0)
             out["emails_found"] += r.get("emails_found", 0)
             if r.get("reached_target"):
                 out["reached_target"] += 1

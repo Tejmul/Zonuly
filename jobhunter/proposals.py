@@ -12,7 +12,9 @@ NOT claimed. A few targets whose contract could not be filled are shown too, wit
 was missing — that is the pipeline refusing to write a generic email.
 
 Proposals are rows in `email_proposal`, never `email`: no status, no approval, no sender
-reads them. `build()` replaces the previous run. Nothing here sends, approves or drafts.
+reads them. `build()` replaces the previous run. Nothing here sends or approves; a proposal
+becomes a draft in the review queue only when the user asks (`to_draft`), and `latest()`
+shows, per proposal, the draft it became and that draft's state in plain words.
 
 Layering: db, needs (briefs) and outreach (batch, drafter, compose) below; api above.
 """
@@ -24,10 +26,10 @@ import logging
 import uuid
 from collections import Counter
 
-from sqlmodel import delete, select
+from sqlmodel import col, delete, select
 
 from jobhunter import admission
-from jobhunter.db import Company, Contact, EmailProposal, Job, get_session, init_db, utcnow
+from jobhunter.db import Company, Contact, Email, EmailProposal, Job, get_session, init_db, utcnow
 
 log = logging.getLogger(__name__)
 
@@ -100,15 +102,9 @@ def _recruiter_targets(skip: set[int]) -> list[dict]:
 
 
 def _market(g: dict) -> str:
-    j = g.get("job") or {}
-    if j.get("market"):
-        return j["market"]
-    loc = (j.get("location") or "").lower()
-    if j.get("remote_anywhere"):
-        return "remote"
-    if any(k in loc for k in ("bengaluru", "bangalore", "hyderabad", "india")) or g["company"].get("list_key"):
-        return "india"
-    return "remote" if j.get("remote") else "abroad"
+    from jobhunter.outreach import patterns
+
+    return patterns.market(g.get("job"), g.get("company"))
 
 
 def _payload(g: dict, r: dict, rank: int) -> dict:
@@ -291,15 +287,89 @@ def build(n: int = 10, *, use_model: bool = True, incomplete_examples: int = 3, 
     return out
 
 
+# What each email state means, in the user's words — the proposal page and the queue
+# show these instead of the raw status (2026-10-16: "is it approved or not? where is the
+# option to approve?").
+STATE_LABEL = {
+    "none": "No draft yet — this is only a proposal",
+    "draft": "Waiting for your review",
+    "approved": "Approved — sends in the next slot",
+    "approved_pattern": "Auto-approved by a pattern — sends in the next slot unless you undo it",
+    "sending": "Sending now",
+    "sent": "Sent",
+    "replied": "Sent — they replied",
+    "rejected": "Rejected — will not be sent",
+    "incomplete": "Not written — evidence missing",
+    "failed": "Send failed",
+    "stale": "Too old to approve — write it again",
+}
+
+
+def draft_state(e: Email | None) -> dict:
+    """The draft behind a proposal (or none), with its state in plain words."""
+    from jobhunter.outreach import patterns
+
+    if e is None:
+        return {"state": "none", "label": STATE_LABEL["none"]}
+    stale = bool(e.status == "draft" and e.expires_at and e.expires_at < utcnow())
+    state = ("stale" if stale else "approved_pattern" if e.status == "approved" and e.approved_by == "pattern"
+             else e.status if e.status in STATE_LABEL else "draft")
+    try:
+        flags = json.loads(e.review_flags or "[]")
+    except json.JSONDecodeError:
+        flags = []
+    return {"state": state, "label": STATE_LABEL[state], "id": e.id, "status": e.status, "subject": e.subject,
+            "body": e.body, "approved_by": e.approved_by, "pattern_id": e.pattern_id, "pattern_note": e.pattern_note,
+            "segment": e.segment, "segment_label": patterns.segment_label(e.segment) if e.segment else None,
+            "quality": e.quality, "review_flags": flags, "to_email": e.to_email, "stale": stale,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+            "approved_at": e.approved_at.isoformat() if e.approved_at else None,
+            "sent_at": e.sent_at.isoformat() if e.sent_at else None}
+
+
+def _draft_for_contact(session, contact_id: int | None) -> Email | None:
+    """The newest cold email to this person — what the proposal turned into, if anything."""
+    if not contact_id:
+        return None
+    return session.exec(select(Email).where(Email.contact_id == contact_id, Email.kind == "cold")
+                        .order_by(col(Email.id).desc())).first()
+
+
+def to_draft(proposal_id: int) -> dict:
+    """Put this proposal into the review queue as a draft — the exact email shown, re-gated
+    against the same facts. Never approves: the user does that, here or in the queue."""
+    from jobhunter.outreach import drafter
+
+    init_db()
+    with get_session() as session:
+        p = session.get(EmailProposal, proposal_id)
+        if p is None:
+            return {"error": f"no proposal {proposal_id}"}
+        if not p.complete:
+            return {"error": "this proposal was not written (evidence missing), so there is nothing to draft"}
+        payload = json.loads(p.payload)
+        contact_id, job_id = p.contact_id, p.job_id
+    if job_id:
+        ensure_briefs([job_id])
+    r = drafter.draft_for(contact_id, job_id, research=False, use_model=False,
+                          text={"subject": payload.get("subject"), "body": payload.get("body"),
+                                "writer": payload.get("writer")})
+    with get_session() as session:
+        r["draft"] = draft_state(_draft_for_contact(session, contact_id))
+    return r
+
+
 def latest() -> dict:
-    """The stored proposals, best first, with the run's summary."""
+    """The stored proposals, best first, with the run's summary — and for each, the draft
+    it became (if any) and that draft's state."""
     init_db()
     with get_session() as session:
         rows = session.exec(select(EmailProposal).order_by(EmailProposal.rank)).all()
         items = []
         for r in rows:
             try:
-                items.append({"id": r.id, "run_id": r.run_id, "created_at": r.created_at.isoformat(), **json.loads(r.payload)})
+                items.append({"id": r.id, "run_id": r.run_id, "created_at": r.created_at.isoformat(), **json.loads(r.payload),
+                              "draft": draft_state(_draft_for_contact(session, r.contact_id))})
             except json.JSONDecodeError:
                 continue
     scores = [i["quality"]["score"] for i in items if i.get("complete") and i.get("quality")]
@@ -311,4 +381,4 @@ def latest() -> dict:
                 "markets": dict(Counter(i["market"] for i in items if i.get("complete")))}}
 
 
-__all__ = ["build", "latest", "ensure_brief", "ensure_briefs"]
+__all__ = ["build", "latest", "ensure_brief", "ensure_briefs", "to_draft", "draft_state", "STATE_LABEL"]

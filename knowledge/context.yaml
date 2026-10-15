@@ -372,6 +372,11 @@ modules:
     path: jobhunter/contacts/roles.py
     layer_order: 2
     summary: Role classification and referral ranking — founder · senior engineer · engineer · EM · tech HR · recruiter.
+  - id: module:jobhunter.kg.warm
+    label: kg/warm.py
+    path: jobhunter/kg/warm.py
+    layer_order: 3
+    summary: Warm paths (shared school / past employer from their own text, same person across companies, alumni elsewhere, shared investors with engaged companies, city, shared stack), similar companies (Adamic–Adar over investors + idf skill overlap), next companies, the graph referrer signal. Sync derives AFFILIATED_WITH · PREVIOUSLY_AT · SAME_PERSON · IN_CITY (~0.4 s, changed edges only). Routes in kg/routes_warm.py.
   - id: module:jobhunter.kg.hunt
     label: kg/hunt.py
     path: jobhunter/kg/hunt.py
@@ -1040,6 +1045,40 @@ features:
     stage: stage:platform
     serves: [constraint:context-continuity, constraint:single-user-laptop]
     implemented_in: [module:jobhunter.kg]
+
+  - id: feature:kg-warm-paths
+    label: Warm paths — why this person might answer, with the quote
+    summary: profile:me -AFFILIATED_WITH-> org <-AFFILIATED_WITH- contact (their own headline/profile names his school or a past employer), SAME_PERSON across companies, PREVIOUSLY_AT alumni, investors shared with engaged companies, same city, shared specific stack. Each path carries evidence + source; shown on the company page and the Graph panel; fed to the research brief as warm_paths. See system docs/KG-USES.md.
+    status: built
+    stage: stage:research
+    serves: [guarantee:no-fabrication, constraint:send-cap-25]
+    implemented_in: [module:jobhunter.kg.warm]
+  - id: feature:kg-similar-companies
+    label: Similar companies — "if you liked X" from the graph
+    summary: Adamic–Adar over shared investors (a small fund counts more than a mega fund) + idf-weighted overlap of the skills their jobs require (≥3 shared), city/stage as tie-breakers; overrated / merged / reject never recommended. next_companies() aggregates over the companies already engaged with.
+    status: built
+    stage: stage:platform
+    serves: [constraint:send-cap-25]
+    implemented_in: [module:jobhunter.kg.warm]
+  - id: feature:kg-referrer-signal
+    label: Graph referrer signal — a second opinion on who to ask
+    summary: 0–100 from confirmed-current employment, independent evidence edges and warm-path weight; exposed as graph_signal on /api/kg/warm/*. Does not replace referral_rank (contacts/roles.py).
+    status: built
+    stage: stage:contacts
+    serves: [constraint:send-cap-25, guarantee:confidence-labels]
+    implemented_in: [module:jobhunter.kg.warm]
+  - id: feature:kg-temporal-validity
+    label: Edge validity windows (valid_from / invalid_at) instead of delete
+    summary: Graphiti-style bi-temporal edges so "used to work at" and "works at" are the same fact at different times; today a changed headline just drops the edge. Not built.
+    status: gap
+    stage: stage:platform
+    serves: [guarantee:no-fabrication]
+  - id: feature:kg-reply-learning
+    label: Learn which warm-path types get replies
+    summary: Once sends exist, Email.hook_type + the path type at draft time → reply rate per path type; reweights WEIGHT in kg/warm.py from data instead of the research prior. Not built — zero sends so far.
+    status: gap
+    stage: stage:track
+    serves: [constraint:send-cap-25]
 
   # ---- scrape
   - id: feature:ats-json-scrapers

@@ -7,12 +7,18 @@ import { relTime } from "@/lib/utils";
 import { PageHead, TaskStrip } from "@/components/shell";
 import { OperatorOnly } from "@/components/access";
 import { Button, Empty, ErrorNote, Loading, Panel, PanelHead, Select } from "@/components/ui/primitives";
+import { ProposalDraft, type DraftState } from "../_review/review";
 
 /* PROPOSAL — how the pipeline would write to the best targets, before anything is drafted.
    Proposals are not drafts: nothing on this page is in the review queue or can be sent.
    Each one shows the evidence used, the structure and why, the subject options, the email
    exactly as it would go, the quality score's parts, the gate's flags, and what was
-   deliberately left out. Black and white: weight and rules carry the hierarchy. */
+   deliberately left out. Black and white: weight and rules carry the hierarchy.
+   2026-10-16: each proposal also says whether it has become a draft and what state that
+   draft is in, with the actions next to it — Write draft, Approve, Edit, Reject, Undo —
+   so the page answers "is it approved or not, and where do I approve it?". */
+
+type ProposalWithDraft = Proposal & { draft?: DraftState };
 
 const STRUCTURE_LABEL: Record<string, string> = {
   proof_opinion: "Proof of work → their opinion",
@@ -55,7 +61,7 @@ function Score({ q }: { q: Proposal["quality"] }) {
   );
 }
 
-function Card({ p }: { p: Proposal }) {
+function Card({ p, onChange }: { p: ProposalWithDraft; onChange: () => void | Promise<void> }) {
   const [showAlt, setShowAlt] = useState(false);
   return (
     <Panel className="mb-4">
@@ -72,6 +78,7 @@ function Card({ p }: { p: Proposal }) {
         }
         action={p.complete ? <Score q={p.quality} /> : <span className="chip chip-strike">not written</span>}
       />
+      {p.complete ? <ProposalDraft proposalId={p.id} draft={p.draft} proposalBody={p.body} onChange={onChange} /> : null}
 
       {!p.complete ? (
         <div className="px-4 py-3 text-sm text-ink-2">
@@ -240,14 +247,16 @@ export default function ProposalPage() {
     watch(task_id, () => void reload());
   }
 
-  const items = (data?.items ?? []).filter((p) => !structure || p.structure.id === structure);
+  const all = (data?.items ?? []) as ProposalWithDraft[];
+  const items = all.filter((p) => !structure || p.structure.id === structure);
   const s = data?.summary;
+  const byState = (...st: DraftState["state"][]) => all.filter((p) => p.complete && st.includes(p.draft?.state ?? "none")).length;
 
   return (
     <>
       <PageHead
         title="Email proposal"
-        description="How each email would be written. These are proposals, not drafts: nothing here is in the review queue or can be sent."
+        description="How each email would be written. A proposal is not a draft: press Write draft to put it in your review queue, then approve, edit or reject it here or in Queue. Nothing is sent until you approve it."
         action={
           <>
             <Select value={structure} onChange={(e) => setStructure(e.target.value)}>
@@ -278,6 +287,15 @@ export default function ProposalPage() {
           · generated {relTime(data?.created_at ?? null)}
         </p>
       ) : null}
+      {s ? (
+        <p className="mb-4 text-xs text-ink-2">
+          Drafts: <span className="tnum">{byState("none")}</span> not written yet ·{" "}
+          <span className="tnum font-medium text-ink">{byState("draft", "stale")}</span> waiting for your review ·{" "}
+          <span className="tnum">{byState("approved", "approved_pattern", "sending")}</span> approved, not sent ·{" "}
+          <span className="tnum">{byState("sent", "replied")}</span> sent ·{" "}
+          <span className="tnum">{byState("rejected")}</span> rejected
+        </p>
+      ) : null}
 
       {loading && !data ? (
         <Loading label="Loading proposals" />
@@ -291,7 +309,7 @@ export default function ProposalPage() {
           />
         </Panel>
       ) : (
-        items.map((p) => <Card key={p.id} p={p} />)
+        items.map((p) => <Card key={p.id} p={p} onChange={reload} />)
       )}
 
       <TaskStrip tasks={tasks} onDismiss={dismiss} />

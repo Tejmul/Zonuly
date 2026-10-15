@@ -844,6 +844,16 @@ outreach:
     companies: []
   # the review queue should hold at least this many approved drafts the evening before a send day
   min_approved_for_day: 5
+  # ---- pattern approval (2026-10-16, outreach/patterns.py). Off = every email waits for
+  # your own approval, as before. On = a draft of a kind you approved as a pattern (from the
+  # review queue: "Approve + use for every email like this") is written from your template
+  # and approved without a click IF every gate passes; it is marked "auto-approved by
+  # pattern #N" and can be undone — or the pattern revoked — until its send slot. The send
+  # cap, warm-up, window, suppression and bounce brake still decide what leaves.
+  # Read live: no restart needed after changing it.
+  pattern_approval: false
+  pattern_min_quality: 75      # a pattern's email scoring under this waits for you
+  pattern_max_waiting: 25      # at most this many pattern-approved emails queued, unsent
 gmail:
   # app_password: SMTP + IMAP with a Gmail app password in .env (GMAIL_APP_PASSWORD).
   # oauth: the Gmail API through a desktop-app client (needed only for the Calendar push).
@@ -858,6 +868,26 @@ calendar:
   conflict_window_minutes: 45
 notifications:
   macos: true
+# 2026-10-16 the notification bot (jobhunter/notify_bot.py): mail to you on a positive reply
+# (at once), on an emergency (at once, one per issue per 6 h) and a morning digest; reply to
+# any of them with `approve 12 14` / `reject 15` / `pause` / `resume` / `status`.
+notify:
+  email: false                 # the automatic bot (send tick every 5 min + hourly audit); true = on
+  email_to: ''                 # '' = outreach.user_email (from the same Gmail account)
+  send_in_dryrun: true         # these go to you, so they send even while outreach is in dryrun
+  digest_hour: 8               # local (IST): the digest goes with the first run after this hour
+  urgent_dedup_hours: 6
+  reply_lookback_hours: 48     # positive replies older than this are never mailed (no backlog)
+  commands: true               # read replies to the bot over IMAP and act on them
+  command_poll_minutes: 5
+  reply_poll_fallback_minutes: 45   # the audit polls replies itself when the tick has not for this long
+# jobhunter/watchdog.py — stuck job / DB lock / job not running / outreach alarms
+watchdog:
+  kill_stuck: false            # true: SIGTERM a stuck job's process; false: only alert
+  idle_minutes: 20             # a lock held past its limit AND its log silent this long = stuck
+  db_locked_minutes: 10
+  max_minutes: {free: 60, paid: 90, send: 20, referrals: 45}
+  stale_minutes: {free: 60, send: 30, referrals: 60, audit: 150}
 sources:
   greenhouse: true
   lever: true
@@ -878,6 +908,7 @@ scheduler:
   reply_poll_minutes: 60
 tick:
   free_interval_seconds: 600   # 2026-10-07: round the clock — a tick holds a lock, so a start that finds one running just exits
+  socket_timeout_seconds: 120  # 2026-10-16: default timeout for any socket opened without one (tick + referrals)
   paid_hour: 6
   paid_minute: 15
   # 2026-10-14 "leads first": a tick's working time is split — leads (people, addresses,

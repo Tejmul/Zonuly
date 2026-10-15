@@ -414,6 +414,11 @@ def sync_all() -> dict:
         g.commit()
         out["contacts"] = sync_contacts(g, contacts, {c.id: c.domain for c in companies if c.domain})
         g.commit()
+        # warm-path edges (kg/warm.py): AFFILIATED_WITH · PREVIOUSLY_AT · SAME_PERSON · IN_CITY,
+        # derived from the rows above; only changed edges are written
+        from jobhunter.kg import warm
+        out["warm"] = warm.sync_warm(g, companies, contacts)
+        g.commit()
         out["emails"] = sync_emails(g, emails)
         out["replies"] = sync_replies(g, replies)
     log.info("kg sync: %s", out)

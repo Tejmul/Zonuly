@@ -130,6 +130,20 @@ async def research_contact(contact_id: int, job_id: int | None = None) -> dict:
     if not isinstance(brief, dict):
         brief = {}
     brief["repos"] = work.get("repos") or []
+    # --- kg warm paths (additive hook; jobhunter/kg/warm.py) ---------------------------
+    # Evidence-carrying links between the candidate and this person, read from the graph:
+    # their own profile naming his school or a past employer, the same login at another
+    # company, a shared specific stack. Each item has `evidence` (their words) and `source`.
+    # Read-only and guarded: no graph, no section — research never fails because of it.
+    try:
+        from jobhunter.kg import warm as _kg_warm  # lazy: kg sits above outreach
+
+        _warm = _kg_warm.brief_section(contact_id)
+        if _warm:
+            brief["warm_paths"] = _warm
+    except Exception as e:  # noqa: BLE001
+        log.debug("warm paths for contact %s: %s", contact_id, e)
+    # --- end kg warm paths -------------------------------------------------------------
 
     import json
 

@@ -19,7 +19,8 @@ rather than a progress bar. Each run answers:
     sample    20 writes from the last hour re-validated against today's validators
     stall     nothing new in the last hour (no field written, no company, contact or role
               added) while the tick ran, or a channel failing
-              more than 80% → a macOS notification and an ALERT line in logs/audit.log
+              more than 80% → a macOS notification and an ALERT line in logs/audit.log;
+              a stall or web search down is also mailed (notify_bot, when notify.email is on)
 
 Each report is stored in `setting` (audit:last, and audit:history — the last 48) and
 appended to logs/audit.log as one JSON line. Runs under its own LaunchAgent,
@@ -432,7 +433,29 @@ def run(*, notify: bool = True, probe_tools: bool = True) -> dict:
                 notifier.send("ZoNuLy scraping needs a look", msg[:180], "hourly audit")
             except Exception as e:  # noqa: BLE001 — a notification must never fail the audit
                 log.debug("audit notification failed: %s", e)
+    if notify:
+        report["notify"] = _mail(report["alerts"])
     return report
+
+
+def _mail(alerts: list[str]) -> dict:
+    """The notification bot, hourly: the audit's emergencies as URGENT mail, then one bot
+    cycle (watchdog, positive replies, the digest, commands) with the reply-poll fallback —
+    so a stuck tick cannot hide a reply. Off unless notify.email; never raises."""
+    try:
+        from jobhunter import notify_bot
+
+        if not notify_bot.ENABLED:
+            return {"skipped": "notify.email is off"}
+        from jobhunter import tick
+
+        with tick._Lock(tick.NOTIFY_LOCK, "notification run"):   # never alongside the send tick's run
+            out = {"urgent": [r for r in notify_bot.audit_alerts(alerts) if not r.get("skipped")]}
+            out["cycle"] = notify_bot.cycle(fallback_poll=True)
+        return out
+    except Exception as e:  # noqa: BLE001
+        log.warning("audit mail failed: %s", e)
+        return {"error": f"{type(e).__name__}: {str(e)[:200]}"}
 
 
 def _compact(report: dict) -> dict:

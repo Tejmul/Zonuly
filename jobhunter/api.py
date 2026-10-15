@@ -29,6 +29,7 @@ from sqlmodel import col, func, select
 from jobhunter import CONFIG, ROOT, access, snapshot_cache
 from jobhunter.campaigns import router as campaigns_router
 from jobhunter.db import Company, Contact, Email, Job, Reply, get_session, init_db
+from jobhunter.outreach.routes import router as review_router
 from jobhunter.research.routes import router as research_router
 
 log = logging.getLogger(__name__)
@@ -115,6 +116,10 @@ app.add_middleware(GZipMiddleware, minimum_size=2048)
 app.include_router(research_router)
 # Campaign start -> n8n webhook (the email automation lives there) -> /api/campaigns/*
 app.include_router(campaigns_router)
+# Knowledge graph, warm paths + similar companies (kg/warm.py) -> /api/kg/warm/*, /api/kg/similar/*
+app.include_router(__import__("jobhunter.kg.routes_warm", fromlist=["router"]).router)
+# Review flow: proposal -> draft, save / undo, and pattern approval -> /api/outreach/*
+app.include_router(review_router)
 
 
 # ---------------------------------------------------------------- task registry
@@ -280,6 +285,11 @@ def _email_dict(e: Email, *, contact: Contact | None = None, company: Company | 
         "writer": e.writer,
         "polish_pending": e.polish_pending,
         "contract": _json_or(e.contract, None),
+        # pattern approval (outreach/patterns.py): who approved it, and why a pattern did or did not
+        "segment": getattr(e, "segment", None),
+        "pattern_id": getattr(e, "pattern_id", None),
+        "approved_by": getattr(e, "approved_by", None),
+        "pattern_note": getattr(e, "pattern_note", None),
     })
 
 

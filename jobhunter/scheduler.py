@@ -86,6 +86,7 @@ def reply_cycle() -> dict:
         # model first, the fixed template when the free models are out; drafts, never approved
         summary["followups"] = followup.queue().get("drafted", 0)
         summary["notified"] = notify.notify_replies()
+        summary["mailed"] = _mail_positive()
         _record("reply_cycle", summary)
     except Exception as e:  # noqa: BLE001
         log.exception("reply cycle failed")
@@ -93,6 +94,21 @@ def reply_cycle() -> dict:
         summary["error"] = str(e)[:300]
     summary["kg"] = _sync_graph()
     return summary
+
+
+def _mail_positive() -> dict:
+    """A positive reply found by this poll is mailed now (notify_bot), not at the next send
+    tick. Deduplicated with the tick's runs through data/notify_state.json."""
+    try:
+        from jobhunter import notify_bot, tick
+
+        if not notify_bot.ENABLED:
+            return {"skipped": "notify.email is off"}
+        with tick._Lock(tick.NOTIFY_LOCK, "notification run"):
+            return notify_bot.email_positive_replies()
+    except Exception as e:  # noqa: BLE001 — a notification must never fail the reply cycle
+        log.warning("positive-reply mail failed: %s", e)
+        return {"error": str(e)[:200]}
 
 
 def start() -> BackgroundScheduler:

@@ -37,7 +37,46 @@ _NAME_OK = re.compile(r"^[A-Z][a-zA-Z.'’\-]+(?:\s+[A-Z][a-zA-Z.'’\-]+){1,3}$
 _EXPERIENCE = re.compile(r"Experience:\s*([^·|\n]{2,80})", re.I)
 # the hosted Exa MCP's profile card: "### AI Engineer - [Sarvam](https://…/company/…) (Current)"
 _CURRENT = re.compile(r"###\s*([^\n]+?)\s+-\s+\[([^\]]{2,80})\]\([^)]*\)\s*\(Current\)", re.I)
+# 2026-10-16, the card Exa returns now: "### [Rupeek](…/company/rupeek)" then, under it,
+# "#### Director of Engineering (Current)" — the position under the company heading
+_CO_BLOCK = re.compile(r"^###\s*\[([^\]]{2,80})\]\([^)]*\)\s*$(.*?)(?=^###\s|\Z)", re.M | re.S)
+_CUR_ROLE = re.compile(r"^####\s*(.+?)\s*\(Current\)\s*$", re.M)
+
+
+def _current_card(snippet: str, company: str, domain: str | None) -> tuple[str, str] | None:
+    """(role, evidence) when the card lists a current position under THIS company's heading."""
+    from jobhunter import guardrails
+
+    for m in _CO_BLOCK.finditer(snippet or ""):
+        if not guardrails.names_company(m.group(1), company, domain):
+            continue
+        r = _CUR_ROLE.search(m.group(2))
+        if r:
+            role = r.group(1).strip()
+            return role, f"{role} at {m.group(1).strip()} (current)"
+    return None
+
+
+def _headline_line(snippet: str) -> str:
+    """The card's headline: the first line after the '# Name' heading."""
+    lines = [x.strip() for x in (snippet or "").splitlines() if x.strip()]
+    if lines and lines[0].startswith("# "):
+        lines = lines[1:]
+    return lines[0] if lines else ""
+
+
 _LI_SUFFIX = re.compile(r"\s*[-–|·]\s*LinkedIn(?:\s+[A-Z][a-z]+)?\s*$")
+
+
+#: guardrails._EX ends in \b, so "Ex- Google, Rupeek" and "Ex - Myntra" slip past it
+#: (no word boundary after "ex-"); this one catches them (2026-10-16)
+_FORMER = re.compile(r"\b(?:ex\s*[-–—:]|ex\s+(?=[A-Z@])|former(?:ly)?\b|previously\b|prev\.|alum(?:ni|nus)?\b|past\b)", re.I)
+
+
+def _former(text: str) -> bool:
+    from jobhunter import guardrails
+
+    return bool(guardrails._EX.search(text) or _FORMER.search(text))
 
 
 def _segment_names(segments: list[str], company: str, domain: str | None) -> str | None:
@@ -45,7 +84,7 @@ def _segment_names(segments: list[str], company: str, domain: str | None) -> str
     from jobhunter import guardrails
 
     for seg in segments:
-        if guardrails.names_company(seg, company, domain) and not guardrails._EX.search(seg):
+        if guardrails.names_company(seg, company, domain) and not _former(seg):
             return seg
     return None
 
@@ -80,6 +119,12 @@ def people_from_results(results: list[dict], company: str, domain: str | None = 
 
         if cur and guardrails.names_company(cur.group(2), company, domain):
             role, hit = cur.group(1).strip(), f"{cur.group(1).strip()} at {cur.group(2).strip()} (current)"
+        if not hit:
+            card = _current_card(snippet, company, domain)
+            if card:
+                role, hit = card
+        if first_line.startswith("# "):
+            first_line = _headline_line(snippet)
         if not hit:
             segs = parts[1:] + [x.strip() for x in re.split(r"\s*\|\s*", first_line) if x.strip()]
             seg = _segment_names(segs, company, domain)
@@ -226,6 +271,7 @@ def _save(company_id: int, people: list[dict], via: str) -> int:
 _LC = CONFIG.get("contacts") or {}
 EXA_PEOPLE_RESERVE = int(_LC.get("exa_people_reserve", 15))
 EXA_PEOPLE_MAX = int(_LC.get("exa_people_max_per_company", 12))
+EXA_PEOPLE_MODE = str(_LC.get("exa_people_mode", "linkedin-domain"))
 
 
 def exa_people_available() -> bool:
@@ -249,8 +295,14 @@ def search_people_exa(company_id: int, *, city: str | None = None, max_people: i
         return {"company": name, "kind": "exa-people", "error": "exa people: daily allowance used"}
     where = f" in {city}, India" if city else ""
     who = f"{name} ({domain})" if domain else name
-    hits = web._exa_api_search(f"engineers, engineering leaders and founders currently working at {who}{where}",
-                               15, 60, category="people")
+    q = f"engineers, engineering leaders and founders currently working at {who}{where}"
+    # 2026-10-16: `category: "people"` answers 400 INVALID_FLAGS on this key ("needs a sierra
+    # main lane"); the same people library comes back with includeDomains linkedin.com,
+    # profile cards and all (Rupeek: 15 profiles, 5 current, $0.012)
+    if EXA_PEOPLE_MODE == "category":
+        hits = web._exa_api_search(q, 15, 60, category="people")
+    else:
+        hits = web._exa_api_search(q, 15, 60, include_domains=["linkedin.com"])
     if not hits:
         err = (web._errors[-1] if web._errors else "no results")[:160]
         return {"company": name, "kind": "exa-people", "found": 0, "added": 0, "error": err}

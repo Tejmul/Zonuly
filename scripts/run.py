@@ -2215,5 +2215,70 @@ def selection_brief(job_id: int, json_: bool = typer.Option(False, "--json")) ->
         typer.echo(f"  angle: {a}")
 
 
+# ---------------------------------------------------------------- notify (the mail bot)
+
+notify_app = typer.Typer(
+    add_completion=False,
+    help="Mail to you: positive replies, URGENT alerts, the morning digest; reply with approve/reject/pause/resume/status",
+)
+app.add_typer(notify_app, name="notify")
+
+
+@notify_app.command("test")
+def notify_test(dry: bool = typer.Option(False, "--dry", help="write outbox/notify/*.eml instead of sending")) -> None:
+    """Send ONE test notification now (even with notify.email off). Reply `status` to it to test the loop."""
+    _setup_logging()
+    from jobhunter import notify_bot
+
+    _echo(notify_bot.test_mail(force_dry=dry))
+
+
+@notify_app.command("digest")
+def notify_digest(dry: bool = typer.Option(True, "--dry/--send"), print_: bool = typer.Option(False, "--print")) -> None:
+    """Build today's digest (default: write the .eml; --send mails it). --print shows the text only."""
+    _setup_logging()
+    from jobhunter import notify_bot
+
+    if print_:
+        typer.echo(notify_bot.digest_text())
+        return
+    _echo(notify_bot.daily_digest(force=True, force_dry=dry))
+
+
+@notify_app.command("watchdog")
+def notify_watchdog() -> None:
+    """Run the watchdog's checks and print the issues (sends nothing, kills nothing)."""
+    _setup_logging()
+    from jobhunter import watchdog
+
+    _echo(watchdog.check(kill=False))
+
+
+@notify_app.command("cycle")
+def notify_cycle(dry: bool = typer.Option(True, "--dry/--send")) -> None:
+    """One bot cycle now, as the send tick runs it (default --dry: mails become .eml files)."""
+    _setup_logging()
+    from jobhunter import notify_bot
+
+    _echo(notify_bot.cycle(force=True, force_dry=dry))
+
+
+@notify_app.command("commands")
+def notify_commands() -> None:
+    """Read your replies to bot mails now (IMAP), run their commands, confirm by reply."""
+    _setup_logging()
+    from jobhunter import notify_bot
+
+    _echo(notify_bot.handle_commands())
+
+
+@notify_app.command("status")
+def notify_status() -> None:
+    """What `status` replies with."""
+    from jobhunter import notify_bot
+
+    typer.echo(notify_bot.status_text())
+
+
 if __name__ == "__main__":
     app()
