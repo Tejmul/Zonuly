@@ -54,4 +54,9 @@ jobs:
             [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$API/api/health")" = 200 ] && break
             sleep 10
           done
-          uv run --frozen --no-dev python scripts/smoke.py "$API"
+          # a fresh instance unpacks the snapshot and warms its cache before every route answers
+          for try in 1 2 3 4; do
+            uv run --frozen --no-dev python scripts/smoke.py "$API" && exit 0
+            sleep 30
+          done
+          exit 1
