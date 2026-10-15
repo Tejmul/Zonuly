@@ -11,6 +11,7 @@ readable in logs and edges.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sqlite3
@@ -99,6 +100,11 @@ class Graph:
         self.conn = sqlite3.connect(str(path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        # ADD-COLUMN migration: a fingerprint of the FTS text, so an unchanged node is
+        # recognised without touching kg_fts (see upsert_node)
+        if "fts_hash" not in {r[1] for r in self.conn.execute("PRAGMA table_info(kg_node)")}:
+            self.conn.execute("ALTER TABLE kg_node ADD COLUMN fts_hash TEXT")
+            self.conn.commit()
 
     def __enter__(self) -> "Graph":
         return self
@@ -129,20 +135,31 @@ class Graph:
         body: str | None = None,
     ) -> str:
         props = props or {}
+        props_json = json.dumps(props, default=str)
+        fts_body = body if body is not None else " ".join(_flatten(props))
+        fts_hash = hashlib.sha1(f"{label}\x00{summary or ''}\x00{fts_body}".encode()).hexdigest()
+        # Unchanged since the last sync: write nothing. The FTS row is keyed by an
+        # UNINDEXED id, so replacing it scans the whole index (~10 ms at 40k nodes);
+        # doing that for every node every hour held the write lock for ten minutes.
+        cur = self.conn.execute(
+            "SELECT kind, label, summary, props, layer, ref_table, ref_id, fts_hash FROM kg_node WHERE id = ?", (id,)
+        ).fetchone()
+        if cur is not None and tuple(cur) == (kind, label, summary, props_json, layer, ref_table, ref_id, fts_hash):
+            return id
         ts = now_iso()
         self.conn.execute(
             """
-            INSERT INTO kg_node (id, kind, label, summary, props, layer, ref_table, ref_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO kg_node (id, kind, label, summary, props, layer, ref_table, ref_id, created_at, updated_at,
+                                 fts_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 kind = excluded.kind, label = excluded.label, summary = excluded.summary,
                 props = excluded.props, layer = excluded.layer,
                 ref_table = excluded.ref_table, ref_id = excluded.ref_id,
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at, fts_hash = excluded.fts_hash
             """,
-            (id, kind, label, summary, json.dumps(props, default=str), layer, ref_table, ref_id, ts, ts),
+            (id, kind, label, summary, props_json, layer, ref_table, ref_id, ts, ts, fts_hash),
         )
-        fts_body = body if body is not None else " ".join(_flatten(props))
         self.conn.execute("DELETE FROM kg_fts WHERE id = ?", (id,))
         self.conn.execute(
             "INSERT INTO kg_fts (id, kind, label, summary, body) VALUES (?, ?, ?, ?, ?)",

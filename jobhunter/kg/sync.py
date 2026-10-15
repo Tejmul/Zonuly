@@ -401,13 +401,19 @@ def sync_all() -> dict:
         emails = session.exec(select(Email)).all()
         replies = session.exec(select(Reply)).all()
     out: dict = {}
+    # A commit after each stage: the pipeline's writers (tick, referral job, API) wait on
+    # this file's write lock, and one transaction over every table kept them out for minutes.
     with Graph() as g:
         skills = sync_profile(g)
         out["skills"] = len(skills)
         out["companies"] = sync_companies(g, companies)
+        g.commit()
         out["investors"] = sync_investors(g, companies)
+        g.commit()
         out["jobs"] = sync_jobs(g, jobs, skills)
+        g.commit()
         out["contacts"] = sync_contacts(g, contacts, {c.id: c.domain for c in companies if c.domain})
+        g.commit()
         out["emails"] = sync_emails(g, emails)
         out["replies"] = sync_replies(g, replies)
     log.info("kg sync: %s", out)
