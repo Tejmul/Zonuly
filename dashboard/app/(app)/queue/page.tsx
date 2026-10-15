@@ -46,6 +46,19 @@ const STRUCTURE_LABEL: Record<string, string> = {
    `?email=ID` opens that email (the proposal page links here); `?tab=` picks a tab. */
 type Tab = "review" | "approved" | "patterns";
 
+/* Evidence fields arrive as plain text from older drafts and as a structured hook
+   ({type, anchor, sentence, source, specificity}) from newer ones; show the words either way. */
+function asText(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string" || typeof v === "number") return String(v);
+  if (typeof v === "object") {
+    const o = v as { sentence?: unknown; text?: unknown; anchor?: unknown };
+    const t = o.sentence ?? o.text ?? o.anchor;
+    if (typeof t === "string") return t;
+  }
+  return JSON.stringify(v);
+}
+
 export default function QueuePage() {
   // useSearchParams needs a Suspense boundary above it, or the whole route renders on the client
   return (
@@ -347,11 +360,11 @@ function Queue() {
                     The facts this draft was allowed to use
                   </summary>
                   <div className="mt-2 space-y-1.5 leading-relaxed">
-                    {active.evidence.person?.evidence && <p><b>Them:</b> {active.evidence.person.evidence}</p>}
-                    {active.evidence.person?.hook && <p><b>Hook:</b> {active.evidence.person.hook}</p>}
-                    {active.evidence.person?.shared_ground && <p><b>Shared ground:</b> {active.evidence.person.shared_ground}</p>}
+                    {active.evidence.person?.evidence && <p><b>Them:</b> {asText(active.evidence.person.evidence)}</p>}
+                    {active.evidence.person?.hook && <p><b>Hook:</b> {asText(active.evidence.person.hook)}</p>}
+                    {active.evidence.person?.shared_ground && <p><b>Shared ground:</b> {asText(active.evidence.person.shared_ground)}</p>}
                     {active.evidence.company && Object.entries(active.evidence.company).map(([k, v]) => (
-                      <p key={k}><b>{k.replace("_", " ")}:</b> {v.text}{v.source ? <span className="text-ink-3"> · {String(v.source).replace(/^https?:\/\//, "").slice(0, 50)}</span> : null}</p>
+                      <p key={k}><b>{k.replace("_", " ")}:</b> {asText(v.text)}{v.source ? <span className="text-ink-3"> · {String(v.source).replace(/^https?:\/\//, "").slice(0, 50)}</span> : null}</p>
                     ))}
                     {active.evidence.role?.title && <p><b>Role:</b> {active.evidence.role.title}{active.evidence.role.where ? ` (${active.evidence.role.where})` : ""}</p>}
                   </div>
