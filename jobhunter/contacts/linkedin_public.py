@@ -221,8 +221,11 @@ def _save(company_id: int, people: list[dict], via: str) -> int:
         c = session.get(Company, company_id)
         # only a pattern the company's own addresses confirm (contacts/addresses.py)
         domain, pattern = c.domain, patterns.confirmed(c)
-        existing = {(k.name or "").lower() for k in session.exec(
-            select(Contact).where(Contact.company_id == company_id)).all()}
+        rows = session.exec(select(Contact).where(Contact.company_id == company_id)).all()
+        existing = {(k.name or "").lower() for k in rows}
+        # 2026-10-17: {first}@ gave two Adityas the same guess; an address someone already
+        # holds (or another new person here would get) is never guessed for a second person
+        taken = {(k.email or "").lower() for k in rows if k.email}
         added = 0
         for p in people:
             if p["name"].lower() in existing:
@@ -233,9 +236,10 @@ def _save(company_id: int, people: list[dict], via: str) -> int:
             if domain and pattern:
                 cands = patterns.candidates(p["name"], domain, pattern)
                 if cands:
-                    got, v = verify.best_candidate(cands)
+                    got, v = verify.best_candidate([x for x in cands if x.lower() not in taken])
                     if got:
                         email, confidence = got, (v.confidence if v else "pattern-guessed")
+                        taken.add(got.lower())
             g = guardrails.vet_contact(session, company=c, name=p["name"], email_addr=email,
                                        source="pattern" if email else "linkedin-public", channel=f"linkedin:{via}",
                                        url=p["url"], name_source="linkedin",
