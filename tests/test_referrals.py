@@ -253,5 +253,5 @@ def test_pattern_guessed_addresses_spend_the_5_a_day_guessed_cap(tmp_path, monke
     for _ in range(ledger.GUESSED_CAP):
         assert ledger.reserve(1, guessed=True)[0]
     ok, why = ledger.reserve(1, guessed=True)
-    assert not ok and "guessed-address cap" in why and ledger.GUESSED_CAP == 5
+    assert not ok and "guessed-address cap" in why and ledger.GUESSED_CAP == ledger._O.get("guessed_daily_cap", 5)
     assert ledger.reserve(1, guessed=False)[0]          # verified addresses still go

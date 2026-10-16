@@ -66,6 +66,7 @@ def _email(engine, cid, pid, *, status="approved", kind="cold", sent_days_ago=No
 
 def test_warmup_ramps_from_5_to_25_over_two_weeks_and_never_above_the_cap(monkeypatch):
     monkeypatch.setattr(warmup, "_W", {"start": "2026-10-19", "first": 5, "step": 5, "every": 2})
+    monkeypatch.setattr(warmup, "DAILY_CAP", 25)        # the ramp's shape, independent of the live cap
     days = [d for d in warmup.schedule(14, from_day="2026-10-19") if d["send_day"]]
     assert [d["quota"] for d in days] == [5, 5, 10, 10, 15, 15, 20, 20, 25, 25]
     assert warmup.quota("2026-10-24") == 15 and not warmup.is_send_day("2026-10-24")   # Saturday

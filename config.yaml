@@ -739,7 +739,11 @@ outreach:
   max_followups: 1
   asks_per_company: 2       # open referral asks at one company at once (2026-10-17: Sarvam, two the same day)
   send_mode: gmail          # 2026-10-17: live — first real sends (Sarvam AI, Mon 19 Oct)
-  guessed_daily_cap: 5
+  guessed_daily_cap: 8
+  # 2026-10-17 ("as much as we can for free"): a personal Gmail sends cold referral asks
+  # safely at ~40/day once warmed up; the ramp (warmup:) climbs 5 → 40 over ~3 weeks. Past
+  # that, scale with a separate domain + inboxes, never by pushing this Gmail harder.
+  daily_send_cap: 40
   draft_expiry_days: 7
   contact_cooldown_days: 30
   company_cooldown_days: 30
