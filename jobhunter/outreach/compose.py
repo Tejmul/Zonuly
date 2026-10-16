@@ -75,6 +75,9 @@ MAX_PER_ROLE = int(_C.get("max_per_role", 1))           # people asked about one
 # which structure writes the first email: "direct_intro" (the user's own pattern, 2026-10-17 — the
 # default for every recipient) or "auto" (the research-based picker: advice / give / fit / recruiter)
 STRUCTURE_MODE = str(_C.get("structure") or "direct_intro")
+DIRECT_TEMPLATE = str(_C.get("direct_template") or "").strip()
+DIRECT_SIGN_OFF = str(_C.get("direct_sign_off") or "Thank you for your time,")
+DIRECT_OPT_OUT = bool(_C.get("direct_opt_out", True))
 DIRECT_MAX_WORDS = int(_C.get("direct_max_words", 170))
 DIRECT_MIN_WORDS = int(_C.get("direct_min_words", 80))
 RECORD_MAX = 4            # track-record items in a direct_intro email (3–4)
@@ -709,6 +712,9 @@ def record_paragraph(c: Contract, me: dict) -> str:
 
 
 def _direct(c: Contract, me: dict) -> str:
+    if DIRECT_TEMPLATE:                      # the user's own email, word for word (config)
+        return DIRECT_TEMPLATE.format(first_name=c.first_name, role=c.target_role, company=c.company,
+                                      resume_link=c.resume_link or "").strip()
     school = me.get("school")
     paras = [f"My name is {me.get('first_name')}, and I'm a final-year B.Tech CS+AI student at {school}.",
              record_paragraph(c, me),
@@ -761,7 +767,7 @@ def fill(c: Contract, me: dict) -> dict:
 
 
 SIGN_OFF = "Best,"
-SIGN_OFF_BY = {"direct_intro": "Thank you for your time,"}
+SIGN_OFF_BY = {"direct_intro": DIRECT_SIGN_OFF}
 
 
 def assemble(message: str, signature: str, opt_out: str | None = None, structure: str | None = None) -> str:
@@ -784,7 +790,7 @@ def word_band(c: Contract | None) -> tuple[int, int]:
 def message_of(body: str, opt_lines: list[str] | None = None) -> str:
     """The message part of a whole body: everything before the opt-out line or the sign-off."""
     cut = len(body or "")
-    for marker in [*(x for x in (opt_lines or []) if x), "\n\nThank you for your time,\n", "\n\nBest,\n", "\n\nThanks,\n", "\n\nRegards,\n",
+    for marker in [*(x for x in (opt_lines or []) if x), f"\n\n{DIRECT_SIGN_OFF}\n", "\n\nThank you for your time,\n", "\n\nBest,\n", "\n\nThanks,\n", "\n\nRegards,\n",
                    "\n\nCheers,\n"]:
         i = (body or "").find(marker)
         if i != -1:

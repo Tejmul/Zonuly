@@ -763,6 +763,22 @@ outreach:
     # pattern for everyone (who he is, 3–4 results for the role, a polite referral ask, resume
     # link); auto = the research picker (advice_first / give_first / fit_question / recruiter_direct)
     structure: direct_intro
+    # 2026-10-17: the user's own email, word for word ("this looks good, use this"). Slots:
+    # {first_name} {role} {company} {resume_link}. Edit the wording here, not in code.
+    direct_template: |-
+      Hi {first_name},
+
+      I'm Tejmul, a final-year Computer Science and AI student at Newton School of Technology.
+
+      In my recent internships I shipped 3 production agentic systems at MVRX Labs (YC P26), fine-tuned Mistral 7B at eWealth Tech (accuracy from 20% to 92%), and moved a product to AWS Lambda, cutting infrastructure costs by 95%.
+
+      I saw the {role} opening at {company}, and I'd be really grateful if you would consider referring me. I'd love the chance to contribute to your team and learn from the work you're doing.
+
+      Resume: {resume_link}
+    direct_sign_off: "Thank you for your time!\n\nBest regards,"
+    # his template carries no opt-out line; a "stop" / "unsubscribe" reply still suppresses
+    # the person and the company forever (suppress.py)
+    direct_opt_out: false
     direct_min_words: 80
     direct_max_words: 170
     max_per_company: 2         # people asked at one company in one batch

@@ -141,9 +141,17 @@ def run(*, sign_in: bool = True, today: datetime | None = None) -> dict:
                      f"{resume[0]}" if resume else "no resume link — the first email carries a \"Resume:\" line, and mail never carries attachments",
                      None if resume else "Upload the resume PDF (Google Drive, anyone-with-the-link can view) and add its URL to outreach.user_links in config.yaml."))
     line = suppress.OPT_OUT_LINE
-    checks.append(_c("opt_out", "Opt-out line on every cold mail", "green" if line else "red",
-                     f"“{line}” — added on approval; replies like “stop” / “unsubscribe” suppress the person and company forever" if line
-                     else "no opt-out line", None if line else "Set outreach.opt_out_line in config.yaml."))
+    from jobhunter.outreach import compose as _compose
+
+    if _compose.STRUCTURE_MODE == "direct_intro" and not _compose.DIRECT_OPT_OUT:
+        checks.append(_c("opt_out", "Opt-out line on every cold mail", "amber",
+                         "off for your own email template (outreach.compose.direct_opt_out: false); a reply like "
+                         "“stop” or “unsubscribe” still suppresses the person and company forever",
+                         "Set outreach.compose.direct_opt_out: true to add the line back."))
+    else:
+        checks.append(_c("opt_out", "Opt-out line on every cold mail", "green" if line else "red",
+                         f"“{line}” — added on approval; replies like “stop” / “unsubscribe” suppress the person and company forever" if line
+                         else "no opt-out line", None if line else "Set outreach.opt_out_line in config.yaml."))
     dnc = o.get("do_not_contact") or {}
     n_dnc = sum(len(dnc.get(k) or []) for k in ("emails", "domains", "companies"))
     with get_session() as session:

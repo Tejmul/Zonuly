@@ -26,6 +26,18 @@ ME = {"full_name": "Tejmul Movin", "first_name": "Tejmul", "school": "Newton Sch
       "internships": 4}
 SIG = "Tejmul Movin\nFinal-year B.Tech CS+AI, Newton School of Technology\nlinkedin.com/in/tejmulmovin"
 
+@pytest.fixture(autouse=True)
+def _generated_direct_intro(monkeypatch):
+    """These tests exercise the role-matched direct_intro (no fixed template) with an
+    opt-out line; the user's word-for-word template has its own tests."""
+    from jobhunter.outreach import compose as _c
+
+    monkeypatch.setattr(_c, "DIRECT_TEMPLATE", "")
+    monkeypatch.setattr(_c, "DIRECT_OPT_OUT", True)
+    monkeypatch.setattr(_c, "DIRECT_SIGN_OFF", "Thank you for your time,")
+    monkeypatch.setitem(_c.SIGN_OFF_BY, "direct_intro", "Thank you for your time,")
+
+
 
 @pytest.fixture()
 def auto(monkeypatch):
@@ -489,3 +501,29 @@ def test_a_funding_hook_quotes_the_amount_its_evidence_states_never_a_stored_tot
     hs = compose.hooks(_person(affiliation_evidence=""), _company(funding_amount_usd_m=263.0,
                        funding_evidence="Acme announces its Series B round"), [], ME)
     assert "$" not in next(h for h in hs if h["type"] == "company_funding")["sentence"]
+
+
+TEMPLATE = ("Hi {first_name},\n\nI'm Tejmul, a final-year Computer Science and AI student at Newton School of Technology.\n\n"
+            "In my recent internships I shipped 3 production agentic systems at MVRX Labs (YC P26), fine-tuned Mistral 7B "
+            "at eWealth Tech (accuracy from 20% to 92%), and moved a product to AWS Lambda, cutting infrastructure costs "
+            "by 95%.\n\nI saw the {role} opening at {company}, and I'd be really grateful if you would consider referring "
+            "me. I'd love the chance to contribute to your team and learn from the work you're doing.\n\n"
+            "Resume: {resume_link}")
+
+
+def test_the_users_own_template_word_for_word(monkeypatch):
+    monkeypatch.setattr(compose, "DIRECT_TEMPLATE", TEMPLATE)
+    c = compose.contract(_person(), _company(), JOB, _brief(), ME)
+    msg = compose.fill(c, ME)["message"]
+    assert msg.startswith(f"Hi {c.first_name},\n\nI'm Tejmul, a final-year Computer Science and AI student")
+    assert f"I saw the {c.target_role} opening at {c.company}, and I'd be really grateful" in msg
+    assert msg.endswith(f"Resume: {c.resume_link}")
+    body = compose.assemble(msg, "Tejmul Movin\nlinkedin.com/in/x", None, "direct_intro")
+    assert body.endswith("Thank you for your time,\nTejmul Movin\nlinkedin.com/in/x")   # sign-off from config
+
+
+def test_the_users_own_template_passes_the_gates_and_scores_well(monkeypatch):
+    monkeypatch.setattr(compose, "DIRECT_TEMPLATE", TEMPLATE)
+    c = compose.contract(_person(), _company(), JOB, _brief(), ME)
+    good, flags = _scored(c, compose.fill(c, ME)["message"])
+    assert good["score"] >= 75, good          # high enough for pattern auto-approval

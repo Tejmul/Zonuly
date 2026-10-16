@@ -17,6 +17,18 @@ from jobhunter.outreach import compose, drafter, patterns, sender
 MISTRAL = ("Fine-tuned Mistral 7B (REV A) using LoRA/QLoRA on 2,000+ curated Q&A pairs with system prompt injection, "
            "improving response accuracy from 20% to 92%; deployed on RunPod Serverless with Qdrant for per-user vector memory")
 
+@pytest.fixture(autouse=True)
+def _generated_direct_intro(monkeypatch):
+    """These tests exercise the role-matched direct_intro (no fixed template) with an
+    opt-out line; the user's word-for-word template has its own tests."""
+    from jobhunter.outreach import compose as _c
+
+    monkeypatch.setattr(_c, "DIRECT_TEMPLATE", "")
+    monkeypatch.setattr(_c, "DIRECT_OPT_OUT", True)
+    monkeypatch.setattr(_c, "DIRECT_SIGN_OFF", "Thank you for your time,")
+    monkeypatch.setitem(_c.SIGN_OFF_BY, "direct_intro", "Thank you for your time,")
+
+
 
 def _brief(co: str):
     return {"stated": [{"text": "Fine-tune LLMs", "kind": "stated", "status": "covered",

@@ -285,6 +285,11 @@ def cold_signature() -> str:
     return "\n".join(lines)
 
 
+def direct_signature() -> str:
+    """The user's own sign-off block: his name, then his LinkedIn — nothing else."""
+    return "\n".join([USER_NAME, *[l for l in USER_LINKS if "linkedin" in l.lower()][:1]])
+
+
 def _repos_for(contact: Contact, brief: dict, research: bool) -> list[dict]:
     """Their own public repos: cached on the contact, else read from GitHub (no model)."""
     if brief.get("repos"):
@@ -428,10 +433,11 @@ def write(g: dict, *, use_model: bool = True, key=None) -> dict:
     i = compose.pick(subjects, key if key is not None else g["person"]["id"])
     subject = subjects[i]["subject"] if i >= 0 else f"{c.target_role} at {c.company}"
     pattern = subjects[i]["pattern"] if i >= 0 else "role_plain"
-    sig = cold_signature()
+    direct = c.structure == "direct_intro"
+    sig = direct_signature() if direct else cold_signature()
     corpus = _corpus(g, c)
     forbidden = [str(x) for x in ((g["brief"] or {}).get("forbidden") or [])]
-    opt = suppress.OPT_OUT_LINE or None
+    opt = None if direct and not compose.DIRECT_OPT_OUT else (suppress.OPT_OUT_LINE or None)
 
     def evaluate(message: str) -> dict:
         body = compose.assemble(message, sig, opt, c.structure)

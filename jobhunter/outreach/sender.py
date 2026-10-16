@@ -151,7 +151,7 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
             from jobhunter.outreach import suppress
 
             # the opt-out line rides on every cold mail (added at approval; this is the net)
-            if suppress.OPT_OUT_LINE and not suppress.has_opt_out(email.body):
+            if suppress.OPT_OUT_LINE and not suppress.has_opt_out(email.body) and _wants_opt_out(email):
                 email.body = suppress.with_opt_out(email.body)
                 session.add(email)
                 session.commit()
@@ -352,7 +352,8 @@ def approve(email_id: int, *, subject: str | None = None, body: str | None = Non
         if email.kind == "cold":
             from jobhunter.outreach import suppress
 
-            email.body = suppress.with_opt_out(email.body)
+            if _wants_opt_out(email):
+                email.body = suppress.with_opt_out(email.body)
         email.status = "approved"
         email.approved_at = utcnow()
         email.error = None
@@ -391,3 +392,11 @@ def quota() -> dict:
         "ledger": ledger.status(),
         "gmail": gmail.status(),
     }
+
+
+def _wants_opt_out(email) -> bool:
+    """The user's own email (direct_intro) carries no opt-out line unless
+    outreach.compose.direct_opt_out says so; every other cold structure does."""
+    from jobhunter.outreach import compose
+
+    return not (getattr(email, "structure", None) == "direct_intro" and not compose.DIRECT_OPT_OUT)
