@@ -373,8 +373,8 @@ function Queue() {
                     {active.evidence.person?.evidence && <p><b>Them:</b> {asText(active.evidence.person.evidence)}</p>}
                     {active.evidence.person?.hook && <p><b>Hook:</b> {asText(active.evidence.person.hook)}</p>}
                     {active.evidence.person?.shared_ground && <p><b>Shared ground:</b> {asText(active.evidence.person.shared_ground)}</p>}
-                    {active.evidence.company && Object.entries(active.evidence.company).map(([k, v]) => (
-                      <p key={k}><b>{k.replace("_", " ")}:</b> {asText(v.text)}{v.source ? <span className="text-ink-3"> · {String(v.source).replace(/^https?:\/\//, "").slice(0, 50)}</span> : null}</p>
+                    {active.evidence.company && Object.entries(active.evidence.company).filter(([, v]) => v != null).map(([k, v]) => (
+                      <p key={k}><b>{k.replace("_", " ")}:</b> {asText(v?.text)}{v?.source ? <span className="text-ink-3"> · {String(v.source).replace(/^https?:\/\//, "").slice(0, 50)}</span> : null}</p>
                     ))}
                     {active.evidence.role?.title && <p><b>Role:</b> {active.evidence.role.title}{active.evidence.role.where ? ` (${active.evidence.role.where})` : ""}</p>}
                   </div>
