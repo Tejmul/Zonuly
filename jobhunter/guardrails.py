@@ -644,8 +644,10 @@ def affiliation(*, company_name: str, domain: str | None = None, email_kind: str
     if email_kind == "company" and recent:
         return Affiliation("verified-current", "company-address",
                            f"company address, committed to {commit_repo or 'their repo'} on {when}")
-    if recent:
-        return Affiliation("likely-current", "recent-commit", f"committed to {commit_repo or 'their repo'} on {when}")
+    # 2026-10-17: a commit alone is not employment. Public cookbooks, SDKs and examples
+    # take outside contributions (Sarvam's cookbook: a Drexel student "open to AI roles",
+    # an OpenLIT maintainer), so a contributor stays unconfirmed unless something else —
+    # their profile, a company address, the team page, a headline — places them there.
     if linkedin_headline and names_company(linkedin_headline, company_name, domain) and not _EX.search(linkedin_headline):
         return Affiliation("likely-current", "linkedin-headline", f"public LinkedIn headline: {linkedin_headline[:120]}")
     if email_kind == "company" and published_at:
@@ -657,6 +659,8 @@ def affiliation(*, company_name: str, domain: str | None = None, email_kind: str
         why.append(f"profile says '{employer_claim[:60]}'")
     if email_kind == "other" and email_addr:
         why.append(f"address at {email_addr.split('@')[-1]}")
+    if last_commit_at and recent:
+        why.append(f"contributes to {commit_repo or 'their repo'} (committed {when}), not shown to work there")
     if last_commit_at and not recent:
         why.append(f"last commit {when}")
     if email_kind == "company" and not why:
@@ -1114,7 +1118,7 @@ def relabel_contact(p: Contact, company: Company | None) -> dict:
                       published_at=published_at if kind == "company" else None)
     # a label the GitHub pass already proved (membership, a dated commit) is not lowered
     # — unless the address it rested on is now known to be an inbox or a format example
-    keep = (p.affiliation in READY and p.affiliation_source in ("org-member", "recent-commit",
+    keep = (p.affiliation in READY and p.affiliation_source in ("org-member",
                                                                 "company-address", "profile-company",
                                                                 "public-mention")
             and kind != "generic" and "_email_reject" not in out)

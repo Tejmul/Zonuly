@@ -46,7 +46,8 @@ def test_a_commit_is_not_employment():
     assert old.label == "unconfirmed"
     recent = g.affiliation(company_name="Acme", domain="acme.com", email_kind="personal",
                            last_commit_at=now - timedelta(days=30), commit_repo="acme/api", now=now)
-    assert recent.label == "likely-current"
+    assert recent.label == "unconfirmed"            # a contributor to a public repo, not shown to work there
+    assert "contributes to acme/api" in recent.evidence
     company = g.affiliation(company_name="Acme", domain="acme.com", email_kind="company",
                             last_commit_at=now - timedelta(days=30), now=now)
     assert company.label == "verified-current"
