@@ -95,6 +95,7 @@ function Queue() {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeErr, setNoticeErr] = useState(false);
 
   const list = drafts.data ?? [];
   const active = list.find((e) => e.id === activeId) ?? list[0] ?? null;
@@ -113,6 +114,7 @@ function Queue() {
     if (!active) return;
     setBusy(true);
     setNotice(null);
+    setNoticeErr(false);
     try {
       if (kind === "approve") {
         await api.post(`/api/emails/${active.id}/approve`, { subject, body });
@@ -137,7 +139,11 @@ function Queue() {
       await Promise.all([drafts.reload(), approved.reload(), patterns.reload()]);
       if (kind === "save") setLoadedId(null);
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : String(e));
+      // 2026-10-17: a refused click used to show only at the top of the page, out of sight
+      // of the button, and the list stayed stale — say why right here and reload
+      setNoticeErr(true);
+      setNotice(`Not done: ${e instanceof Error ? e.message : String(e)}`);
+      await Promise.all([drafts.reload(), approved.reload()]);
     } finally {
       setBusy(false);
     }
@@ -185,7 +191,8 @@ function Queue() {
       />
 
       {notice ? (
-        <div className="mb-4 rounded-sm border border-line-strong bg-surface-2/15 px-3 py-2 text-sm text-ink">
+        <div role={noticeErr ? "alert" : "status"}
+          className={`mb-4 rounded-sm border px-3 py-2 text-sm ${noticeErr ? "border-ink bg-[var(--warn-wash)] font-medium text-[var(--warn-ink)]" : "border-line-strong bg-surface-2/15 text-ink"}`}>
           {notice}
         </div>
       ) : null}
@@ -443,6 +450,12 @@ function Queue() {
                   {body.trim().split(/\s+/).filter(Boolean).length} words
                 </span>
               </div>
+              {notice ? (
+                <p role={noticeErr ? "alert" : "status"}
+                  className={`mt-2 text-sm ${noticeErr ? "rounded-sm border border-ink bg-[var(--warn-wash)] px-2 py-1.5 font-medium text-[var(--warn-ink)]" : "text-ink-2"}`}>
+                  {notice}
+                </p>
+              ) : null}
               {active.kind === "cold" && active.contract ? (
                 <p className="text-[11px] leading-relaxed text-ink-3">
                   Approve sends this one email in the next slot. “Approve + use for every email like this” also saves it,
