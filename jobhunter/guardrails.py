@@ -480,7 +480,12 @@ _CJK = re.compile(r"^[一-鿿぀-ヿ가-힯]{2,4}$")
 _NOT_PERSON = {"github", "bot", "admin", "team", "support", "root", "unknown", "user", "dev", "devs",
                "developer", "engineering", "hello", "info", "contact", "careers", "hiring", "hr",
                "recruiting", "sales", "the", "inc", "labs", "ltd", "llc", "technologies", "official",
-               "anonymous", "noreply", "test", "null", "none", "staff", "ops", "founders", "office"}
+               "anonymous", "noreply", "test", "null", "none", "staff", "ops", "founders", "office",
+               # 2026-10-17: "Your Application" (a form label) was stored as a name — "Hi Your"
+               "your", "our", "my", "dear", "application", "applications", "apply", "resume", "jobs",
+               "job", "position", "candidate", "regards", "thanks", "team's", "company", "account",
+               "customer", "service", "services", "community", "partners", "partner", "media", "press",
+               "marketing", "finance", "legal", "privacy", "security", "billing", "talent", "people"}
 
 
 #: a careers page's "Firstname Lastname <firstname.lastname@acme.com>" is a format, not a person
@@ -521,6 +526,33 @@ def person_name(raw: str | None) -> Check:
     return Check(True, n, confidence="high")
 
 
+#: 2026-10-17: a first name alone, for a greeting ("Hi Ankush,") — read off an address
+#: (contacts/names.py, name_source "address-first"), never off a login.
+_FIRST_ONLY = re.compile(r"^[A-Z][a-z]{1,19}$")
+
+
+def first_name_only(raw: str | None) -> Check:
+    """One given name — capitalised letters, 2–20 long, not an inbox or team word."""
+    if not raw or not str(raw).strip():
+        return _no("empty")
+    n = str(raw).strip()
+    if not _FIRST_ONLY.match(n):
+        return _no("not a single capitalised name", raw)
+    low = n.lower()
+    if low in _NOT_PERSON or low in GENERIC_LOCAL or low in ROLE_TOKENS or low in INBOX_WORDS:
+        return _no("not a person", raw)
+    if not any(ch in "aeiouy" for ch in low):
+        return _no("no vowel — initials, not a name", raw)
+    return Check(True, n, confidence="medium", flags=["first-only"])
+
+
+def is_first_only(contact: Contact) -> bool:
+    """A contact named by a first name only (from the address, or a one-word GitHub display
+    name that the address or login agrees with) — a person, not a handle."""
+    return bool(contact.name and (contact.name_source or "") in ("address-first", "github-first")
+                and first_name_only(contact.name))
+
+
 _EMAIL = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 _NOISE_LOCAL = re.compile(r"^(noreply|no-reply|donotreply|do-not-reply|mailer-daemon|postmaster|abuse|"
                           r"bounce|unsubscribe|notifications?|example|test)$", re.I)
@@ -559,6 +591,24 @@ def _role_mailbox(local: str) -> bool:
     return any(t in ROLE_TOKENS for t in re.split(r"[-._+0-9]+", local) if t)
 
 
+#: 2026-10-17: inboxes the sets above missed (accommodations@benchling.com, demo@, upload@)
+INBOX_WORDS = {
+    "accommodations", "accommodation", "accessibility", "benefits", "payroll", "upload", "uploads",
+    "shop", "store", "orders", "demo", "demos", "integrations", "partnerwithus", "gethelp", "reservations",
+    "admissions", "membership", "students", "onboarding", "docs", "bugs", "reports", "orders", "returns",
+    "refunds", "shipping", "procurement", "vendors", "vendor", "purchase", "purchasing", "quotes", "rfp",
+    "lifestyle", "hr-india", "accountmanager", "whistleblower", "ethics",
+}
+#: a function word inside a run-together local part: speechsupport@, emailsupport@, atsupport@
+_ROLE_SUBSTR = re.compile(r"support|careers|recruit|noreply|no-reply|donotreply|accommodation|helpdesk|"
+                          r"customerservice|customercare|enquir|inquir|partnerwith|account-?manager|"
+                          r"feedback|unsubscribe|mailerdaemon")
+#: a scraper read an escaped "<" or ">" into the address: u003csupport@benchling.com
+_ESCAPED_LOCAL = re.compile(r"^(u00[0-9a-f]{2}|x3[ce]|%3[ce]|mailto)", re.I)
+_BARE_PLACEHOLDER = re.compile(r"^(first|last|firstname|lastname|fname|lname|jsmith|johnsmith|janesmith|"
+                               r"janedoe|johndoe)$", re.I)
+
+
 FREEMAIL = {
     "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "yahoo.com",
     "ymail.com", "yahoo.co.in", "yahoo.co.uk", "icloud.com", "me.com", "mac.com", "proton.me",
@@ -580,9 +630,23 @@ def email(raw: str | None, *, domain: str | None = None) -> Check:
     local, host = e.split("@", 1)
     if _NOISE_LOCAL.match(local) or host.endswith("noreply.github.com") or host in ("example.com", "localhost"):
         return _no("a no-reply or relay address", raw)
-    if _PLACEHOLDER_LOCAL.match(local):
+    # first@peoplebox.ai is a format; first@firstround.com is First Round's own inbox
+    bare = _BARE_PLACEHOLDER.match(local) and local not in host.split(".")[0]
+    if _PLACEHOLDER_LOCAL.match(local) or bare:
         return _no("a format example (first.last@), not a person", raw)
-    if local in GENERIC_LOCAL or local.split("+")[0] in GENERIC_LOCAL or _role_mailbox(local):
+    esc = _ESCAPED_LOCAL.match(local)
+    if esc:
+        # a scraper kept the escaped "<" / ">" in front of the address (u003ejenn.priske@):
+        # the address is what follows it — judged on its own, flagged as repaired
+        rest = local[esc.end():].lstrip("._-")
+        if not rest:
+            return _no("an escaped-HTML fragment (u003c…), not an address", raw)
+        fixed = email(f"{rest}@{host}", domain=domain)
+        if fixed:
+            fixed.flags = [*fixed.flags, "repaired-escape"]
+        return fixed
+    if (local in GENERIC_LOCAL or local.split("+")[0] in GENERIC_LOCAL or _role_mailbox(local)
+            or local.split("+")[0] in INBOX_WORDS or _ROLE_SUBSTR.search(local)):
         return Check(True, (e, "generic"), confidence="high")
     if domain:
         reg = admission.registrable(domain.lower()) or domain.lower()
@@ -1080,7 +1144,7 @@ def relabel_contact(p: Contact, company: Company | None) -> dict:
     m = _GH_LOGIN.search((p.github or "").rstrip("/"))
     if m:
         login = m.group(1)
-    if p.name:
+    if p.name and not is_first_only(p):      # a first name from the address is a person, not a handle
         nm = person_name(p.name)
         if not nm:
             out["name"] = None
@@ -1156,6 +1220,8 @@ def is_ready(contact: Contact) -> bool:
         chk = email(contact.email)
         if not chk.ok or chk.value[1] == "generic":
             return False
+        if "repaired-escape" in chk.flags:
+            return False  # u003e…@: the stored address is not the one to write to until it is repaired
     return True
 
 
@@ -1438,7 +1504,7 @@ def sweep() -> dict:
 __all__ = [
     "Check", "Affiliation", "READY", "AFFILIATIONS", "PARTS", "names_company", "company_name", "description",
     "bot_wall", "funding_stage", "funding_amount", "funding_date", "investors", "valuation", "funding_evidence",
-    "careers_page", "own_careers_url", "hiring", "person_name", "email", "affiliation", "employer_matches",
+    "careers_page", "own_careers_url", "hiring", "person_name", "first_name_only", "is_first_only", "email", "affiliation", "employer_matches",
     "address_confidence", "reject", "record", "put", "set_description", "set_funding", "set_valuation",
     "set_hiring", "vet_contact", "is_ready", "completeness", "refresh_completeness", "referrer_counts",
     "sweep", "sweep_stale_hiring", "relabel_contact", "label_unlabelled", "SHOWN_PARTS", "complete_bar",

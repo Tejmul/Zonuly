@@ -144,6 +144,7 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
 
     # ---- persist, every row through the guardrails (name, address, affiliation)
     from jobhunter import guardrails
+    from jobhunter.contacts import names
 
     with get_session() as session:
         company_row = session.get(Company, company_id)
@@ -173,6 +174,7 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                 commit_repo=p.get("commit_repo"), team_page=p.get("team_page"), published_at=p.get("published_at"),
                 smtp=p.get("smtp") or (p["confidence"] if p["source"] == "hunter" else None),
                 profile_email=bool(p.get("profile_email")))
+            g = names.fill_vetted(g, company_row, login=p.get("handle"))     # "Hi {first_name}" from the address
             if g is None or not (g.get("email") or (g.get("name") and g["affiliation"] in guardrails.READY)):
                 continue
             if g["confidence"] == "verified":

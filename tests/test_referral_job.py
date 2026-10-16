@@ -21,6 +21,8 @@ def engine(tmp_path, monkeypatch):
         monkeypatch.setattr(mod, "get_session", lambda: Session(eng))
     monkeypatch.setattr(referrals, "init_db", lambda: None)
     monkeypatch.setattr(referrals, "_log_run", lambda *a, **k: None)
+    from jobhunter.contacts import names
+    monkeypatch.setattr(names, "github_pass", lambda *a, **k: {})     # no network in tests
     return eng
 
 
@@ -64,7 +66,8 @@ def _world(engine) -> dict[str, int]:
     return ids
 
 
-def test_queue_order_is_bengaluru_then_hyderabad_then_india_then_remote_star_first(engine):
+def test_queue_order_is_bengaluru_then_hyderabad_then_india_then_remote_star_first(engine, monkeypatch):
+    monkeypatch.setattr(referrals, "ONLY", ())          # every bucket
     ids = _world(engine)
     q = referrals.cycle_queue()
     name = {v: k for k, v in ids.items()}
@@ -217,3 +220,10 @@ def test_leads_api_masks_addresses_on_the_public_instance(engine, monkeypatch):
     monkeypatch.setattr(access, "_KEY", "sekret")
     r = TestClient(api.app).get("/api/leads").json()
     assert r["items"] and all("•••@" in i["email"] for i in r["items"] if i["email"])
+
+
+def test_only_buckets_keeps_the_job_to_bengaluru_and_hyderabad(engine, monkeypatch):
+    monkeypatch.setattr(referrals, "ONLY", ("Bengaluru", "Hyderabad"))
+    ids = _world(engine)
+    name = {v: k for k, v in ids.items()}
+    assert [name[i] for i in referrals.cycle_queue()] == ["blr_star", "blr_hi", "blr", "hyd_star", "hyd"]

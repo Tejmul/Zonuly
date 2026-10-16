@@ -1129,6 +1129,7 @@ needs:
 referrals:
   interval_seconds: 900     # every 15 min (+ at load)
   cycle_seconds: 1200       # the work budget of one cycle; a cycle still running blocks the next (the lock)
+  only_buckets: [Bengaluru, Hyderabad]   # 2026-10-17: India focus, Bengaluru first; remove to work every bucket again
   cycle_companies: 40       # companies per cycle (the claimed window)
   search_down_tail: 6       # companies still worked (no web search) once every keyless backend cools, then stop
   skip_touched_minutes: 60  # a company another worker touched this recently is left alone

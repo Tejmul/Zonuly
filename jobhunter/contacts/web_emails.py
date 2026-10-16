@@ -26,7 +26,7 @@ import re
 from sqlmodel import col, select
 
 from jobhunter import CONFIG, guardrails
-from jobhunter.contacts import patterns, roles
+from jobhunter.contacts import names, patterns, roles
 from jobhunter.db import Company, Contact, get_session, init_db, utcnow
 
 log = logging.getLogger(__name__)
@@ -229,6 +229,7 @@ def find(company_id: int, *, max_pages: int = MAX_PAGES, fresh: bool = False) ->
                                        name_source="page" if info["name"] else None,
                                        team_page=info["where"] if (on_site and info["name"]) else None,
                                        published_at=info["where"])
+            g = names.fill_vetted(g, company_row)          # a name from the address when the page gave none
             if g is None or not g.get("email"):
                 continue
             verdict = roles.classify(None, name=g.get("name"), email=email)

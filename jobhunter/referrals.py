@@ -115,6 +115,9 @@ def with_deadline(fn, seconds: int):
         signal.signal(signal.SIGALRM, old)
 INDIA_CITIES = ("Bengaluru", "Hyderabad")
 BUCKETS = ("Bengaluru", "Hyderabad", "India", "Remote")
+#: 2026-10-17 ("focus on the Indian companies: Bangalore, then Hyderabad"): when set, the
+#: referral job works only these buckets; empty = all four
+ONLY = tuple(_R.get("only_buckets") or ())
 
 
 # ------------------------------------------------------------------ bookkeeping
@@ -696,7 +699,7 @@ def cycle_queue(limit: int | None = None, *, exclude: set[int] | frozenset = fro
     held = claimed_by_others(owner)
     pending = []
     for c in rows:
-        if c.id in exclude or c.id in held or bucket(c) is None:
+        if c.id in exclude or c.id in held or bucket(c) is None or (ONLY and BUCKETS[bucket(c)] not in ONLY):
             continue
         r, e = counts.get(c.id, (0, 0))
         if r >= TARGET and e >= 1:
@@ -934,13 +937,18 @@ def run_cycle(*, budget_s: int | None = None, limit: int | None = None, exclude:
         prune_claims()
     except Exception as e:  # noqa: BLE001
         log.debug("prune claims: %s", e)
-    from jobhunter.contacts import linkedin_public
+    from jobhunter.contacts import linkedin_public, names
+
+    # 2026-10-17: a name for every address that says one, then a few GitHub display names
+    # (paced, budgeted under the unauthenticated 60/h) — "Hi {first_name}" needs a person
+    naming = names.step(sessions=get_session)
 
     queue = ids if ids is not None else cycle_queue(limit, exclude=exclude or set(), owner=owner)
     window = [cid for cid in queue[:limit] if claim(cid, owner, ttl_s=budget_s + 300)]
     out: dict = {"queued": len(queue), "window": len(window), "companies": 0, "added_ready": 0,
                  "added_by_channel": Counter(), "emails_found": 0, "reached_target": 0, "reached_ids": [],
-                 "buckets": Counter(), "linkedin_queries": 0, "errors": 0, "stopped": None, "search_down_companies": 0}
+                 "buckets": Counter(), "linkedin_queries": 0, "errors": 0, "stopped": None, "search_down_companies": 0,
+                 "names": naming}
     dry = 0
     try:
         for i, cid in enumerate(window):

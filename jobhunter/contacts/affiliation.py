@@ -188,13 +188,17 @@ def check_company(company_id: int, client: httpx.Client, budget: Budget, *, max_
                 if isinstance(u, dict):
                     claim = (u.get("company") or "").strip() or (None if fresh else claim)
                     nm = guardrails.person_name(u.get("name"))
-                    if need_name and nm:
+                    # a first name read off the address gives way to their own full name
+                    # only when the two agree ("Ankush" -> "Ankush Kumar"); never otherwise
+                    first_only = guardrails.is_first_only(p)
+                    if need_name and nm and (not first_only or nm.value.split()[0].lower() == p.name.lower()):
                         if not dry_run:
                             p.name, p.name_source = nm.value, "github-profile"
                         stats["names_resolved"] += 1
                     pe = (u.get("email") or "").lower()
                     profile_email = bool(pe and p.email and pe == p.email.lower())
-            if need_name and not guardrails.person_name(p.name) and not dry_run and p.name:
+            if (need_name and not guardrails.person_name(p.name) and not dry_run and p.name
+                    and not guardrails.is_first_only(p)):
                 guardrails.reject(session, company_id=company_id, contact_id=p.id, field="contact.name",
                                   value=p.name, reason="a handle, not a name (no display name on GitHub)",
                                   source=f"https://github.com/{login}", channel="github")
