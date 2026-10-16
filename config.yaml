@@ -743,14 +743,15 @@ outreach:
   contact_cooldown_days: 30
   company_cooldown_days: 30
   # 2026-10-14 (knowledge/cold-email-playbook.md): the message itself, counted WITHOUT the
-  # forwardable blurb and the opt-out line. Boomerang 50–125 (75–100 peak), Gong <100,
-  # Instantly <80 — the playbook's synthesis is 60–120.
+  # opt-out line and the signature. Boomerang 50–125 (75–100 peak), Gong <100, Instantly <80.
+  # 2026-10-17: 60–110 words for the research structures; the user's own direct_intro pattern
+  # (the default) runs 80–170 (compose.direct_min_words / direct_max_words).
   gate:
     min_words: 60
-    max_words: 120
+    max_words: 110
     blurb_max_words: 55
     subject_min_words: 2
-    subject_max_words: 8
+    subject_max_words: 8         # the research structures keep theirs to 5 (compose.SUBJECT_MAX)
     subject_max_chars: 60
   # outreach/compose.py — the personalisation contract, the structures, the quality score
   compose:
@@ -758,6 +759,23 @@ outreach:
     good_from: 80
     small_team: 60             # team_size at or under this (or seed / Series A) = a small startup
     learn_min_sent: 20         # a variant needs this many sends before its rate is shown
+    # which structure writes the first email (2026-10-17, the user's call): direct_intro = his own
+    # pattern for everyone (who he is, 3–4 results for the role, a polite referral ask, resume
+    # link); auto = the research picker (advice_first / give_first / fit_question / recruiter_direct)
+    structure: direct_intro
+    direct_min_words: 80
+    direct_max_words: 170
+    max_per_company: 2         # people asked at one company in one batch
+    max_per_role: 1            # people asked about one role in one batch
+    # Something you built or used with a company's own product or repo, in your words —
+    # turns on the give-first structure for that company. Every fact here must be true.
+    #   - company: "Temporal"
+    #     thing: "Temporal"                       # what you used (optional; else the company)
+    #     line: "migrated a production pipeline from Trigger.dev to Temporal at MVRX Labs"   # follows "I "
+    #     link: "github.com/Tejmul/..."           # optional: then it is the email's one link
+    #     offer: "I wrote up what broke. It might be useful, or it might be naive."      # optional
+    # Without an entry, a resume line naming their product is used (outreach/compose.py gifts).
+    gifts: []
     # Short, true phrasings of the resume's quantified bullets, used as the PROOF slot.
     # `match` must appear in the resume line a covered need points at (needs brief), so a
     # proof is only ever used where the brief says it answers what the role asks for.
@@ -814,6 +832,8 @@ outreach:
   - linkedin.com/in/tejmulmovin-softwareengineer
   - spylook.vercel.app
   user_email: tejmulmovin9@gmail.com
+  # the cold signature (2026-10-17): name, this line, LinkedIn — one link, no link row
+  signature_line: Final-year B.Tech CS+AI, Newton School of Technology
   # ---- launch (2026-10-14, first live sends Mon 2026-10-19) — outreach/warmup.py,
   # outreach/suppress.py, outreach/preflight.py. These only ever LOWER what goes out:
   # the 25/day cap, the 5/day guessed cap and the review gate are untouched.
@@ -832,7 +852,9 @@ outreach:
     jitter_fraction: 0.35
     max_per_run: 2
   # every cold email carries this line, above the signature (added on approval)
-  opt_out_line: If this isn't something you can help with, no worries, and if you'd rather I didn't write again, just reply "stop" and I won't.
+  # (2026-10-17: shorter and humane; the old line is still recognised in bodies and quoted replies —
+  # outreach/suppress.py LEGACY_OPT_OUT_LINES)
+  opt_out_line: If you'd rather not hear from me again, just say so and I won't write.
   # a guessed address that bounces hurts the account: this many bounces inside window_days
   # and no guessed address is sent to until they age out (verified addresses still go)
   bounce_brake:

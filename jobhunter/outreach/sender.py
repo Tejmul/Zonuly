@@ -151,7 +151,7 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
             from jobhunter.outreach import suppress
 
             # the opt-out line rides on every cold mail (added at approval; this is the net)
-            if suppress.OPT_OUT_LINE and suppress.OPT_OUT_LINE not in (email.body or ""):
+            if suppress.OPT_OUT_LINE and not suppress.has_opt_out(email.body):
                 email.body = suppress.with_opt_out(email.body)
                 session.add(email)
                 session.commit()

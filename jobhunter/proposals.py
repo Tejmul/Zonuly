@@ -33,7 +33,7 @@ from jobhunter.db import Company, Contact, Email, EmailProposal, Job, get_sessio
 
 log = logging.getLogger(__name__)
 
-STRUCTURE_ORDER = ["proof_opinion", "referral_engineer", "founder_direct", "recruiter_direct"]
+STRUCTURE_ORDER = ["direct_intro", "advice_first", "give_first", "fit_question", "recruiter_direct"]
 
 
 def ensure_brief(session, job: Job) -> bool:
@@ -150,18 +150,20 @@ def _payload(g: dict, r: dict, rank: int) -> dict:
 
 def compose_followup(r: dict, c: dict) -> dict:
     """The follow-up this email would get after five silent days: one NEW piece of value
-    (a second proof that covers the role), not "just bumping this" (playbook §6)."""
-    proofs = c.get("proofs") or []
+    (a proof the first email did not show), not "just bumping this" (playbook §6)."""
+    shown = {p.get("proof") for p in (c.get("record") or [])} if c.get("structure") == "direct_intro" else \
+        {(c.get("proofs") or [{}])[0].get("proof")}
     first, role = c.get("first_name"), c.get("target_role")
-    extra = proofs[1]["proof"] if len(proofs) > 1 and c.get("structure") != "proof_opinion" else None
+    extra = next((p["proof"] for p in c.get("proofs") or [] if p.get("proof") and p["proof"] not in shown), None)
     if extra:
-        body = (f"Hi {first},\n\nOne more thing since my note last week: I also {extra}. If a referral for the {role} "
-                f"role isn't possible, a pointer to whoever is hiring would help just as much. Either way, thanks for reading.")
+        body = (f"Hi {first},\n\nA short note on my message from last week about the {role} role. One thing I left out: "
+                f"I also {extra}. If it isn't something you can help with, I completely understand. Thank you for reading.")
     else:
-        body = (f"Hi {first},\n\nFollowing up once on my note about the {role} role. If it's not something you can help "
-                f"with, a pointer to whoever is hiring would help just as much. This is my last note, thanks for reading.")
+        body = (f"Hi {first},\n\nA short note on my message from last week about the {role} role. I know inboxes get "
+                f"busy, so this is the last time I'll write. If it isn't something you can help with, I completely "
+                f"understand, and thank you for reading.")
     return {"subject": "Re: " + r["subject"], "body": body, "after_days": 5,
-            "new_value": bool(extra)}
+            "new_value": bool(extra), "after_yes": r.get("forward_note")}
 
 
 def build(n: int = 10, *, use_model: bool = True, incomplete_examples: int = 3, pool: int = 60) -> dict:

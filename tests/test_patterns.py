@@ -12,7 +12,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from jobhunter import proposals
 from jobhunter.db import Company, Contact, Email, EmailPattern, EmailProposal, Job
-from jobhunter.outreach import drafter, patterns, sender
+from jobhunter.outreach import compose, drafter, patterns, sender
 
 MISTRAL = ("Fine-tuned Mistral 7B (REV A) using LoRA/QLoRA on 2,000+ curated Q&A pairs with system prompt injection, "
            "improving response accuracy from 20% to 92%; deployed on RunPod Serverless with Qdrant for per-user vector memory")
@@ -59,7 +59,7 @@ def _person(engine, *, company: str, name: str, repo: str) -> tuple[int, int]:
 
 def _edited(body: str) -> str:
     # the user's own line, generic enough to hold for anyone of this kind
-    return body.replace("\n\nI'm ", "\n\nI'd value even a one-line answer.\n\nI'm ", 1)
+    return body.replace("\n\nMy name is ", "\n\nI'd value even a one-line answer.\n\nMy name is ", 1)
 
 
 # ------------------------------------------------------------------ templates
@@ -85,11 +85,12 @@ def test_an_approved_pattern_auto_approves_the_next_email_of_its_kind_and_revoki
     assert "pattern" not in first           # no pattern yet: waits for review
     with Session(db) as s:
         e1 = s.get(Email, first["email_id"])
-        assert e1.status == "draft" and e1.segment == "referral_engineer:abroad"
+        assert e1.status == "draft" and e1.segment == "direct_intro:abroad"
         body = _edited(e1.body)
     r = patterns.approve_from(first["email_id"], body=body)
-    assert r["approved"] and r["pattern"]["edited"] and "{{hook}}" in r["pattern"]["body_template"]
-    assert "Priya" not in r["pattern"]["body_template"]
+    t = r["pattern"]["body_template"]
+    assert r["approved"] and r["pattern"]["edited"] and "{{role}}" in t and "{{company}}" in t and "{{proof1}}" in t
+    assert "Priya" not in t and "{{out_line}}" in t
 
     second = drafter.draft_for(p2, j2, research=False, use_model=False)
     assert second["pattern"]["auto_approved"], second
@@ -123,7 +124,17 @@ def test_with_the_switch_off_every_email_waits_for_review(db, monkeypatch):
     assert "error" in patterns.apply_to_waiting(1)
 
 
-def test_a_pattern_that_loses_the_hook_is_refused(db):
+def test_a_pattern_that_loses_the_role_is_refused(db):
+    p1, j1 = _person(db, company="Acme AI", name="Priya Sharma", repo="voice-sdk")
+    first = drafter.draft_for(p1, j1, research=False, use_model=False)
+    with Session(db) as s:
+        body = s.get(Email, first["email_id"]).body.replace("the Backend Engineer opening", "an opening")
+    r = patterns.approve_from(first["email_id"], body=body)
+    assert "error" in r and "role" in r["error"]
+
+
+def test_a_pattern_that_loses_the_hook_is_refused(db, monkeypatch):
+    monkeypatch.setattr(compose, "STRUCTURE_MODE", "auto")
     p1, j1 = _person(db, company="Acme AI", name="Priya Sharma", repo="voice-sdk")
     first = drafter.draft_for(p1, j1, research=False, use_model=False)
     with Session(db) as s:
@@ -141,7 +152,7 @@ def test_a_failing_gate_leaves_the_pattern_email_for_review(db):
     p2, j2 = _person(db, company="Beta Labs", name="Rahul Verma", repo="infra-kit")
     first = drafter.draft_for(p1, j1, research=False, use_model=False)
     with Session(db) as s:
-        body = s.get(Email, first["email_id"]).body.replace("\n\nI'm ", "\n\nI also know Kubernetes well.\n\nI'm ", 1)
+        body = s.get(Email, first["email_id"]).body.replace("\n\nMy name is ", "\n\nI also know Kubernetes well.\n\nMy name is ", 1)
     assert patterns.approve_from(first["email_id"], body=body)["approved"]
     second = drafter.draft_for(p2, j2, research=False, use_model=False)
     assert not second["pattern"]["auto_approved"] and "waiting for your review" in second["pattern"]["note"]
@@ -194,7 +205,7 @@ def test_the_routes(db):
     assert c.get("/api/outreach/review/count").json()["waiting"] == 1
     assert c.post(f"/api/outreach/emails/{eid}/unapprove").status_code == 400
     r = c.post(f"/api/outreach/patterns/from-email/{eid}", json={})
-    assert r.status_code == 200 and r.json()["pattern"]["label"].startswith("Referral ask")
+    assert r.status_code == 200 and r.json()["pattern"]["label"].startswith("Who I am")
     assert c.get("/api/outreach/review/count").json() == {"waiting": 0, "approved_unsent": 1,
                                                           "auto_approved_unsent": 0, "pattern_approval": True}
     pats = c.get("/api/outreach/patterns").json()

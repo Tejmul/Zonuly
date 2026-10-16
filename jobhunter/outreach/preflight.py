@@ -132,13 +132,13 @@ def run(*, sign_in: bool = True, today: datetime | None = None) -> dict:
     # ---- what the mail says
     from jobhunter.outreach import drafter
 
-    sig = drafter.signature()
+    sig = drafter.cold_signature()
     links = [str(x) for x in (o.get("user_links") or [])]
     resume = [x for x in links if any(k in x.lower() for k in ("resume", "cv", "drive.google", ".pdf", "docs.google"))]
     checks.append(_c("signature", "Signature", "green" if o.get("user_name") and links else "red",
                      sig.replace("\n", " · ")[:220], None if links else "Set outreach.user_links in config.yaml."))
-    checks.append(_c("resume_link", "Resume link in the signature", "green" if resume else "amber",
-                     f"{resume[0]}" if resume else "no resume link — the prompt promises one in the signature, and mail never carries attachments",
+    checks.append(_c("resume_link", "Resume link (a \"Resume:\" line in the email body)", "green" if resume else "amber",
+                     f"{resume[0]}" if resume else "no resume link — the first email carries a \"Resume:\" line, and mail never carries attachments",
                      None if resume else "Upload the resume PDF (Google Drive, anyone-with-the-link can view) and add its URL to outreach.user_links in config.yaml."))
     line = suppress.OPT_OUT_LINE
     checks.append(_c("opt_out", "Opt-out line on every cold mail", "green" if line else "red",
@@ -242,7 +242,7 @@ USER_CHECKLIST = [
     "Turn on 2-Step Verification for tejmulmovin9@gmail.com, then create an app password at "
     "myaccount.google.com/apppasswords (name it ZoNuLy).",
     "Paste it in Settings → Email and press Verify (or run `python scripts/run.py gmail-verify`) — it must say SMTP and IMAP OK.",
-    "Add a resume link (a Drive PDF anyone with the link can view) to outreach.user_links, so the signature carries it.",
+    "Add a resume link (a Drive PDF anyone with the link can view) to outreach.user_links, so the email's \"Resume:\" line carries it.",
     "Run `python scripts/run.py tick install` once, so the send agent is loaded next to the tick.",
     "By Sunday night: open the Queue, read every draft, edit what is off, approve at least 5 for Monday (45 for the week). Nothing is sent that you did not approve.",
     "Monday morning, before 10:00: run `python scripts/run.py outreach preflight` — everything green except send mode — then switch "

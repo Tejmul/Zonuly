@@ -66,6 +66,10 @@ export type Patterns = { enabled: boolean; min_quality: number; max_waiting: num
 export type ReviewCount = { waiting: number; approved_unsent: number; auto_approved_unsent: number; pattern_approval: boolean };
 
 const STRUCTURE = {
+  direct_intro: "Who I am, track record, polite referral ask (your pattern)",
+  advice_first: "Advice first, then the role",
+  give_first: "Give first, then the role",
+  fit_question: "Honest fit question (manager / founder)",
   proof_opinion: "Proof of work → their opinion (small team)",
   referral_engineer: "Referral ask to an engineer",
   founder_direct: "Direct ask to a founder",

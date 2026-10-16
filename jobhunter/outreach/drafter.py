@@ -23,10 +23,15 @@ USER_NAME = _O.get("user_name") or "(set outreach.user_name in config.yaml)"
 USER_HEADLINE = _O.get("user_headline") or ""
 USER_LINKS = _O.get("user_links") or []
 USER_EMAIL = _O.get("user_email") or ""
+# the cold signature's one line under the name (2026-10-17): no headline of titles, no link row
+SIGNATURE_LINE = _O.get("signature_line") or "Final-year B.Tech CS+AI, Newton School of Technology"
+MAX_FOLLOWUPS = int(_O.get("max_followups", 1))
 
-FOLLOWUP_SYSTEM = """You write one short, polite, low-pressure follow-up to an unanswered email.
-It must be 40-60 words, must not guilt the recipient, must not repeat the original pitch at
-length, and must make clear this is the last time you'll write. No em-dashes. JSON only."""
+FOLLOWUP_SYSTEM = """You write one short, polite, humble follow-up to an unanswered email from a final-year
+student. 40-60 words. It must add ONE new thing the first email did not say (taken only from the
+facts given), must not guilt the recipient, must not repeat the first email, must not ask for a
+referral outright, and must keep "if it's not a fit, that's completely fine". No "just following
+up", no "bumping this", no "Sir/Ma'am", no flattery, no em-dashes, no links. JSON only."""
 
 FOLLOWUP_PROMPT = """The candidate {user_name} sent this {days} days ago to {contact_name} at {company},
 and got no reply:
@@ -36,8 +41,10 @@ SUBJECT: {subject}
 {body}
 ---
 
-Write a brief follow-up that sits on the same thread. Add one small new piece of value or
-context if you can do so truthfully from the original email; otherwise just be brief.
+This is follow-up {n} of at most {max_n}. {last}
+The new thing to add (true, from his resume): {new_value}
+
+Write the follow-up that sits on the same thread.
 
 Reply with exactly:
 {{"body": "<the follow-up body, plain text, no signature block>"}}"""
@@ -93,7 +100,7 @@ def _clean_body(body: str, contact_name: str | None) -> str:
 
 
 def _compose(body: str, contact_name: str | None) -> str:
-    return f"{_clean_body(body, contact_name)}\n\nThanks,\n{signature()}"
+    return f"{_clean_body(body, contact_name)}\n\nBest,\n{cold_signature()}"
 
 
 DRAFT_EXPIRY_DAYS = int(_O.get("draft_expiry_days", 7))
@@ -191,9 +198,13 @@ def _cooldown(session, contact_id: int, company_id: int, candidate_id: int) -> s
     return None
 
 
-POLISH_SYSTEM = """You polish a short cold email from a student engineer. Every fact in the draft is verified:
-keep all of them and add none. No flattery, no buzzwords, no "I hope this finds you well", no "I'm reaching out",
-no em-dashes. Short sentences (under 18 words), plain words, 60-110 words. Exactly one question: the ask.
+POLISH_SYSTEM = """You polish a short first email from a final-year student to an engineer he has never met.
+Every fact in the draft is verified: keep all of them and add none. The email must stay POLITE and HUMBLE and
+must not feel cold: thank them for their time, keep that he is early in his career, keep the tentative words
+("might be relevant", "if not, that's completely fine"). Never oversell, never grovel, never "Sir" or "Ma'am",
+no flattery adjectives, no buzzwords, no "I hope this finds you well", no "I'm reaching out", no "quick
+question", no em-dashes. Do not ask for a referral outright. Short sentences (under 18 words), plain words a
+12-year-old could read, 60-110 words, exactly one question mark. It must not sound AI-written.
 Reply with JSON only."""
 
 POLISH_PROMPT = """STRUCTURE: {label}. Why: {why}.
@@ -205,8 +216,8 @@ THE DRAFT:
 ---
 
 Make it read like one person writing to another. Keep, word for word: the greeting "Hi {first},", {keep}every
-number, the role name "{role_title}", and the ask: "{ask}". {bullets}
-Do not add a signature, a sign-off, a note to forward, links or a P.S.
+number, the role name "{role_title}", {link}and the one question: "{ask}".
+Do not add a signature, a sign-off, a note to forward, a resume link, a bullet list, any other link or a P.S.
 
 Reply with exactly: {{"message": "<the polished message, plain text, starting with Hi {first},>"}}"""
 
@@ -251,20 +262,25 @@ def me() -> dict:
     year = (re.findall(r"(20\d\d)\s*$", edu.get("years") or "") or [""])[0]
     full = p.get("name") if USER_NAME.startswith("(") else USER_NAME
     resume_link = next((l.split(":", 1)[1].strip() for l in USER_LINKS if l.lower().startswith("resume")), None)
+    # every line of real work, for compose.gifts (a line naming the recipient's own product)
+    work_lines = [h for e in p.get("experience") or [] for h in e.get("highlights") or []] + \
+        [x.get("description") or "" for x in p.get("projects") or []]
+    internships = sum(1 for e in p.get("experience") or [] if re.search(r"\bintern", e.get("title") or "", re.I))
     employers = [re.sub(r"\s*\(.*?\)|\s+(LLC|Inc\.?|Ltd\.?)$", "", e.get("company") or "").strip()
                  for e in p.get("experience") or []]
     rest = [x.strip() for x in (edu.get("institution") or "").split(",")[1:]]
     return {"full_name": full, "first_name": (full or "").split()[0], "school": school, "year": year,
             "resume_link": resume_link, "bond": f"CS+AI '{year[-2:]} grad" if year else "CS+AI grad",
-            "shared_places": [school, *rest, *[e for e in employers if e]]}
+            "shared_places": [school, *rest, *[e for e in employers if e]], "work_lines": [w for w in work_lines if w],
+            "internships": internships}
 
 
 def cold_signature() -> str:
-    """Name, headline, LinkedIn. The resume link is in the forwardable note, so the mail
-    carries two links in all (playbook: 1–2 links, a LinkedIn link in the signature)."""
+    """Name, one line ("Final-year B.Tech CS+AI, Newton School of Technology"), LinkedIn.
+    One link in the signature, none of the link row; the resume is offered after a reply."""
     lines = [USER_NAME]
-    if USER_HEADLINE:
-        lines.append(USER_HEADLINE)
+    if SIGNATURE_LINE:
+        lines.append(SIGNATURE_LINE)
     lines += [l for l in USER_LINKS if "linkedin" in l.lower()][:1]
     return "\n".join(lines)
 
@@ -369,12 +385,29 @@ def _corpus(g: dict, c) -> str:
             " ".join(f"{r.get('name')} {r.get('description') or ''}" for r in p.get("repos") or []),
             co.get("name"), co.get("description"), co.get("funding_stage"), co.get("funding_evidence"),
             f"{co['funding_amount_usd_m']:g}" if co.get("funding_amount_usd_m") else None,
-            j.get("title"), g["me"].get("school"), g["me"].get("year")]
+            j.get("title"), j.get("url"), g["me"].get("school"), g["me"].get("year")]
+    if c.gift:
+        bits += [c.gift.get("proof"), c.gift.get("source"), c.gift.get("thing"), c.gift.get("link"), c.gift.get("offer")]
     for b in (g.get("brief") or {}).get("building") or []:
         bits += [b.get("text"), b.get("quote")]
     for n in c.proofs:
         bits += [n.get("quote"), n.get("resume_line"), n.get("what"), n.get("need")]
     return "\n".join(x for x in bits if x)
+
+
+def _shape_flags(message: str, c) -> list[dict]:
+    """Flags for the queue the gate itself does not raise: the old cold-template shape in a
+    first email (compose.old_shape) and grovelling ("Sir", "kindly", "humbly")."""
+    from jobhunter.outreach import compose
+
+    out = []
+    shape = compose.old_shape(message, c)
+    if shape:
+        out.append({"kind": "first_mail", "detail": "not for a first email: " + "; ".join(shape)})
+    grovel = compose.humility(message)["grovel"]
+    if grovel:
+        out.append({"kind": "tone", "detail": "grovels: " + ", ".join(dict.fromkeys(g.lower() for g in grovel))})
+    return out
 
 
 def write(g: dict, *, use_model: bool = True, key=None) -> dict:
@@ -390,7 +423,7 @@ def write(g: dict, *, use_model: bool = True, key=None) -> dict:
         out.update(incomplete=True, missing=c.missing, missing_labels=[compose.CONTRACT_LABEL[m] for m in c.missing])
         return out
     me_ = g["me"]
-    filled = compose.fill(c, me_)
+    filled = compose.fill(c, me_)    # {message, forward_note}: the note is an after-yes asset
     subjects = compose.subject_options(c, me_)
     i = compose.pick(subjects, key if key is not None else g["person"]["id"])
     subject = subjects[i]["subject"] if i >= 0 else f"{c.target_role} at {c.company}"
@@ -401,23 +434,27 @@ def write(g: dict, *, use_model: bool = True, key=None) -> dict:
     opt = suppress.OPT_OUT_LINE or None
 
     def evaluate(message: str) -> dict:
-        body = compose.assemble(message, filled["blurb_intro"], filled["blurb"], sig, opt)
+        body = compose.assemble(message, sig, opt, c.structure)
         v = gates.check(body, corpus=corpus, signature=sig, address_confidence=g["person"].get("confidence"),
                         affiliation=g["person"].get("affiliation"), forbidden=forbidden,
-                        exclude=[filled["blurb_intro"], filled["blurb"], opt or ""], subject=subject)
-        q = compose.quality(message, subject, c, v.flags, v.words, has_blurb=True, has_resume=bool(c.resume_link))
+                        exclude=[opt or ""], subject=subject, word_band=compose.word_band(c))
+        v.flags += _shape_flags(message, c)
+        q = compose.quality(message, subject, c, v.flags, v.words)
         return {"message": message, "body": body, "flags": v.flags, "words": v.words, "quality": q,
                 "blocked": v.blocked}
 
     tpl = evaluate(filled["message"])
     chosen, writer, model_note, model_version = tpl, "template", None, None
+    if use_model and c.structure == "direct_intro":
+        # the user's own pattern, word for word: a model rewrite would only drift from it
+        use_model, model_note = False, "the user's own pattern (direct_intro): written as he wrote it, no model polish"
     if use_model:
         keep = f"the words \"{c.hook['anchor']}\", " if c.hook.get("anchor") else ""
         prompt = POLISH_PROMPT.format(
             label=compose.STRUCTURES[c.structure]["label"], why=c.structure_why, first=c.first_name,
             role=c.recipient_role, company=c.company, message=filled["message"], keep=keep,
             role_title=c.target_role, ask=compose.ask_line(c),
-            bullets="Keep the bulleted list of shipped work as a list." if c.structure == "proof_opinion" else "")
+            link=f"the link \"{c.link}\" (the only link), " if c.link else "")
         try:
             data = _polish_call(prompt)
         except openrouter.BudgetExceeded as e:
@@ -448,30 +485,30 @@ def write(g: dict, *, use_model: bool = True, key=None) -> dict:
                writer=writer, polish_pending=bool(use_model and writer == "template" and out.get("budget")),
                model_note=model_note, template=tpl, model=model_version, **{k: chosen[k] for k in (
                    "message", "body", "flags", "words", "quality", "blocked")},
-               blurb=filled["blurb"], blurb_intro=filled["blurb_intro"], signature=sig, opt_out=opt)
+               forward_note=filled["forward_note"], signature=sig, opt_out=opt)
     return out
 
 
 def evaluate_body(g: dict, r: dict, subject: str, body: str) -> dict:
     """Gate and score a whole body written some other way than write() — the proposal's
     exact text, or a pattern's template filled for this person — against the same facts,
-    signature, blurb and opt-out line write() used. `dropped` = what the contract needs
-    that the message lost (compose.keeps_contract)."""
+    signature and opt-out line write() used. `dropped` = what the contract needs that the
+    message lost, or the old template shape it carries (compose.keeps_contract)."""
     from dataclasses import fields
 
-    from jobhunter.outreach import compose, gates
+    from jobhunter.outreach import compose, gates, suppress
 
     names = {f.name for f in fields(compose.Contract)}
     c = compose.Contract(**{k: v for k, v in (r.get("contract") or {}).items() if k in names})
-    intro, note, sig, opt = r.get("blurb_intro") or "", r.get("blurb") or "", r.get("signature") or cold_signature(), r.get("opt_out")
-    message = body.split(intro)[0] if intro and intro in body else body.split("\n\nThanks,")[0]
-    message = message.strip()
+    sig, opt = r.get("signature") or cold_signature(), r.get("opt_out")
+    message = compose.message_of(body, [opt or "", *suppress.opt_out_lines()])
     forbidden = [str(x) for x in ((g.get("brief") or {}).get("forbidden") or [])]
     v = gates.check(body, corpus=_corpus(g, c), signature=sig, address_confidence=g["person"].get("confidence"),
                     affiliation=g["person"].get("affiliation"), forbidden=forbidden,
-                    exclude=[intro, note, opt or ""], subject=subject)
-    q = compose.quality(message, subject, c, v.flags, v.words, has_blurb=bool(note and note in body),
-                        has_resume=bool(c.resume_link))
+                    exclude=[x for x in [opt, *suppress.opt_out_lines()] if x], subject=subject,
+                    word_band=compose.word_band(c))
+    v.flags += _shape_flags(message, c)
+    q = compose.quality(message, subject, c, v.flags, v.words)
     return {"message": message, "body": body, "flags": v.flags, "words": v.words, "quality": q,
             "blocked": v.blocked, "dropped": compose.keeps_contract(message, c)}
 
@@ -633,8 +670,28 @@ def draft_for_bets(limit: int = 10, *, candidate_id: int = 1) -> list[dict]:
     return out
 
 
+def followup_count(session, email_id: int) -> int:
+    return len(session.exec(select(Email.id).where(Email.parent_email_id == email_id,
+                                                    Email.kind == "followup")).all())
+
+
+def followup_new_value(parent: Email, n: int) -> str:
+    """The one NEW thing follow-up `n` adds (a follow-up never just bumps): the first, a
+    second proof from the parent's own contract; the last, the offer of his resume and a
+    two-line summary they could forward (the after-yes assets the first email held back)."""
+    proofs = []
+    try:
+        proofs = (json.loads(parent.contract or "{}") or {}).get("proofs") or []
+    except (json.JSONDecodeError, TypeError):
+        proofs = []
+    if n == 1 and len(proofs) > 1 and proofs[1].get("proof"):
+        return f"one thing I left out: I also {proofs[1]['proof']}"
+    return "if it would help, I'm happy to send my resume or a two-line summary you could forward"
+
+
 def draft_followup(email_id: int) -> dict:
-    """Queue a single polite follow-up on an unanswered thread."""
+    """Queue one polite follow-up on an unanswered thread (at most outreach.max_followups,
+    each adding something new; the last one says it is the last)."""
     init_db()
     from jobhunter import llm
 
@@ -642,7 +699,8 @@ def draft_followup(email_id: int) -> dict:
         parent = session.get(Email, email_id)
         if parent is None or parent.status != "sent":
             return {"error": "parent email not found or not sent"}
-        if parent.followup_sent:
+        n = followup_count(session, email_id) + 1
+        if n > MAX_FOLLOWUPS or (parent.followup_sent and MAX_FOLLOWUPS <= 1):
             return {"error": "follow-up already queued for this thread"}
         contact = session.get(Contact, parent.contact_id)
         company = session.get(Company, parent.company_id)
@@ -655,6 +713,10 @@ def draft_followup(email_id: int) -> dict:
             "company": company.name if company else "the company",
             "subject": parent.subject,
             "body": parent.body,
+            "n": n, "max_n": MAX_FOLLOWUPS,
+            "last": ("It is the LAST one: say kindly that you won't write again." if n >= MAX_FOLLOWUPS
+                     else "It is not the last one: do not say it is."),
+            "new_value": followup_new_value(parent, n),
         }
         parent_to, parent_subject = parent.to_email, parent.subject
         contact_id, company_id, job_id = parent.contact_id, parent.company_id, parent.job_id
@@ -736,14 +798,21 @@ def draft_for_high_matches(limit: int = 5, *, per_company: int = 2) -> list[dict
                 e.contact_id for e in session.exec(select(Email).where(Email.company_id == cid)).all()
             }
             picked = [c for c in contacts if c.id not in already][:per_company]
-            best_job = session.exec(
+            jobs = session.exec(
                 select(Job).where(Job.company_id == cid, Job.status == "high_match")
                 .order_by(col(Job.match_score).desc())
-            ).first()
-            for c in picked:
-                targets.append((c.id, best_job.id if best_job else None))
+            ).all()
+            # one person per role: the second person at a company is asked about the next role
+            for i, c in enumerate(picked):
+                job = jobs[i] if i < len(jobs) else None
+                if job is None and i > 0:
+                    continue
+                targets.append({"contact_id": c.id, "company_id": cid, "job_id": job.id if job else None})
 
-    for contact_id, job_id in targets[:limit]:
+    from jobhunter.outreach import compose
+
+    targets = compose.volume(targets, per_company=min(per_company, compose.MAX_PER_COMPANY))
+    for contact_id, job_id in [(t["contact_id"], t["job_id"]) for t in targets[:limit]]:
         r = draft_for(contact_id, job_id)
         out.append(r)
         if r.get("budget"):

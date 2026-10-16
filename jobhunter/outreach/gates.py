@@ -47,6 +47,7 @@ AI_TELLS = [
     "robust", "game-changing", "tapestry", "in today's", "landscape", "unlock", "empower",
     "i would love the opportunity", "as an ai", "i believe i would be a great fit", "esteemed",
     "innovative solutions", "dynamic", "reach out to you", "touch base",
+    "i hope you're doing well", "i hope you are doing well", "i wanted to reach out", "hope this email finds",
 ]
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z'’\-]+")
@@ -100,11 +101,14 @@ def _body_only(body: str, signature: str | None) -> str:
 def check(body: str, *, corpus: str, signature: str | None = None,
           address_confidence: str | None = None, affiliation: str | None = None,
           affiliation_evidence: str | None = None, forbidden: list[str] | None = None,
-          exclude: list[str] | None = None, subject: str | None = None) -> GateResult:
+          exclude: list[str] | None = None, subject: str | None = None,
+          word_band: tuple[int, int] | None = None) -> GateResult:
     """Run every gate over `body` against the facts in `corpus`.
 
     `forbidden` are skills the needs brief marked uncovered (needs.forbidden_terms): the
-    body naming one is a claim the resume cannot back, whatever the corpus contains."""
+    body naming one is a claim the resume cannot back, whatever the corpus contains.
+    `word_band` overrides the configured length band (the user's direct_intro pattern
+    carries a track record and runs longer)."""
     r = GateResult()
     text = _body_only(body or "", signature)
     norm_corpus = " " + _normalise(corpus) + " "
@@ -179,10 +183,11 @@ def check(body: str, *, corpus: str, signature: str | None = None,
         if seg:
             counted = counted.replace(seg, " ")
     r.words = len(_WORD.findall(counted))
-    if r.words < MIN_WORDS:
-        r.flags.append({"kind": "length", "detail": f"{r.words} words — under {MIN_WORDS}, may read as thin"})
-    elif r.words > MAX_WORDS:
-        r.flags.append({"kind": "length", "detail": f"{r.words} words — over {MAX_WORDS}, a busy engineer stops reading"})
+    lo, hi = word_band or (MIN_WORDS, MAX_WORDS)
+    if r.words < lo:
+        r.flags.append({"kind": "length", "detail": f"{r.words} words — under {lo}, may read as thin"})
+    elif r.words > hi:
+        r.flags.append({"kind": "length", "detail": f"{r.words} words — over {hi}, a busy engineer stops reading"})
 
     # ---- one ask
     asks = len(_ASK.findall(text))

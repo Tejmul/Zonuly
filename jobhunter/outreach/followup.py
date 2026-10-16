@@ -1,4 +1,7 @@
-"""Follow-ups — one, after five silent days, on the same thread, into the review queue.
+"""Follow-ups — at most outreach.max_followups (1, or 2), each after five silent days, on the
+same thread, into the review queue. Each one adds something NEW (a second proof from the
+first email's contract; then the offer of the resume / a two-line note they could forward),
+and only the last says it is the last.
 
 drafter.draft_followup writes it with the model. The free models hit their daily ceiling
 most days, so when the model gives nothing the follow-up is written from a short fixed
@@ -28,9 +31,13 @@ AFTER_DAYS = int(_O.get("followup_after_days", 5))
 MAX_FOLLOWUPS = int(_O.get("max_followups", 1))
 
 TEMPLATE = (
-    "Just following up on my note from {when} about {what}. I know inboxes get busy, so this is the "
-    "last time I'll write. If a referral or a quick pointer to the right person isn't possible, no "
-    "problem at all, and thank you for reading."
+    "A short note on my message from {when} about {what}. {new} I know inboxes get busy, so this is the "
+    "last time I'll write. If it isn't something you can help with, I completely understand, and thank you "
+    "for reading."
+)
+TEMPLATE_NOT_LAST = (
+    "A short note on my message from {when} about {what}. {new} If it isn't something you can help with, "
+    "I completely understand. Thank you for reading."
 )
 
 
@@ -38,9 +45,15 @@ def _when(days: int) -> str:
     return "last week" if days >= 5 else "a few days ago"
 
 
-def template_body(parent: Email, *, company: str | None, days: int) -> str:
+def template_body(parent: Email, *, company: str | None, days: int, n: int = 1) -> str:
+    """Follow-up `n`: the new thing it adds, and "the last time" only on the last one."""
+    from jobhunter.outreach import drafter
+
     what = "a referral at " + company if company else "a referral"
-    return TEMPLATE.format(when=_when(days), what=what)
+    new = drafter.followup_new_value(parent, n)
+    new = new[0].upper() + new[1:] + "."
+    tpl = TEMPLATE if n >= MAX_FOLLOWUPS else TEMPLATE_NOT_LAST
+    return tpl.format(when=_when(days), what=what, new=new)
 
 
 def due(session, *, after_days: int | None = None, now=None) -> list[Email]:
@@ -52,15 +65,21 @@ def due(session, *, after_days: int | None = None, now=None) -> list[Email]:
         return []
     days = AFTER_DAYS if after_days is None else after_days
     cutoff = (now or utcnow()) - timedelta(days=days)
-    rows = session.exec(select(Email).where(
-        Email.kind == "cold", Email.status == "sent", Email.followup_sent == False,  # noqa: E712
-        col(Email.sent_at).is_not(None), col(Email.sent_at) < cutoff)).all()
+    q = select(Email).where(Email.kind == "cold", Email.status == "sent",
+                            col(Email.sent_at).is_not(None), col(Email.sent_at) < cutoff)
+    if MAX_FOLLOWUPS <= 1:
+        q = q.where(Email.followup_sent == False)  # noqa: E712
     out = []
-    for e in rows:
-        if session.exec(select(func.count()).select_from(Reply).where(Reply.email_id == e.id)).one():
+    for e in session.exec(q).all():
+        kids = session.exec(select(Email).where(Email.parent_email_id == e.id)).all()
+        thread = [e.id, *(k.id for k in kids)]
+        if session.exec(select(func.count()).select_from(Reply).where(col(Reply.email_id).in_(thread))).one():
             continue
-        if session.exec(select(Email.id).where(Email.parent_email_id == e.id)).first():
-            continue
+        if len(kids) >= MAX_FOLLOWUPS or any(k.status != "sent" for k in kids):
+            continue                      # all used, or one is still waiting / was rejected
+        last = max((k.sent_at for k in kids if k.sent_at), default=None)
+        if last is not None and last >= cutoff:
+            continue                      # the last follow-up is not five days old yet
         if sender.SEND_MODE == "gmail" and str(e.gmail_thread_id or "").startswith("dryrun:"):
             continue
         contact = session.get(Contact, e.contact_id)
@@ -76,13 +95,17 @@ def _template_followup(email_id: int, *, now=None) -> dict:
 
     with get_session() as session:
         parent = session.get(Email, email_id)
-        if parent is None or parent.status != "sent" or parent.followup_sent:
+        if parent is None or parent.status != "sent" or (parent.followup_sent and MAX_FOLLOWUPS <= 1):
             return {"error": "parent not sent, or already followed up"}
         contact = session.get(Contact, parent.contact_id)
         company = session.get(Company, parent.company_id)
         days = ((now or utcnow()) - (parent.sent_at or parent.created_at)).days
+        n = drafter.followup_count(session, parent.id) + 1
+        if n > MAX_FOLLOWUPS:
+            return {"error": "every follow-up already used"}
         name = drafter.greeting_name(contact.name if contact else None, parent.to_email)
-        body = drafter._compose(template_body(parent, company=company.name if company else None, days=days), name)
+        body = drafter._compose(template_body(parent, company=company.name if company else None, days=days, n=n),
+                                name)
         subject = parent.subject if parent.subject.lower().startswith("re:") else f"Re: {parent.subject}"
         email = Email(contact_id=parent.contact_id, company_id=parent.company_id, job_id=parent.job_id,
                       to_email=parent.to_email, subject=subject[:180], body=body, kind="followup",

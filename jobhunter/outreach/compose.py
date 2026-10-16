@@ -1,11 +1,20 @@
 """Compose: the personalisation contract, the four structures, subject lines, the
-deterministic fill and the quality score of one cold referral ask.
+deterministic fill and the quality score of one first email to someone who could refer.
 
-Where every rule comes from is knowledge/cold-email-playbook.md. In short: open with
-one specific thing of THEIRS (their commit, repo, post, launch, round), say who you are
-in one clause, give one quantified proof that answers what the role asks for, make ONE
-low-friction ask, and make "yes" cheap with a two-line note they can forward and a
-resume link. 60–120 words, plain text, short sentences.
+Where the rules come from: knowledge/cold-email-playbook.md, and the 2026-10-17 rewrite
+(the user: the direct "would you refer me? here's a note you can forward" format reads as a
+cold template and won't work; mails must be polite, HUMBLE and not cold). Referring a
+stranger risks the referrer's own name, so the first email does not ask for the referral
+outright and does not hide the goal either: one specific, checkable fact about THEIR work,
+one real thing he did that relates, one genuine small question, then — openly, separately —
+the role and "if you think I'd fit, I'd be grateful to know the best way to apply", and an
+easy no. 60–110 words, plain text, exactly one question, at most one link in the body (the
+role, or something he built with their product). No forwardable note, no resume link and no
+bullet list in the first email: those are after-yes / follow-up assets (`forward_note`).
+
+HUMILITY (the user's explicit rule): thank them for their time; say he is early in his
+career; tentative words ("might be relevant", "I might be wrong", "if not, that's
+completely fine"); never oversell, never grovel, never "Sir/Ma'am", no flattery adjectives.
 
 THE CONTRACT. Every slot is filled from evidence or the draft is not written:
 
@@ -16,19 +25,26 @@ THE CONTRACT. Every slot is filled from evidence or the draft is not written:
     hook            ONE specific thing, with its source: their post / commit / repo / bio,
                     shared ground, else the company's launch / round / own description
     need + proof    ONE need the needs brief marks COVERED, and the resume line covering it
-    resume_link     outreach.user_links "Resume: …"
+    resume_link     outreach.user_links "Resume: …" (kept for the after-yes note, never in
+                    the first email)
+    gift            optional: something he built or used with THEIR product / repo (a resume
+                    line naming it, or outreach.compose.gifts) — turns on give_first
 
 A missing slot is returned in `missing` and the caller files "incomplete" instead of a
 generic email. Uncovered needs are never claimed (gates.check enforces it).
 
-THE STRUCTURES, chosen by who they are:
+THE STRUCTURES, chosen by who they are and what the evidence holds:
 
-    proof_opinion      engineers and founders at small startups: what I've shipped, with
-                       numbers, then "what do you think?" (they can offer the referral)
-    referral_engineer  engineers at larger companies: one proof, "would you be open to
-                       referring me, or pointing me to whoever is hiring?"
-    founder_direct     founders at larger companies: "would you consider me for …"
-    recruiter_direct   recruiters: "could you put me forward, or is it open to 2027 grads?"
+    advice_first    engineers (the default): their work → his related work → one genuine
+                    question → separately, the role link and "if you think I'd fit, I'd be
+                    grateful to know the best way to apply" → easy out
+    give_first      anyone but a recruiter, when he built / used something with their
+                    product or repo: offer it humbly ("might be useful, might be naive") →
+                    the role → a soft ask
+    fit_question    engineering managers and founders: the role link + one proof + an honest
+                    "does your team hire freshers into this role, or should I wait?"
+    recruiter_direct  recruiters: a direct but humble ask (is it open to 2027 graduates,
+                    and the best way to apply)
 
 Pure: no DB, no model, no network. drafter.py gathers the inputs and calls the model.
 """
@@ -52,32 +68,55 @@ SMALL_TEAM = int(_C.get("small_team", 60))
 LEARN_MIN_SENT = int(_C.get("learn_min_sent", 20))
 PROOFS: list[dict] = list(_C.get("proofs") or [])
 
+GIFTS: list[dict] = list(_C.get("gifts") or [])        # [{company, line, link?, offer?}] — written by the user
+MAX_PER_COMPANY = int(_C.get("max_per_company", 2))     # people asked at one company in one batch
+MAX_PER_ROLE = int(_C.get("max_per_role", 1))           # people asked about one role in one batch
+
+# which structure writes the first email: "direct_intro" (the user's own pattern, 2026-10-17 — the
+# default for every recipient) or "auto" (the research-based picker: advice / give / fit / recruiter)
+STRUCTURE_MODE = str(_C.get("structure") or "direct_intro")
+DIRECT_MAX_WORDS = int(_C.get("direct_max_words", 170))
+DIRECT_MIN_WORDS = int(_C.get("direct_min_words", 80))
+RECORD_MAX = 4            # track-record items in a direct_intro email (3–4)
+
 STRUCTURES = {
-    "proof_opinion": {
-        "label": "Proof of work, then their opinion",
-        "for": "engineers and founders at small startups",
-        "ask_kind": "opinion",
-        "why": "a low-pressure question about shipped work invites a reply and lets them offer the referral",
-    },
-    "referral_engineer": {
-        "label": "Referral ask to an engineer",
-        "for": "engineers at larger companies",
+    "direct_intro": {
+        "label": "Who I am, my track record, a polite referral ask",
+        "for": "everyone (the user's own pattern, the default)",
         "ask_kind": "referral",
-        "why": "an engineer can refer; one proof plus a yes/no ask with an easy out",
+        "why": "the user's choice: say who he is, show 3–4 real results that fit the role, ask politely to be "
+               "considered for a referral, attach the resume link, and give an honest, easy out",
     },
-    "founder_direct": {
-        "label": "Direct ask to a founder",
-        "for": "founders at larger startups",
-        "ask_kind": "consider",
-        "why": "a founder decides; ask to be considered, or pointed to whoever is hiring",
+    "advice_first": {
+        "label": "Advice first, then the role",
+        "for": "engineers (the default)",
+        "ask_kind": "advice",
+        "why": "a stranger risks their name by referring; a genuine question about their work, with the role "
+               "mentioned openly, lets them offer instead of being asked",
+    },
+    "give_first": {
+        "label": "Give first, then the role",
+        "for": "anyone but a recruiter, when he built or used something with their product or repo",
+        "ask_kind": "soft",
+        "why": "he has something real to offer about their own product; offer it humbly, then mention the role",
+    },
+    "fit_question": {
+        "label": "An honest fit question",
+        "for": "engineering managers and founders",
+        "ask_kind": "fit",
+        "why": "they decide who is hired; the role, one proof and an honest \"do you hire freshers into this, "
+               "or should I wait?\"",
     },
     "recruiter_direct": {
-        "label": "Direct ask to a recruiter",
+        "label": "Direct, humble ask to a recruiter",
         "for": "recruiters and talent partners",
-        "ask_kind": "put-forward",
-        "why": "a recruiter routes candidates; name the role and ask to be put forward",
+        "ask_kind": "apply",
+        "why": "routing candidates is their job: name the role, ask if it's open to 2027 graduates and how to apply",
     },
 }
+# drafts written before 2026-10-17 carry these names
+LEGACY_STRUCTURES = {"proof_opinion": "advice_first", "referral_engineer": "advice_first",
+                     "founder_direct": "fit_question"}
 
 # hook types, most specific first, with how specific each one is (feeds the quality score)
 HOOK_SPECIFICITY = {
@@ -288,7 +327,7 @@ def _proof_line(evidence: str) -> dict | None:
     trimmed clause of the line itself when no phrasing matches. None for the skills list."""
     for p in PROOFS:
         if p.get("match") and p["match"].lower() in (evidence or "").lower():
-            return {"line": p["line"], "topic": p.get("topic"), "source_line": evidence}
+            return {"line": p["line"], "topic": p.get("topic"), "source_line": evidence, "curated": True}
     clauses = [c.strip() for c in re.split(r";", evidence or "") if c.strip()]
     if not clauses or len(evidence.split(",")) > 12:
         return None                        # a skills list is not proof of work
@@ -298,7 +337,13 @@ def _proof_line(evidence: str) -> dict | None:
         best = ",".join(" ".join(words[:24]).split(",")[:-1]) or " ".join(words[:24])
     if best[:1].isupper() and best[1:2].islower():
         best = best[0].lower() + best[1:]
-    return {"line": best.rstrip("."), "topic": None, "source_line": evidence}
+    return {"line": best.rstrip("."), "topic": None, "source_line": evidence, "curated": False}
+
+
+# resume lines that are true but are not the strongest thing to show an engineer
+# (2026-10-17: a DevOps draft pitched "managed DNS configurations for 8 company websites")
+_WEAK_PROOF = re.compile(r"\bDNS\b|mentor|technical interviews|annotat|training to|trainer|troubleshooting|"
+                         r"student performance", re.I)
 
 
 def _label(skill: str) -> str:
@@ -327,8 +372,10 @@ def needs_and_proofs(brief: dict | None, limit: int = 3) -> list[dict]:
         p = _proof_line(n["evidence"])
         if not p:
             continue
-        scored.append(((n.get("status") != "covered", not re.search(r"\d", p["line"]), -(n.get("weight") or 0),
-                        n.get("kind") != "stated"), n, p))
+        # the strongest relevant proof first: covered, a curated phrasing of a real achievement,
+        # not a weak line (DNS, mentoring), a number in it, then the need's weight
+        scored.append(((n.get("status") != "covered", bool(_WEAK_PROOF.search(p["line"])), not p.get("curated"),
+                        not re.search(r"\d", p["line"]), -(n.get("weight") or 0), n.get("kind") != "stated"), n, p))
     scored.sort(key=lambda x: x[0])
     nums_seen: set[str] = set()
     for _, n, p in scored:
@@ -351,6 +398,54 @@ def needs_and_proofs(brief: dict | None, limit: int = 3) -> list[dict]:
     return out
 
 
+# ------------------------------------------------------------------ the gift (give_first)
+
+_CO_WORDS = re.compile(r"\b(ai|labs?|inc|llc|ltd|limited|pvt|private|technologies|technology|tech|systems|software|"
+                       r"hq|corp|corporation|company|co|group|global)\b\.?", re.I)
+
+
+def _brand(name: str | None) -> str:
+    """'Temporal Technologies' -> 'Temporal'; 'Acme AI' -> 'Acme'."""
+    return re.sub(r"\s+", " ", _CO_WORDS.sub(" ", name or "")).strip(" .,-")
+
+
+def _names(text: str, name: str) -> bool:
+    return bool(re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", text or "", re.I))
+
+
+def gifts(person: dict, company: dict, me: dict) -> list[dict]:
+    """Something he built or used with THEIR product or repo, from evidence only:
+    outreach.compose.gifts (the user's own words, with an optional link and offer), else a
+    resume line that names the company's product (or the repo they commit to) and whose
+    proof phrasing names it too. A place he worked is shared ground, not a gift."""
+    out: list[dict] = []
+    cname = company.get("name") or ""
+    for g in GIFTS:
+        if g.get("company") and g.get("line") and _brand(g["company"]).lower() == _brand(cname).lower():
+            out.append({"type": "config", "thing": g.get("thing") or _brand(cname) or cname,
+                        "proof": str(g["line"]).rstrip("."), "link": g.get("link"), "offer": g.get("offer"),
+                        "source": "outreach.compose.gifts"})
+    if out:
+        return out
+    mine = " | ".join(me.get("shared_places") or []).lower()
+    names = []
+    brand = _brand(cname)
+    if len(brand) >= 4 and brand.lower() not in mine:
+        names.append(brand)
+    m = re.search(r"committed to [\w.\-]+/([\w.\-]+) on", person.get("affiliation_evidence") or "")
+    if m and len(m.group(1)) >= 5 and m.group(1).lower() not in mine:
+        names.append(m.group(1))
+    for nm in names:
+        for line in me.get("work_lines") or []:
+            if not _names(line, nm):
+                continue
+            p = _proof_line(line)
+            if p and p.get("curated") and _names(p["line"], nm):
+                return [{"type": "used_their_product", "thing": nm, "proof": p["line"], "link": None, "offer": None,
+                         "source": line}]
+    return out
+
+
 # ------------------------------------------------------------------ the contract
 
 @dataclass
@@ -368,6 +463,10 @@ class Contract:
     need: dict | None = None
     proofs: list[dict] = field(default_factory=list)
     resume_link: str | None = None
+    gift: dict | None = None
+    link: str | None = None              # the one link the body carries (the role, or the gift's)
+    record: list[dict] = field(default_factory=list)   # direct_intro: 3–4 proofs, the role's first
+    more_experience: str | None = None   # evidence the role asks for more experience than he has
     structure: str | None = None
     structure_why: str | None = None
     small: bool = False
@@ -383,16 +482,22 @@ class Contract:
         return d
 
 
-def choose_structure(role_class: str | None, small: bool) -> tuple[str, str]:
+def choose_structure(role_class: str | None, small: bool = False, has_gift: bool = False,
+                     mode: str | None = None) -> tuple[str, str]:
+    if (mode or STRUCTURE_MODE) == "direct_intro":
+        return "direct_intro", ("the user's own pattern, for every recipient: who he is, his strongest results for "
+                                "this role, a polite referral ask and the resume link")
     rc = role_class or "other"
     if rc in ("tech_recruiter", "recruiter"):
-        return "recruiter_direct", "they are a recruiter: name the role, ask to be put forward"
-    if rc in ("engineer", "senior_engineer", "eng_manager", "founder") and small:
-        return "proof_opinion", ("a small startup (seed / Series A or a small team): show shipped work and ask "
-                                 "their opinion — the low-pressure ask that lets them offer the referral")
-    if rc == "founder":
-        return "founder_direct", "a founder at a larger startup: ask to be considered for the role"
-    return "referral_engineer", "an engineer at a larger company: one proof, a referral ask with an easy out"
+        return "recruiter_direct", "they are a recruiter: name the role, ask humbly if it's open to 2027 graduates"
+    if has_gift:
+        return "give_first", ("he built or used something with their own product or repo: offer it humbly, "
+                              "then mention the role")
+    if rc in ("eng_manager", "founder"):
+        return "fit_question", ("they decide who is hired: the role, one proof, and an honest question about "
+                                "whether the team hires freshers into it")
+    return "advice_first", ("an engineer: a genuine question about their work, with the role mentioned openly, so "
+                            "they can offer to help instead of being asked to vouch for a stranger")
 
 
 def contract(person: dict, company: dict, job: dict | None, brief: dict | None, me: dict) -> Contract:
@@ -415,43 +520,120 @@ def contract(person: dict, company: dict, job: dict | None, brief: dict | None, 
     c.proofs = nps
     c.resume_link = me.get("resume_link")
     c.small = is_small(company)
-    c.structure, c.structure_why = choose_structure(c.role_class, c.small)
+    gs = gifts(person, company, me) if (c.role_class or "") not in ("recruiter", "tech_recruiter") else []
+    c.gift = gs[0] if gs else None
+    c.structure, c.structure_why = choose_structure(c.role_class, c.small, bool(c.gift))
+    if c.structure == "direct_intro":
+        c.link = c.resume_link
+        c.record = track_record(c.proofs, me)
+        c.more_experience = more_experience(job, brief)
+    else:
+        c.link = (c.gift or {}).get("link") if c.structure == "give_first" and (c.gift or {}).get("link") \
+            else c.target_role_url
     for f in CONTRACT_FIELDS:
+        if f == "hook" and c.structure == "direct_intro":
+            continue                      # the user's pattern opens with who he is, not a hook
         val = {"need": c.need, "proof": c.proofs[0]["proof"] if c.proofs else None}.get(f, getattr(c, f, None))
         if not val:
             c.missing.append(f)
     return c
 
 
+_YEARS = re.compile(r"\b(?:[2-9]|1\d)\s*\+?\s*(?:-\s*\d+\s*)?(?:years?|yrs?)\b", re.I)
+_SENIOR = re.compile(r"\b(senior|sr\.?|staff|principal|lead|ii|iii|iv)\b", re.I)
+
+
+def more_experience(job: dict | None, brief: dict | None) -> str | None:
+    """The evidence that the role asks for more experience than a final-year student has:
+    the role marked senior, a senior title, or the posting asking for 2+ years. None otherwise."""
+    j = job or {}
+    if j.get("is_senior"):
+        return "the role is marked senior"
+    if _SENIOR.search(j.get("title") or ""):
+        return f"the title says \"{_SENIOR.search(j['title']).group(0)}\""
+    for n in (brief or {}).get("stated") or []:
+        m = _YEARS.search(n.get("quote") or "") or _YEARS.search(n.get("text") or "")
+        if m:
+            return f"the posting asks for {m.group(0)}"
+    return None
+
+
+def resume_proofs(me: dict) -> list[dict]:
+    """Every curated proof (outreach.compose.proofs) whose resume line is really on the
+    resume (me.work_lines), in config order — the top-up for a direct_intro track record."""
+    out = []
+    for line in me.get("work_lines") or []:
+        p = _proof_line(line)
+        if p and p.get("curated"):
+            out.append({"proof": p["line"], "topic": p["topic"], "resume_line": line, "need": None})
+    order = {p["line"]: i for i, p in enumerate(PROOFS)}
+    return sorted(out, key=lambda x: order.get(x["proof"], 999))
+
+
+def track_record(proofs: list[dict], me: dict, limit: int = RECORD_MAX) -> list[dict]:
+    """3–4 concrete results: the ones covering the role's needs first (needs brief, best
+    first), then the strongest other lines of the resume. No two that share a number, no
+    weak line (DNS, mentoring) while a stronger one is left."""
+    out, nums_seen, seen = [], set(), set()
+    for p in [*(proofs or []), *resume_proofs(me)]:
+        line = p.get("proof") or ""
+        nums = frozenset(re.findall(r"\d[\d,]*%?", line))
+        if not line or line in seen or (nums and nums & nums_seen) or _WEAK_PROOF.search(line):
+            continue
+        seen.add(line)
+        nums_seen |= nums
+        out.append(p)
+        if len(out) >= limit:
+            break
+    return out
+
+
 # ------------------------------------------------------------------ subjects
 
+SUBJECT_MAX = 5          # 2–5 words, about THEM or their work; never "Referral request for …"
 SUBJECT_PATTERNS = {
-    "referral_engineer": ["referral_q", "bond_role", "name_role"],
-    "founder_direct": ["role_q", "bond_role", "name_role"],
-    "recruiter_direct": ["bond_role", "role_q", "name_role"],
-    "proof_opinion": ["proof_take", "bond_role", "name_role"],
+    "direct_intro": ["referral_for"],
+    "advice_first": ["hook", "role_at"],
+    "give_first": ["gift", "hook", "role_at"],
+    "fit_question": ["fresher_q", "hook", "role_at"],
+    "recruiter_direct": ["grad_role", "role_at"],
 }
 
 
+def hook_subject(c: Contract) -> str | None:
+    """2–5 words about the hook: "your voice-sdk commits", "Acme AI's recent launch"."""
+    h = c.hook or {}
+    a = h.get("anchor") or ""
+    short = a.split("/")[-1]
+    return {"person_commit": f"your {short} commits", "person_repo": f"your {short} repo",
+            "person_post": f"your {a}", "person_bio": f"your work on {a}", "shared_ground": f"fellow {a}",
+            "company_launch": f"{c.company}'s recent launch",
+            "company_funding": f"{c.company}'s {a}"}.get(h.get("type") or "")
+
+
 def subject_options(c: Contract, me: dict) -> list[dict]:
-    """Every subject the structure's patterns give that passes the gate's subject rules."""
-    role, co, first = c.target_role or "", c.company or "", c.first_name or ""
-    bond = me.get("bond") or "CS+AI '27 grad"
-    topic = next((p["topic"] for p in c.proofs if p.get("topic")), None)
+    """Every subject the structure's patterns give that passes the gate's subject rules
+    and is 2–5 words."""
+    role, co = c.target_role or "", c.company or ""
+    year = me.get("year") or "2027"
+    thing = (c.gift or {}).get("thing")
     make = {
-        "referral_q": f"Referral for {role} at {co}?",
-        "role_q": f"{role} at {co}?",
-        "bond_role": f"{bond}, {role} at {co}",
-        "name_role": f"{first}, {role} at {co}?",
-        "proof_take": f"{topic}: your take?" if topic else None,
+        "hook": hook_subject(c),
+        "gift": f"A note on using {thing}" if thing else None,
+        "fresher_q": f"Freshers for {role}?" if len(role.split()) <= 3 else f"Freshers at {co}?",
+        "grad_role": f"{role}, {year} graduate" if len(role.split()) <= 3 else f"{year} graduate, {co}",
+        "role_at": f"{role} at {co}" if len(f"{role} at {co}".split()) <= SUBJECT_MAX else f"{role} opening",
+        "referral_for": f"Referral for {role} at {co}" if not gates.subject_problems(f"Referral for {role} at {co}")
+        else f"Referral for {role}",
     }
+    most = gates.SUBJECT_MAX_WORDS if c.structure == "direct_intro" else SUBJECT_MAX
     out = []
     for pat in SUBJECT_PATTERNS.get(c.structure or "", []):
         s = make.get(pat)
-        if s and role and co and not gates.subject_problems(s):
+        if s and role and co and len(s.split()) <= most and not gates.subject_problems(s):
             out.append({"pattern": pat, "subject": s})
     if not out and role and co:
-        out.append({"pattern": "role_plain", "subject": f"{role} at {co}"[:60]})
+        out.append({"pattern": "role_plain", "subject": " ".join(f"{role} opening".split()[:SUBJECT_MAX])[:60]})
     return out
 
 
@@ -464,134 +646,331 @@ def pick(options: list, key: Any) -> int:
 
 # ------------------------------------------------------------------ the deterministic fill
 
+THANKS = "Thank you for your time."
+EASY_OUT = "If not, that's completely fine."
+DEFAULT_OFFER = "If it's ever useful, I'm happy to share what I ran into. It might be naive next to what your team knows."
+
+
 def ask_line(c: Contract) -> str:
-    return {
-        # the role is named in the line before; the ask says "it" (no repetition)
-        "referral_engineer": "Would you be open to referring me for it, or pointing me to whoever is hiring?",
-        "founder_direct": "Would you be open to considering me for it, or pointing me to whoever is hiring?",
-        "recruiter_direct": "Could you put me forward for it, or tell me if it's open to 2027 graduates?",
-        "proof_opinion": "What do you think: is this the kind of work your team needs in that role?",
-    }[c.structure or "referral_engineer"]
-
-
-def blurb(c: Contract, me: dict) -> tuple[str, str]:
-    """(intro line, the forwardable note in quotes) — two lines a referrer can paste."""
-    p = c.proofs[0]["proof"]
-    p = p[0].upper() + p[1:]
-    note = (f"\"{me.get('full_name')}, final-year B.Tech CS+AI at {me.get('school')} ({me.get('year')}). {p}. "
-            f"Interested in the {c.target_role} role at {c.company}. Resume: {c.resume_link}\"")
-    intro = ("If you think it's a fit, here's a short note you could forward:" if c.structure == "proof_opinion"
-             else "If it's easier, here's a short note you can forward:")
-    return intro, note
+    """The one question of the email, per structure."""
+    h = c.hook or {}
+    if c.structure == "direct_intro":
+        return (f"I saw the {c.target_role} opening at {c.company}, and I'd be really grateful if you would "
+                f"consider referring me.")
+    if c.structure == "give_first":
+        return "If you think I might fit, could you point me to the best way to apply?"
+    if c.structure == "fit_question":
+        return "Does your team hire freshers into this role, or should I wait a year or two?"
+    if c.structure == "recruiter_direct":
+        return "Could you tell me whether it's open to 2027 graduates, and if so, the best way to apply?"
+    if h.get("type") in ("person_commit", "person_repo") and h.get("anchor"):
+        return f"In my place, what would you learn next to be useful on a codebase like {h['anchor']}?"
+    return "In my place, what would you learn next to be useful on a team like yours?"
 
 
 def _cap(s: str) -> str:
     return s[0].upper() + s[1:] if s else s
 
 
+def _opening(c: Contract) -> str:
+    """"the Backend Engineer opening at Acme AI (https://…)" — the link only when it is the body's one link."""
+    link = f" ({c.link})" if c.link and c.link == c.target_role_url else ""
+    return f"the {c.target_role} opening at {c.company}{link}"
+
+
+def forward_note(c: Contract, me: dict) -> str:
+    """The two lines a referrer can forward — an AFTER-YES asset (sent once they offer to
+    help, or in a follow-up), never in the first email."""
+    p = _cap(c.proofs[0]["proof"]) if c.proofs else ""
+    role = f"the {c.target_role} role at {c.company}" + (f" ({c.target_role_url})" if c.target_role_url else "")
+    return (f"\"{me.get('full_name')}, final-year B.Tech CS+AI at {me.get('school')} ({me.get('year')}). {p}. "
+            f"Interested in {role}. Resume: {c.resume_link}\"")
+
+
+_NUMBER_WORD = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
+OUT_MORE_EXPERIENCE = ("I understand the role asks for more experience than I have, so if it isn't a fit, "
+                       "I completely understand.")
+OUT_PLAIN = "If it isn't something you can help with, I completely understand."
+
+
+def out_line(c: Contract) -> str:
+    """The honest humility line: "more experience than I have" only when evidence says so."""
+    return OUT_MORE_EXPERIENCE if c.more_experience else OUT_PLAIN
+
+
+def record_paragraph(c: Contract, me: dict) -> str:
+    """"I've done four internships so far. I fine-tuned … I also built …" — every item a
+    resume line's curated phrasing, the role's needs first."""
+    n = me.get("internships") or 0
+    head = f"I've done {_NUMBER_WORD.get(n, n)} internships so far. " if n >= 2 else ""
+    lead = ["I", "I also", "I", "And I"]
+    items = [f"{lead[i]} {p['proof'].rstrip('.')}." for i, p in enumerate(c.record or c.proofs[:1])]
+    return head + " ".join(items)
+
+
+def _direct(c: Contract, me: dict) -> str:
+    school = me.get("school")
+    paras = [f"My name is {me.get('first_name')}, and I'm a final-year B.Tech CS+AI student at {school}.",
+             record_paragraph(c, me),
+             f"{ask_line(c)} {out_line(c)}"]
+    if c.resume_link:
+        paras.append(f"Resume: {c.resume_link}")
+    return f"Hi {c.first_name},\n\n" + "\n\n".join(paras)
+
+
 def fill(c: Contract, me: dict) -> dict:
-    """The message (greeting → ask) written from the slots alone. Returns
-    {message, blurb_intro, blurb}: the drafter adds blurb, opt-out line and signature."""
-    first, co, role = c.first_name, c.company, c.target_role
+    """The message (greeting → thanks) written from the slots alone. Returns {message,
+    forward_note}: the drafter adds the opt-out line and the signature. One question,
+    one link at most, no bullet list, no resume, no forwardable note."""
+    if c.structure == "direct_intro":
+        return {"message": _direct(c, me), "forward_note": forward_note(c, me)}
+    first = c.first_name
     intro = f"I'm {me.get('first_name')}, a final-year CS+AI student at {me.get('school')}"
     need = c.need or {}
-    asks_for = (f"asks for {need['what']}" if need.get("kind") == "stated"
-                else f"suggests you need {need.get('what')}")
+    asks_for = (f"The posting asks for {need['what']}." if need.get("kind") == "stated"
+                else f"The posting suggests you need {need.get('what')}.")
     p1 = c.proofs[0]["proof"]
-    if c.structure == "proof_opinion":
-        shown = [p["proof"] for p in c.proofs[:3]]
-        bullets = "\n".join(f"- {_cap(p)}" for p in shown)
-        mid = f"{intro}. Some things I've built:\n{bullets}"
-        close = f"Your {role} posting {asks_for}. {ask_line(c)}"   # names the role; the ask says "that role"
-        paras = [c.hook["sentence"], mid, close]
+    relevant = f"One thing I've done that might be relevant: I {p1}."
+    if c.structure == "give_first":
+        g = c.gift or {}
+        gift_link = f" ({g['link']})" if g.get("link") and c.link == g.get("link") else ""
+        paras = [c.hook["sentence"],
+                 f"{intro}, still early in my career. I've used {g.get('thing')} myself: I {g.get('proof')}"
+                 f"{gift_link}.",
+                 g.get("offer") or DEFAULT_OFFER,
+                 f"I'm also interested in {_opening(c)}. {ask_line(c)} {EASY_OUT} {THANKS}"]
+    elif c.structure == "fit_question":
+        paras = [c.hook["sentence"],
+                 f"{intro}. I'm interested in {_opening(c)}. {asks_for} {relevant}",
+                 f"I'm still early in my career, so I might be wrong about the fit. {ask_line(c)}",
+                 f"Either answer would help. {THANKS}"]
     elif c.structure == "recruiter_direct":
-        mid = f"{intro}, graduating in 2027, and I'd like to apply for the {role} role. It {asks_for}, and I {p1}."
-        paras = [c.hook["sentence"], mid, ask_line(c)]
-    elif c.structure == "founder_direct":
-        mid = f"{intro}, and I'd like to be considered for the {role} role. It {asks_for}, and I {p1}."
-        paras = [c.hook["sentence"], mid, ask_line(c)]
-    else:
-        mid = f"{intro}, applying for the {role} role at {co}. The posting {asks_for}, and I {p1}."
-        paras = [c.hook["sentence"], mid, ask_line(c)]
-    intro_b, note = blurb(c, me)
-    return {"message": f"Hi {first},\n\n" + "\n\n".join(paras), "blurb_intro": intro_b, "blurb": note}
+        paras = [c.hook["sentence"],
+                 f"{intro}, graduating in {me.get('year') or 2027}. I'd like to apply for {_opening(c)}. "
+                 f"{asks_for} {relevant}",
+                 f"I'm early in my career, so I may not be what you need. {ask_line(c)}",
+                 THANKS]
+    else:                                   # advice_first
+        paras = [c.hook["sentence"],
+                 f"{intro}, still early in my career. {relevant}",
+                 ask_line(c),
+                 f"I'm also writing because of {_opening(c)}. If you think I'd fit, "
+                 f"I'd be grateful to know the best way to apply. {EASY_OUT}",
+                 THANKS]
+    return {"message": f"Hi {first},\n\n" + "\n\n".join(paras), "forward_note": forward_note(c, me)}
 
 
-def assemble(message: str, blurb_intro: str, note: str, signature: str, opt_out: str | None = None) -> str:
-    """The full body exactly as it would be sent: message, the forwardable note, the
-    opt-out line, "Thanks," and the signature."""
-    parts = [message.strip(), f"{blurb_intro}\n{note}"]
+SIGN_OFF = "Best,"
+SIGN_OFF_BY = {"direct_intro": "Thank you for your time,"}
+
+
+def assemble(message: str, signature: str, opt_out: str | None = None, structure: str | None = None) -> str:
+    """The full body exactly as it would be sent: the message, the opt-out line, the
+    sign-off ("Thank you for your time," in the user's pattern) and the signature."""
+    parts = [message.strip()]
     if opt_out:
         parts.append(opt_out)
-    return "\n\n".join(parts) + f"\n\nThanks,\n{signature}"
+    return "\n\n".join(parts) + f"\n\n{SIGN_OFF_BY.get(structure or '', SIGN_OFF)}\n{signature}"
+
+
+def word_band(c: Contract | None) -> tuple[int, int]:
+    """The message's word band: the user's pattern carries a track record (80–170), the
+    research structures are short (gate config, 60–110)."""
+    if c is not None and c.structure == "direct_intro":
+        return DIRECT_MIN_WORDS, DIRECT_MAX_WORDS
+    return gates.MIN_WORDS, gates.MAX_WORDS
+
+
+def message_of(body: str, opt_lines: list[str] | None = None) -> str:
+    """The message part of a whole body: everything before the opt-out line or the sign-off."""
+    cut = len(body or "")
+    for marker in [*(x for x in (opt_lines or []) if x), "\n\nThank you for your time,\n", "\n\nBest,\n", "\n\nThanks,\n", "\n\nRegards,\n",
+                   "\n\nCheers,\n"]:
+        i = (body or "").find(marker)
+        if i != -1:
+            cut = min(cut, i)
+    return (body or "")[:cut].strip()
 
 
 # ------------------------------------------------------------------ checks on any version
 
+# the old cold-template shape: a forwardable note, a resume link or a bullet list in the
+# first email, an outright referral ask, a call ask, the stock openers
+_FORWARD = re.compile(r"note (?:you|they) (?:can|could) forward|forwardable|short note you", re.I)
+_RESUME_IN_BODY = re.compile(r"resume\s*:|drive\.google|docs\.google|\.pdf\b", re.I)
+_BULLETS = re.compile(r"^\s*[-•*]\s+\S", re.M)
+_REFER_ME = re.compile(r"\brefer(?:ring)? me\b|\bbe open to referring\b|\breferral for\b", re.I)
+_CALL_ASK = re.compile(r"\b\d+[- ]?min(?:ute)?s?\b.{0,12}\b(?:call|chat)\b", re.I)
+_STOCK = re.compile(r"i hope this finds you|i'?m reaching out|i am reaching out|quick question|i came across your profile",
+                    re.I)
+_LINK = re.compile(r"https?://\S+|\b[\w-]+\.(?:com|ai|io|dev|app|co|in|org|net)/\S*", re.I)
+GROVEL = re.compile(r"\bsir\b|\bma'?am\b|\bmadam\b|\brespected\b|\bhumbly\b|\bkindly\b|\bbeg\b|\bdesperate|"
+                    r"sorry to bother|please help me|do the needful", re.I)
+HUMILITY = {
+    "thanks": re.compile(r"\bthank you\b|\bthanks for\b", re.I),
+    "early": re.compile(r"early in my career|still learning|final-year", re.I),
+    "tentative": re.compile(r"might be (?:relevant|wrong|naive|useful)|may (?:not )?be (?:naive|what)|completely fine|"
+                            r"no worries|if not\b|i might be wrong|either answer|completely understand|"
+                            r"isn't a fit|really grateful", re.I),
+}
+
+
+def links(message: str) -> list[str]:
+    return _LINK.findall(message or "")
+
+
+def old_shape(message: str, c: Contract | None = None) -> list[str]:
+    """What the message carries that the first email must not (the pre-2026-10-17 template)."""
+    out = []
+    if _FORWARD.search(message):
+        out.append("a forwardable note (send it after they say yes)")
+    direct = bool(c and c.structure == "direct_intro")     # the user's pattern: resume + referral ask by design
+    if _RESUME_IN_BODY.search(message) and not direct:
+        out.append("a resume link (offer it after they reply)")
+    if _BULLETS.search(message):
+        out.append("a bullet list of resume lines")
+    if _REFER_ME.search(message) and not (c and c.structure in ("recruiter_direct", "direct_intro")):
+        out.append("an outright referral ask in the first email")
+    if _CALL_ASK.search(message):
+        out.append("a call ask")
+    if _STOCK.search(message):
+        out.append(f"a stock phrase (\"{_STOCK.search(message).group(0)}\")")
+    if len(links(message)) > 1:
+        out.append(f"{len(links(message))} links (one at most)")
+    return out
+
+
 def keeps_contract(message: str, c: Contract) -> list[str]:
-    """What a (model) rewrite dropped that the contract requires to be in the message."""
+    """What a (model) rewrite dropped that the contract requires to be in the message, or
+    the old template shape it brought back."""
     low = (message or "").lower()
     out = []
     if c.first_name and c.first_name.lower() not in low[:80]:
         out.append("first name in the greeting")
-    if c.company and c.company.lower() not in low and c.structure != "proof_opinion" and c.structure != "founder_direct" \
-            and c.structure != "recruiter_direct":
+    if c.company and c.company.lower() not in low:
         out.append("company name")
     if c.target_role and c.target_role.lower() not in low:
         out.append("role")
-    if c.hook and c.hook.get("anchor") and c.hook["anchor"].lower() not in low:
+    direct = c.structure == "direct_intro"
+    if not direct and c.hook and c.hook.get("anchor") and c.hook["anchor"].lower() not in low:
         out.append("hook")
-    for p in (c.proofs[:3] if c.structure == "proof_opinion" else c.proofs[:1]):
-        nums = re.findall(r"\d[\d,]*%?", p["proof"])
+    shown = [p["proof"] for p in (c.record or c.proofs[:1])] if direct else [
+        (c.gift or {}).get("proof") if c.structure == "give_first" and c.gift else (c.proofs[0]["proof"] if c.proofs else "")]
+    for proof in shown:
+        nums = re.findall(r"\d[\d,]*%?", proof or "")
         if nums and not any(n in message for n in nums):
             out.append(f"proof number ({nums[0]})")
-    if "?" not in message:
+    if c.link and c.link not in message:
+        out.append("the resume link" if direct else "the link")
+    q = message.count("?")
+    if direct:
+        if not re.search(r"consider referring me|refer(?:ring)? me", message, re.I):
+            out.append("the ask")
+        if q > 1:
+            out.append("exactly one question")
+    elif q == 0:
         out.append("the ask")
+    elif q > 1:
+        out.append("exactly one question")
+    out += old_shape(message, c)
     return out
 
 
-def quality(message: str, subject: str, c: Contract, flags: list[dict], words: int, *, has_blurb: bool,
-            has_resume: bool) -> dict:
-    """0–100 and its parts. Personalisation completeness 30, hook specificity 20, length 15,
-    one ask 10, readability 10, subject 5, faithfulness 10. Under REWRITE_BELOW: "rewrite"."""
+def humility(message: str) -> dict:
+    """Which humility markers the message carries, and any grovelling."""
+    found = [k for k, rx in HUMILITY.items() if rx.search(message or "")]
+    grovel = [m.group(0) for m in GROVEL.finditer(message or "")]
+    return {"markers": found, "grovel": grovel}
+
+
+def quality(message: str, subject: str, c: Contract, flags: list[dict], words: int, **_legacy) -> dict:
+    """0–100 and its parts. Personalisation 20, hook specificity 15 (the user's direct_intro
+    pattern has no hook: its 15 are the track record — 3–4 numbered results that fit the
+    role), length 10 (60–110; direct_intro 80–170), one ask 10, humility 15, first-email
+    shape 10, readability 5, subject 5, faithfulness 10. Under REWRITE_BELOW: "rewrite"."""
     kinds = [f["kind"] for f in flags]
+    direct = c.structure == "direct_intro"
+    low = (message or "").lower()
+    proof = (c.gift or {}).get("proof") if c.structure == "give_first" and c.gift else (
+        c.proofs[0]["proof"] if c.proofs else "")
+    nums = re.findall(r"\d[\d,]*%?", proof or "")
     present = [
         bool(c.first_name and c.first_name in message[:80]),
-        bool(c.company and (c.company.lower() in message.lower() or c.structure in ("proof_opinion", "founder_direct",
-                                                                                      "recruiter_direct"))),
-        bool(c.target_role and c.target_role.lower() in message.lower()),
-        bool(c.hook and c.hook.get("anchor", "").lower() in message.lower()),
-        bool(c.proofs and any(re.findall(r"\d", p["proof"]) and p["proof"][:20].lower() in message.lower()
-                              for p in c.proofs) or (c.proofs and c.proofs[0]["proof"][:20].lower() in message.lower())),
-        "?" in message,
-        has_blurb, has_resume,
+        bool(c.company and c.company.lower() in low),
+        bool(c.target_role and c.target_role.lower() in low),
+        bool(c.resume_link and c.resume_link in message) if direct else
+        bool(c.hook and c.hook.get("anchor", "").lower() in low),
+        bool(proof and ((nums and any(n in message for n in nums)) or proof[:20].lower() in low)),
     ]
-    completeness = round(30 * sum(present) / len(present))
-    used_hook = bool(c.hook and c.hook.get("anchor") and c.hook["anchor"].lower() in message.lower())
-    hook = round(20 * ((c.hook or {}).get("specificity") or 0)) if used_hook else 0   # only a hook the email uses
-    lo, hi = gates.MIN_WORDS, gates.MAX_WORDS
+    completeness = round(20 * sum(present) / len(present))
+    used_hook = bool(c.hook and c.hook.get("anchor") and c.hook["anchor"].lower() in low)
+    hook = round(15 * ((c.hook or {}).get("specificity") or 0)) if used_hook else 0   # only a hook the email uses
+    shown = 0
+    if direct:
+        shown = sum(1 for p in (c.record or []) if (re.findall(r"\d[\d,]*%?", p["proof"]) and any(
+            n in message for n in re.findall(r"\d[\d,]*%?", p["proof"]))))
+        hook = {0: 0, 1: 5, 2: 10}.get(shown, 15)
+    lo, hi = word_band(c)
     dist = 0 if lo <= words <= hi else (lo - words if words < lo else words - hi)
-    length = max(0, 15 - 3 * (dist // 10 + (1 if dist else 0)))
-    asks = len(re.findall(r"\?", message))
-    one_ask = 10 if asks == 1 else 6 if asks == 2 else 0
+    length = max(0, 10 - 2 * (dist // 10 + (1 if dist else 0)))
+    asks = message.count("?")
+    one_ask = 10 if asks == 1 else 4 if asks == 2 else 0
+    if direct:
+        asked = bool(re.search(r"consider referring me|refer(?:ring)? me", message, re.I))
+        one_ask = 10 if asked and asks <= 1 else 4 if asked else 0
+    hum = humility(message)
+    if direct and "thanks" not in hum["markers"]:
+        hum["markers"].append("thanks")          # its sign-off is "Thank you for your time," (assemble)
+    humble = 0 if hum["grovel"] else {0: 0, 1: 6, 2: 11}.get(len(hum["markers"]), 15)
+    shape_bad = old_shape(message, c)
+    shape = max(0, 10 - 4 * len(shape_bad))
     long_s, avg = gates.readability(message)
-    readability = max(0, (10 if avg <= 18 else 6 if avg <= 24 else 2) - 2 * long_s)
-    subj = 5 if not gates.subject_problems(subject) else 0
+    readability = max(0, (5 if avg <= 16 else 3 if avg <= 22 else 1) - 2 * long_s)
+    sp = gates.subject_problems(subject)
+    if len((subject or "").split()) > SUBJECT_MAX and not direct:
+        sp = [*sp, f"over {SUBJECT_MAX} words"]
+    if re.match(r"\s*referral\b", subject or "", re.I) and not direct:
+        sp = [*sp, "a \"Referral …\" subject reads as a template"]
+    subj = 5 if not sp else 0
     faith = 10 - 5 * ("faithfulness" in kinds) - 10 * ("uncovered_claim" in kinds) - 3 * ("ai_tell" in kinds) \
         - 2 * ("dashes" in kinds)
     faith = max(0, faith)
-    total = completeness + hook + length + one_ask + readability + subj + faith
+    total = completeness + hook + length + one_ask + humble + shape + readability + subj + faith
     verdict = "good" if total >= GOOD_FROM else "ok" if total >= REWRITE_BELOW else "rewrite"
     return {"score": total, "verdict": verdict, "parts": {
-        "personalisation": {"score": completeness, "of": 30, "detail": f"{sum(present)} of {len(present)} slots in the email"},
-        "hook": {"score": hook, "of": 20, "detail": ((c.hook or {}).get("type") or "none") + ("" if used_hook else " (not in the email)")},
-        "length": {"score": length, "of": 15, "detail": f"{words} words (aim {lo}–{hi})"},
-        "one_ask": {"score": one_ask, "of": 10, "detail": f"{asks} question mark(s)"},
-        "readability": {"score": readability, "of": 10, "detail": f"avg {avg:.0f} words/sentence, {long_s} over 30"},
-        "subject": {"score": subj, "of": 5, "detail": "; ".join(gates.subject_problems(subject)) or "passes"},
+        "personalisation": {"score": completeness, "of": 20, "detail": f"{sum(present)} of {len(present)} slots in the email"},
+        "hook": {"score": hook, "of": 15, "detail": (f"track record: {shown} numbered result(s) in the email" if direct else
+                                                    ((c.hook or {}).get("type") or "none") + ("" if used_hook else " (not in the email)"))},
+        "length": {"score": length, "of": 10, "detail": f"{words} words (aim {lo}–{hi})"},
+        "one_ask": {"score": one_ask, "of": 10, "detail": ("one polite referral ask" if direct and one_ask == 10
+                                                          else f"{asks} question mark(s)")},
+        "humility": {"score": humble, "of": 15, "detail": (f"grovels: {', '.join(hum['grovel'][:3])}" if hum["grovel"]
+                                                            else ", ".join(hum["markers"]) or "no thanks, no 'early in my career', nothing tentative")},
+        "shape": {"score": shape, "of": 10, "detail": "; ".join(shape_bad) or "no note, no resume, no bullets, one link"},
+        "readability": {"score": readability, "of": 5, "detail": f"avg {avg:.0f} words/sentence, {long_s} over 30"},
+        "subject": {"score": subj, "of": 5, "detail": "; ".join(sp) or "passes"},
         "faithfulness": {"score": faith, "of": 10, "detail": ", ".join(k for k in kinds if k in (
             "faithfulness", "uncovered_claim", "ai_tell", "dashes")) or "no flags"},
     }}
+
+
+def volume(targets: list[dict], *, per_company: int | None = None, per_role: int | None = None) -> list[dict]:
+    """Targets ({company_id, job_id, ...}, best first) kept within one batch's limits: at
+    most MAX_PER_COMPANY people at one company and MAX_PER_ROLE about one role."""
+    pc = MAX_PER_COMPANY if per_company is None else per_company
+    pr = MAX_PER_ROLE if per_role is None else per_role
+    by_co: dict = {}
+    by_role: dict = {}
+    out = []
+    for t in targets:
+        co, job = t.get("company_id"), t.get("job_id")
+        if by_co.get(co, 0) >= pc or (job is not None and by_role.get(job, 0) >= pr):
+            continue
+        by_co[co] = by_co.get(co, 0) + 1
+        if job is not None:
+            by_role[job] = by_role.get(job, 0) + 1
+        out.append(t)
+    return out
 
 
 def not_claimed(brief: dict | None, c: Contract) -> list[dict]:
@@ -613,6 +992,8 @@ def not_claimed(brief: dict | None, c: Contract) -> list[dict]:
     return out[:14]
 
 
-__all__ = ["Contract", "contract", "hooks", "needs_and_proofs", "first_name", "recipient_role", "short_role",
-           "choose_structure", "subject_options", "fill", "assemble", "keeps_contract", "quality", "not_claimed",
-           "pick", "STRUCTURES", "CONTRACT_FIELDS", "HOOK_SPECIFICITY", "REWRITE_BELOW", "LEARN_MIN_SENT"]
+__all__ = ["Contract", "contract", "hooks", "gifts", "needs_and_proofs", "first_name", "recipient_role", "short_role",
+           "choose_structure", "subject_options", "hook_subject", "fill", "forward_note", "assemble", "message_of",
+           "keeps_contract", "old_shape", "humility", "quality", "not_claimed", "volume", "pick", "STRUCTURES",
+           "LEGACY_STRUCTURES", "CONTRACT_FIELDS", "HOOK_SPECIFICITY", "REWRITE_BELOW", "LEARN_MIN_SENT",
+           "MAX_PER_COMPANY", "MAX_PER_ROLE"]

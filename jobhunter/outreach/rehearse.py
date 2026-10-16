@@ -161,7 +161,7 @@ def _simulate(start: str, days: int, out_path: str) -> None:   # noqa: C901 — 
         else:
             refused.append(r.get("error"))
     with get_session() as s:
-        opt_line_ok = all(suppress.OPT_OUT_LINE in e.body for e in s.exec(
+        opt_line_ok = all(suppress.has_opt_out(e.body) for e in s.exec(
             select(Email).where(Email.status == "approved", Email.kind == "cold")).all())
 
     rows: list[dict] = []

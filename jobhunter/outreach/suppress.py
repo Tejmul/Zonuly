@@ -38,6 +38,21 @@ _DNC = _O.get("do_not_contact") or {}
 COMPANY_COOLDOWN_DAYS = int(_O.get("company_cooldown_days", 30))
 CONTACT_COOLDOWN_DAYS = int(_O.get("contact_cooldown_days", 30))
 OPT_OUT_LINE = str(_O.get("opt_out_line") or "").strip()
+#: opt-out lines earlier drafts carry (and replies quote): a body with one of these already
+#: has its opt-out line, and a reply quoting one is not asking us to stop
+LEGACY_OPT_OUT_LINES = [
+    "If this isn't something you can help with, no worries, and if you'd rather I didn't write again, "
+    "just reply \"stop\" and I won't.",
+]
+
+
+def opt_out_lines() -> list[str]:
+    """The current opt-out line first, then the older ones still found in stored bodies."""
+    return [x for x in [OPT_OUT_LINE, *LEGACY_OPT_OUT_LINES] if x]
+
+
+def has_opt_out(body: str | None) -> bool:
+    return any(x in (body or "") for x in opt_out_lines())
 _BRAKE = _O.get("bounce_brake") or {}
 BRAKE_DAYS = int(_BRAKE.get("window_days", 7))
 BRAKE_MAX = int(_BRAKE.get("max_bounces", 2))
@@ -136,12 +151,14 @@ def cooldown(session, email: Email) -> str | None:
 def with_opt_out(body: str) -> str:
     """The body with outreach.opt_out_line above the sign-off — once. Idempotent."""
     line = OPT_OUT_LINE
-    if not line or not body or line in body:
+    if not line or not body or has_opt_out(body):
         return body
-    for marker in ("\n\nThanks,\n", "\n\nThanks\n", "\n\nBest,\n", "\n\nRegards,\n", "\n\nCheers,\n"):
-        if marker in body:
-            head, tail = body.split(marker, 1)
-            return f"{head.rstrip()}\n\n{line}{marker}{tail}"
+    found = [(body.find(m), m) for m in ("\n\nBest,\n", "\n\nThanks,\n", "\n\nThanks\n", "\n\nRegards,\n",
+                                         "\n\nCheers,\n") if m in body]
+    if found:
+        _, marker = min(found)
+        head, tail = body.split(marker, 1)
+        return f"{head.rstrip()}\n\n{line}{marker}{tail}"
     return f"{body.rstrip()}\n\n{line}"
 
 
@@ -166,8 +183,8 @@ def is_opt_out(text: str | None) -> str | None:
     body = (text or "").strip()
     if not body:
         return None
-    if OPT_OUT_LINE and OPT_OUT_LINE in body:
-        body = body.replace(OPT_OUT_LINE, " ")
+    for line in opt_out_lines():
+        body = body.replace(line, " ")
     for rx in _OPT_OUT:
         m = rx.search(body)
         if m:
@@ -264,5 +281,5 @@ def dead_addresses(session, company_id: int | None = None) -> set[str]:
     return {(a or "").lower() for a in session.exec(stmt).all() if a}
 
 
-__all__ = ["blocked", "config_block", "cooldown", "with_opt_out", "is_opt_out", "opt_out", "mark_bounced",
+__all__ = ["blocked", "config_block", "cooldown", "with_opt_out", "has_opt_out", "opt_out_lines", "is_opt_out", "opt_out", "mark_bounced",
            "brake", "bounced_in_window", "dead_addresses", "OPT_OUT_LINE"]

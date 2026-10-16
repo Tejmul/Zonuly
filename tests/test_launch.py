@@ -269,6 +269,45 @@ def test_a_follow_up_is_drafted_once_after_five_silent_days_and_threads_under_th
         assert s.get(Email, fid).gmail_thread_id == "dryrun:1"
 
 
+def test_two_follow_ups_when_configured_each_new_and_only_the_last_says_so(db, monkeypatch):
+    from jobhunter.outreach import drafter
+
+    monkeypatch.setattr(followup, "MAX_FOLLOWUPS", 2)
+    monkeypatch.setattr(drafter, "get_session", followup.get_session)
+    cid, (p1, _) = _world(db)
+    contract = {"proofs": [{"proof": "fine-tuned Mistral 7B, lifting accuracy from 20% to 92%"},
+                           {"proof": "cut AI response latency by 88% with SSE streaming"}]}
+    parent = _email(db, cid, p1, status="sent", sent_days_ago=12, contract=json.dumps(contract))
+    assert followup.queue(use_model=False)["drafted"] == 1
+    with Session(db) as s:
+        f1 = s.exec(select(Email).where(Email.kind == "followup")).one()
+        assert "88%" in f1.body and "last time" not in f1.body       # new value, not the last one
+        f1.status, f1.sent_at = "sent", utcnow() - timedelta(days=1)
+        s.add(f1)
+        s.commit()
+    assert followup.queue(use_model=False)["drafted"] == 0          # five quiet days after the first follow-up
+    with Session(db) as s:
+        f1 = s.exec(select(Email).where(Email.kind == "followup")).one()
+        f1.sent_at = utcnow() - timedelta(days=6)
+        s.add(f1)
+        s.commit()
+    assert followup.queue(use_model=False)["drafted"] == 1
+    with Session(db) as s:
+        f2 = s.exec(select(Email).where(Email.kind == "followup").order_by(Email.id.desc())).first()
+        assert f2.parent_email_id == parent and "last time" in f2.body and "resume" in f2.body
+        f2.status, f2.sent_at = "sent", utcnow() - timedelta(days=9)
+        s.add(f2)
+        s.commit()
+    assert followup.queue(use_model=False)["due"] == 0              # never a third
+
+
+def test_a_legacy_opt_out_line_counts_and_is_not_an_opt_out(monkeypatch):
+    old = suppress.LEGACY_OPT_OUT_LINES[0]
+    body = f"Hi Priya,\n\nA short ask.\n\n{old}\n\nThanks,\nTejmul"
+    assert suppress.with_opt_out(body) == body and suppress.has_opt_out(body)
+    assert suppress.is_opt_out(f"Sure, happy to help.\n\n{old}") is None
+
+
 def test_no_follow_up_after_a_reply_a_bounce_or_an_opt_out(db):
     cid, (p1, p2) = _world(db)
     replied = _email(db, cid, p1, status="sent", sent_days_ago=6)

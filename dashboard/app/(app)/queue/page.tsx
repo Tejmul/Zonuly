@@ -35,8 +35,11 @@ const FLAG_LABEL: Record<string, string> = {
   faithfulness: "unsupported claim", ai_tell: "reads machine-written", length: "length", one_ask: "more than one ask",
   dashes: "dashes", guessed: "guessed address", conflict: "calendar clash", subject: "subject line",
   readability: "long sentences", blurb: "blurb too long", uncovered_claim: "claims an uncovered need",
+  first_mail: "not for a first email", tone: "grovels",
 };
 const STRUCTURE_LABEL: Record<string, string> = {
+  direct_intro: "Who I am · track record · referral ask", advice_first: "Advice first, then the role",
+  give_first: "Give first, then the role", fit_question: "Honest fit question",
   proof_opinion: "Proof of work → their opinion", referral_engineer: "Referral ask · engineer",
   founder_direct: "Direct ask · founder", recruiter_direct: "Direct ask · recruiter",
 };

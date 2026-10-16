@@ -21,6 +21,10 @@ import { ProposalDraft, type DraftState } from "../_review/review";
 type ProposalWithDraft = Proposal & { draft?: DraftState };
 
 const STRUCTURE_LABEL: Record<string, string> = {
+  direct_intro: "Who I am · track record · referral ask",
+  advice_first: "Advice first, then the role",
+  give_first: "Give first, then the role",
+  fit_question: "Honest fit question",
   proof_opinion: "Proof of work → their opinion",
   referral_engineer: "Referral ask · engineer",
   founder_direct: "Direct ask · founder",

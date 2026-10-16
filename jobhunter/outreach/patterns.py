@@ -42,16 +42,23 @@ from jobhunter.db import Company, Email, EmailPattern, Job, get_session, init_db
 log = logging.getLogger(__name__)
 
 STRUCTURE_LABEL = {
+    "direct_intro": "Who I am, track record, polite referral ask (your pattern)",
+    "advice_first": "Advice first, then the role",
+    "give_first": "Give first, then the role",
+    "fit_question": "Honest fit question (manager / founder)",
+    # drafts written before 2026-10-17
     "proof_opinion": "Proof of work → their opinion (small team)",
     "referral_engineer": "Referral ask to an engineer",
     "founder_direct": "Direct ask to a founder",
-    "recruiter_direct": "Direct ask to a recruiter",
+    "recruiter_direct": "Direct, humble ask to a recruiter",
 }
 MARKET_LABEL = {"india": "India", "remote": "Remote", "abroad": "Abroad (on-site)"}
 
 # a slot the template must keep: without it every email of the kind would say the same
 # thing about different people ("your post about X" to someone who never wrote it)
 REQUIRED = ("first_name", "hook", "role")
+# the user's own pattern has no hook: its per-person facts are the name, the role and the company
+REQUIRED_BY = {"direct_intro": ("first_name", "role", "company")}
 # the only gate flag an auto-approval may carry — the bounce brake and the guessed cap
 # still decide at send time whether a guessed address goes
 ALLOWED_FLAGS = {"guessed"}
@@ -110,7 +117,7 @@ def market(job: dict | None, company: dict | None) -> str:
 
 
 def segment(structure: str | None, mkt: str | None) -> str:
-    return f"{structure or 'referral_engineer'}:{mkt or 'abroad'}"
+    return f"{structure or 'direct_intro'}:{mkt or 'abroad'}"
 
 
 def segment_label(seg: str | None) -> str:
@@ -146,9 +153,28 @@ def slots(contract: dict | None) -> dict[str, str]:
         # compose.fill's own phrase: a stated need "asks for", an implied one "suggests you need"
         out["asks_for"] = (f"asks for {need['what']}" if need.get("kind") == "stated"
                            else f"suggests you need {need['what']}")
-    for i, p in enumerate((c.get("proofs") or [])[:3], 1):
+    # the proofs the email shows: the track record (direct_intro), else the covered needs
+    for i, p in enumerate((c.get("record") or c.get("proofs") or [])[:4], 1):
         out[f"proof{i}"] = p.get("proof")
         out[f"topic{i}"] = p.get("topic")
+    hook = c.get("hook") or {}
+    if hook.get("anchor"):
+        out["anchor"] = hook["anchor"]
+        if "/" in hook["anchor"]:
+            out["anchor_short"] = hook["anchor"].split("/")[-1]
+    if c.get("target_role_url"):
+        out["role_url"] = c["target_role_url"]
+    gift = c.get("gift") or {}
+    if gift.get("proof"):
+        out["gift"] = gift["proof"]
+    if gift.get("thing"):
+        out["gift_thing"] = gift["thing"]
+    if gift.get("link"):
+        out["gift_link"] = gift["link"]
+    if c.get("structure") == "direct_intro":
+        from jobhunter.outreach import compose
+
+        out["out_line"] = compose.OUT_MORE_EXPERIENCE if c.get("more_experience") else compose.OUT_PLAIN
     return {k: str(v).strip() for k, v in out.items() if v and len(str(v).strip()) >= 2}
 
 
@@ -349,9 +375,11 @@ def approve_from(email_id: int, *, subject: str | None = None, body: str | None 
         edited = (subject != e.subject) or (body != e.body)
     vals = slots(contract)
     body_t, subj_t = to_template(body, vals), to_template(subject, vals)
-    lost = [s for s in REQUIRED if s in vals and s not in used_slots(body_t)]
+    lost = [s for s in REQUIRED_BY.get(contract.get("structure") or "", REQUIRED)
+            if s in vals and s not in used_slots(body_t)]
     if lost:
-        names = {"first_name": "their first name", "hook": "the line about them (the hook)", "role": "the role's name"}
+        names = {"first_name": "their first name", "hook": "the line about them (the hook)", "role": "the role's name",
+                 "company": "the company's name"}
         return {"error": "A pattern has to keep a place for each person's own " + ", ".join(names[s] for s in lost)
                          + ". Your edit changed or removed it, so every email of this kind would say the same thing "
                          "about different people. Keep that part as drafted, or approve just this email."}
