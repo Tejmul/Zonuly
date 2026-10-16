@@ -527,3 +527,9 @@ def test_the_users_own_template_passes_the_gates_and_scores_well(monkeypatch):
     c = compose.contract(_person(), _company(), JOB, _brief(), ME)
     good, flags = _scored(c, compose.fill(c, ME)["message"])
     assert good["score"] >= 75, good          # high enough for pattern auto-approval
+
+
+def test_the_users_template_needs_no_needs_brief(monkeypatch):
+    monkeypatch.setattr(compose, "DIRECT_TEMPLATE", TEMPLATE)
+    c = compose.contract(_person(), _company(), JOB, {}, ME)       # no brief at all
+    assert "need" not in c.missing and "proof" not in c.missing

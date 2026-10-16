@@ -536,6 +536,8 @@ def contract(person: dict, company: dict, job: dict | None, brief: dict | None, 
     for f in CONTRACT_FIELDS:
         if f == "hook" and c.structure == "direct_intro":
             continue                      # the user's pattern opens with who he is, not a hook
+        if f in ("need", "proof", "recipient_role") and c.structure == "direct_intro" and DIRECT_TEMPLATE:
+            continue                      # his fixed text names its own results; no per-role need or proof slot
         val = {"need": c.need, "proof": c.proofs[0]["proof"] if c.proofs else None}.get(f, getattr(c, f, None))
         if not val:
             c.missing.append(f)
