@@ -179,3 +179,14 @@ def test_an_aggregator_figure_alone_never_hides_a_company():
     assert india.pay_verdict(ev)[0] == "unknown"
     ev = india.pay_evidence(company_ppo=26, jobs=[], company_ppo_evidence="levels.fyi SDE1: $29,500 total comp")
     assert india.pay_verdict(ev)[0] == "ok"          # it can still keep one
+
+
+def test_a_us_posting_is_not_india_pay():
+    us = SimpleNamespace(title="Software Engineer", is_senior=False, is_internship=False, salary_min_lpa=150,
+                         salary_max_lpa=250, salary_raw="$170K – $245K", ppo_lpa=None, location="San Francisco",
+                         currency=None)
+    blr = SimpleNamespace(title="Software Engineer", is_senior=False, is_internship=False, salary_min_lpa=10,
+                          salary_max_lpa=20, salary_raw="₹10L – ₹20L", ppo_lpa=None, location="Bengaluru",
+                          currency=None)
+    assert verdict(jobs=[us])[0] == "unknown"           # dollars in California prove nothing here
+    assert verdict(jobs=[us, blr])[0] == "ok"           # the Bengaluru figure decides (floor 20 in these tests)

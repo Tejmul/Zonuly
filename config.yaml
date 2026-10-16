@@ -355,6 +355,7 @@ targeting:
       # listed companies: thousands of applicants per opening, whatever the round on record (2026-10-08)
       listed:
       - affirm
+      - rubrik        # 2026-10-17: NYSE-listed since 2024, was surfacing in the Bengaluru shortlist
       - robinhood
       - sofi
       - =toast

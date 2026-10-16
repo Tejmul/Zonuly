@@ -96,6 +96,30 @@ def ctc_upper(ctc: str | None) -> float | None:
 _AGGREGATOR = re.compile(r"levels\.fyi|glassdoor|ambitionbox|payscale|6figr|weekday\.works", re.I)
 
 
+_INDIA_PLACE = re.compile(r"\b(india|bengaluru|bangalore|hyderabad|secunderabad|karnataka|telangana|pune|mumbai|"
+                          r"chennai|gurgaon|gurugram|noida|delhi|ncr)\b", re.I)
+_INR_TEXT = re.compile(r"(₹|\binr\b|\brs\.?|\blpa\b|\blakhs?\b|\bcrores?\b)", re.I)
+_FOREIGN_MONEY = re.compile(r"(\$|€|£|\busd\b|\beur\b|\bgbp\b|\bcad\b|\bsgd\b|\baud\b)", re.I)
+_ABROAD = re.compile(r"\b(us|usa|united states|remote - us|uk|united kingdom|canada|europe|germany|singapore|"
+                     r"australia|ca|ny|tx|wa|san francisco|new york|seattle|london|berlin|palo alto|"
+                     r"mountain view|austin|boston|toronto|dubai|emea|americas)\b", re.I)
+
+
+def paid_in_india(j) -> bool:
+    """False only when the posting plainly is not India pay: a non-rupee currency, a figure
+    in $/€/£, or a location outside India. A posting that says nothing about either counts.
+    2026-10-17: US postings ("Remote - US, $200,200–$357,500") read as ₹314 LPA and made
+    Samsara and Rubrik look like they clear the Bengaluru floor."""
+    currency = (getattr(j, "currency", None) or "").upper()
+    raw = getattr(j, "salary_raw", None) or ""
+    where = getattr(j, "location", None) or ""
+    if currency == "INR" or _INR_TEXT.search(raw):
+        return True
+    if currency or _FOREIGN_MONEY.search(raw):
+        return False
+    return not where.strip() or bool(_INDIA_PLACE.search(where)) or not _ABROAD.search(where)
+
+
 def pay_evidence(*, company_ppo: float | None, company_ppo_evidence: str | None,
                  jobs: list, list_ctc: str | None = None) -> list[PayEvidence]:
     """Every piece of full-time pay evidence for one company. `jobs` are Job rows (or any
@@ -107,7 +131,10 @@ def pay_evidence(*, company_ppo: float | None, company_ppo_evidence: str | None,
         if v is not None and float(v) >= IMPLAUSIBLE_LPA:
             out.append(PayEvidence(float(v), quote[:240], kind))
 
-    if company_ppo is not None:
+    q = company_ppo_evidence or ""
+    if company_ppo is not None and (_AGGREGATOR.search(q) or _INR_TEXT.search(q) or not _FOREIGN_MONEY.search(q)):
+        # a stored figure copied from a dollar POSTING is US pay, not evidence for Bengaluru;
+        # an aggregator (levels.fyi) quotes Indian pay in dollars, so it stays
         quote = company_ppo_evidence or f"₹{company_ppo:g} LPA on record"
         # a salary aggregator's number is one data point from an unknown level and city —
         # it may keep a company, it may not hide one (InMobi's "Fellow Engineer" at ₹13.8L)
@@ -121,6 +148,8 @@ def pay_evidence(*, company_ppo: float | None, company_ppo_evidence: str | None,
         if getattr(j, "is_internship", False):
             continue          # the stipend (and an internship 'salary') is not full-time pay
         band = getattr(j, "salary_max_lpa", None) or getattr(j, "salary_min_lpa", None)
+        if band and not paid_in_india(j):
+            continue          # a San Francisco posting converted to rupees says nothing about Bengaluru pay
         if band:
             raw = getattr(j, "salary_raw", None)
             add(band, f"posting states {raw} for {title}" if raw else f"posting states ₹{band:g} LPA for {title}",
