@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 _O = CONFIG.get("outreach") or {}
 _DNC = _O.get("do_not_contact") or {}
 COMPANY_COOLDOWN_DAYS = int(_O.get("company_cooldown_days", 30))
+ASKS_PER_COMPANY = max(1, int(_O.get("asks_per_company", 1)))
 CONTACT_COOLDOWN_DAYS = int(_O.get("contact_cooldown_days", 30))
 OPT_OUT_LINE = str(_O.get("opt_out_line") or "").strip()
 #: opt-out lines earlier drafts carry (and replies quote): a body with one of these already
@@ -122,17 +123,23 @@ def cooldown(session, email: Email) -> str | None:
         Email.company_id == email.company_id, Email.candidate_id == email.candidate_id, Email.kind == "cold",
         col(Email.status).in_(_LIVE), Email.id != email.id)).all()
     mine = (email.approved_at or utcnow(), email.id or 10**9)
+    # ASKS_PER_COMPANY open asks may stand at one company at once (2026-10-17: two at Sarvam
+    # the same day, the user's call); one more than that waits for a reply or the cooldown
+    ahead: list[str] = []
     for o in others:
         if o.status == "sending" or (o.status == "approved" and (o.approved_at or o.created_at, o.id) < mine):
-            return f"another ask to this company is already approved (email {o.id}) — one at a time"
+            ahead.append(f"another ask to this company is already approved (email {o.id})")
+            continue
         if o.status == "approved":
             continue      # approved after this one: it waits behind this, not the other way round
         when = o.sent_at or o.created_at
         if when and when >= since:
             replied = session.exec(select(Reply.id).where(Reply.email_id == o.id)).first()
             if not replied:
-                return (f"you asked someone at this company on {when:%d %b} and nobody has replied — "
-                        f"one ask per company until a reply or {COMPANY_COOLDOWN_DAYS} days")
+                ahead.append(f"you asked someone at this company on {when:%d %b} and nobody has replied")
+    if len(ahead) >= ASKS_PER_COMPANY:
+        return (f"{ahead[0]} — at most {ASKS_PER_COMPANY} open ask(s) per company until a reply or "
+                f"{COMPANY_COOLDOWN_DAYS} days (outreach.asks_per_company)")
     since_p = utcnow() - timedelta(days=CONTACT_COOLDOWN_DAYS)
     same = session.exec(select(Email).where(
         Email.contact_id == email.contact_id, Email.kind == "cold", col(Email.status).in_(_LIVE),

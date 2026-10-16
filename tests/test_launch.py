@@ -211,7 +211,8 @@ def test_the_opt_out_line_is_added_once_above_the_sign_off(monkeypatch):
 
 # ------------------------------------------------------------------ cooldown
 
-def test_one_ask_per_company_until_a_reply_or_30_days(db):
+def test_one_ask_per_company_until_a_reply_or_30_days(db, monkeypatch):
+    monkeypatch.setattr(suppress, "ASKS_PER_COMPANY", 1)
     cid, (p1, p2) = _world(db)
     first = _email(db, cid, p1, status="approved")
     second = _email(db, cid, p2, status="draft")
@@ -232,7 +233,8 @@ def test_one_ask_per_company_until_a_reply_or_30_days(db):
                                           kind="followup")) is None
 
 
-def test_two_approved_asks_do_not_deadlock_the_older_one_goes(db):
+def test_two_approved_asks_do_not_deadlock_the_older_one_goes(db, monkeypatch):
+    monkeypatch.setattr(suppress, "ASKS_PER_COMPANY", 1)
     cid, (p1, p2) = _world(db)
     a = _email(db, cid, p1, status="approved")
     b = _email(db, cid, p2, status="approved")
@@ -327,3 +329,12 @@ def test_a_live_follow_up_never_answers_a_dry_run_thread(db, monkeypatch):
     with Session(db) as s:
         assert "dry run" in sender._referrer_problem(s, s.get(Email, fid))
         assert followup.due(s) == []
+
+
+def test_asks_per_company_lets_two_people_at_one_company_go_the_same_day(db, monkeypatch):
+    monkeypatch.setattr(suppress, "ASKS_PER_COMPANY", 2)
+    cid, (p1, p2) = _world(db)
+    a = _email(db, cid, p1, status="approved")
+    b = _email(db, cid, p2, status="draft")
+    with Session(db) as s:
+        assert suppress.cooldown(s, s.get(Email, b)) is None          # the second of two may go
