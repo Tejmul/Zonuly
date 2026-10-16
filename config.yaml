@@ -843,9 +843,9 @@ outreach:
   user_name: Tejmul Movin
   user_headline: AI/ML Engineer • B.Tech CS+AI '27, Newton School of Technology
   user_links:
-  - "Resume: drive.google.com/file/d/1O6Mit9eKX7LigytCjf3D9CRzaF7vnZuC/view"
+  - "Resume: https://drive.google.com/file/d/1O6Mit9eKX7LigytCjf3D9CRzaF7vnZuC/view"
   - github.com/Tejmul
-  - linkedin.com/in/tejmulmovin-softwareengineer
+  - https://www.linkedin.com/in/tejmulmovin-softwareengineer/
   - spylook.vercel.app
   user_email: tejmulmovin9@gmail.com
   # the cold signature (2026-10-17): name, this line, LinkedIn — one link, no link row
