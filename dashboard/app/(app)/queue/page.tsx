@@ -78,7 +78,8 @@ function Queue() {
   const approved = useApi<ReviewEmail[]>("/api/emails?status=approved");
   const incomplete = useApi<ReviewEmail[]>("/api/emails?status=incomplete");
   const patterns = useApi<Patterns>("/api/outreach/patterns");
-  const { data: quota } = useApi<Quota>("/api/gmail/status");
+  // /api/gmail/status answers the setup shape: `authorized` at the top, not under `gmail`
+  const { data: quota } = useApi<Quota & { authorized?: boolean }>("/api/gmail/status");
   const { tasks, watch, dismiss } = useTaskWatcher();
 
   const [tab, setTab] = useState<Tab>(
@@ -197,7 +198,7 @@ function Queue() {
         </div>
       ) : null}
 
-      {quota && !quota.gmail?.authorized ? (
+      {quota && !(quota.gmail?.authorized ?? quota.authorized) ? (
         <div className="mb-4 rounded-sm border border-line bg-surface px-3 py-2.5 text-xs leading-relaxed text-ink-2">
           Gmail isn&apos;t connected. You can still draft and approve — approved mail waits in the
           queue until you{" "}
