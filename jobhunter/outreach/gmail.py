@@ -24,7 +24,7 @@ import re
 import smtplib
 import time
 from email.message import EmailMessage
-from email.utils import formataddr, make_msgid, parseaddr, parsedate_to_datetime
+from email.utils import formataddr, formatdate, make_msgid, parseaddr, parsedate_to_datetime
 from pathlib import Path
 
 from jobhunter import CONFIG, ROOT, secret
@@ -156,7 +156,12 @@ def send(to: str, subject: str, body: str, *, in_reply_to: str | None = None) ->
     if in_reply_to:
         msg["In-Reply-To"] = in_reply_to
         msg["References"] = in_reply_to
-    msg.set_content(body)   # plain text only: HTML mail from a personal account reads as bulk
+    msg["Date"] = formatdate(localtime=True)
+    # 2026-10-17: a plain-text-only message with bare URLs and no Date landed in Spam ("similar
+    # to messages identified as spam"). Gmail's own compose sends text + its minimal HTML
+    # (<div dir="ltr">, links on words); this mirrors it exactly so it reads person-to-person.
+    msg.set_content(as_plain(body))
+    msg.add_alternative(as_gmail_html(body), subtype="html")
 
     with _smtp() as conn:
         conn.send_message(msg)
@@ -531,3 +536,29 @@ __all__ = [
     "install_app_password", "configured", "authorized", "status", "service", "authorize", "my_address",
     "install_credentials", "validate_client_json", "disconnect", "setup_status", "from_header",
 ]
+
+_MD_LINK = re.compile(r"\[([^\]\n]{1,80})\]\((https?://[^)\s]+)\)")
+_BARE_URL = re.compile(r"(?<![\"'>(])(https?://[^\s<]+)")
+
+
+def as_plain(body: str) -> str:
+    """The text part: "[my resume](url)" becomes "my resume (url)"."""
+    return _MD_LINK.sub(lambda m: f"{m.group(1)} ({m.group(2)})", body or "")
+
+
+def as_gmail_html(body: str) -> str:
+    """The HTML part the way Gmail's compose writes it: one <div> per line, an empty
+    <div><br></div> between paragraphs, links on their words, nothing else — no styles,
+    no images, no tracking."""
+    import html as _h
+
+    def line(t: str) -> str:
+        t = _h.escape(t, quote=False)
+        t = re.sub(r"\[([^\]\n]{1,80})\]\((https?://[^)\s]+)\)",
+                   lambda m: f'<a href="{m.group(2)}">{m.group(1)}</a>', t)
+        t = re.sub(r'(?<!href=")(?<!">)(https?://[^\s<]+)', lambda m: f'<a href="{m.group(1)}">{m.group(1)}</a>', t)
+        return f"<div>{t}</div>" if t.strip() else "<div><br></div>"
+
+    lines = (body or "").replace("\r\n", "\n").split("\n")
+    return '<div dir="ltr">' + "".join(line(x) for x in lines) + "</div>\n"
+

@@ -287,7 +287,8 @@ def cold_signature() -> str:
 
 def direct_signature() -> str:
     """The user's own sign-off block: his name, then his LinkedIn — nothing else."""
-    return "\n".join([USER_NAME, *[l for l in USER_LINKS if "linkedin" in l.lower()][:1]])
+    li = [l for l in USER_LINKS if "linkedin" in l.lower()][:1]
+    return "\n".join([USER_NAME, *(f"[LinkedIn]({li[0]})" for _ in li[:1])])
 
 
 def _repos_for(contact: Contact, brief: dict, research: bool) -> list[dict]:
