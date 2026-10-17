@@ -741,11 +741,11 @@ outreach:
   asks_per_company_overrides:      # by company name; 2026-10-17: everyone in Sarvam AI's Bangalore office
     Sarvam AI: 80
   send_mode: gmail          # 2026-10-17: live — first real sends (Sarvam AI, Mon 19 Oct)
-  guessed_daily_cap: 8
+  guessed_daily_cap: 60       # 2026-10-17: one whole company a day (the user's call); the bounce brake still guards it
   # 2026-10-17 ("as much as we can for free"): a personal Gmail sends cold referral asks
   # safely at ~40/day once warmed up; the ramp (warmup:) climbs 5 → 40 over ~3 weeks. Past
   # that, scale with a separate domain + inboxes, never by pushing this Gmail harder.
-  daily_send_cap: 40
+  daily_send_cap: 60          # 2026-10-17: one company a day, ~50–60 mails
   draft_expiry_days: 7
   contact_cooldown_days: 30
   company_cooldown_days: 30
@@ -865,7 +865,7 @@ outreach:
   # Thu 10, Fri 15, then 15, 20, 20, 25 (25 from Thu of the second week).
   warmup:
     start: '2026-10-19'
-    first: 5
+    first: 60      # 2026-10-17: no ramp — a whole company in one day
     step: 5
     every: 2
   send_days: [mon, tue, wed, thu, fri]   # no cold mail at weekends
@@ -882,7 +882,7 @@ outreach:
   # and no guessed address is sent to until they age out (verified addresses still go)
   bounce_brake:
     window_days: 7
-    max_bounces: 2
+    max_bounces: 6   # 2026-10-17: was 2; a few wrong {first}@ guesses must not halt a company's day
   # never written to, whatever the pipeline finds: addresses, whole domains, company names
   do_not_contact:
     emails: []

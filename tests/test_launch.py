@@ -140,7 +140,8 @@ def test_a_bounce_kills_the_address_and_it_is_never_retried(db, monkeypatch):
         assert "bounced" in suppress.blocked(s, contact=None, company=c, to_email="priya@acme.com")
 
 
-def test_the_bounce_brake_pauses_guessed_addresses(db):
+def test_the_bounce_brake_pauses_guessed_addresses(db, monkeypatch):
+    monkeypatch.setattr(suppress, "BRAKE_MAX", 2)        # the rule, independent of the live setting
     cid, (p1, p2) = _world(db)
     ids = [_email(db, cid, pid, status="sent", sent_days_ago=1) for pid in (p1, p2)]
     with Session(db) as s:

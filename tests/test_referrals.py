@@ -247,11 +247,12 @@ def test_pattern_guessed_addresses_spend_the_5_a_day_guessed_cap(tmp_path, monke
     SQLModel.metadata.create_all(engine)
     monkeypatch.setattr(ledger, "DB_PATH", tmp_path / "l.db")
     # the guessed cap on its own — the warm-up quota (tests/test_launch.py) is a separate ceiling
-    monkeypatch.setattr(ledger, "effective_cap", lambda day: ledger.DAILY_CAP)
+    monkeypatch.setattr(ledger, "effective_cap", lambda day: 25)
+    monkeypatch.setattr(ledger, "GUESSED_CAP", 5)         # the rule, independent of the live setting
     # the sender counts anything not `verified` — pattern-guessed included — as guessed
     assert 'guessed = (email.address_confidence or "verified") != "verified"' in inspect.getsource(sender)
     for _ in range(ledger.GUESSED_CAP):
         assert ledger.reserve(1, guessed=True)[0]
     ok, why = ledger.reserve(1, guessed=True)
-    assert not ok and "guessed-address cap" in why and ledger.GUESSED_CAP == ledger._O.get("guessed_daily_cap", 5)
+    assert not ok and "guessed-address cap" in why and ledger.GUESSED_CAP == 5
     assert ledger.reserve(1, guessed=False)[0]          # verified addresses still go
