@@ -37,6 +37,8 @@ _O = CONFIG.get("outreach") or {}
 _DNC = _O.get("do_not_contact") or {}
 COMPANY_COOLDOWN_DAYS = int(_O.get("company_cooldown_days", 30))
 ASKS_PER_COMPANY = max(1, int(_O.get("asks_per_company", 1)))
+#: per company (by name) — 2026-10-17: everyone at Sarvam AI's Bangalore office, the user's call
+ASKS_OVERRIDES = {str(k).lower(): int(v) for k, v in (_O.get("asks_per_company_overrides") or {}).items()}
 CONTACT_COOLDOWN_DAYS = int(_O.get("contact_cooldown_days", 30))
 OPT_OUT_LINE = str(_O.get("opt_out_line") or "").strip()
 #: opt-out lines earlier drafts carry (and replies quote): a body with one of these already
@@ -137,8 +139,12 @@ def cooldown(session, email: Email) -> str | None:
             replied = session.exec(select(Reply.id).where(Reply.email_id == o.id)).first()
             if not replied:
                 ahead.append(f"you asked someone at this company on {when:%d %b} and nobody has replied")
-    if len(ahead) >= ASKS_PER_COMPANY:
-        return (f"{ahead[0]} — at most {ASKS_PER_COMPANY} open ask(s) per company until a reply or "
+    limit = ASKS_PER_COMPANY
+    if ASKS_OVERRIDES:
+        co = session.get(Company, email.company_id) if email.company_id else None
+        limit = ASKS_OVERRIDES.get((co.name if co else "").lower(), ASKS_PER_COMPANY)
+    if len(ahead) >= limit:
+        return (f"{ahead[0]} — at most {limit} open ask(s) per company until a reply or "
                 f"{COMPANY_COOLDOWN_DAYS} days (outreach.asks_per_company)")
     since_p = utcnow() - timedelta(days=CONTACT_COOLDOWN_DAYS)
     same = session.exec(select(Email).where(
