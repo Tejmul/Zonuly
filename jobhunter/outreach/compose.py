@@ -76,6 +76,10 @@ MAX_PER_ROLE = int(_C.get("max_per_role", 1))           # people asked about one
 # default for every recipient) or "auto" (the research-based picker: advice / give / fit / recruiter)
 STRUCTURE_MODE = str(_C.get("structure") or "direct_intro")
 DIRECT_TEMPLATE = str(_C.get("direct_template") or "").strip()
+#: the same email in other words (2026-10-17): one per recipient, so no company sees 50 copies
+DIRECT_VARIANTS = [DIRECT_TEMPLATE, *[str(v).strip() for v in (_C.get("direct_variants") or []) if str(v).strip()]] \
+    if DIRECT_TEMPLATE else []
+DIRECT_SUBJECTS = [str(v) for v in (_C.get("direct_subjects") or []) if str(v).strip()]
 DIRECT_SIGN_OFF = str(_C.get("direct_sign_off") or "Thank you for your time,")
 DIRECT_OPT_OUT = bool(_C.get("direct_opt_out", True))
 DIRECT_MAX_WORDS = int(_C.get("direct_max_words", 170))
@@ -469,6 +473,7 @@ class Contract:
     gift: dict | None = None
     link: str | None = None              # the one link the body carries (the role, or the gift's)
     record: list[dict] = field(default_factory=list)   # direct_intro: 3–4 proofs, the role's first
+    to_email: str | None = None                        # picks the recipient's wording (variant_index)
     more_experience: str | None = None   # evidence the role asks for more experience than he has
     structure: str | None = None
     structure_why: str | None = None
@@ -507,6 +512,7 @@ def contract(person: dict, company: dict, job: dict | None, brief: dict | None, 
     """Fill every slot from evidence; record what could not be filled."""
     c = Contract()
     c.first_name = first_name(person.get("name"))
+    c.to_email = person.get("email")
     c.full_name = html.unescape(person.get("name") or "") or None
     c.role_class = person.get("role_class")
     c.recipient_role = recipient_role(person.get("role"), c.role_class)
@@ -616,6 +622,16 @@ def hook_subject(c: Contract) -> str | None:
             "company_funding": f"{c.company}'s {a}"}.get(h.get("type") or "")
 
 
+def _direct_subject(c: Contract, role: str, co: str) -> str:
+    """The referral subject in one of its wordings (config direct_subjects), same pick as the body."""
+    if DIRECT_TEMPLATE and DIRECT_SUBJECTS:
+        subj = DIRECT_SUBJECTS[variant_index(c, len(DIRECT_SUBJECTS))].format(role=role, company=co)
+        if not gates.subject_problems(subj):
+            return subj
+    full = f"Referral for {role} at {co}"
+    return full if not gates.subject_problems(full) else f"Referral for {role}"
+
+
 def subject_options(c: Contract, me: dict) -> list[dict]:
     """Every subject the structure's patterns give that passes the gate's subject rules
     and is 2–5 words."""
@@ -628,8 +644,7 @@ def subject_options(c: Contract, me: dict) -> list[dict]:
         "fresher_q": f"Freshers for {role}?" if len(role.split()) <= 3 else f"Freshers at {co}?",
         "grad_role": f"{role}, {year} graduate" if len(role.split()) <= 3 else f"{year} graduate, {co}",
         "role_at": f"{role} at {co}" if len(f"{role} at {co}".split()) <= SUBJECT_MAX else f"{role} opening",
-        "referral_for": f"Referral for {role} at {co}" if not gates.subject_problems(f"Referral for {role} at {co}")
-        else f"Referral for {role}",
+        "referral_for": _direct_subject(c, role, co),
     }
     most = gates.SUBJECT_MAX_WORDS if c.structure == "direct_intro" else SUBJECT_MAX
     out = []
@@ -713,10 +728,20 @@ def record_paragraph(c: Contract, me: dict) -> str:
     return head + " ".join(items)
 
 
+def variant_index(c: Contract, n: int) -> int:
+    """A stable pick per recipient (their address, else name + company): the same person
+    always gets the same wording, neighbours at one company mostly get different ones."""
+    import hashlib
+
+    key = (getattr(c, "to_email", None) or f"{c.first_name}|{c.company}|{c.recipient_role}").lower()
+    return int(hashlib.sha1(key.encode()).hexdigest(), 16) % max(1, n)
+
+
 def _direct(c: Contract, me: dict) -> str:
-    if DIRECT_TEMPLATE:                      # the user's own email, word for word (config)
-        return DIRECT_TEMPLATE.format(first_name=c.first_name, role=c.target_role, company=c.company,
-                                      resume_link=c.resume_link or "").strip()
+    if DIRECT_TEMPLATE:                      # the user's own email, in one of its wordings (config)
+        text = DIRECT_VARIANTS[variant_index(c, len(DIRECT_VARIANTS))] if DIRECT_VARIANTS else DIRECT_TEMPLATE
+        return text.format(first_name=c.first_name, role=c.target_role, company=c.company,
+                           resume_link=c.resume_link or "").strip()
     school = me.get("school")
     paras = [f"My name is {me.get('first_name')}, and I'm a final-year B.Tech CS+AI student at {school}.",
              record_paragraph(c, me),

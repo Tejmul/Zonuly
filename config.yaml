@@ -782,6 +782,45 @@ outreach:
       I saw the {role} opening at {company}, and I'd be really grateful if you would consider referring me. I'd love the chance to contribute to your team and learn from the work you're doing.
 
       Resume: {resume_link}
+    # 2026-10-17: every recipient gets one of these wordings (picked by their address), so a
+    # company's inboxes never hold 50 identical bodies — the pattern Google Workspace files
+    # as bulk. Same facts, same ask, same tone as direct_template above.
+    direct_variants:
+    - |-
+      Hi {first_name},
+
+      My name is Tejmul. I'm in my final year of Computer Science and AI at Newton School of Technology.
+
+      Over my internships, I fine-tuned Mistral 7B at eWealth Tech (taking accuracy from 20% to 92%), built 3 production agentic systems at MVRX Labs (YC P26), and moved a product to AWS Lambda, which cut infrastructure costs by 95%.
+
+      I came across the {role} role at {company}, and I would be very grateful if you could consider referring me for it. I'd love to contribute to the team and learn from the work you're all doing.
+
+      Resume: {resume_link}
+    - |-
+      Hello {first_name},
+
+      I'm Tejmul, a final-year Computer Science and AI student at Newton School of Technology.
+
+      Recently I moved a product to AWS Lambda and cut its infrastructure costs by 95%, shipped 3 production agentic systems at MVRX Labs (YC P26), and fine-tuned Mistral 7B at eWealth Tech, lifting accuracy from 20% to 92%.
+
+      There's an opening for {role} at {company}, and if you'd be open to referring me, I'd be really thankful. It would mean a lot to contribute to your team and learn from what you're building.
+
+      Resume: {resume_link}
+    - |-
+      Hi {first_name},
+
+      I'm Tejmul, in my final year of B.Tech in Computer Science and AI at Newton School of Technology.
+
+      During my internships I've shipped 3 production agentic systems at MVRX Labs (YC P26), moved a product to AWS Lambda to cut infrastructure costs by 95%, and fine-tuned Mistral 7B at eWealth Tech (accuracy from 20% to 92%).
+
+      I noticed the {role} opening at {company} and wanted to ask, humbly, whether you would consider referring me. I'd love the chance to contribute and to learn from your team.
+
+      Resume: {resume_link}
+    direct_subjects:
+    - "Referral for {role} at {company}"
+    - "{role} at {company}: a referral request"
+    - "Referral request for the {role} role"
+    - "Asking about a referral for {role} at {company}"
     direct_sign_off: "Thank you for your time!\n\nBest regards,"
     # his template carries no opt-out line; a "stop" / "unsubscribe" reply still suppresses
     # the person and the company forever (suppress.py)

@@ -513,6 +513,7 @@ TEMPLATE = ("Hi {first_name},\n\nI'm Tejmul, a final-year Computer Science and A
 
 def test_the_users_own_template_word_for_word(monkeypatch):
     monkeypatch.setattr(compose, "DIRECT_TEMPLATE", TEMPLATE)
+    monkeypatch.setattr(compose, "DIRECT_VARIANTS", [TEMPLATE])
     c = compose.contract(_person(), _company(), JOB, _brief(), ME)
     msg = compose.fill(c, ME)["message"]
     assert msg.startswith(f"Hi {c.first_name},\n\nI'm Tejmul, a final-year Computer Science and AI student")
@@ -533,3 +534,15 @@ def test_the_users_template_needs_no_needs_brief(monkeypatch):
     monkeypatch.setattr(compose, "DIRECT_TEMPLATE", TEMPLATE)
     c = compose.contract(_person(), _company(), JOB, {}, ME)       # no brief at all
     assert "need" not in c.missing and "proof" not in c.missing
+
+
+def test_recipients_at_one_company_get_different_wordings(monkeypatch):
+    monkeypatch.setattr(compose, "DIRECT_TEMPLATE", TEMPLATE)
+    monkeypatch.setattr(compose, "DIRECT_VARIANTS", [TEMPLATE, TEMPLATE.replace("Hi {first_name}", "Hello {first_name}"),
+                                                     TEMPLATE.replace("really grateful", "very grateful")])
+    bodies = set()
+    for i in range(12):
+        c = compose.contract(_person(email=f"person{i}@acme.ai"), _company(), JOB, _brief(), ME)
+        bodies.add(compose.fill(c, ME)["message"])
+        assert compose.fill(c, ME)["message"] == compose.fill(c, ME)["message"]     # stable per person
+    assert len(bodies) >= 2
