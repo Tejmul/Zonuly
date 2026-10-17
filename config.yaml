@@ -877,7 +877,7 @@ outreach:
       line: "built Zonuly, a multi-agent system that mapped 3,528 companies and 19,159 referrers with resume-to-role matching"
       topic: "a multi-agent system over 3,528 companies"
   send_window:
-  - 10
+  - 9          # 2026-10-17: was 10 — send as soon as the working day starts
   - 19
   user_name: Tejmul Movin
   user_headline: AI/ML Engineer • B.Tech CS+AI '27, Newton School of Technology
@@ -905,7 +905,11 @@ outreach:
   # of the gap between two slots, and at most max_per_run in one run of the send agent
   pacing:
     jitter_fraction: 0.35
-    max_per_run: 2
+    max_per_run: 6
+    # 2026-10-17 (the user's call): the whole day's mail is due the moment the window opens
+    # and the Mac is awake — sent back to back, stagger_seconds apart, not spread over the day
+    front_load: true
+  stagger_seconds: [40, 90]
   # every cold email carries this line, above the signature (added on approval)
   # (2026-10-17: shorter and humane; the old line is still recognised in bodies and quoted replies —
   # outreach/suppress.py LEGACY_OPT_OUT_LINES)

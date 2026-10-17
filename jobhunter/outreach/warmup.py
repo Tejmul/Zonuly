@@ -33,6 +33,7 @@ SEND_DAYS = tuple(str(d).lower()[:3] for d in (_O.get("send_days") or _DAYS))
 _P = _O.get("pacing") or {}
 JITTER = float(_P.get("jitter_fraction", 0.35))
 MAX_PER_RUN = int(_P.get("max_per_run", 2))
+FRONT_LOAD = bool(_P.get("front_load", False))
 
 
 def _as_date(d: date | datetime | str | None) -> date:
@@ -118,6 +119,9 @@ def due(now: datetime | None = None, *, cap: int | None = None) -> int:
     now = now or datetime.now()
     if not is_send_day(now):
         return 0
+    if FRONT_LOAD:
+        lo, hi = SEND_WINDOW
+        return quota(now, cap=cap) if lo <= now.hour < hi else 0
     return sum(1 for t in slots(now, quota(now, cap=cap)) if t <= now)
 
 
