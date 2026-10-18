@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import { rise } from "@/components/anim";
 import {
@@ -98,6 +98,23 @@ export default function CompanyPage() {
   useGSAP(() => { if (data) rise("[data-anim='sec']", { stagger: 0.045 }); },
     { scope: root, dependencies: [!!data] });
 
+  // Opening a company that is still missing parts fills it now, in the background — the
+  // API skips one that is complete or was filled in the last few hours.
+  const [autoFill, setAutoFill] = useState(false);
+  const autoAsked = useRef<string | null>(null);
+  const hasData = !!data;
+  useEffect(() => {
+    if (!hasData || autoAsked.current === id) return;
+    autoAsked.current = id;
+    api.post<{ task_id: string | null }>(`/api/companies/${id}/fill?auto=true`)
+      .then(({ task_id }) => {
+        if (!task_id) return;
+        setAutoFill(true);
+        watch(task_id, () => { setAutoFill(false); void reload(); });
+      })
+      .catch(() => {});
+  }, [hasData, id, watch, reload]);
+
   async function run(label: string, path: string, body?: unknown) {
     setBusy(label);
     try {
@@ -161,6 +178,11 @@ export default function CompanyPage() {
         <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-ink-2">
           {data.description ?? "No description yet."}
         </p>
+        {autoFill && (
+          <p className="mt-2 inline-flex items-center gap-1.5 text-[13px] text-ink-2">
+            <Loader2 size={13} className="animate-spin" /> Filling this company now. The page updates when it finishes.
+          </p>
+        )}
         {/* The money, at a glance — the full evidence is in the last section. */}
         <dl className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-4">
           <Fact label="Last round">{fund.stage ?? <span className="text-ink-3">—</span>}</Fact>

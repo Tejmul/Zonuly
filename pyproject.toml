@@ -22,6 +22,7 @@ dependencies = [
     "playwright>=1.46",
     "numpy>=1.26",
     "networkx>=3.6.1",
+    "crawlee[beautifulsoup,curl-impersonate]>=1.11",
 ]
 
 [project.optional-dependencies]

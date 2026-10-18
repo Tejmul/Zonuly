@@ -204,6 +204,9 @@ def sync(key: str, *, verify_sites: bool = True) -> dict:
 
 # ------------------------------------------------------------------ the rows
 
+_BANDS = {"pays": 0, "deep_pockets": 1, "funded": 2, "thin": 3, "unknown": 4}
+
+
 def rows(key: str) -> dict:
     """The list as the dashboard shows it: the header, then every company in list order
     with what the database knows — roles, people, who to ask first, hiring proof."""
@@ -216,6 +219,20 @@ def rows(key: str) -> dict:
         companies = session.exec(
             select(Company).where(Company.list_key == key).order_by(col(Company.list_rank))
         ).all()
+        # 2026-10-19 (Tejmul): a list with `include_cities` also shows every company in
+        # those cities that clears the guardrails — active (or under the pay bar, shown
+        # collapsed as before), not a reject, not overrated, not do-not-contact. The
+        # list's own rows keep their rank and come first.
+        cities = [x.lower() for x in spec.get("include_cities") or []]
+        if cities:
+            more = [c for c in session.exec(select(Company).where(
+                        col(Company.list_key).is_(None), col(Company.merged_into).is_(None),
+                        col(Company.status).is_(None) | (Company.status == "below_pay_bar"))).all()
+                    if any(x in (c.city or "").lower() for x in cities)
+                    and c.tier != "reject" and not c.overrated and not c.do_not_contact]
+            more.sort(key=lambda c: (0 if c.complete else 1, _BANDS.get(c.pay_power_band or "", 9),
+                                     -(c.priority_score or 0), c.id))
+            companies = list(companies) + more
         ids = [c.id for c in companies]
         jobs = session.exec(select(Job).where(col(Job.company_id).in_(ids))).all() if ids else []
         people = session.exec(select(Contact).where(col(Contact.company_id).in_(ids))).all() if ids else []
@@ -240,6 +257,7 @@ def rows(key: str) -> dict:
         fresher = [j for j in cjobs if not j.is_senior]
         (below if c.status == "below_pay_bar" else out).append({
             "id": c.id, "rank": c.list_rank, "name": c.name, "city": c.city,
+            "listed": c.list_key == key,
             "what": c.description or meta.get("what"),
             "website": c.website, "careers_url": c.careers_url,
             "website_note": None if c.website else meta.get("website_check"),
@@ -284,6 +302,7 @@ def rows(key: str) -> dict:
         "pay_floor_lpa": india.MIN_LPA,
         "stats": {
             "companies": len(out),
+            "listed": sum(1 for r in out if r["listed"]),
             "with_website": sum(1 for r in out if r["website"]),
             "with_roles": sum(1 for r in out if r["roles"]["total"]),
             "with_people": sum(1 for r in out if r["people"]["total"]),

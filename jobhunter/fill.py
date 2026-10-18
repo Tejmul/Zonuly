@@ -271,6 +271,40 @@ def _get(url: str) -> tuple[str, str | None, str]:
     return "", None, problem
 
 
+def backfill_linkedin(limit: int | None = None, *, concurrency: int = 8) -> dict:
+    """The LinkedIn company page each ★ list / Bengaluru / Hyderabad company's own homepage
+    links to, stored as linkedin_url (2026-10-19: 37 of 1,485 had one — the fill pass
+    dropped the link whenever LinkedIn itself was unreadable). Homepages are different
+    hosts, so `concurrency` fetches run at once; writes stay on this thread."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    init_db()
+    with get_session() as s:
+        rows = s.exec(select(Company).where(col(Company.status).is_(None), col(Company.linkedin_url).is_(None),
+                                            col(Company.website).is_not(None))).all()
+        todo = [(c.id, c.website) for c in rows if cohort(c) in (0, 1)][: limit or None]
+
+    def one(item):
+        cid, site = item
+        page, _, problem = _get(site)
+        return cid, linkedin_slug(page) if page else None, problem
+
+    out = {"checked": len(todo), "found": 0, "no_link": 0, "unreadable": 0}
+    with ThreadPoolExecutor(concurrency) as pool:
+        for cid, slug, problem in pool.map(one, todo):
+            if not slug:
+                out["unreadable" if problem else "no_link"] += 1
+                continue
+            with get_session() as s:
+                c = s.get(Company, cid)
+                if c is not None and not c.linkedin_url:
+                    c.linkedin_url = f"https://www.linkedin.com/company/{slug}"
+                    s.add(c)
+                    s.commit()
+                    out["found"] += 1
+    return out
+
+
 # ------------------------------------------------------------------ LinkedIn (guest, paced)
 
 _FOUNDED = re.compile(r"(?m)^\s*Founded\s*(?:\n\s*)?(\d{4})\s*$")
@@ -486,6 +520,10 @@ def company(cid: int, *, li: _LI | None = None, people: bool = True, facts: bool
                 out["description"] = None
         if slug and info.get("url"):
             c.linkedin_url = info["url"]
+        elif vouched and slug and not c.linkedin_url:
+            # 2026-10-19: their own site links this page — evidence enough to keep the URL
+            # while LinkedIn itself is unreadable (Apify's People tab needs it)
+            c.linkedin_url = f"https://www.linkedin.com/company/{slug}"
         if info and not info.get("error"):
             c.linkedin_checked_at = utcnow()
             if info.get("size"):

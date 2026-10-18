@@ -256,6 +256,125 @@ def _pattern_status(c: Company) -> str:
     return "legacy" if c.email_pattern else "unlearned"
 
 
+# ------------------------------------------------------------------ Hunter (2026-10-19)
+
+_HUNTER_BANDS = {"deep_pockets": 0, "pays": 1, "funded": 2}
+_HUNTER_CITIES = ("bengaluru", "hyderabad")
+
+
+def hunter_queue() -> list[int]:
+    """Companies one Hunter lookup could finish: ★ list or Bengaluru / Hyderabad, a domain,
+    no confirmed pattern, at least one ready referrer and none with an address. Pay band
+    first (deep pockets, pays, funded), then those already holding an on-domain address —
+    one more agreeing address from Hunter confirms the pattern — then priority."""
+    from jobhunter import backoff
+
+    init_db()
+    with get_session() as session:
+        counts = guardrails.ready_counts(session)
+        rows = session.exec(select(Company).where(
+            col(Company.status).is_(None), col(Company.domain).is_not(None),
+            col(Company.email_pattern).is_(None))).all()
+        held = Counter(cid for cid, email in session.exec(select(Contact.company_id, Contact.email).where(
+            col(Contact.email).is_not(None))).all())
+        picks = [c for c in rows
+                 if counts.get(c.id, (0, 0))[0] > 0 and counts[c.id][1] == 0
+                 and not c.overrated and c.tier != "reject" and not c.do_not_contact
+                 and (c.list_key or any(x in (c.city or "").lower() for x in _HUNTER_CITIES))
+                 and backoff.due(c, "hunter")]
+        picks.sort(key=lambda c: (0 if c.list_key else 1, _HUNTER_BANDS.get(c.pay_power_band or "", 3),
+                                  0 if held.get(c.id) else 1, -(c.priority_score or 0), c.id))
+        return [c.id for c in picks]
+
+
+def hunter_step(limit: int = 2) -> dict:
+    """Spend up to `limit` of the month's Hunter lookups (hunter.MONTHLY_BUDGET) on
+    hunter_queue(). Hunter's addresses are stored and voted on like any other
+    (contacts.discover_for_company); its own pattern claim is never used. Each company is
+    looked up once — the marker holds it back for the longest backoff either way."""
+    from jobhunter import backoff
+    from jobhunter.contacts import discover_for_company, hunter
+
+    if not hunter.available():
+        return {"skipped": "no HUNTER_API_KEY in .env"}
+    left = hunter.budget_left()
+    if left <= 0:
+        return {"skipped": "monthly Hunter budget spent"}
+    ids = hunter_queue()
+    out = {"queue": len(ids), "budget_left": left, "looked_up": 0, "gained_pattern": 0, "companies": []}
+    for cid in ids[:min(limit, left)]:
+        stats = asyncio.run(discover_for_company(cid, github=False, force_hunter=True))
+        with get_session() as session:
+            c = session.get(Company, cid)
+            if c is None:
+                continue
+            backoff.fail(c, "hunter", f"looked up: {stats.get('hunter', 0)} addresses", retryable=False)
+            session.add(c)
+            session.commit()
+            gained = bool(c.email_pattern)
+        out["looked_up"] += 1
+        out["gained_pattern"] += gained
+        out["companies"].append({"id": cid, "name": stats.get("company"), "hunter_addresses": stats.get("hunter", 0),
+                                 "by_pattern": stats.get("by_pattern", 0), "pattern": gained})
+    out["budget_left"] = hunter.budget_left()
+    return out
+
+
+# ------------------------------------------------------------------ Apify People tab (2026-10-19)
+
+def apify_queue() -> list[int]:
+    """★ list or Bengaluru / Hyderabad companies with a LinkedIn page on record and fewer
+    than two good referrers — pay band first, then priority. Each is bought once
+    (backoff marker), so the free credit never pays twice for the same People tab."""
+    from jobhunter import backoff
+    from jobhunter.contacts import roles
+
+    init_db()
+    with get_session() as session:
+        rows = session.exec(select(Company).where(
+            col(Company.status).is_(None), col(Company.linkedin_url).is_not(None))).all()
+        rows = [c for c in rows
+                if not c.overrated and c.tier != "reject" and not c.do_not_contact
+                and (c.list_key or any(x in (c.city or "").lower() for x in _HUNTER_CITIES))
+                and backoff.due(c, "apify")]
+        good = roles.good_referrer_counts(session, [c.id for c in rows])
+        picks = [c for c in rows if good.get(c.id, 0) < 2]
+        picks.sort(key=lambda c: (0 if c.list_key else 1, _HUNTER_BANDS.get(c.pay_power_band or "", 3),
+                                  -(c.priority_score or 0), c.id))
+        return [c.id for c in picks]
+
+
+def apify_step(limit: int = 1, *, apify_max: int = 25) -> dict:
+    """Buy up to `limit` companies' People tabs (in their own city — actors.people
+    city_locations) inside the free-credit cap (config actors.apify.daily_usd)."""
+    from jobhunter import backoff
+    from jobhunter.actors import apify_source
+    from jobhunter.actors.fill import fill_company
+
+    if not apify_source.token():
+        return {"skipped": "no APIFY_TOKEN in .env"}
+    left = round(apify_source.DAILY_USD - apify_source.spent_today(), 4)
+    if left < apify_max * apify_source.MODES["short"][1] + apify_source.START_FEE:
+        return {"skipped": f"today's Apify cap reached (${apify_source.spent_today()} of ${apify_source.DAILY_USD})"}
+    ids = apify_queue()
+    out = {"queue": len(ids), "companies": []}
+    for cid in ids[:limit]:
+        r = fill_company(cid, sources=["known", "apify"], max_verify=0, apify=True, apify_max=apify_max)
+        err = ((r.get("sources") or {}).get("apify") or {}).get("error")
+        with get_session() as session:
+            c = session.get(Company, cid)
+            if c is not None and not (err and "cap" in err):
+                backoff.fail(c, "apify", err or f"bought: {r.get('found', 0)} people", retryable=bool(err))
+                session.add(c)
+                session.commit()
+        out["companies"].append({"id": cid, "name": r.get("company"), "found": r.get("found"),
+                                 "saved": r.get("saved"), "referrers_now": r.get("referrers_now"), "error": err})
+        if err and "cap" in err:
+            break
+    out["spent_today_usd"] = apify_source.spent_today()
+    return out
+
+
 # ------------------------------------------------------------------ addresses (the pattern step)
 
 def pattern_step(*, dry_run: bool = True, company_ids: list[int] | None = None, sample: int = 12) -> dict:

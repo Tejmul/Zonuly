@@ -23,7 +23,9 @@ import { OperatorOnly } from "@/components/access";
 import { TaskStrip } from "@/components/shell";
 
 type Row = {
-  id: number; rank: number; name: string; city: string | null; what: string | null;
+  id: number; rank: number | null; name: string; city: string | null; what: string | null;
+  // true for the list file's own rows; the rest are the cities' companies that clear the guardrails
+  listed?: boolean;
   website: string | null; careers_url: string | null; website_note: string | null;
   stage: string | null; funding: string | null; size: string | null;
   ctc: string | null; ctc_kind: "indicative" | "reported" | "unknown" | null; category: string | null;
@@ -56,7 +58,7 @@ type Payload = {
   below_bar?: Row[];
   pay_floor_lpa?: number;
   stats: {
-    companies: number; with_website: number; with_roles: number; with_people: number; ready: number;
+    companies: number; listed?: number; with_website: number; with_roles: number; with_people: number; ready: number;
     people: number; reachable: number; hiring_proven: number; by_city: Record<string, number>;
   };
 };
@@ -140,15 +142,16 @@ export default function ListPage() {
     with_people: 0, reachable: 0, ready: 0, by_city: {},
   };
 
-  // complete rows first; the rest under "Still being filled" — no hand-picked row disappears
-  const shown = rows.filter((c) => c.complete !== false);
-  const filling = rows.filter((c) => c.complete === false);
+  // every row in one table, complete first (2026-10-19: nothing hidden behind a fold);
+  // an incomplete row says what it is still missing on its own line
+  const shown = [...rows.filter((c) => c.complete !== false), ...rows.filter((c) => c.complete === false)];
+  const listed = s.listed ?? s.companies;
   const renderRow = (c: Row) => {
     const isOpen = open === c.id;
     return (
       <li key={c.id} data-row>
         <div className={`${COLS} px-4 py-2.5 transition-colors hover:bg-surface-2`}>
-          <span className="tnum text-right text-[11px] text-ink-3">{c.rank}</span>
+          <span className="tnum text-right text-[11px] text-ink-3" title={c.listed ? "On the list file" : undefined}>{c.rank ?? ""}</span>
           <button onClick={() => setOpen(isOpen ? null : c.id)} aria-expanded={isOpen} aria-label="Details" className="cursor-pointer">
             <ChevronRight size={13} className={`text-ink-3 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
           </button>
@@ -292,11 +295,10 @@ export default function ListPage() {
           <p className="mt-1 max-w-[64ch] text-[12.5px] leading-relaxed text-ink-2">{data.description}</p>
           {/* the one rule of this page: nothing joins it because a scraper found it */}
           <p className="mt-1.5 text-[12px] text-ink-3">
-            Hand-picked only — exactly the {s.companies} companies in the list file, whatever the scrapers find.
-            Every other India company is under{" "}
-            <Link href="/companies?view=india" className="underline decoration-line underline-offset-2 hover:decoration-ink hover:text-ink">
-              Companies → India — all
-            </Link>.
+            {listed === s.companies
+              ? <>The {s.companies} companies in the list file.</>
+              : <>The {listed} companies from your list (numbered, first), then {s.companies - listed} more Bengaluru and
+                Hyderabad companies the pipeline found that clear the guardrails, complete ones first.</>}
           </p>
         </div>
         <OperatorOnly>
@@ -313,7 +315,7 @@ export default function ListPage() {
               className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-ink px-3 text-[12.5px] font-medium text-on-ink transition-opacity hover:opacity-85 disabled:opacity-50"
             >
               {busy.has("all") ? <Loader2 size={13} className="animate-spin" /> : <UserSearch size={13} />}
-              Find people at all {s.companies}
+              Find people at the {listed} listed
             </button>
           </div>
         </OperatorOnly>
@@ -362,7 +364,7 @@ export default function ListPage() {
           </div>
           {shown.length === 0 ? (
             <p className="px-4 py-8 text-[13px] text-ink-3">
-              {rows.length ? "No company on this list is complete yet — every one is below, being filled." : "Nothing matches."}
+              Nothing matches.
             </p>
           ) : (
             <ul className="divide-y divide-line">
@@ -372,19 +374,6 @@ export default function ListPage() {
         </div>
       </div>
 
-      {filling.length > 0 && (
-        <details className="plate group">
-          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-[12.5px] text-ink-2 hover:text-ink">
-            <ChevronRight size={13} className="text-ink-3 transition-transform duration-200 group-open:rotate-90" />
-            <span className="font-medium">Still being filled</span>
-            <span className="chip tnum">{filling.length}</span>
-            <span className="marginal ml-auto">missing a description, hiring proof or a referrer with an address — filled first every tick</span>
-          </summary>
-          <div className="overflow-x-auto border-t border-line">
-            <ul className="min-w-[1080px] divide-y divide-line">{filling.map(renderRow)}</ul>
-          </div>
-        </details>
-      )}
 
       <BelowBar rows={data.below_bar ?? []} floor={data.pay_floor_lpa ?? 20} />
 

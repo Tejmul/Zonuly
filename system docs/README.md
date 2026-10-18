@@ -19,6 +19,8 @@ Every design document for the project, in reading order. When two disagree,
 | draft | [JOBHUNTER-ARCHITECTURE.md](JOBHUNTER-ARCHITECTURE.md) | TypeScript/Drizzle draft; lessons copied from and fixed in the MVRX portal. Superseded, still the source of the send-ledger, fabrication-validator and tests-first ideas. |
 | draft | [JOBHUNTER-TOOLS.md](JOBHUNTER-TOOLS.md) | Services and pricing; the email-finding waterfall; the **warmth ladder** (GAP-3). Superseded. |
 | draft | [MULTI-AGENT-ORCHESTRATION.md](MULTI-AGENT-ORCHESTRATION.md) | Conductor / supervisors / workers borrowed from gtm-os. The hierarchy was dropped (D4); the ledger, evidence spans, no-auto-reject and draft-expiry ideas survived. Superseded. |
+| tool | [AGENT-REACH-INTEGRATION.md](AGENT-REACH-INTEGRATION.md) | The web-research layer (`jobhunter/research/`): what Agent Reach really is, what we kept, the channels. |
+| tool | [REA-INTEGRATION.md](REA-INTEGRATION.md) | REA, the reverse-engineering MCP, registered for this repo only: how a new source's JSON API is found before its scraper is written. |
 | draft | [GEMINI.md](GEMINI.md) | Sequential typed agents, tool-loop and schema guardrails, the clickable Provenance Panel. |
 
 ## Generated, not written

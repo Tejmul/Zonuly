@@ -914,6 +914,228 @@ def research_cache(purge: bool = typer.Option(False, help="Delete entries older 
     _echo({"deleted": cache.purge()} if purge else cache.stats())
 
 
+# ---------------------------------------------------------------- actors (our Apify)
+
+actor_app = typer.Typer(add_completion=False, help="Actors — our own Apify: LinkedIn guest pages, cached, paced, breaker-guarded")
+app.add_typer(actor_app, name="actor")
+
+
+def _actor_done(row: dict, show: int = 10) -> None:
+    from jobhunter import actors
+
+    _echo({k: row[k] for k in ("run_id", "status", "error", "items", "network_calls", "cache_hits", "stats", "dataset")})
+    for x in actors.read_dataset(row["run_id"])[:show]:
+        typer.echo("  " + json.dumps({k: v for k, v in x.items() if k not in ("description", "about", "employee_profiles")},
+                                     default=str, ensure_ascii=False)[:400])
+
+
+@actor_app.command("list")
+def actor_list() -> None:
+    """The actors this machine can run."""
+    from jobhunter import actors
+
+    for name, fn in actors.ACTORS.items():
+        typer.echo(f"{name:22} {(fn.__doc__ or '').strip().splitlines()[0]}")
+
+
+@actor_app.command("jobs")
+def actor_jobs(
+    keywords: str,
+    location: str = typer.Option(None, help='e.g. "India", "Bengaluru", "Worldwide"'),
+    remote: bool = typer.Option(False, help="Remote roles only (f_WT=2)"),
+    days: int = typer.Option(None, help="Posted in the last N days"),
+    experience: str = typer.Option(None, help="internship,entry,associate,mid-senior"),
+    max_items: int = typer.Option(25, "--max"),
+    details: bool = typer.Option(False, help="Open each job for description, seniority, applicants"),
+    fresh: bool = typer.Option(False, help="Bypass the page cache"),
+) -> None:
+    """LinkedIn job search through the logged-out endpoint."""
+    _setup_logging()
+    from jobhunter import actors
+
+    _actor_done(actors.run("linkedin-jobs", fresh=fresh, keywords=keywords, location=location, remote=remote,
+                           posted_days=days, experience=experience, max_items=max_items, details=details))
+
+
+@actor_app.command("company")
+def actor_company(companies: list[str], fresh: bool = False) -> None:
+    """Public company pages, by slug or URL."""
+    _setup_logging()
+    from jobhunter import actors
+
+    _actor_done(actors.run("linkedin-company", fresh=fresh, companies=companies))
+
+
+@actor_app.command("profile")
+def actor_profile(urls: list[str], fresh: bool = False) -> None:
+    """Public profiles: current and former employers, schools, location."""
+    _setup_logging()
+    from jobhunter import actors
+
+    _actor_done(actors.run("linkedin-profile", fresh=fresh, urls=urls))
+
+
+@actor_app.command("employees")
+def actor_employees(
+    company_id: int = typer.Argument(..., help="Company id in jobhunter.db"),
+    linkedin: str = typer.Option(None, help="The company's LinkedIn slug or URL (exact match + its employee links)"),
+    max_profiles: int = typer.Option(15, "--max"),
+    exa: bool = typer.Option(False, help="Also spend one metered Exa search for candidates"),
+    save: bool = typer.Option(True, "--save/--no-save", help="Store the people verified as there NOW as contacts (through guardrails)"),
+    fresh: bool = False,
+) -> None:
+    """Who works at a company now — discovered, then verified on each public profile."""
+    _setup_logging()
+    from jobhunter import actors
+    from jobhunter.contacts import linkedin_public as lp
+    from jobhunter.db import Company, Contact, get_session, init_db
+    from sqlmodel import select
+
+    init_db()
+    with get_session() as s:
+        c = s.get(Company, company_id)
+        if c is None:
+            raise typer.BadParameter(f"no company {company_id}")
+        name, domain, city = c.name, c.domain, c.city
+        known = [k.linkedin for k in s.exec(select(Contact).where(Contact.company_id == company_id)).all()
+                 if k.linkedin and "linkedin.com/in/" in k.linkedin]
+    row = actors.run("linkedin-employees", fresh=fresh, company=name, linkedin=linkedin, domain=domain,
+                     city=city, max_profiles=max_profiles, exa=exa, extra_urls=known)
+    _actor_done(row)
+    if save:
+        people = [{"name": x["name"], "url": x["linkedin_url"],
+                   "role": x.get("headline") or (x.get("job_titles") or [""])[0] or "",
+                   "headline": x.get("headline")}
+                  for x in actors.read_dataset(row["run_id"]) if x.get("works_there_now") and x.get("name")]
+        typer.echo(f"saved {lp._save(company_id, people, 'actor:linkedin-employees') if people else 0} new contacts")
+
+
+@actor_app.command("people")
+def actor_people(
+    company_id: int = typer.Argument(None, help="Company id in jobhunter.db (fills name, domain, website, city, GitHub org)"),
+    name: str = typer.Option(None, help="Or: any company by name, not in the DB"),
+    domain: str = typer.Option(None), website: str = typer.Option(None), city: str = typer.Option(None),
+    linkedin: str = typer.Option(None, help="The company's LinkedIn slug or URL — enables the company page, exact matching and Apify"),
+    source: list[str] = typer.Option(None, "--source", help="Repeatable. Default: known linkedin-company search jobs team yc github; opt-in: exa apify"),
+    title: list[str] = typer.Option(None, "--title", help="Keep only these title words (repeatable)"),
+    exclude_title: list[str] = typer.Option(None, "--exclude-title"),
+    location: list[str] = typer.Option(None, "--location"),
+    max_items: int = typer.Option(100, "--max"),
+    max_verify: int = typer.Option(15, help="Public profiles opened to confirm current employment (paced)"),
+    no_verify: bool = typer.Option(False, help="Skip opening profiles"),
+    include_former: bool = typer.Option(False),
+    apify_max: int = typer.Option(50, help="People-tab rows to buy from Apify when --source apify"),
+    apify_mode: str = typer.Option("short", help="short ($4/1k) | full ($8/1k) | email ($12/1k)"),
+    save: bool = typer.Option(True, "--save/--no-save", help="Store verified/likely-current LinkedIn people as contacts so the dashboard shows them (default on with a company_id, 2026-10-19)"),
+    fresh: bool = False,
+) -> None:
+    """The LinkedIn People tab for a company — without our LinkedIn account."""
+    _setup_logging()
+    from jobhunter import actors
+    from jobhunter.contacts import linkedin_public as lp
+    from jobhunter.db import Company, Contact, get_session, init_db
+    from sqlmodel import select
+
+    known: list[dict] = []
+    gh_org = None
+    if company_id is not None:
+        init_db()
+        with get_session() as s:
+            c = s.get(Company, company_id)
+            if c is None:
+                raise typer.BadParameter(f"no company {company_id}")
+            name, domain = name or c.name, domain or c.domain
+            website, city, gh_org = website or c.website, city or c.city, c.github_org
+            known = [{"name": k.name, "role": k.role, "linkedin": k.linkedin, "github": k.github,
+                      "confidence": k.confidence}
+                     for k in s.exec(select(Contact).where(Contact.company_id == company_id)).all()]
+    if not name:
+        raise typer.BadParameter("give a company_id or --name")
+    row = actors.run("company-people", fresh=fresh, company=name, domain=domain, website=website, linkedin=linkedin,
+                     city=city, github_org=gh_org, sources=source or None, titles=title or None,
+                     exclude_titles=exclude_title or None, locations=location or None, max_items=max_items,
+                     verify=not no_verify, max_verify=max_verify, include_former=include_former, known=known,
+                     apify_max=apify_max, apify_mode=apify_mode)
+    _echo({k: row[k] for k in ("run_id", "status", "error", "items", "network_calls", "stats", "dataset")})
+    for p in actors.read_dataset(row["run_id"])[:40]:
+        typer.echo(f"  {p['status']:17} {p['role_class'] or '':13} {(p['name'] or '')[:26]:26} "
+                   f"{(p['title'] or p['headline'] or '')[:44]:44} {','.join(p['sources'])}")
+    if save and company_id is not None:
+        keep = [{"name": p["name"], "url": p["linkedin_url"], "role": p["title"] or p["headline"] or "",
+                 "headline": p["headline"] or p["title"]}
+                for p in actors.read_dataset(row["run_id"])
+                if p["linkedin_url"] and p["status"] in ("verified-current", "likely-current")]
+        typer.echo(f"saved {lp._save(company_id, keep, 'actor:company-people') if keep else 0} new contacts")
+
+
+@actor_app.command("fill")
+def actor_fill(
+    limit: int = typer.Option(5, help="How many unfilled companies this run"),
+    company_id: int = typer.Option(None, help="Fill just this company"),
+    max_verify: int = typer.Option(10, help="Public profiles opened per company (paced)"),
+    apify: bool = typer.Option(False, help="Also buy the People tab from Apify (APIFY_TOKEN, $ capped)"),
+    apify_max: int = typer.Option(25),
+    count: bool = typer.Option(False, help="Only print how many companies have no current referrer"),
+) -> None:
+    """Fill companies that have no current referrer: find people, store them, apply the address format."""
+    _setup_logging()
+    from jobhunter.actors import fill
+
+    if count:
+        _echo({"unfilled": len(fill.unfilled())})
+        return
+    rows = [fill.fill_company(company_id, max_verify=max_verify, apify=apify, apify_max=apify_max)] if company_id \
+        else fill.fill(limit, max_verify=max_verify, apify=apify, apify_max=apify_max)
+    for r in rows:
+        typer.echo(f"{(r.get('company') or '')[:28]:28} found {r.get('found', 0):>3}  new {r.get('new', 0):>3}  "
+                   f"saved {r.get('saved')}  referrers now {r.get('referrers_now')}  li={(r.get('linkedin') or {}).get('slug')}")
+    _echo([{k: r.get(k) for k in ("company", "run_id", "sources", "addresses")} for r in rows])
+
+
+@actor_app.command("apify")
+def actor_apify() -> None:
+    """Apify source: token present, today's spend against the cap."""
+    from jobhunter.actors import apify_source
+
+    _echo(apify_source.status())
+
+
+@actor_app.command("runs")
+def actor_runs(limit: int = 15) -> None:
+    """The run ledger, newest first."""
+    from jobhunter import actors
+
+    for r in actors.recent_runs(limit):
+        typer.echo(f"{r['finished_at'][:19]}  {r['status']:9} {r['items']:>4} items  {r['network_calls']:>3} calls  "
+                   f"{r['run_id']}  {(r.get('error') or '')[:70]}")
+
+
+@actor_app.command("show")
+def actor_show(run_id: str, limit: int = 50) -> None:
+    """A run's dataset."""
+    from jobhunter import actors
+
+    for x in actors.read_dataset(run_id)[:limit]:
+        typer.echo(json.dumps(x, default=str, ensure_ascii=False))
+
+
+@actor_app.command("status")
+def actor_status() -> None:
+    """Per-route breaker state and today's request count."""
+    from jobhunter import actors
+
+    _echo(actors.host_status())
+
+
+@actor_app.command("reset")
+def actor_reset(route: str = typer.Argument(..., help='e.g. "www.linkedin.com/in"')) -> None:
+    """Clear a route's cooldown by hand. Only after the wall is gone — check in a browser first."""
+    from jobhunter import actors
+
+    actors.reset_host(route)
+    _echo(actors.host_status())
+
+
 # ---------------------------------------------------------------- models & spend
 
 models_app = typer.Typer(add_completion=False, help="OpenRouter — aliases, spend, and a live check")

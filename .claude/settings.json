@@ -2,11 +2,16 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
+      "Edit(/.github/workflows/**)",
+      "Edit(/dashboard/next.config.ts)",
+      "Bash(catalyst deploy:*)",
+      "Bash(catalyst project:use:*)",
       "mcp__shadcn",
       "mcp__playwright",
       "mcp__chrome-devtools",
-      "Bash(.venv/bin/python scripts/run.py research x-search:*)"
+      "Bash(.venv/bin/python scripts/run.py research x-search:*)",
+      "mcp__rea",
+      "Bash(npx -y rea-agents@*)"
     ]
   }
 }
-

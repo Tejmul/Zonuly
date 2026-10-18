@@ -19,6 +19,9 @@ description: >
   Recently funded (Series A / B) startups in Hyderabad and Bengaluru, picked by hand.
   Every company here is chased regardless of tier — the list is the decision.
 source: "top_50_series_a_b_startups_hyderabad_bengaluru_UPDATED_with_Coupang.pdf"
+# 2026-10-19 (Tejmul): the page also shows every company in these cities that clears the
+# guardrails — the companies below come first, in rank order.
+include_cities: [Bengaluru, Hyderabad]
 companies:
   - {rank: 1,  name: "Equal AI",           aliases: ["Equal", "Equal Identity"], city: Hyderabad, stage: "Series B", funding: "$30M", funding_usd_m: 30, size: "51–200", what: "Consumer AI call assistant; AI-native identity/data platform", ctc: "₹10–30L+", ctc_kind: indicative, website: "https://equal.in"}
   - {rank: 2,  name: "Swish",              city: Bengaluru, stage: "Series B", funding: "$38M reported", funding_usd_m: 38, size: "51–200", what: "10-minute food delivery / quick commerce", ctc: "₹8–25L+", ctc_kind: indicative, website: null, note: "app-only (Play Store / App Store); no website found"}

@@ -28,7 +28,7 @@ from sqlmodel import col, func, select
 
 from jobhunter import CONFIG, ROOT, access, snapshot_cache
 from jobhunter.campaigns import router as campaigns_router
-from jobhunter.db import Company, Contact, Email, Job, Reply, get_session, init_db
+from jobhunter.db import Company, Contact, Email, Job, Reply, get_session, init_db, utcnow
 from jobhunter.outreach.routes import router as review_router
 from jobhunter.research.routes import router as research_router
 
@@ -885,12 +885,17 @@ def graph_map(view: Literal["market", "pipeline", "project"] = "market") -> dict
     return graphmap.cached(view)
 
 
+AUTO_FILL_HOURS = 6
+
+
 @app.post("/api/companies/{company_id}/fill")
-def fill_company(company_id: int) -> dict:
+def fill_company(company_id: int, auto: bool = False) -> dict:
     """Fill one company now — description, LinkedIn, hiring proof, funding, referrers
     (fill.run over this one id) — as a background task. A fill already running for the
-    company is returned rather than started twice. Operator-only on a public instance:
-    the access middleware refuses every POST there."""
+    company is returned rather than started twice. `auto` is the company page asking on
+    open (2026-10-19): skipped when the company is complete or was filled in the last
+    AUTO_FILL_HOURS. Operator-only on a public instance: the access middleware refuses
+    every POST there."""
     from jobhunter import fill
 
     with get_session() as session:
@@ -898,6 +903,9 @@ def fill_company(company_id: int) -> dict:
         if company is None:
             raise HTTPException(404, "unknown company")
         name = company.name
+        if auto and (company.complete or (company.filled_at is not None
+                                          and utcnow() - company.filled_at < timedelta(hours=AUTO_FILL_HOURS))):
+            return {"task_id": None, "skipped": "complete" if company.complete else "filled recently", "company": name}
     task_name = f"fill:{company_id}"
     with _lock:
         running = next((t for t in _tasks.values() if t["name"] == task_name and t["status"] == "running"), None)

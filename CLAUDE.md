@@ -73,3 +73,12 @@ python scripts/run.py research startups --topic AI --table
 It returns records and nothing else: no scoring, no DB writes, no graph, no drafting. Extraction is
 evidence-linked (`evidence_quote`) and never invented — a field with no source stays null.
 Same operations at `/api/research/*`.
+
+## Reverse engineering a source (REA)
+
+[REA](https://github.com/morluto/rea) is registered as an MCP server for this directory only
+(`claude mcp add --scope local rea -- npx -y rea-agents@6.5.0 mcp`). Use it to find the JSON
+endpoint behind a careers page or a board's bundle before writing a scraper, to read a HAR offline,
+or to inspect a *copy* of the database. It is a developer tool: nothing in `jobhunter` imports it,
+and it never attaches to a browser signed in to a personal account. Setup, workflow and limits:
+[system docs/REA-INTEGRATION.md](system%20docs/REA-INTEGRATION.md).

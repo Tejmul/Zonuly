@@ -46,6 +46,8 @@ PAID_MINUTE = int(_T.get("paid_minute", 15))
 # per-tick limits: small enough that a tick finishes well inside its interval
 L = {
     "verify": int(_T.get("verify_per_tick", 60)),
+    "hunter": int(_T.get("hunter_per_tick", 2)),       # 2026-10-19: Hunter lookups per tick (25/month free)
+    "apify": int(_T.get("apify_per_tick", 1)),         # 2026-10-19: People tabs bought per tick (cap: actors.apify.daily_usd)
     "people": int(_T.get("people_per_tick", 40)),
     # 2026-10-08 "referrals are the main thing": the people step runs first and is the
     # dominant work — at most this many seconds of it per tick (the free channels pace it)
@@ -325,7 +327,8 @@ def _company_steps() -> list[tuple[str, object]]:
     steps.append(("revalidate", lambda: _ref().revalidate_companies(
         limit=L["revalidate"], budget_s=max(120, int(BUDGET_S * SHARE_COMPANIES) // 3))))
     steps.append(("verify", lambda: {"checked": len(hiring_verify.verify_pending(
-        limit=L["verify"], tiers=("tier1", "tier2", "prospect", "unknown")))}))
+        limit=L["verify"], tiers=("tier1", "tier2", "prospect", "unknown"),
+        budget_s=max(120, int(BUDGET_S * SHARE_COMPANIES) // 3)))}))
     steps.append(("yc", lambda: {"yc": _as(harvest.admit_yc()), "probe": harvest.probe_ats(),
                                  "roles": harvest.scrape_roles()}))
     if L["india"]:
@@ -434,6 +437,10 @@ def run_free(budget_s: int | None = None) -> dict:
     except (TypeError, ValueError, AttributeError):
         touched = []
     _step(s, "addresses", _addresses_step, touched)
+    # 2026-10-19: the month's Hunter lookups, two a tick, on the companies one lookup can finish
+    _step(s, "hunter", referrals.hunter_step, limit=L["hunter"])
+    # …and the People tab from Apify, inside the free-credit cap, for companies short of referrers
+    _step(s, "apify", referrals.apify_step, limit=L["apify"])
     if time.time() - t_leads < leads_s:
         _step(s, "reverify", referrals.reverify_referrers, limit=L["reverify"])
     if L["affiliation"] and time.time() - t_leads < leads_s:

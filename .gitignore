@@ -26,3 +26,9 @@ data/watchdog.json
 
 # Catalyst AppSail build output (scripts/build_catalyst.py) — regenerated, never committed
 deploy/catalyst/appsail/build/
+
+# actor runs: cache, datasets, ledger, breaker state (jobhunter/actors/core.py)
+data/actors/
+
+# database backups (scripts take them before risky passes) — never committed
+data/backups/

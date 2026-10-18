@@ -1171,3 +1171,8 @@ referrals:
   cycle_companies: 40       # companies per cycle (the claimed window)
   search_down_tail: 6       # companies still worked (no web search) once every keyless backend cools, then stop
   skip_touched_minutes: 60  # a company another worker touched this recently is left alone
+
+actors:
+  apify:
+    daily_usd: 0.15        # 2026-10-19: free credit only — ~$4.50/month stays under Apify's $5 free plan
+    cache_hours: 24

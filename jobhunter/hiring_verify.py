@@ -33,6 +33,7 @@ import asyncio
 import logging
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
@@ -385,14 +386,16 @@ def verify_company(company_id: int, *, claimed_role: str | None = None, fresh: b
 
 def verify_pending(limit: int = 10, *, tiers: tuple[str, ...] = ("tier1", "tier2", "unknown", "prospect"),
                    recheck_days: int = MAX_AGE_DAYS, fresh: bool = False,
-                   list_key: str | None = None) -> list[dict]:
+                   list_key: str | None = None, budget_s: int | None = None) -> list[dict]:
     """Verify the companies worth verifying: list rows first (db.fill_order), then the
     graded targets by priority, oldest check first among equals.
 
     A `reject` is never checked — we are not going to write to them either way — unless a
     hand-picked list names it; a check younger than `recheck_days` is left alone. With
     `list_key`, only that list, and a row that is not yet `verified` is checked again
-    whatever its age (the careers pass may have found the page since).
+    whatever its age (the careers pass may have found the page since). With `budget_s`,
+    stops starting new checks once that many seconds have passed (2026-10-19: 120 checks
+    took 33 minutes of a 40-minute tick and starved the fill pass).
     """
     init_db()
     from jobhunter.db import fill_order
@@ -418,7 +421,12 @@ def verify_pending(limit: int = 10, *, tiers: tuple[str, ...] = ("tier1", "tier2
         pending.sort(key=lambda c: (*fill_order(c), TIER_ORDER.get(c.tier or "unknown", 9),
                                     c.hiring_checked_at or datetime.min, c.name))
         ids = [c.id for c in pending[:limit]]
-    return [verify_company(cid, fresh=fresh) for cid in ids]
+    t0, out = time.time(), []
+    for cid in ids:
+        if budget_s is not None and time.time() - t0 > budget_s:
+            break
+        out.append(verify_company(cid, fresh=fresh))
+    return out
 
 
 def claim_from_job(job_id: int) -> dict:

@@ -40,6 +40,7 @@
       "company": "eWealth Tech LLC",
       "dates": "June 2026 - September 2026",
       "highlights": [
+        "Promoted to AI Lead, leading AI work, mentoring interns and conducting technical interviews",
         "Managed DNS configurations for 8 company websites, led infrastructure troubleshooting, mentored interns, and conducted technical interviews as AI and Software Lead",
         "Redesigned PostgreSQL schema and system architecture from scratch for metaboliqos.com, reducing infrastructure and deployment costs by 95% through an AWS Lambda serverless migration",
         "Fine-tuned Mistral 7B (REV A) using LoRA/QLoRA on 2,000+ curated Q&A pairs with system prompt injection, improving response accuracy from 20% to 92%; deployed on RunPod Serverless with Qdrant for per-user vector memory",

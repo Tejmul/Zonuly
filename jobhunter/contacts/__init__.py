@@ -35,10 +35,13 @@ def _looks_recruiter(text: str | None) -> bool:
     return bool(text) and any(h in text.lower() for h in _RECRUITER_HINT)
 
 
-async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_COMPANY, github: bool = True) -> dict:
+async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_COMPANY, github: bool = True,
+                               force_hunter: bool = False) -> dict:
     """Run every free source for one company and persist the results. `github=False`
     (the hourly GitHub budget is spent) skips the mining and leaves the company un-rested
-    (contacts_found_at untouched) so the next pass mines it."""
+    (contacts_found_at untouched) so the next pass mines it. `force_hunter` spends a Hunter
+    lookup even when this run found no new nameless people — the referrers already held
+    are who it is for (referrals.hunter_step picks those companies)."""
     init_db()
     with get_session() as session:
         company = session.get(Company, company_id)
@@ -108,7 +111,7 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
 
         # ---- 4. Hunter, only if we still have no pattern and there are names to apply it to
         nameless = [p for p in people if p["name"] and not p["email"]]
-        if not pattern and domain and nameless and hunter.available():
+        if not pattern and domain and (nameless or force_hunter) and hunter.available():
             result = await hunter.domain_search(http, domain)
             if result:
                 # Hunter's own pattern is a claim, not evidence: its addresses are stored
