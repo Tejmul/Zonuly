@@ -697,6 +697,9 @@ def run(limit: int = 6, *, budget_s: int = 240, linkedin_reads: int = 12, people
             out["descriptions"][r["description"]] += 1
         for k in r.get("missing") or {}:
             out["missing"][k] += 1
+        if len(todo) == 1:
+            # one company (the dashboard's Fill now): say why each part is still missing
+            out["why"] = dict(r.get("missing") or {})
     with get_session() as s:
         guardrails.refresh_complete(s)
     out["descriptions"], out["missing"] = dict(out["descriptions"]), dict(out["missing"])

@@ -389,7 +389,7 @@ function useDebounced<T>(value: T, ms: number): T {
 
 /* ---------------------------------------------------------------- fill now */
 
-type FillResult = { companies?: number; missing?: Record<string, number>; errors?: number; error_samples?: string[]; seconds?: number; linkedin?: string; stopped?: string };
+type FillResult = { companies?: number; missing?: Record<string, number>; why?: Record<string, string>; errors?: number; error_samples?: string[]; seconds?: number; linkedin?: string; stopped?: string };
 type FillState = { task: string | null; status: "starting" | "running" | "done" | "error"; started: number; result?: FillResult; error?: string };
 type Fill = { state: Record<number, FillState>; start: (cid: number) => void };
 
@@ -460,19 +460,25 @@ function FillButton({ cid, fill, size = "md" }: { cid: number; fill: Fill; size?
   );
 }
 
-function FillOutcome({ st }: { st: FillState }) {
+/** What a finished fill did, in a sentence: still-missing parts with the reason fill.py
+ *  recorded for each (no careers page, site blocks readers, …), or that nothing is left. */
+function fillOutcomeText(st: FillState): string {
   if (st.status === "starting" || st.status === "running")
-    return <p className="text-[11.5px] leading-relaxed text-ink-3">Reading their site, LinkedIn, careers page and people. This takes a minute or two; the map refreshes when it lands.</p>;
-  if (st.status === "error") return <p className="text-[11.5px] text-ink-2">Fill failed: {st.error ?? "unknown error"}</p>;
+    return "Reading their site, LinkedIn, careers page and people. This takes a minute or two; the map refreshes when it lands.";
+  if (st.status === "error") return `Fill failed: ${st.error ?? "unknown error"}`;
   const r = st.result ?? {};
+  if (r.errors) return `Fill hit an error: ${r.error_samples?.[0] ?? "unknown"}`;
   const left = Object.keys(r.missing ?? {});
-  return (
-    <p className="text-[11.5px] leading-relaxed text-ink-2">
-      Filled in {r.seconds ?? "?"}s.{" "}
-      {r.errors ? `It hit an error: ${r.error_samples?.[0] ?? ""}` : left.length ? `Still missing: ${left.map((k) => PART_LABEL[k] ?? k).join(", ")}.` : "Nothing left missing."}
-      {r.stopped ? ` Stopped: ${r.stopped}.` : ""}
-    </p>
-  );
+  if (!left.length) return `Done in ${r.seconds ?? "?"}s. Nothing left missing.`;
+  const parts = left.map((k) => {
+    const why = r.why?.[k];
+    return `${PART_LABEL[k] ?? k}${why ? ` (${why})` : ""}`;
+  });
+  return `Done in ${r.seconds ?? "?"}s. Nothing new found for: ${parts.join("; ")}.`;
+}
+
+function FillOutcome({ st }: { st: FillState }) {
+  return <p className="text-[11.5px] leading-relaxed text-ink-2">{fillOutcomeText(st)}</p>;
 }
 
 /* ---------------------------------------------------------------- panel cards
@@ -710,6 +716,9 @@ function PendingList({ title, leaves, fill, onPick }: { title: string; leaves: L
                 {(l.missing ?? []).map((p) => PART_LABEL[p] ?? p).join(" · ") || l.feature_status}
                 {l.priority != null ? ` · p${l.priority}` : ""}
               </span>
+              {fill && l.cid && fill.state[l.cid] && fill.state[l.cid].status !== "starting" && fill.state[l.cid].status !== "running" ? (
+                <span className="mt-0.5 block text-[11px] leading-snug text-ink-2">{fillOutcomeText(fill.state[l.cid])}</span>
+              ) : null}
             </button>
             {fill && l.cid ? <FillButton cid={l.cid} fill={fill} size="sm" /> : null}
           </li>

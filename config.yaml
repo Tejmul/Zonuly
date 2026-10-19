@@ -734,18 +734,17 @@ contacts:
   hunter_api_key: ''
   smtp_verify: false
 outreach:
-  daily_send_cap: 25
   followup_after_days: 5
   max_followups: 1
   asks_per_company: 2       # open referral asks at one company at once (2026-10-17: Sarvam, two the same day)
   asks_per_company_overrides:      # by company name; 2026-10-17: everyone in Sarvam AI's Bangalore office
     Sarvam AI: 80
   send_mode: gmail          # 2026-10-17: live — first real sends (Sarvam AI, Mon 19 Oct)
-  guessed_daily_cap: 60       # 2026-10-17: one whole company a day (the user's call); the bounce brake still guards it
+  guessed_daily_cap: 25       # 2026-10-19: matches the 25/day cap; was 60 (one whole company a day)
   # 2026-10-17 ("as much as we can for free"): a personal Gmail sends cold referral asks
   # safely at ~40/day once warmed up; the ramp (warmup:) climbs 5 → 40 over ~3 weeks. Past
   # that, scale with a separate domain + inboxes, never by pushing this Gmail harder.
-  daily_send_cap: 60          # 2026-10-17: one company a day, ~50–60 mails
+  daily_send_cap: 25          # 2026-10-19: 25/day — Gmail refused (5.4.5) after 24 on 10-19; was 60
   draft_expiry_days: 7
   contact_cooldown_days: 30
   company_cooldown_days: 30
@@ -897,7 +896,7 @@ outreach:
   # Thu 10, Fri 15, then 15, 20, 20, 25 (25 from Thu of the second week).
   warmup:
     start: '2026-10-19'
-    first: 60      # 2026-10-17: no ramp — a whole company in one day
+    first: 25      # 2026-10-19: 25/day; was 60 (a whole company in one day)
     step: 5
     every: 2
   send_days: [mon, tue, wed, thu, fri]   # no cold mail at weekends
@@ -905,10 +904,12 @@ outreach:
   # of the gap between two slots, and at most max_per_run in one run of the send agent
   pacing:
     jitter_fraction: 0.35
-    max_per_run: 6
-    # 2026-10-17 (the user's call): the whole day's mail is due the moment the window opens
-    # and the Mac is awake — sent back to back, stagger_seconds apart, not spread over the day
-    front_load: true
+    # 2026-10-19 (the user): never like spam. Gmail blocked the account (550 5.4.5) after 24
+    # mails sent 40–90 s apart into one company. The day's mail is spread across the whole
+    # window (25 over 10–19 ≈ one every ~20 min, jittered), and one mail per run — a Mac that
+    # slept never catches up in a burst.
+    max_per_run: 1
+    front_load: false
   stagger_seconds: [40, 90]
   # every cold email carries this line, above the signature (added on approval)
   # (2026-10-17: shorter and humane; the old line is still recognised in bodies and quoted replies —
