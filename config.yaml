@@ -1245,4 +1245,5 @@ actors:
     mode: full             # short $4/1k (name, location) · full $8/1k (+ titles, positions) · email $12/1k
     per_company: 25        # People-tab rows bought per company (in the company's own city)
     companies_per_run: 3   # companies per run of com.zonuly.apify
+    linkedin_backfill_per_run: 30   # homepages read per run for the company's LinkedIn page (free; the People tab needs it)
     interval_seconds: 1800 # com.zonuly.apify runs every 30 min; the daily cap stops it when spent

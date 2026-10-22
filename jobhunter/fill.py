@@ -271,18 +271,45 @@ def _get(url: str) -> tuple[str, str | None, str]:
     return "", None, problem
 
 
-def backfill_linkedin(limit: int | None = None, *, concurrency: int = 8) -> dict:
-    """The LinkedIn company page each ★ list / Bengaluru / Hyderabad company's own homepage
-    links to, stored as linkedin_url (2026-10-19: 37 of 1,485 had one — the fill pass
-    dropped the link whenever LinkedIn itself was unreadable). Homepages are different
-    hosts, so `concurrency` fetches run at once; writes stay on this thread."""
+def linkedin_company_url(url_or_slug: str | None) -> str | None:
+    """Any LinkedIn company link — in.linkedin.com/company/scalioapp?trk=…, a bare slug — as
+    https://www.linkedin.com/company/<slug>, or None when it is not a company page."""
+    if not url_or_slug:
+        return None
+    m = _LI_SLUG.search(url_or_slug)
+    slug = (m.group(1) if m else url_or_slug if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_%.-]{1,80}", url_or_slug) else "")
+    slug = slug.rstrip("/.").lower()
+    if not slug or slug in {"company", "linkedin", "login"}:
+        return None
+    return f"https://www.linkedin.com/company/{slug}"
+
+
+def set_linkedin(session, c: Company, url_or_slug: str | None, *, source: str, channel: str,
+                 evidence: str | None = None) -> str | None:
+    """Store the company's LinkedIn page wherever a scrape hands us one (2026-10-23, Tejmul:
+    "from now on add the LinkedIn URL of the company while scraping"). Through guardrails.put,
+    so the source is recorded and a different existing value is reconciled, not overwritten."""
+    url = linkedin_company_url(url_or_slug)
+    if not url:
+        return None
+    return guardrails.put(session, c, "linkedin_url", url, evidence=evidence, source=source, channel=channel)
+
+
+def backfill_linkedin(limit: int | None = None, *, concurrency: int = 8, cohorts: tuple[int, ...] = (0, 1, 2),
+                      ids: list[int] | None = None) -> dict:
+    """The LinkedIn company page each company's own homepage links to, stored as linkedin_url
+    (2026-10-19: 37 of 1,485 had one — the fill pass dropped the link whenever LinkedIn itself
+    was unreadable). Every cohort since 2026-10-23 — the ★ list, Bengaluru / Hyderabad and the
+    remote targets — or just `ids`. Homepages are different hosts, so `concurrency` fetches run
+    at once; writes stay on this thread."""
     from concurrent.futures import ThreadPoolExecutor
 
     init_db()
     with get_session() as s:
-        rows = s.exec(select(Company).where(col(Company.status).is_(None), col(Company.linkedin_url).is_(None),
-                                            col(Company.website).is_not(None))).all()
-        todo = [(c.id, c.website) for c in rows if cohort(c) in (0, 1)][: limit or None]
+        q = select(Company).where(col(Company.linkedin_url).is_(None), col(Company.website).is_not(None))
+        q = q.where(col(Company.id).in_(ids)) if ids else q.where(col(Company.status).is_(None))
+        rows = s.exec(q).all()
+        todo = [(c.id, c.website) for c in rows if ids or cohort(c) in cohorts][: limit or None]
 
     def one(item):
         cid, site = item
@@ -297,8 +324,8 @@ def backfill_linkedin(limit: int | None = None, *, concurrency: int = 8) -> dict
                 continue
             with get_session() as s:
                 c = s.get(Company, cid)
-                if c is not None and not c.linkedin_url:
-                    c.linkedin_url = f"https://www.linkedin.com/company/{slug}"
+                if c is not None and not c.linkedin_url and set_linkedin(
+                        s, c, slug, source=c.website, channel="homepage", evidence="linked from their own homepage"):
                     s.add(c)
                     s.commit()
                     out["found"] += 1

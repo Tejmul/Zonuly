@@ -38,20 +38,21 @@ export function VerdictChip({ verdict, label }: { verdict: DecideVerdict; label:
 
 const pct = (p: number) => (p >= 0.1 ? `${Math.round(p * 100)}%` : `${(p * 100).toFixed(1)}%`);
 const STAGES: { key: DecideStage; short: string }[] = [
-  { key: "open", short: "Role open" },
-  { key: "call", short: "Interview call" },
-  { key: "loop", short: "Clears loop" },
-  { key: "pay", short: "Pays ≥ floor" },
+  { key: "open", short: "A fresher role is open" },
+  { key: "call", short: "You get an interview" },
+  { key: "loop", short: "You pass their interviews" },
+  { key: "pay", short: "They pay your minimum" },
 ];
 
 function Odds({ d, big = false }: { d: DecideRow; big?: boolean }) {
   return (
     <div className="flex flex-col items-start gap-0.5">
-      <span className={cn("tnum font-semibold text-ink", big ? "text-3xl" : "text-base")}>
-        1 in {d.one_in ?? "∞"}
-      </span>
-      <span className="tnum text-[11px] text-ink-3" title="P(offer) and its 80% interval">
-        {pct(d.p_offer)} · {pct(d.p_lo)}–{pct(d.p_hi)}
+      <span className={cn("tnum font-semibold text-ink", big ? "text-3xl" : "text-base")}>{pct(d.p_offer)}</span>
+      <span
+        className="text-[11px] leading-snug text-ink-3"
+        title={`Most likely ${pct(d.p_offer)}; we are fairly sure it is between ${pct(d.p_lo)} and ${pct(d.p_hi)}.`}
+      >
+        chance of an offer{d.one_in ? ` — about 1 in ${d.one_in} companies like this` : ""}
       </span>
     </div>
   );
@@ -162,8 +163,8 @@ export function TodayCard() {
             <div className="flex shrink-0 flex-col items-start gap-3 lg:w-56">
               <Odds d={d} big />
               <span className="text-xs text-ink-3">
-                {d.lift ? `${d.lift}× the odds of the typical company on your list` : null}
-                {" · "}their loop&rsquo;s DSA {Math.round(d.dsa * 100)}%
+                {d.lift ? `${d.lift}× better than the typical company on your list` : null}
+                {" · "}how DSA-heavy their interviews are: {Math.round(d.dsa * 100)}%
               </span>
               <div className="flex flex-wrap gap-2">
                 {pick.action === "fill" && pick.status === "picked" ? (
@@ -252,7 +253,7 @@ export function DecideShortlist() {
             <thead>
               <tr>
                 <Th className="w-10">#</Th>
-                <Th className="w-32">Odds of an offer</Th>
+                <Th className="w-40">Chance of an offer</Th>
                 <Th>Company</Th>
                 <Th className="w-[36%]">{parked ? "Why parked" : "Stages"}</Th>
                 <Th className="w-20">DSA</Th>
@@ -274,7 +275,7 @@ export function DecideShortlist() {
                     </div>
                     <div className="mt-0.5 line-clamp-2 text-xs text-ink-3">
                       {d.city}
-                      {d.lift ? ` · ${d.lift}× typical` : ""}
+                      {d.lift ? ` · ${d.lift}× better than the typical company on your list` : ""}
                       {d.culture ? ` · culture ${d.culture.rating}/5 (${d.culture.reviews})` : ""}
                       {d.best_job_title ? ` · best role: ${d.best_job_title}` : ""}
                       {!parked && d.verdict === "fill_first" ? ` · ${d.reason}` : ""}

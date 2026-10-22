@@ -209,6 +209,24 @@ def _gaps(c: Company, d: CompanyDecision, fresh_ads: bool, culture: tuple | None
     return gaps
 
 
+def _remember_linkedin(company_id: int, ads: list[dict]) -> None:
+    """Every LinkedIn ad names its company's page (companyUrl); keep the one their ads agree on."""
+    from collections import Counter
+
+    from jobhunter import fill
+
+    urls = Counter(u for u in (fill.linkedin_company_url(a.get("companyUrl")) for a in ads) if u)
+    if not urls:
+        return
+    url, n = urls.most_common(1)[0]
+    with get_session() as session:
+        c = session.get(Company, company_id)
+        if c is not None and fill.set_linkedin(session, c, url, source=ads[0].get("url"), channel="apify-linkedin-ads",
+                                               evidence=f"the company page on {n} of their LinkedIn ads"):
+            session.add(c)
+            session.commit()
+
+
 def _buy(company: Company, pool: str) -> dict:
     from jobhunter.actors import apify_source
 
@@ -235,6 +253,8 @@ def _buy(company: Company, pool: str) -> dict:
         items = r.get("items") or []
         mine = [it for it in items if _same(who(it), company)]
         ids = _save([make(it, company) for it in mine]) if mine else []
+        if source == "linkedin" and mine:
+            _remember_linkedin(company.id, mine)
         rating, reviews = _culture(mine) if source == "naukri" else (None, None)
         stopped = None
         if r.get("error"):

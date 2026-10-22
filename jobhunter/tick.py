@@ -100,6 +100,7 @@ APIFY_LABEL = "com.zonuly.apify"
 APIFY_LOCK = ROOT / "data" / "apify.lock"
 APIFY_INTERVAL_S = int(_AP.get("interval_seconds", 1800))
 APIFY_PER_RUN = int(_AP.get("companies_per_run", 3))
+APIFY_LI_BACKFILL = int(_AP.get("linkedin_backfill_per_run", 30))
 # 2026-10-23 (the user, after buying Apify Starter): the home-made scrapers are frozen —
 # tick install leaves free, paid, referrals and audit unloaded while this is true
 SCRAPERS_FROZEN = bool(_T.get("scrapers_frozen", False))
@@ -646,8 +647,12 @@ def run_apify() -> dict:
     _net_timeout()
     try:
         with _Lock(APIFY_LOCK, "apify run"):
-            summary = {"kind": "apify", "started": datetime.now().isoformat(timespec="seconds"),
-                       **_ref().apify_step(limit=APIFY_PER_RUN)}
+            summary = {"kind": "apify", "started": datetime.now().isoformat(timespec="seconds")}
+            # free and first (2026-10-23): read homepages for the LinkedIn page the People tab
+            # needs — a company without linkedin_url can never have its referrers bought
+            _step(summary, "linkedin_urls", lambda: __import__("jobhunter.fill", fromlist=["backfill_linkedin"])
+                  .backfill_linkedin(limit=APIFY_LI_BACKFILL))
+            summary.update(_ref().apify_step(limit=APIFY_PER_RUN))
             _step(summary, "complete", _complete)
     except RuntimeError as e:
         return {"kind": "apify", "skipped": str(e)}
