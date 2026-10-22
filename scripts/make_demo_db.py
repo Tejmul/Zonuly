@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -35,7 +37,44 @@ CLEARED = (
     "research_cache",  # whole cached pages; megabytes, and none of it is the product
     "llm_call",        # what every model call cost — an operator's business, not a visitor's
     "reply",           # real inbound mail from real people
+    "upskillitem",     # your own learning notes and proof links (upskill.py)
+    "decisionoutcome", # what really happened at a company: interviews, offers, rejections
+    "mixerscrape",     # what each paid Apify lookup cost — the operator's ledger, like llm_call
 )
+
+
+_ADDRESS = re.compile(r"([A-Za-z0-9._%+\-]+)@([A-Za-z0-9.\-]+\.[A-Za-z]{2,})")
+
+
+def _stand_in(m: re.Match) -> str:
+    """A real address → a stand-in on the same domain: first letter + 7 hex of its hash. The
+    domain is the company's (public, and half the evidence); the local part is what makes a
+    row mailable, so it never leaves this machine. Deterministic, so one address is one
+    stand-in everywhere it appears, and ASCII, so the address checks still pass and the
+    public site (which shows p•••@domain anyway) looks exactly as before."""
+    local, domain = m.group(1), m.group(2)
+    return f"{local[:1].lower()}{hashlib.sha1(m.group(0).lower().encode()).hexdigest()[:7]}@{domain.lower()}"
+
+
+def mask_addresses(con: sqlite3.Connection) -> dict:
+    """2026-10-23: demo.db.gz sits in a public repository, so masking at the API was not
+    enough — the file itself carried 25,060 contact addresses. Every text column of every
+    table (the knowledge graph's search index included) has its addresses replaced."""
+    con.create_function("mask_addresses", 1, lambda v: _ADDRESS.sub(_stand_in, v) if isinstance(v, str) else v,
+                        deterministic=True)
+    out = {}
+    tables = [r[0] for r in con.execute("select name from sqlite_master where type='table' and name not like 'sqlite_%' "
+                                        "and name not like 'kg_fts_%'")]
+    for table in tables:
+        cols = [r[1] for r in con.execute(f'pragma table_info("{table}")')
+                if (r[2] or "").upper() in ("", "TEXT", "VARCHAR", "CHAR", "JSON") or "CHAR" in (r[2] or "").upper()]
+        for col in cols:
+            n = con.execute(f'update "{table}" set "{col}" = mask_addresses("{col}") '
+                            f'where "{col}" like \'%@%.%\' and "{col}" != mask_addresses("{col}")').rowcount
+            if n:
+                out[f"{table}.{col}"] = n
+    con.commit()
+    return out
 
 
 def build(src: Path, out: Path) -> dict:
@@ -59,6 +98,7 @@ def build(src: Path, out: Path) -> dict:
             con.execute(f'delete from "{table}"')
             cleared[table] = before
         con.commit()
+        masked = mask_addresses(con)
         # VACUUM outside a transaction; without it the pages are freed but the file is not.
         con.isolation_level = None
         con.execute("VACUUM")
@@ -82,6 +122,7 @@ def build(src: Path, out: Path) -> dict:
         "was_mb": round(src.stat().st_size / 1_048_576, 1),
         "cleared": cleared,
         "kept": kept,
+        "masked": masked,
     }
 
 
@@ -150,6 +191,8 @@ def main() -> None:
         print(f"  cleared {table:16} {n:>6} rows")
     for table, n in result["kept"].items():
         print(f"  kept    {table:16} {n:>6} rows")
+    for column, n in result["masked"].items():
+        print(f"  masked  {column:28} {n:>6} rows")
 
 
 if __name__ == "__main__":
