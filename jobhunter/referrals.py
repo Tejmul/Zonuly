@@ -344,22 +344,27 @@ def apify_queue() -> list[int]:
         return [c.id for c in picks]
 
 
-def apify_step(limit: int = 1, *, apify_max: int = 25) -> dict:
+def apify_step(limit: int = 1, *, apify_max: int | None = None, apify_mode: str | None = None) -> dict:
     """Buy up to `limit` companies' People tabs (in their own city — actors.people
-    city_locations) inside the free-credit cap (config actors.apify.daily_usd)."""
+    city_locations) inside the daily cap (config actors.apify.daily_usd). Mode and size
+    come from config actors.apify.mode / per_company unless given."""
     from jobhunter import backoff
     from jobhunter.actors import apify_source
     from jobhunter.actors.fill import fill_company
 
+    conf = (CONFIG.get("actors") or {}).get("apify") or {}
+    apify_mode = apify_mode or str(conf.get("mode", "short"))
+    apify_max = int(apify_max or conf.get("per_company", 25))
     if not apify_source.token():
         return {"skipped": "no APIFY_TOKEN in .env"}
     left = round(apify_source.DAILY_USD - apify_source.spent_today(), 4)
-    if left < apify_max * apify_source.MODES["short"][1] + apify_source.START_FEE:
+    if left < apify_max * apify_source.MODES.get(apify_mode, apify_source.MODES["short"])[1] + apify_source.START_FEE:
         return {"skipped": f"today's Apify cap reached (${apify_source.spent_today()} of ${apify_source.DAILY_USD})"}
     ids = apify_queue()
     out = {"queue": len(ids), "companies": []}
     for cid in ids[:limit]:
-        r = fill_company(cid, sources=["known", "apify"], max_verify=0, apify=True, apify_max=apify_max)
+        r = fill_company(cid, sources=["known", "apify"], max_verify=0, apify=True, apify_max=apify_max,
+                         apify_mode=apify_mode)
         err = ((r.get("sources") or {}).get("apify") or {}).get("error")
         with get_session() as session:
             c = session.get(Company, cid)
@@ -372,6 +377,7 @@ def apify_step(limit: int = 1, *, apify_max: int = 25) -> dict:
         if err and "cap" in err:
             break
     out["spent_today_usd"] = apify_source.spent_today()
+    out["mode"] = apify_mode
     return out
 
 

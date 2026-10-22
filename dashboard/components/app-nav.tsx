@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import {
-  Activity, Building2, Calendar, Crosshair, Globe, Inbox, LayoutGrid, Mail, MessageSquare, Network, PanelLeft, Send, Settings, Star, Users, Workflow,
+  Activity, BookOpen, Building2, Calendar, Crosshair, Globe, Inbox, LayoutGrid, Mail, MessageSquare, Network, PanelLeft, Send, Settings, Star, Users, Workflow,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme";
 import { SearchBox } from "@/components/search-box";
@@ -38,6 +38,8 @@ const LINKS = [
   { href: "/tracker", label: "Tracker", icon: Send },
   // the hourly audit: is the scraping still filling fields, and is every channel answering?
   { href: "/health", label: "Scraping health", icon: Activity },
+  // how all of it works — its own frame at /docs, with a sidebar and search
+  { href: "/docs", label: "Docs", icon: BookOpen },
 ];
 
 /* How many drafts wait for the user (2026-10-16: "I don't see any notification").

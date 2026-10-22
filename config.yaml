@@ -988,8 +988,12 @@ sources:
     like Gecko) Chrome/125.0 Safari/537.36
 scheduler:
   scrape_hour: 8
+  daily_scrape: false   # 2026-10-23: scrapers frozen — the API's 08:00 scrape is off; replies are still polled hourly
   reply_poll_minutes: 60
 tick:
+  # 2026-10-23 (the user bought Apify Starter): the home-made scrapers are frozen for now —
+  # `tick install` leaves free, paid, referrals and audit unloaded; send and apify run
+  scrapers_frozen: true
   free_interval_seconds: 600   # 2026-10-07: round the clock — a tick holds a lock, so a start that finds one running just exits
   socket_timeout_seconds: 120  # 2026-10-16: default timeout for any socket opened without one (tick + referrals)
   paid_hour: 6
@@ -1175,5 +1179,11 @@ referrals:
 
 actors:
   apify:
-    daily_usd: 0.15        # 2026-10-19: free credit only — ~$4.50/month stays under Apify's $5 free plan
+    # 2026-10-23: Apify Starter — $19 of credit per cycle (22 Oct → 21 Nov). $0.60/day spends
+    # it evenly over ~31 days. Was 0.15 on the free plan.
+    daily_usd: 0.60
     cache_hours: 24
+    mode: full             # short $4/1k (name, location) · full $8/1k (+ titles, positions) · email $12/1k
+    per_company: 25        # People-tab rows bought per company (in the company's own city)
+    companies_per_run: 3   # companies per run of com.zonuly.apify
+    interval_seconds: 1800 # com.zonuly.apify runs every 30 min; the daily cap stops it when spent

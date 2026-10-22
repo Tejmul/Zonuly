@@ -93,6 +93,16 @@ SEND_LOCK = ROOT / "data" / "send.lock"
 _RJ = CONFIG.get("referrals") or {}
 REFER_LABEL = "com.zonuly.referrals"
 REFER_LOCK = ROOT / "data" / "referrals.lock"
+# 2026-10-23: Apify as its own job (com.zonuly.apify) — the People tab, bought inside
+# actors.apify.daily_usd, a few companies a run, never overlapping itself
+_AP = (CONFIG.get("actors") or {}).get("apify") or {}
+APIFY_LABEL = "com.zonuly.apify"
+APIFY_LOCK = ROOT / "data" / "apify.lock"
+APIFY_INTERVAL_S = int(_AP.get("interval_seconds", 1800))
+APIFY_PER_RUN = int(_AP.get("companies_per_run", 3))
+# 2026-10-23 (the user, after buying Apify Starter): the home-made scrapers are frozen —
+# tick install leaves free, paid, referrals and audit unloaded while this is true
+SCRAPERS_FROZEN = bool(_T.get("scrapers_frozen", False))
 REFER_INTERVAL_S = int(_RJ.get("interval_seconds", 900))
 #: while the referral job is loaded, the tick's people step keeps only this share of leads
 SHARE_PEOPLE_YIELD = float(_SHARE.get("people_when_referral_job", 0.3))
@@ -627,6 +637,23 @@ def run_referrals(**kw) -> dict:
     return summary
 
 
+def run_apify() -> dict:
+    """The Apify job (launchd com.zonuly.apify): People tabs for the next companies in
+    referrals.apify_queue, inside the daily cap, then the complete bar refreshed."""
+    LOGS.mkdir(exist_ok=True)
+    _net_timeout()
+    try:
+        with _Lock(APIFY_LOCK, "apify run"):
+            summary = {"kind": "apify", "started": datetime.now().isoformat(timespec="seconds"),
+                       **_ref().apify_step(limit=APIFY_PER_RUN)}
+            _step(summary, "complete", _complete)
+    except RuntimeError as e:
+        return {"kind": "apify", "skipped": str(e)}
+    summary["finished"] = datetime.now().isoformat(timespec="seconds")
+    _record("apify", summary)
+    return summary
+
+
 class _UseSendLock(Exception):
     """The send agent has its own lock: it must never wait behind a long free tick."""
 
@@ -667,6 +694,8 @@ def run(kind: str = "free") -> dict:
         # while a free tick held it (288 of 323 runs) and overwrote tick.lock's pid line
         if kind == "send":
             raise _UseSendLock()
+        if kind == "apify":
+            return run_apify()
         with _Lock():
             summary = run_free() if kind == "free" else run_paid() if kind == "paid" else {**run_free(), "paid": run_paid()}
     except _UseSendLock:
@@ -729,6 +758,24 @@ def _refer_plist() -> dict:
     return base
 
 
+def _apify_plist() -> dict:
+    base = _plist("free")
+    base.update({
+        "Label": APIFY_LABEL,
+        "ProgramArguments": [PYTHON, str(ROOT / "scripts" / "run.py"), "tick", "run", "--kind", "apify"],
+        "StandardOutPath": str(LOGS / "apify.log"),
+        "StandardErrorPath": str(LOGS / "apify.log"),
+        "StartInterval": APIFY_INTERVAL_S,
+        "RunAtLoad": True,
+    })
+    return base
+
+
+def _unload(path: Path) -> dict:
+    r = subprocess.run(["launchctl", "unload", str(path)], capture_output=True, text=True)
+    return {"plist": str(path), "unloaded": r.returncode == 0}
+
+
 def _load(path: Path, plist: dict) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(["launchctl", "unload", str(path)], capture_output=True)
@@ -742,7 +789,16 @@ def install() -> dict:
     job, and the hourly audit beside them. Idempotent."""
     LOGS.mkdir(exist_ok=True)
     out = {}
-    for kind in ("free", "paid", "send"):
+    out["send"] = _load(_agents_dir() / f"{LABEL}.send.plist", _plist("send"))
+    out["apify"] = _load(_agents_dir() / f"{APIFY_LABEL}.plist", _apify_plist())
+    if SCRAPERS_FROZEN:
+        for kind in ("free", "paid"):
+            out[kind] = _unload(_agents_dir() / f"{LABEL}.{kind}.plist")
+        out["referrals"] = _unload(_agents_dir() / f"{REFER_LABEL}.plist")
+        out["audit"] = _unload(_agents_dir() / "com.zonuly.audit.plist")
+        out["frozen"] = "tick.scrapers_frozen is true: free, paid, referrals and audit stay unloaded"
+        return out
+    for kind in ("free", "paid"):
         out[kind] = _load(_agents_dir() / f"{LABEL}.{kind}.plist", _plist(kind))
     out["referrals"] = _load(_agents_dir() / f"{REFER_LABEL}.plist", _refer_plist())
     from jobhunter import audit

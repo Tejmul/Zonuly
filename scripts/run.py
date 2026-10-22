@@ -1400,7 +1400,7 @@ app.add_typer(tick_app, name="tick")
 
 
 @tick_app.command("run")
-def tick_run(kind: str = typer.Option("free", help="free | paid | all | send")) -> None:
+def tick_run(kind: str = typer.Option("free", help="free | paid | all | send | apify")) -> None:
     """Run one bounded slice now (what launchd calls). Takes the lock; skips if another tick is running."""
     _setup_logging()
     from jobhunter import tick

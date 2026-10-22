@@ -41,6 +41,7 @@
   --ink: #09090b;
   --ink-2: #52525b;
   --ink-3: #8e8e97;
+  --ink-muted: #64646c;   /* secondary text that still passes WCAG AA (≥4.5:1 on paper and surface) */
 
   --on-ink: #ffffff;
   --shadow-plate: 0 1px 2px rgb(9 9 11 / 0.05);
@@ -61,6 +62,7 @@
   --ink: #fafafa;
   --ink-2: #a1a1aa;
   --ink-3: #6b6b75;
+  --ink-muted: #8b8b94;   /* ≥5:1 on every dark surface */
 
   --on-ink: #0a0a0b;
   --shadow-plate: 0 1px 2px rgb(0 0 0 / 0.5);
@@ -76,6 +78,7 @@
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
+  --color-ink-muted: var(--ink-muted);
   --color-on-ink: var(--on-ink);
 
   --color-background: var(--paper);
@@ -581,3 +584,14 @@ body {
    than no ornament — and the edge is now visible on its own. */
 :root { --plate-edge: #a6a6af; }   /* 2.42:1 on white — a hairline you can actually see */
 :root.dark { --plate-edge: #51515c; } /* 2.46:1 on the dark surface */
+
+/* --- docs ------------------------------------------------------------------ */
+/* The docs' small uppercase labels: the .marginal look at a size and contrast that
+   pass WCAG AA (11px, ink-2) — .marginal's 9.5px ink-3 is a chart annotation, not reading text. */
+.doc-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}

@@ -21,6 +21,7 @@ _S = CONFIG.get("scheduler") or {}
 SCRAPE_HOUR = int(_S.get("scrape_hour", 8))
 REPLY_POLL_MINUTES = int(_S.get("reply_poll_minutes", 60))
 SCORE_BATCH = int(_S.get("score_batch", 120))
+DAILY_SCRAPE = bool(_S.get("daily_scrape", True))   # 2026-10-23: false while the scrapers are frozen
 
 _scheduler: BackgroundScheduler | None = None
 _last_runs: dict[str, dict] = {}
@@ -125,10 +126,11 @@ def start() -> BackgroundScheduler:
     # the lid shut at 08:00 and opened at 10:00 the job was two hours late, past the
     # default grace, and skipped - seven days in a row. Now a lid opened any time
     # before 18:00 still runs today's scoring. coalesce=True keeps it to one run.
-    _scheduler.add_job(
-        daily_cycle, CronTrigger(hour=SCRAPE_HOUR, minute=0), id="daily_cycle", name="Daily scrape + score",
-        misfire_grace_time=10 * 3600,
-    )
+    if DAILY_SCRAPE:
+        _scheduler.add_job(
+            daily_cycle, CronTrigger(hour=SCRAPE_HOUR, minute=0), id="daily_cycle", name="Daily scrape + score",
+            misfire_grace_time=10 * 3600,
+        )
     _scheduler.add_job(
         reply_cycle,
         IntervalTrigger(minutes=REPLY_POLL_MINUTES),
@@ -136,7 +138,9 @@ def start() -> BackgroundScheduler:
         name="Poll Gmail for replies",
     )
     _scheduler.start()
-    log.info("scheduler started: scrape daily at %02d:00, replies every %dm", SCRAPE_HOUR, REPLY_POLL_MINUTES)
+    log.info("scheduler started: %s, replies every %dm",
+             f"scrape daily at {SCRAPE_HOUR:02d}:00" if DAILY_SCRAPE else "daily scrape OFF (scheduler.daily_scrape)",
+             REPLY_POLL_MINUTES)
     return _scheduler
 
 

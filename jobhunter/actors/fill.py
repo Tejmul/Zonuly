@@ -40,7 +40,7 @@ def unfilled(limit: int | None = None) -> list[int]:
 
 
 def fill_company(company_id: int, *, sources: list[str] | None = None, max_verify: int = 10,
-                 apify: bool = False, apify_max: int = 25) -> dict:
+                 apify: bool = False, apify_max: int = 25, apify_mode: str = "short") -> dict:
     from jobhunter import actors
     from jobhunter.contacts import addresses, roles
     from jobhunter.contacts import linkedin_public as lp
@@ -59,7 +59,7 @@ def fill_company(company_id: int, *, sources: list[str] | None = None, max_verif
     if apify and "apify" not in src:
         src.append("apify")
     row = actors.run("company-people", **inp, sources=src, known=known, max_verify=max_verify,
-                     apify_max=apify_max)
+                     apify_max=apify_max, apify_mode=apify_mode)
     people = actors.read_dataset(row["run_id"])
     fresh = [p for p in people if "known" not in p["sources"]]
     # a LinkedIn person is stored only on evidence stronger than a search headline: their
