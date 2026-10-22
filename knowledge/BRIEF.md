@@ -1,6 +1,6 @@
 # ZoNuLy — context brief
 
-> Generated 2026-10-19T18:23 from the knowledge graph (47164 nodes, 153421 edges). Do not edit — run `python scripts/run.py kg brief`.
+> Generated 2026-10-22T09:54 from the knowledge graph (49297 nodes, 160042 edges). Do not edit — run `python scripts/run.py kg brief`.
 > To query: `kg search <text>` · `kg show <id>` · `kg path <a> <b>` · `kg compose "<problem>"` · to remember: `kg note "<what changed>" --about <id>`.
 
 ## The problem
@@ -19,10 +19,10 @@ An engineer on site in the US/UK/Germany costs ₹1.5–2 crore a year; the same
 
 ## Where the pipeline is right now (live)
 
-- **7122** jobs from 18 sources (ashby 2070, greenhouse 1606, wellfound 1244, careers 1164, hn 287, workable 238, wwr 183, lever 77, linkedin-jobs 51, instahyre 46, darwinbox 39, remoteok 36, yc 33, breezy 20, recruitee 14, smartrecruiters 6, jobfound 5, bamboohr 3)
-- **284** scored · status: high_match 37, new 6838, scored 247
-- **5745** companies · **33241** contacts (pattern-guessed 506, scraped 30975, verified 1760)
-- emails: approved 32, draft 5, failed 4, rejected 8, sent 20 · replies: none
+- **7811** jobs from 18 sources (ashby 2142, greenhouse 1649, careers 1601, wellfound 1282, hn 287, workable 249, wwr 190, lever 102, linkedin-jobs 81, instahyre 68, darwinbox 39, remoteok 38, yc 33, breezy 21, recruitee 14, jobfound 6, smartrecruiters 6, bamboohr 3)
+- **426** scored · status: high_match 38, new 7385, scored 388
+- **5873** companies · **34423** contacts (pattern-guessed 553, scraped 32057, verified 1813)
+- emails: approved 32, draft 5, failed 12, rejected 8, sent 12 · replies: none
 - top matches: [85] Backend Engineer — Intern (4 months, in-office) @ ethereal labs (job:3707); [85] Junior AI Engineer @ Silstone Health (job:3902); [85] Data Science Engineer Intern @ Eshal AI (job:3998); [78] Founding Software Engineer @ *Strello Health (job:1219); [78] Founding Full-Stack Engineer @ Arusto (job:3043); [78] Junior AI Engineer @ Planso (job:3085); [78] AI Engineer @ Frequency.cx (job:3129); [78] Founding Engineer for AI Consumer App @ Scalio (job:3592)
 
 ## Constraints and guarantees (never cut)
