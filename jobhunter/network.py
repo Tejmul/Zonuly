@@ -292,6 +292,21 @@ def _build_funnel(*, include_rejects: bool = False) -> dict:
     }
 
 
+_MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+
+
+def _clean_role(role: str | None) -> str | None:
+    """A role as scraped from a LinkedIn page can arrive as markdown — "### Co-Founder -
+    [Scalio](https://…) (Current)". Show the words, not the markup."""
+    if not role:
+        return role
+    t = _MD_LINK.sub(r"\1", role)
+    t = re.sub(r"^\s*#+\s*", "", t)
+    t = re.sub(r"\s*\((?:current|present)\)\s*", " ", t, flags=re.I)
+    t = re.sub(r"\s+", " ", t).strip(" -|")
+    return t[:160] + ("…" if len(t) > 160 else "")
+
+
 def company_detail(company_id: int) -> dict:
     """Everything known about one company, for the detail page."""
     init_db()
@@ -301,6 +316,9 @@ def company_detail(company_id: int) -> dict:
             return {"error": f"no company {company_id}"}
         jobs = session.exec(select(Job).where(Job.company_id == company_id)).all()
         people = session.exec(select(Contact).where(Contact.company_id == company_id)).all()
+    # do-not-contact rows (namesakes, opt-outs) stay in the table for the record, never on the page
+    hidden = sum(1 for p in people if p.do_not_contact)
+    people = [p for p in people if not p.do_not_contact]
 
     from jobhunter import segments as seg
     from jobhunter.kg import hunt
@@ -407,7 +425,7 @@ def company_detail(company_id: int) -> dict:
         ],
         "people": [
             {
-                "id": p.id, "name": p.name, "role": p.role, "role_class": p.role_class,
+                "id": p.id, "name": p.name, "role": _clean_role(p.role), "role_class": p.role_class,
                 "label": roleclass.LABELS.get(p.role_class or "", p.role_class),
                 "rank": p.referral_rank, "email": p.email, "confidence": p.confidence,
                 "affiliation": p.affiliation, "affiliation_evidence": p.affiliation_evidence,
@@ -421,6 +439,7 @@ def company_detail(company_id: int) -> dict:
             for p in sorted(people, key=lambda p: (p.id not in reachable_ids, p.referral_rank or 9, p.name or ""))
         ],
         "leads": len(reachable_ids),
+        "people_hidden": hidden,
         "graph": {
             "verdict": graph.get("verdict"),
             "skills_they_want_that_i_have": graph.get("skills_they_want_that_i_have", []),
@@ -452,7 +471,10 @@ def company_list(*, include_rejects: bool = False, include_overrated: bool = Fal
     init_db()
     with get_session() as session:
         companies = session.exec(select(Company)).all()
-        jobs = session.exec(select(Job)).all()
+        # Only the columns the list and _trust read — not the posting text and selection
+        # JSON, ~100 MB resident on the 512 MB public instance (see build()).
+        jobs = session.exec(select(Job.company_id, Job.title, Job.is_senior, Job.match_score, Job.is_internship,
+                                   Job.remote_anywhere, Job.salary_min_lpa)).all()
         contacts = session.exec(select(Contact)).all()
 
     if not include_rejects:
@@ -741,7 +763,10 @@ def build(*, include_rejects: bool = False, include_incomplete: bool = False) ->
     init_db()
     with get_session() as session:
         companies = session.exec(select(Company)).all()
-        jobs = session.exec(select(Job)).all()
+        # Only the three columns the map reads. Whole Job rows carry the posting text and
+        # the selection JSON, ~100 MB resident for the snapshot's 6,651 roles — on the
+        # 512 MB public instance, the margin a cold start runs out of memory in.
+        jobs = session.exec(select(Job.company_id, Job.is_senior, Job.remote_anywhere)).all()
         contacts = session.exec(select(Contact)).all()
 
     if not include_rejects:

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import {
-  Activity, BookOpen, Building2, Calendar, Crosshair, Globe, Inbox, LayoutGrid, Mail, MessageSquare, Network, PanelLeft, Send, Settings, Star, Users, Workflow,
+  Activity, BookOpen, Building2, Calendar, Crosshair, Globe, GraduationCap, Inbox, LayoutGrid, Mail, MessageSquare, Network, PanelLeft, Send, Settings, Star, Users, Workflow,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme";
 import { SearchBox } from "@/components/search-box";
@@ -20,6 +20,7 @@ const LINKS = [
   { href: "/companies", label: "Companies", icon: Building2 },
   // roles by the odds of getting selected — India and Remote (confidence.py)
   { href: "/best-bets", label: "Best bets", icon: Crosshair },
+  { href: "/upskill", label: "Upskill", icon: GraduationCap },
   // The hand-picked list — a page of its own so it is never one filter among seven
   { href: "/lists/india-star", label: "★ India", icon: Star },
   { href: "/atlas", label: "Atlas", icon: Globe },

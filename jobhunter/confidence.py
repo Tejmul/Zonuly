@@ -652,7 +652,8 @@ def referral_index(session) -> dict[int, dict]:
             ready = network._reachable(comp, ps)
         except Exception:  # noqa: BLE001 — a malformed row must not stop the batch
             ready = []
-        ready.sort(key=lambda p: ((p.referral_rank or 9), p.affiliation != "verified-current", p.confidence != "verified"))
+        ready.sort(key=lambda p: (p.confidence == "pattern-guessed", (p.referral_rank or 9), p.affiliation != "verified-current",
+                                  p.confidence != "verified"))
         best = ready[0] if ready else None
         out[cid] = {
             "people": len(ps), "ready": len(ready),

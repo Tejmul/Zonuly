@@ -2350,6 +2350,197 @@ def india_discover(
                          sources=tuple(x.strip() for x in sources.split(",") if x.strip())))
 
 
+# ---------------------------------------------------------------- the decision brain
+
+decide_app = typer.Typer(help="Which Bengaluru / Hyderabad companies to spend the days on — P(offer), odds, one a day (decide.py)",
+                         no_args_is_help=True)
+app.add_typer(decide_app, name="decide")
+
+
+def _decide_line(i: dict) -> str:
+    return (f"#{i['rank'] or '-':>3} {(i['name'] or '')[:28]:28} {i['verdict_label']:10} "
+            f"P(offer) {i['p_offer']:.3f} [{i['p_lo']:.3f}–{i['p_hi']:.3f}] 1 in {i['one_in'] or '∞':<5} "
+            f"{(str(i['lift']) + '×') if i['lift'] else '':7} DSA {i['dsa']:.2f}  weakest: {i['weakest']}")
+
+
+@decide_app.command("run")
+def decide_run() -> None:
+    """Decide every Bengaluru / Hyderabad company and re-rank the shortlists."""
+    _setup_logging()
+    from jobhunter import decide
+
+    _echo(decide.run())
+
+
+@decide_app.command("top")
+def decide_top(pool: str = typer.Option("all", help="Bengaluru | Hyderabad | all"),
+               verdict: str = typer.Option(None, help="after_dsa | skip | target | fill_first (default: the shortlist)"),
+               limit: int = typer.Option(30), json_: bool = typer.Option(False, "--json")) -> None:
+    """The ranked shortlist, or the companies parked under one verdict."""
+    from jobhunter import decide
+
+    out = decide.shortlist(pool=pool, verdict=verdict, limit=limit)
+    if json_:
+        _echo(out)
+        return
+    typer.echo(f"your DSA level {out['dsa_level']} · counts {json.dumps(out['counts'])}")
+    for i in out["items"]:
+        typer.echo(_decide_line(i))
+        if verdict:
+            typer.echo(f"      {i['reason']}")
+
+
+@decide_app.command("show")
+def decide_show(company_id: int, json_: bool = typer.Option(False, "--json")) -> None:
+    """One company: every question, its probability and the evidence behind it."""
+    from jobhunter import decide
+
+    d = decide.company_view(company_id)
+    if d is None:
+        typer.echo("not decided — not a Bengaluru / Hyderabad company, or `decide run` has not run")
+        raise typer.Exit(1)
+    if json_:
+        _echo(d)
+        return
+    typer.secho(_decide_line(d), bold=True)
+    typer.echo(f"  {d['reason']}")
+    for k, q in (d["questions"] or {}).items():
+        typer.echo(f"  {q['label']:34} {q['p']:.3f}  {q['why'][:110]}")
+    typer.echo(f"  {'Gets an interview call':34} {d['stages']['call']:.3f}  (a referral multiplies the screen's odds)")
+    for e in d["dsa_evidence"] or []:
+        typer.echo(f"  DSA {e['delta']:+.1f}  {e['signal']}" + (f" — “{e['quote'][:90]}”" if e.get("quote") else ""))
+
+
+@decide_app.command("today")
+def decide_today(skip: str = typer.Option(None, help="skip today's company, with a reason; the next one is picked"),
+                 asked: bool = typer.Option(False, "--asked", help="mark today's company as asked")) -> None:
+    """Today's company — fill it or ask its referrer."""
+    from jobhunter import decide
+
+    t = decide.mark("skipped", skip) if skip else decide.mark("asked") if asked else decide.today()
+    p = t["pick"]
+    if not p:
+        typer.echo("nothing left to pick — run `decide run`, or every shortlisted company was picked in the last 30 days")
+        return
+    d = p["decision"]
+    typer.secho(f"{t['day']}: {d['name']} ({d['city']}) — {p['action'].upper()} · status {p['status']}", bold=True)
+    typer.echo(_decide_line(d))
+    typer.echo(f"  {d['reason']}")
+    if p["action"] == "fill":
+        typer.echo("  fill it:  python scripts/run.py decide fill   (or the Fill button on Best bets)")
+
+
+@decide_app.command("fill")
+def decide_fill(company_id: int = typer.Option(None, help="default: today's company")) -> None:
+    """Fill one company completely (description, hiring proof, facts, referrers), then decide it again."""
+    _setup_logging()
+    from jobhunter import decide, fill
+
+    cid = company_id or ((decide.today().get("pick") or {}).get("decision") or {}).get("company_id")
+    if not cid:
+        typer.echo("no company to fill")
+        raise typer.Exit(1)
+    _echo(fill.run(ids=[cid], people=True, budget_s=600))
+    decide.run()
+    _echo(decide.company_view(cid))
+
+
+@decide_app.command("outcome")
+def decide_outcome(company_id: int, stage: str = typer.Argument(..., help="replied | referred | interview | offer | rejected | no_response"),
+                   note: str = typer.Option(None)) -> None:
+    """Record what happened — the ground truth `decide calibrate` scores the brain against."""
+    from jobhunter import decide
+
+    _echo(decide.record_outcome(company_id, stage, note))
+
+
+@decide_app.command("calibrate")
+def decide_calibrate() -> None:
+    """Brier score and log loss of what the brain said vs what happened (Laya's proper scoring rules)."""
+    from jobhunter import decide
+
+    _echo(decide.calibrate())
+
+
+# ---------------------------------------------------------------- the mixer: decide, then scrape
+
+mixer_app = typer.Typer(help="Decide first, then buy job ads from Apify only for the companies that need them (mixer.py)",
+                        no_args_is_help=True)
+app.add_typer(mixer_app, name="mixer")
+
+
+@mixer_app.command("plan")
+def mixer_plan(limit: int = typer.Option(None, help="companies a run would buy (default: mixer.per_run)")) -> None:
+    """The free funnel, layer by layer, and who would be bought next. Spends nothing."""
+    from jobhunter import mixer
+
+    p = mixer.plan(limit or mixer.PER_RUN)
+    for l in p["layers"]:
+        typer.echo(f"  {l['layer']:28} {l['in']:>5} → {l['out']:<5} " + "; ".join(l["dropped_sample"][:2])[:110])
+    typer.secho(f"next: " + ", ".join(f"{x['name']} ({x['pool']}, P {x['p_offer']:.3f})" for x in p["next"]) +
+                f"  ≈ ${p['estimate_usd']}", bold=True)
+    typer.echo(f"Apify today ${p['spent_today_usd']} of ${p['apify_daily_usd']} (mixer ${p['mixer_spent_today_usd']} of "
+               f"${p['mixer_daily_usd']}; ${p['referral_reserve_usd']} kept for referrals) — "
+               + ("can buy now" if p["can_spend_now"] else "will NOT buy now: referrals first"))
+
+
+@mixer_app.command("run")
+def mixer_run(limit: int = typer.Option(None), company: list[int] = typer.Option(None, "--company", help="buy these ids instead of the plan")) -> None:
+    """Decide, buy the next companies' ads (cheapest source first), re-score, decide again."""
+    _setup_logging()
+    from jobhunter import mixer
+
+    _echo(mixer.run(limit or mixer.PER_RUN, company_ids=company or None))
+
+
+@mixer_app.command("history")
+def mixer_history(limit: int = typer.Option(20)) -> None:
+    """Every paid lookup: what it found, matched, saved and cost."""
+    from jobhunter import mixer
+
+    for r in mixer.history(limit):
+        typer.echo(f"{r['at'][:16]} {(r['name'] or '')[:24]:24} {r['source']:8} found {r['found']:>3} matched {r['matched']:>3} "
+                   f"saved {r['saved']:>3} ${r['cost_usd']:.4f}{' cached' if r['cached'] else ''} {r['error'] or r['stopped'] or ''}")
+
+
+# ---------------------------------------------------------------- upskill
+
+upskill_app = typer.Typer(help="What is missing from the profile, ranked by expected offers gained (upskill.py)", no_args_is_help=True)
+app.add_typer(upskill_app, name="upskill")
+
+
+@upskill_app.command("gaps")
+def upskill_gaps(limit: int = typer.Option(25)) -> None:
+    """The gaps across your shortlisted companies, best payoff first, and what DSA practice is worth."""
+    from jobhunter import upskill
+
+    a = upskill.analyse(refresh=True)
+    typer.echo(f"{a['companies_read']} shortlisted companies read · expected offers now {a['expected_offers_now']}")
+    for r in a["dsa"]["levels"]:
+        typer.echo(f"  DSA {a['dsa']['level_now']} → {r['level']}: +{r['expected_offers_gained']} expected offers; back: "
+                   + ", ".join(b["name"] or "?" for b in r["companies_back"]))
+    for x in a["skills"][:limit]:
+        typer.echo(f"  {x['skill'][:24]:24} {x['kind']:6} {x['companies_n']:>3} companies ({x['share']:.0%})  "
+                   f"+{x['expected_offers_gained']:.3f}  [{x['status']}]")
+
+
+@upskill_app.command("mark")
+def upskill_mark(skill: str, status: str = typer.Argument(..., help="todo | learning | done"),
+                 proof_url: str = typer.Option(None), note: str = typer.Option(None, help="what you built, in your words")) -> None:
+    from jobhunter import upskill
+
+    _echo(upskill.mark(skill, status, proof_url, note))
+
+
+@upskill_app.command("add")
+def upskill_add(skill: str) -> None:
+    """Put a done skill (with proof) into profile.json, then re-score everything."""
+    _setup_logging()
+    from jobhunter import upskill
+
+    _echo(upskill.add_to_profile(skill))
+
+
 # ---------------------------------------------------------------- selection confidence + needs briefs
 
 selection_app = typer.Typer(help="Selection confidence per role (confidence.py) and needs briefs (needs.py)", no_args_is_help=True)

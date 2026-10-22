@@ -90,8 +90,10 @@ def _person(session, c, name, email=None, *, source="github", affiliation="verif
 
 def test_a_confirmed_pattern_addresses_ready_referrers_and_is_guessed(session):
     c = _company(session)
-    _person(session, c, "Priya Sharma", "priya.sharma@acme.com", confidence="verified")
-    _person(session, c, "Rahul Verma", "rahul.verma@acme.com", confidence="verified")
+    # the examples teach the format but are not ready referrers (a guess is the last resort:
+    # it is made only when nobody ready to refer has a real address)
+    _person(session, c, "Priya Sharma", "priya.sharma@acme.com", confidence="verified", affiliation="unconfirmed")
+    _person(session, c, "Rahul Verma", "rahul.verma@acme.com", confidence="verified", affiliation="unconfirmed")
     lead = _person(session, c, "Kiran Das", source="linkedin-public", affiliation="likely-current",
                    linkedin="https://linkedin.com/in/kiran")
     gone = _person(session, c, "Old Hand", source="linkedin-public", affiliation="unconfirmed",
@@ -109,6 +111,18 @@ def test_a_confirmed_pattern_addresses_ready_referrers_and_is_guessed(session):
     assert gone.email is None          # not confirmed there now: never addressed
     assert P.confirmed(session.get(Company, c.id)) == "{first}.{last}"
     assert session.exec(select(ExtractionWrite).where(ExtractionWrite.channel == "pattern")).first()
+
+
+def test_no_guess_while_a_ready_referrer_has_a_real_address(session):
+    # 2026-10-23: "don't [make] the company emails unless you don't find any mail"
+    c = _company(session)
+    _person(session, c, "Priya Sharma", "priya.sharma@acme.com", confidence="verified")
+    _person(session, c, "Rahul Verma", "rahul.verma@acme.com", confidence="verified")
+    lead = _person(session, c, "Kiran Das", source="linkedin-public", affiliation="likely-current",
+                   linkedin="https://linkedin.com/in/kiran")
+    plan = addresses.plan_company(session, c, check_mx=False)
+    assert plan.add == [] and plan.skipped.get("real_address_held") == 2
+    assert lead.email is None
 
 
 def test_no_mx_means_no_address(session):

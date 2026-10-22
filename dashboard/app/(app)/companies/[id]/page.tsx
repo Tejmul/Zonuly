@@ -16,6 +16,7 @@ import { FundingCell } from "@/components/funding";
 import { AffiliationBadge } from "@/components/signals";
 import { fundingOf, money, roundWhen } from "@/lib/funding";
 import { SimilarCompanies, WarmPaths } from "@/components/kg-warm";
+import { Dossier } from "@/components/dossier";
 
 /* One page per company, in the order you read it: who they are → the hiring post →
    the roles → the people to ask → the money. Every number sits next to the sentence
@@ -255,6 +256,9 @@ export default function CompanyPage() {
           </ActionButton>
         </div>
       </Section>
+
+      {/* ---------------------------------------------------------- the research dossier, when one exists */}
+      <Dossier companyId={data.id} />
 
       {/* ---------------------------------------------------------- the best bet here */}
       <Section title="Best bet here" sub="The role with the best odds of selecting you (India and Remote first), and why.">

@@ -671,18 +671,19 @@ targeting:
   people:
     max_per_company: 30
     roles:
-    - key: founder
+    # 2026-10-23, Tejmul: "need referrals from tech team" — engineers first, founders (incl. CTO) next
+    - key: senior_engineer
       rank: 1
       refer: true
-      label: Founder / CTO / co-founder
-    - key: senior_engineer
+      label: Senior / staff / lead / founding engineer
+    - key: engineer
       rank: 2
       refer: true
-      label: Senior / staff / lead engineer
-    - key: engineer
+      label: Software engineer, SDE 1-3
+    - key: founder
       rank: 3
       refer: true
-      label: Software engineer, SDE 1-3
+      label: Founder / CTO / co-founder
     - key: eng_manager
       rank: 4
       refer: true
@@ -920,6 +921,12 @@ outreach:
   bounce_brake:
     window_days: 7
     max_bounces: 6   # 2026-10-17: was 2; a few wrong {first}@ guesses must not halt a company's day
+  # 2026-10-23 (Sarvam): Gmail refused 9 of 24 mails into sarvam.ai as spam (5.7.1 "Message
+  # blocked") after ~15 near-identical asks went into one domain within hours. These only HOLD
+  # mail (outreach/suppress.py); nothing is rejected and the 25/day cap is untouched.
+  per_domain_daily_cap: 3          # cold mails a day into one recipient domain (a company's mail server sees them all)
+  spam_block_cooldown_days: 21     # after a spam block, no cold mail into that domain / company for this long
+  spam_pause_hours: 48             # after any spam block, no cold mail at all for this long
   # never written to, whatever the pipeline finds: addresses, whole domains, company names
   do_not_contact:
     emails: []
@@ -1160,6 +1167,58 @@ confidence:
     synth_per_tick: 2            # model syntheses per tick (free chain; stops at the daily ceiling)
     context_per_tick: 2          # companies whose public context (keyless search + GitHub) is fetched
     brief_seconds: 120
+# THE DECISION BRAIN (jobhunter/decide.py, 2026-10-23). Tejmul: "we should not target thousands
+# of companies … around 100 in Bengaluru, 15 in Hyderabad … calculate probability, chances and odds
+# … eliminate the DSA companies which are high-paying right now … target at least one company a day."
+# Method borrowed from Laya (github.com/NandhaKishorM/laya) — typed yes/no questions, each a
+# probability, an abstention gate when the evidence is thin, proper scoring rules once outcomes
+# exist — WITHOUT its model (no local model on this machine). Every number below is a stated prior
+# until `decide calibrate` has outcomes to test it against.
+decide:
+  shortlist:                 # companies kept in focus per pool, best P(offer) first
+    Bengaluru: 100
+    Hyderabad: 50
+    Remote: 100              # US / UK / anywhere, with a role open to someone in India; DSA tolerated, pay must be good
+  me:
+    dsa_level: 0.35          # 0..1, your interview-DSA ability today. Raise it as you practise:
+                             # parked DSA-heavy companies come back on their own at the next run.
+  dsa:
+    heavy: 0.60              # DSA intensity at or above this = a LeetCode-style loop
+    park_always_above: 0.80  # parked even when the pay is unknown
+    margin: 0.15             # parked only while their loop is more than this above your dsa_level
+    high_pay_lpa: 35         # stated / PPO pay at or above this counts as high-paying
+    heavy_names: []          # lower-case names you KNOW run DSA loops (from people who sat them)
+  priors:
+    reply: {alpha: 2, beta: 18}    # Beta prior on one referral ask getting a reply: mean 10%
+    asks_per_company: 3            # referral asks we would spend on one company
+    find_referrer_unsearched: 0.5  # P(a fill finds a usable referrer) when nobody has looked
+    find_referrer_searched: 0.15   # … when people search already ran and found none
+    referral_odds_ratio: 6.0       # a referral multiplies the screen's odds by this
+    screen: {base: -4.0, skills: 2.0, gap: 0.8, small: 1.0}   # logit of a cold screen pass
+    loop: {slope: 4.0, fit: 2.0, base: -0.5}                  # logit = slope·(you − DSA) + fit·(skills − .5) + base
+  gate:                      # Laya's abstention: not enough evidence to decide → fill it first
+    min_info: 0.55           # share of the seven deciding fields we actually hold (and a ready referrer)
+  draws: 4000                # Monte Carlo draws per company (seeded: same inputs, same answer)
+  avoid_repeat_days: 30      # a company picked for the day is not picked again for this long
+
+# THE MIXER (jobhunter/mixer.py, 2026-10-23): decide first, then scrape. Free layers narrow the
+# companies — pay power → location → no DSA (India) → the brain — and only the survivors
+# are bought from Apify, cheapest source first, each next source only while the company still looks
+# worth it. Spend shares actors.apify.daily_usd and the same ledger; `daily_usd` is the mixer's share.
+# 2026-10-23, Tejmul: "don't use Apify a lot … we have to use it importantly for referrals" — so a small
+# share, a reserve the mixer may never eat into, and it runs only when asked (no scheduled job calls it).
+mixer:
+  daily_usd: 0.05            # ~$1.50 a month of the $19 credit; ~$0.01 a company
+  referral_reserve_usd: 0.30 # the mixer refuses unless this much of today's Apify cap is left for referrals after it
+  per_run: 2                 # companies bought per run
+  refresh_days: 14           # a company is not bought again inside this
+  pay_bands: [pays, deep_pockets, funded]   # layer 1: pay power that passes (or stated pay ≥ the India floor)
+  max_dsa: 0.5               # layer 4 (India only): DSA intensity at or above this is dropped
+  culture_min: 3.0           # AmbitionBox rating under this on ≥ culture_min_reviews reviews → the brain skips it (India)
+  culture_min_reviews: 10
+  linkedin: {actor: "valig~linkedin-jobs-scraper", per_item: 0.0004, start_fee: 0.001, limit: 15}
+  naukri: {actor: "valig~naukri-jobs-scraper", per_item: 0.0004, start_fee: 0.001, limit: 15}
+
 # NEEDS ANALYSIS (jobhunter/needs.py): what they actually need, mapped to the resume
 needs:
   context_ttl_days: 14     # public context per company (search results, repos) is reused this long

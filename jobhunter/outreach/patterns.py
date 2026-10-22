@@ -61,7 +61,8 @@ REQUIRED = ("first_name", "hook", "role")
 REQUIRED_BY = {"direct_intro": ("first_name", "role", "company")}
 # the only gate flag an auto-approval may carry — the bounce brake and the guessed cap
 # still decide at send time whether a guessed address goes
-ALLOWED_FLAGS = {"guessed"}
+# near_duplicate: a pattern writes alike by design; near-copies into ONE domain are "deliverability" and wait
+ALLOWED_FLAGS = {"guessed", "near_duplicate"}
 
 _SLOT = re.compile(r"\{\{(\w+)\}\}")
 # tests set this; None = read config.yaml

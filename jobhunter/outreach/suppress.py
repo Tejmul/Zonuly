@@ -14,6 +14,9 @@ and the one-ask-per-company cooldown, checked again at approval and at send.
     config      outreach.do_not_contact: addresses, whole domains, company names.
     cooldown    one cold ask per company until someone there replies or 30 days pass, and
                 never two approved asks to one company waiting at once.
+    spam block  a bounce saying Gmail refused the mail as spam (5.7.1 "Message blocked"):
+                no cold mail for spam_pause_hours, none into that domain / company for
+                spam_block_cooldown_days. And per_domain_daily_cap cold mails a day per domain.
 
 The opt-out line every cold mail carries (outreach.opt_out_line) is added here too.
 
@@ -287,6 +290,80 @@ def brake(session) -> str | None:
     return None
 
 
+# ------------------------------------------------------------------ blocked as spam
+
+#: 2026-10-23 (Sarvam): Gmail answered 9 of 24 mails into sarvam.ai with "** Message blocked **"
+#: / 5.7.1 "Message rejected" (support.google.com/mail/answer/69585). That is not a dead
+#: address, it is Google calling the mail spam: the whole recipient domain cools down, and
+#: no cold mail leaves at all for a while.
+SPAM_COOLDOWN_DAYS = int(_O.get("spam_block_cooldown_days", 21))
+SPAM_PAUSE_HOURS = int(_O.get("spam_pause_hours", 48))
+PER_DOMAIN_DAILY_CAP = int(_O.get("per_domain_daily_cap", 3))
+_SPAM_BLOCK = re.compile(r"message blocked|message rejected|has been blocked|\b5\.7\.(?:1|26|28)\b|"
+                         r"\bspam\b|unsolicited|policy reasons", re.I)
+
+
+def is_spam_block(text: str | None) -> bool:
+    """A bounce that says the mail was refused as spam / by policy (not "address not found")."""
+    return bool(text and _SPAM_BLOCK.search(text))
+
+
+def _domain(addr: str | None) -> str:
+    return (addr or "").rsplit("@", 1)[-1].strip().lower() if "@" in (addr or "") else ""
+
+
+def spam_blocks(session, *, hours: float) -> list[Email]:
+    since = utcnow() - timedelta(hours=hours)
+    rows = session.exec(select(Email).where(Email.status == "failed", col(Email.error).like("bounced%"),
+                                            col(Email.sent_at) >= since)).all()
+    return [e for e in rows if is_spam_block(e.error)]
+
+
+def spam_hold(session, email: Email) -> str | None:
+    """Why this cold mail must wait because Gmail refused earlier mail as spam, or None:
+    any block in the last SPAM_PAUSE_HOURS pauses every cold mail (the account is being
+    watched); a block at this company or this recipient domain in the last
+    SPAM_COOLDOWN_DAYS holds every ask there. Only ever holds; nothing is rejected."""
+    if email.kind != "cold":
+        return None
+    recent = spam_blocks(session, hours=SPAM_PAUSE_HOURS) if SPAM_PAUSE_HOURS else []
+    if recent:
+        last = max(recent, key=lambda e: e.sent_at)
+        return (f"Gmail refused a mail as spam on {last.sent_at:%d %b %H:%M} UTC ({last.to_email}) — cold mail "
+                f"pauses for {SPAM_PAUSE_HOURS}h after a block (outreach.spam_pause_hours)")
+    if not SPAM_COOLDOWN_DAYS:
+        return None
+    dom = _domain(email.to_email)
+    for e in spam_blocks(session, hours=24 * SPAM_COOLDOWN_DAYS):
+        if e.id != email.id and (e.company_id == email.company_id or (dom and _domain(e.to_email) == dom)):
+            return (f"Gmail refused mail to {e.to_email} as spam on {e.sent_at:%d %b} — {dom or 'this company'} "
+                    f"cools down for {SPAM_COOLDOWN_DAYS} days (outreach.spam_block_cooldown_days)")
+    return None
+
+
+def domain_cap(session, email: Email) -> str | None:
+    """At most PER_DOMAIN_DAILY_CAP cold mails a day into one recipient domain: a company's
+    mail server (sarvam.ai is Google Workspace) sees every inbox, and a dozen near-identical
+    asks from one stranger in a day is the cluster it files as bulk."""
+    if email.kind != "cold" or not PER_DOMAIN_DAILY_CAP:
+        return None
+    dom = _domain(email.to_email)
+    if not dom:
+        return None
+    from datetime import datetime, timezone
+
+    midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
+    start = midnight.astimezone(timezone.utc).replace(tzinfo=None)
+    rows = session.exec(select(Email.to_email).where(Email.kind == "cold", col(Email.sent_at) >= start,
+                                                     col(Email.status).in_(["sent", "replied", "failed", "sending"]),
+                                                     Email.id != email.id)).all()
+    n = sum(1 for a in rows if _domain(a) == dom)
+    if n >= PER_DOMAIN_DAILY_CAP:
+        return (f"{n} cold mails into {dom} already today — at most {PER_DOMAIN_DAILY_CAP} a day per domain "
+                "(outreach.per_domain_daily_cap); it goes on a later day")
+    return None
+
+
 def dead_addresses(session, company_id: int | None = None) -> set[str]:
     stmt = select(Contact.dead_email).where(col(Contact.dead_email).is_not(None))
     if company_id is not None:
@@ -294,5 +371,5 @@ def dead_addresses(session, company_id: int | None = None) -> set[str]:
     return {(a or "").lower() for a in session.exec(stmt).all() if a}
 
 
-__all__ = ["blocked", "config_block", "cooldown", "with_opt_out", "has_opt_out", "opt_out_lines", "is_opt_out", "opt_out", "mark_bounced",
+__all__ = ["blocked", "config_block", "cooldown", "spam_hold", "domain_cap", "is_spam_block", "spam_blocks", "with_opt_out", "has_opt_out", "opt_out_lines", "is_opt_out", "opt_out", "mark_bounced",
            "brake", "bounced_in_window", "dead_addresses", "OPT_OUT_LINE"]

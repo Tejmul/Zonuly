@@ -83,10 +83,8 @@ def in_send_window(now: datetime | None = None) -> bool:
 
 
 def _build_message(to: str, subject: str, body: str, thread_id: str | None) -> dict:
-    msg = EmailMessage()
-    msg["To"] = to
-    msg["Subject"] = subject
-    msg.set_content(body)   # plain text only: HTML mail from a personal account reads as bulk
+    # the same message the SMTP path sends (gmail.build_message): one build, one fingerprint
+    msg = gmail.build_message(to, subject, body)
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     payload = {"raw": raw}
     if thread_id:
@@ -118,7 +116,7 @@ def _referrer_problem(session, email: Email) -> str | None:
                 str(parent.gmail_thread_id or "").startswith("dryrun:") or "@zonuly.local" in str(parent.gmail_message_id or "")):
             return "the mail this follows up only went out as a dry run — nothing to follow up"
         return None
-    why = suppress.cooldown(session, email)
+    why = suppress.cooldown(session, email) or suppress.spam_hold(session, email)
     if why:
         return why
     if contact is None:
@@ -150,6 +148,10 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
         if email.kind == "cold":
             from jobhunter.outreach import suppress
 
+            # spread one company's mail over days, not into one morning (2026-10-23, Sarvam)
+            why = suppress.domain_cap(session, email)
+            if why:
+                return {"error": why, "email_id": email_id}
             # the opt-out line rides on every cold mail (added at approval; this is the net)
             if suppress.OPT_OUT_LINE and not suppress.has_opt_out(email.body) and _wants_opt_out(email):
                 email.body = suppress.with_opt_out(email.body)

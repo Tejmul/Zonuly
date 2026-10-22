@@ -19,6 +19,17 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [{ source: "/zapi/:path*", destination: `${API_ORIGIN}/:path*` }];
   },
+  /* Let Vercel's edge keep what the backend marks cacheable. The public API stamps its
+     snapshot reads `s-maxage=600, stale-while-revalidate=604800` (jobhunter/snapshot_cache.py),
+     but a project created before April 2026 ignores cache headers on an external rewrite
+     unless told otherwise — every /zapi read went to AppSail (x-vercel-cache: MISS), and
+     AppSail's Development instance sleeps a minute after its last request, so most visitors
+     paid a cold start. With this, a visit after the first is answered at the edge, stale
+     while the backend wakes behind it. Live probes (/api/health) carry no cache
+     header upstream and stay uncached. */
+  async headers() {
+    return [{ source: "/zapi/:path*", headers: [{ key: "x-vercel-enable-rewrite-caching", value: "1" }] }];
+  },
 };
 
 export default nextConfig;

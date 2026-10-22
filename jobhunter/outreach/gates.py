@@ -20,6 +20,9 @@ the queue. The gate never rewrites a sentence — it flags, the human decides.
     blurb         the forwardable blurb is longer than blurb_max_words
     uncovered_claim  the body names a skill the needs brief marked UNCOVERED (the role asks
                   for it, the resume does not have it) — the draft may not claim it
+    deliverability  what a spam filter sees (deliverability()): an attachment, more than 2
+                  links, a shortener, a nameless greeting, a near-copy (shingle Jaccard
+                  >= 0.8) of mail already approved/sent, the same subject or many asks into one domain
 
 Pure functions; no I/O, no model.
 """
@@ -229,6 +232,103 @@ def check(body: str, *, corpus: str, signature: str | None = None,
     return r
 
 
+# ------------------------------------------------------------------ deliverability
+# 2026-10-23 (Sarvam): Gmail refused 9 of 24 asks into sarvam.ai as spam (5.7.1). What a spam
+# filter sees before a person does. FLAGS only, like every gate: the human decides.
+
+SIMILAR_AT = 0.8          # token-shingle Jaccard over the message at or above this = a near-duplicate
+SHORTENERS = {"bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd", "buff.ly", "rebrand.ly", "cutt.ly",
+              "lnkd.in", "shorturl.at", "tiny.cc", "rb.gy", "t.ly", "s.id", "bl.ink", "short.io", "linktr.ee"}
+_MDLINK = re.compile(r"\[([^\]\n]{1,80})\]\((https?://[^)\s]+)\)")
+_URL = re.compile(r"(?:https?://|www\.)[^\s)<>\]]+", re.I)
+_BARE_GREETING = re.compile(r"^\s*(hi|hello|hey|dear)(\s+(there|team|all|sir|madam|sir/madam))?\s*[,!.]?\s*$", re.I)
+_MOJIBAKE = re.compile(r"â€|Ã.|Â |\ufffd")
+
+
+def _host(url: str) -> str:
+    u = re.sub(r"^https?://", "", url.strip(), flags=re.I)
+    return u.split("/")[0].split("?")[0].lower().removeprefix("www.")
+
+
+def links_in(body: str) -> list[tuple[str, str]]:
+    """(text, url) for every link: "[words](url)" and bare URLs."""
+    out = [(m.group(1), m.group(2)) for m in _MDLINK.finditer(body or "")]
+    rest = _MDLINK.sub(" ", body or "")
+    out += [(m.group(0), m.group(0)) for m in _URL.finditer(rest)]
+    return out
+
+
+def shingles(text: str, k: int = 3) -> set[tuple[str, ...]]:
+    toks = re.findall(r"[a-z0-9']+", (text or "").lower())
+    return {tuple(toks[i:i + k]) for i in range(max(0, len(toks) - k + 1))}
+
+
+def jaccard(a: set, b: set) -> float:
+    return len(a & b) / len(a | b) if a and b else 0.0
+
+
+def deliverability(subject: str, body: str, *, first_name: str | None = None, signature: str | None = None,
+                   sent: list[dict] | None = None, to_email: str | None = None, attachments: int = 0) -> list[dict]:
+    """What makes a one-to-one cold mail look like bulk to Gmail / Google Workspace:
+    an attachment, more than 2 links, a shortener, link words that name another site,
+    a greeting with no name, mojibake, a body that is a near-copy of mail already sent
+    (`sent`: [{to, subject, body}], approved or sent), the same subject already sent into
+    the same domain. Each flag is {"kind": "deliverability", "detail": <plain English>}."""
+    flags: list[dict] = []
+
+    def flag(detail: str) -> None:
+        flags.append({"kind": "deliverability", "detail": detail})
+
+    if attachments:
+        flag(f"{attachments} attachment(s): a file on a first mail from a stranger is a classic spam/phishing "
+             "signal; link the resume instead")
+    links = links_in(body)
+    if len(links) > 2:
+        flag(f"{len(links)} links: keep a first mail to one or two (resume, LinkedIn)")
+    short = sorted({_host(u) for _, u in links if _host(u) in SHORTENERS})
+    if short:
+        flag("link shortener (" + ", ".join(short) + "): filters treat a hidden destination as phishing; "
+             "write the full link")
+    for text, url in links:
+        if text != url and _URL.fullmatch(text.strip()) and _host(text) != _host(url):
+            flag(f'link words "{text}" name a different site than the link goes to ({_host(url)})')
+    lines = [x for x in (body or "").splitlines() if x.strip()]
+    greeting = lines[0] if lines else ""
+    if _BARE_GREETING.match(greeting):
+        flag(f'greeting "{greeting.strip()}" has no name: a mail that could go to anyone reads as bulk')
+    elif first_name and first_name.lower() not in greeting.lower():
+        flag(f"the greeting does not use their name ({first_name})")
+    if _MOJIBAKE.search(f"{subject}\n{body}"):
+        flag("broken characters (mojibake) in the subject or body")
+    message = _body_only(body or "", signature)
+    mine = shingles(message)
+    dom = (to_email or "").rsplit("@", 1)[-1].lower() if "@" in (to_email or "") else ""
+    near, near_here, best, same_subject, same_domain = 0, 0, 0.0, 0, 0
+    for o in sent or []:
+        sim = jaccard(mine, shingles(_body_only(o.get("body") or "", signature)))
+        here = bool(dom and str(o.get("to") or "").lower().endswith("@" + dom))
+        best = max(best, sim)
+        near += sim >= SIMILAR_AT
+        near_here += here and sim >= SIMILAR_AT
+        if here:
+            same_domain += 1
+            same_subject += (o.get("subject") or "").strip().lower() == (subject or "").strip().lower()
+    if near_here:
+        flag(f"{near_here} mail(s) to {dom} already approved/sent are near-copies of this one (up to {best:.0%} "
+             "the same): the company's mail server groups them and files the group as bulk; change the wording")
+    elif near:
+        # other companies: still worth seeing, but a pattern may carry it (patterns.ALLOWED_FLAGS)
+        flags.append({"kind": "near_duplicate",
+                      "detail": f"{near} mail(s) already approved/sent elsewhere are up to {best:.0%} the same as "
+                                "this one; Gmail sees every mail you send, so vary the wording"})
+    if same_subject:
+        flag(f'the subject "{subject}" already went to {same_subject} other inbox(es) at {dom}')
+    if same_domain >= 3:
+        flag(f"{same_domain} other asks to {dom} are approved or sent: one company's mail server sees every "
+             "inbox, so spread them over days")
+    return flags
+
+
 _SENT = re.compile(r"(?<=[.!?:])\s+|\n+")
 _SPAM = re.compile(r"\b(free|guarantee[d]?|urgent|act now|limited time|winner|click here|100%|risk[- ]free|earn|\$\$)\b", re.I)
 
@@ -270,5 +370,5 @@ def subject_problems(subject: str) -> list[str]:
     return out
 
 
-__all__ = ["GateResult", "check", "AI_TELLS", "MIN_WORDS", "MAX_WORDS", "BLURB_MAX_WORDS", "readability",
+__all__ = ["GateResult", "check", "deliverability", "links_in", "shingles", "jaccard", "SIMILAR_AT", "AI_TELLS", "MIN_WORDS", "MAX_WORDS", "BLURB_MAX_WORDS", "readability",
            "sentences", "subject_problems"]

@@ -529,6 +529,64 @@ tools:
 
 # ------------------------------------------------------------------ features: every idea any draft proposed, and its fate
 features:
+  # ---- the decision brain (built 2026-10-23)
+  - id: feature:decision-brain
+    label: The decision brain — P(offer) per Bengaluru / Hyderabad company, a 100 + 15 shortlist, one company a day
+    summary: >
+      Tejmul, 2026-10-23: stop targeting thousands; ~100 Bengaluru + 15 Hyderabad, ranked on
+      probability and odds, DSA-heavy high payers parked until his DSA improves, one company a day,
+      and "it should ask me to fill that company". jobhunter/decide.py borrows Laya's METHOD
+      (typed yes/no questions, abstention, proper scoring) — not its 421M model (no local model).
+      P(offer) = open · call · loop · pay; call = reach·σ(logit screen + ln OR) + (1−reach)·screen;
+      loop is a Rasch term, your DSA level (config decide.me.dsa_level) vs their loop's DSA
+      intensity read from postings + money/size/stage. Each answer is a Beta; seeded Monte Carlo
+      gives the mean and 80% interval. Verdicts target / fill_first (abstain: <55% of the deciding
+      fields or nobody to ask) / after_dsa / skip. The reply rate is a Beta(2,18) prior updated by
+      every send and positive reply; `decide calibrate` scores it (Brier, log loss) — every other
+      number is a stated prior until outcomes exist. Tables companydecision, dailypick,
+      decisionoutcome; tick step "decide" after "selection"; /api/decide*; CLI `decide`;
+      Best bets → Companies (default) with Today's card and the shortlists.
+    status: built
+    stage: stage:filter
+    serves: [constraint:send-cap-25, constraint:ten-minute-review]
+    implemented_in: [module:jobhunter.decide]
+  - id: feature:mixer
+    label: The mixer — decide first, then buy job ads from Apify only where data is missing
+    summary: >
+      Tejmul, 2026-10-23: "first you decide, then you scrape", in layers — pay power → location →
+      no DSA (India only) → the brain → not bought in 14 days → needs paid data (a "Node.js" layer was
+      a dictation error and was removed the same day)
+      (no ad seen in 14 days, pay unknown, or India culture unknown). Only survivors are bought,
+      cheapest first: LinkedIn ads (valig~linkedin-jobs-scraper, $0.0004/ad), then Naukri ads
+      (valig~naukri-jobs-scraper) only for India and only while pay or culture is unknown; Naukri ads
+      carry the AmbitionBox rating, which the brain reads (India: < 3.0 on ≥ 10 reviews → skip).
+      Ads are matched to the company by name key, stored through pipeline.persist, re-scored, re-decided.
+      "Use Apify mainly for referrals": $0.05/day share, a $0.30 referral reserve it never eats, manual
+      only (no scheduled job). bovi~ambitionbox-reviews-scraper timed out on its first run — not used.
+      Also 2026-10-23: the brain gained a Remote pool (US / UK / anywhere, a role open to India; DSA
+      tolerated, thin pay = skip, unknown pay = fill first); Hyderabad shortlist raised to 50.
+    status: built
+    stage: stage:scrape
+    serves: [constraint:student-budget, feature:decision-brain]
+    implemented_in: [module:jobhunter.mixer, module:jobhunter.actors.apify_source]
+  - id: feature:upskill
+    label: Upskill — the profile's gaps, read from the shortlist, ranked by expected offers gained
+    summary: >
+      Tejmul, 2026-10-23: "a pipeline [of] what's missing from your profile … add the missing things
+      in my resume so that I can upskill and learn." jobhunter/upskill.py reads the best roles' needs
+      briefs of every shortlisted company (decide.py) and lists each skill as LEARN (missing) or PROVE
+      (only a word in the skills list). The payoff runs through the brain's own formulas (screen and
+      loop logits → P(offer)), summed over the shortlist — an upper estimate (Observability measured
+      +0.19 vs +0.32 estimated). DSA is its own row: the loop at a higher dsa_level and the parked
+      companies that return (+3.0 expected offers at 0.5). Progress todo → learning → done; done
+      needs a proof link and a line in your words; only then can it be added to profile.json
+      (dated backup), which re-maps every stored brief and re-scores. Page /upskill; /api/upskill*;
+      CLI `upskill gaps | mark | add`. Also fixed: After-DSA parking now depends on dsa_level
+      (decide.dsa.margin).
+    status: built
+    stage: stage:score
+    serves: [guarantee:no-fabrication, feature:decision-brain]
+    implemented_in: [module:jobhunter.upskill]
   # ---- company + people targeting (built 2026-09-03)
   - id: feature:star-lists
     label: Hand-picked lists — ★ India (Top 50 Series A/B, Hyderabad & Bengaluru) on a page of its own

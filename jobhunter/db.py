@@ -458,6 +458,87 @@ class Reply(SQLModel, table=True):
     notified: bool = False
 
 
+class CompanyDecision(SQLModel, table=True):
+    """The decision brain's latest answer for one company (decide.py, 2026-10-23): P(offer)
+    with its 80% interval, the five stage probabilities, a verdict and the shortlist slot."""
+
+    company_id: int = Field(foreign_key="company.id", primary_key=True)
+    pool: str = Field(index=True)           # Bengaluru | Hyderabad
+    verdict: str = Field(index=True)        # target | fill_first | after_dsa | skip
+    p_offer: float = Field(index=True)
+    p_lo: float                              # 10th percentile of the draws
+    p_hi: float                              # 90th percentile
+    p_open: float
+    p_reach: float
+    p_screen: float
+    p_call: float
+    p_loop: float
+    p_pay: float
+    dsa: float                               # DSA intensity of their loop, 0..1
+    info: float                              # share of the deciding fields we hold
+    rank: Optional[int] = Field(default=None, index=True)   # 1.. inside the pool's shortlist; None = outside it
+    why: Optional[str] = None                # JSON: every question, its evidence, the verdict's reason
+    at: datetime = Field(default_factory=utcnow)
+
+
+class DailyPick(SQLModel, table=True):
+    """One company a day (decide.today). The snapshot is frozen at pick time so
+    `decide calibrate` can score what the brain said then against what happened."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    day: str = Field(index=True)             # YYYY-MM-DD, local (IST); a skip adds the next pick on the same day
+    company_id: int = Field(foreign_key="company.id", index=True)
+    action: str                              # fill | ask
+    status: str = "picked"                   # picked | filled | asked | skipped
+    p_offer: float
+    p_reach: float
+    verdict: str
+    note: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: Optional[datetime] = None
+
+
+class DecisionOutcome(SQLModel, table=True):
+    """What actually happened at a company — the ground truth the priors get scored against."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
+    stage: str = Field(index=True)           # replied | referred | interview | offer | rejected | no_response
+    note: Optional[str] = None
+    at: datetime = Field(default_factory=utcnow)
+
+
+class MixerScrape(SQLModel, table=True):
+    """One paid lookup the mixer made for one company (mixer.py, 2026-10-23): what it bought,
+    what matched the company, what was saved, what it cost, and the culture rating it carried."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
+    source: str = Field(index=True)          # linkedin | naukri
+    found: int = 0                            # items the actor returned
+    matched: int = 0                          # … whose company is this company
+    saved: int = 0                            # … that passed the relevance gate into the job table
+    cost_usd: float = 0.0
+    cached: bool = False
+    error: Optional[str] = None
+    culture_rating: Optional[float] = None    # AmbitionBox rating carried on the company's own Naukri ads
+    culture_reviews: Optional[int] = None
+    stopped: Optional[str] = None             # why the cascade stopped after this layer
+    at: datetime = Field(default_factory=utcnow, index=True)
+
+
+class UpskillItem(SQLModel, table=True):
+    """Your progress on one gap the upskill pipeline found (upskill.py, 2026-10-23). Nothing
+    reaches the profile without proof: a link and a line in your own words."""
+
+    skill: str = Field(primary_key=True)     # the skill dictionary's canonical name, or "DSA"
+    status: str = "todo"                      # todo | learning | done
+    proof_url: Optional[str] = None           # the repo / demo / write-up that shows it
+    proof_note: Optional[str] = None          # what you built, in your words — the resume line is made from this
+    added_to_profile_at: Optional[datetime] = None
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class Setting(SQLModel, table=True):
     """Small key/value store for runtime state the config file shouldn't own (send counters, cursors)."""
 

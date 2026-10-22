@@ -32,3 +32,6 @@ data/actors/
 
 # database backups (scripts take them before risky passes) — never committed
 data/backups/
+
+# research dossiers name people and their addresses — never pushed (2026-10-23)
+reports/

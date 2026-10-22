@@ -8,11 +8,14 @@ import { lpa } from "@/lib/utils";
 import { PageHead } from "@/components/shell";
 import { BAND_LABEL, BandChip } from "@/components/selection";
 import { Empty, ErrorNote, Loading, Panel, Table, Td, Th, Tr } from "@/components/ui/primitives";
+import { DecideShortlist, MixerPanel, TodayCard } from "@/components/decide";
 
 /* Best bets: roles ordered by the odds of getting selected (jobhunter/confidence.py).
    One engine, two weight profiles — India (Bengaluru / Hyderabad on-site or hybrid) and
    Remote (anywhere / from India). Each row: score and band, the top three reasons, the
-   main blocker. The breakdown and the needs brief are on the role page. */
+   main blocker. The breakdown and the needs brief are on the role page.
+   Companies (the default, 2026-10-23) is the decision brain over those roles (jobhunter/decide.py):
+   P(offer) per Bengaluru / Hyderabad company, the shortlist, and one company a day. */
 
 const MARKETS = [
   { key: "india", label: "India", hint: "Bengaluru / Hyderabad, on-site or hybrid" },
@@ -20,7 +23,54 @@ const MARKETS = [
 ] as const;
 const BANDS: SelectionBand[] = ["high", "medium", "low", "long_shot"];
 
+const LEVELS = [
+  { key: "companies", label: "Companies", hint: "P(offer) per company — the shortlist and today's pick" },
+  { key: "roles", label: "Roles", hint: "every role by its selection score" },
+] as const;
+
 export default function BestBetsPage() {
+  const [level, setLevel] = useState<(typeof LEVELS)[number]["key"]>("companies");
+  return (
+    <>
+      <PageHead
+        title="Best bets"
+        description={
+          level === "companies"
+            ? "Where an offer is most likely: P(offer) = role open × interview call × clears the loop × pays, with the odds and an 80% interval. One company a day."
+            : "Roles by the odds of getting selected — so the 25 emails a day go where they can land. Every number is itemised on the role page."
+        }
+      />
+      <div role="tablist" aria-label="Level" className="mb-4 inline-flex rounded-sm border border-line p-0.5">
+        {LEVELS.map((l) => (
+          <button
+            key={l.key}
+            role="tab"
+            type="button"
+            aria-selected={level === l.key}
+            title={l.hint}
+            onClick={() => setLevel(l.key)}
+            className={`h-8 cursor-pointer rounded-sm px-3.5 text-[13px] transition-colors ${
+              level === l.key ? "bg-ink font-medium text-on-ink" : "text-ink-2 hover:text-ink"
+            }`}
+          >
+            {l.label}
+          </button>
+        ))}
+      </div>
+      {level === "companies" ? (
+        <>
+          <TodayCard />
+          <DecideShortlist />
+          <MixerPanel />
+        </>
+      ) : (
+        <RolesView />
+      )}
+    </>
+  );
+}
+
+function RolesView() {
   const [market, setMarket] = useState<(typeof MARKETS)[number]["key"]>("india");
   const [bands, setBands] = useState<SelectionBand[]>(["high", "medium"]);
 
@@ -35,11 +85,6 @@ export default function BestBetsPage() {
 
   return (
     <>
-      <PageHead
-        title="Best bets"
-        description="Roles by the odds of getting selected — so the 25 emails a day go where they can land. Every number is itemised on the role page."
-      />
-
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div role="tablist" aria-label="Market" className="inline-flex rounded-sm border border-line p-0.5">
           {MARKETS.map((m) => (

@@ -48,7 +48,8 @@ def token() -> str | None:
     return secret("APIFY_TOKEN") or None
 
 
-def spent_today() -> float:
+def spent_today(label: str | None = None) -> float:
+    """Today's booked Apify spend — all of it, or only the rows a caller booked under `label`."""
     if not SPEND_FILE.exists():
         return 0.0
     today = datetime.now().strftime("%Y-%m-%d")
@@ -58,7 +59,7 @@ def spent_today() -> float:
             row = json.loads(line)
         except ValueError:
             continue
-        if row.get("day") == today:
+        if row.get("day") == today and (label is None or row.get("label") == label):
             total += float(row.get("usd", 0))
     return round(total, 4)
 
@@ -128,3 +129,39 @@ def company_employees(company_url: str, *, max_items: int = 50, mode: str = "sho
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cp.write_text(json.dumps(people))
     return {"people": people, "cost_usd": cost, "cached": False}
+
+
+def run_actor(actor_id: str, inp: dict, *, per_item: float, start_fee: float, max_items: int,
+              label: str | None = None, cap_usd: float | None = None, timeout_s: int = 280) -> dict:
+    """Any pinned Apify actor under the same guards as company_employees — {items, cost_usd, cached}
+    or {error}. Never raises. The estimate (max_items × per_item + start_fee) is checked BEFORE the
+    run against today's cap (and `cap_usd`, a caller's own share of it, when given); the actual cost
+    is booked after. Same input inside the cache window → the cached items, free."""
+    if not token():
+        return {"error": "APIFY_TOKEN not set — add it to .env"}
+    key = hashlib.sha1(json.dumps({"actor": actor_id, **inp}, sort_keys=True).encode()).hexdigest()
+    cp = CACHE_DIR / f"{key}.json"
+    if cp.exists() and time.time() - cp.stat().st_mtime < CACHE_HOURS * 3600:
+        return {"items": json.loads(cp.read_text()), "cost_usd": 0.0, "cached": True}
+    estimate = round(max_items * per_item + start_fee, 4)
+    if spent_today() + estimate > DAILY_USD:
+        return {"error": f"apify daily cap: ${spent_today()} spent + ${estimate} estimated > ${DAILY_USD}"}
+    if cap_usd is not None and spent_today(label) + estimate > cap_usd:
+        return {"error": f"{label} cap: ${spent_today(label)} spent + ${estimate} estimated > ${cap_usd}"}
+    try:
+        r = httpx.post(f"https://api.apify.com/v2/acts/{actor_id}/run-sync-get-dataset-items",
+                       params={"token": token(), "timeout": timeout_s}, json=inp, timeout=timeout_s + 20)
+    except httpx.HTTPError as e:
+        return {"error": f"apify request failed: {e}"}
+    if r.status_code >= 400:
+        return {"error": f"apify HTTP {r.status_code}: {r.text[:200]}"}
+    items = r.json() if r.headers.get("content-type", "").startswith("application/json") else []
+    items = [x for x in items if isinstance(x, dict)] if isinstance(items, list) else []
+    cost = round(len(items) * per_item + start_fee, 4)
+    ACTOR_DIR.mkdir(parents=True, exist_ok=True)
+    with open(SPEND_FILE, "a") as fh:
+        fh.write(json.dumps({"day": datetime.now().strftime("%Y-%m-%d"), "actor": actor_id, "label": label,
+                             "items": len(items), "usd": cost}) + "\n")
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cp.write_text(json.dumps(items))
+    return {"items": items, "cost_usd": cost, "cached": False}

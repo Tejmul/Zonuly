@@ -85,7 +85,8 @@ def _busy_companies(session, candidate_id: int) -> dict[int, str]:
 
 
 def _referrer_key(p: Contact) -> tuple:
-    return (p.referral_rank or 9, _ROLE_ORDER.get(p.role_class or "other", 6), p.confidence != "verified",
+    # a guessed company address last of all (2026-10-23): real addresses deliver, guessed ones bounce
+    return (p.confidence == "pattern-guessed", p.referral_rank or 9, _ROLE_ORDER.get(p.role_class or "other", 6), p.confidence != "verified",
             p.affiliation != "verified-current", p.name is None, p.id)
 
 

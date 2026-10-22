@@ -440,12 +440,16 @@ def write(g: dict, *, use_model: bool = True, key=None) -> dict:
     forbidden = [str(x) for x in ((g["brief"] or {}).get("forbidden") or [])]
     opt = None if direct and not compose.DIRECT_OPT_OUT else (suppress.OPT_OUT_LINE or None)
 
+    sent = sent_like(g["person"].get("id"))
+
     def evaluate(message: str) -> dict:
         body = compose.assemble(message, sig, opt, c.structure)
         v = gates.check(body, corpus=corpus, signature=sig, address_confidence=g["person"].get("confidence"),
                         affiliation=g["person"].get("affiliation"), forbidden=forbidden,
                         exclude=[opt or ""], subject=subject, word_band=compose.word_band(c))
         v.flags += _shape_flags(message, c)
+        v.flags += gates.deliverability(subject, body, first_name=c.first_name, signature=sig, sent=sent,
+                                        to_email=g["person"].get("email"))
         q = compose.quality(message, subject, c, v.flags, v.words)
         return {"message": message, "body": body, "flags": v.flags, "words": v.words, "quality": q,
                 "blocked": v.blocked}
@@ -515,9 +519,25 @@ def evaluate_body(g: dict, r: dict, subject: str, body: str) -> dict:
                     exclude=[x for x in [opt, *suppress.opt_out_lines()] if x], subject=subject,
                     word_band=compose.word_band(c))
     v.flags += _shape_flags(message, c)
+    v.flags += gates.deliverability(subject, body, first_name=c.first_name, signature=sig,
+                                    sent=sent_like(g["person"].get("id")), to_email=g["person"].get("email"))
     q = compose.quality(message, subject, c, v.flags, v.words)
     return {"message": message, "body": body, "flags": v.flags, "words": v.words, "quality": q,
             "blocked": v.blocked, "dropped": compose.keeps_contract(message, c)}
+
+
+def sent_like(contact_id: int | None, days: int = 30) -> list[dict]:
+    """Cold mail approved, sending or already out in the last `days` (to anyone but this
+    person): what the deliverability gate compares a new draft against."""
+    from datetime import timedelta
+
+    since = utcnow() - timedelta(days=days)
+    with get_session() as session:
+        rows = session.exec(select(Email.to_email, Email.subject, Email.body).where(
+            Email.kind == "cold", Email.contact_id != (contact_id or -1),
+            col(Email.status).in_(["approved", "sending", "sent", "replied", "failed"]),
+            col(Email.created_at) >= since)).all()
+    return [{"to": t, "subject": sj, "body": b} for t, sj, b in rows if b]
 
 
 def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = True,
@@ -661,7 +681,8 @@ def draft_for_bets(limit: int = 10, *, candidate_id: int = 1) -> list[dict]:
             company = session.get(Company, c["id"])
             people = session.exec(select(Contact).where(Contact.company_id == c["id"])).all()
             leads = network._reachable(company, people)
-            leads.sort(key=lambda p: ((p.referral_rank or 9), p.affiliation != "verified-current",
+            # a guessed company address last of all (2026-10-23): real addresses deliver
+            leads.sort(key=lambda p: (p.confidence == "pattern-guessed", (p.referral_rank or 9), p.affiliation != "verified-current",
                                       p.confidence != "verified", p.name is None))
             if not leads:
                 continue

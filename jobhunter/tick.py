@@ -499,6 +499,8 @@ def run_free(budget_s: int | None = None) -> dict:
 
     # SELECTION CONFIDENCE (confidence.py, 2026-10-14): re-score roles whose inputs changed, then a few needs briefs within the model budget
     _step(s, "selection", lambda: __import__("jobhunter.confidence", fromlist=["tick"]).tick())
+    # THE DECISION BRAIN (decide.py, 2026-10-23): P(offer) per Bengaluru / Hyderabad company from those role scores, the shortlists re-ranked
+    _step(s, "decide", lambda: __import__("jobhunter.decide", fromlist=["tick"]).tick())
 
     _step(s, "complete", _complete)
     if PAID_HOURLY and time.time() - t0 < budget_s + 600:

@@ -24,7 +24,7 @@ import re
 import smtplib
 import time
 from email.message import EmailMessage
-from email.utils import formataddr, formatdate, make_msgid, parseaddr, parsedate_to_datetime
+from email.utils import formataddr, formatdate, parseaddr, parsedate_to_datetime
 from pathlib import Path
 
 from jobhunter import CONFIG, ROOT, secret
@@ -141,28 +141,48 @@ def _forget_app_password() -> None:
     _verified.update(at=0.0, ok=False, error=None)
 
 
+def build_message(to: str, subject: str, body: str, *, in_reply_to: str | None = None) -> EmailMessage:
+    """The exact message send() hands to Gmail, built and never sent (deliverability checks,
+    the review queue's preview, tests).
+
+    2026-10-17: a plain-text-only message with bare URLs and no Date landed in Spam ("similar
+    to messages identified as spam"), so it mirrors Gmail's own compose: text + its minimal
+    HTML (<div dir="ltr">, links on words), no styles, no images, no tracking, no attachment.
+    2026-10-23 (Sarvam, 5.7.1 "Message rejected"): the Python-library fingerprints are gone
+    too: a mail-client style Message-ID (no timestamp.pid), a Gmail-style boundary instead of
+    "===============", no MIME-Version on the parts, and links in the text part written the
+    way Gmail writes them ("my resume <https://...>").
+    No List-Unsubscribe: this is one person writing to one person, and Gmail and Yahoo
+    require it only of bulk senders (5,000+ a day); on a personal note it marks the mail as
+    a campaign. A "stop" reply is the opt-out (suppress.py)."""
+    import secrets as _secrets
+    import uuid
+
+    msg = EmailMessage()
+    msg["From"] = from_header()
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg["Message-ID"] = f"<{str(uuid.uuid4()).upper()}@{ADDRESS.split('@')[-1] or 'gmail.com'}>"
+    if in_reply_to:
+        msg["In-Reply-To"] = in_reply_to
+        msg["References"] = in_reply_to
+    msg["Date"] = formatdate(localtime=True)
+    msg.set_content(as_plain(body))
+    msg.add_alternative(as_gmail_html(body), subtype="html")
+    msg.set_boundary("0000000000" + _secrets.token_hex(8))
+    for part in msg.iter_parts():
+        del part["MIME-Version"]
+    return msg
+
+
 def send(to: str, subject: str, body: str, *, in_reply_to: str | None = None) -> dict:
-    """Send one plain-text mail as Tejmul and return where Gmail filed it.
+    """Send one mail as Tejmul (build_message) and return where Gmail filed it.
 
     Returns {"id": <RFC Message-ID>, "threadId": <Gmail X-GM-THRID or the Message-ID>}.
     The thread id is read back from Sent Mail over IMAP so the tracker can poll the
     same conversation the way the API path did; when Gmail is slow to file the copy
     the Message-ID stands in and the poller resolves it later."""
-    msg = EmailMessage()
-    msg["From"] = from_header()
-    msg["To"] = to
-    msg["Subject"] = subject
-    msg["Message-ID"] = make_msgid(domain=ADDRESS.split("@")[-1] or "gmail.com")
-    if in_reply_to:
-        msg["In-Reply-To"] = in_reply_to
-        msg["References"] = in_reply_to
-    msg["Date"] = formatdate(localtime=True)
-    # 2026-10-17: a plain-text-only message with bare URLs and no Date landed in Spam ("similar
-    # to messages identified as spam"). Gmail's own compose sends text + its minimal HTML
-    # (<div dir="ltr">, links on words); this mirrors it exactly so it reads person-to-person.
-    msg.set_content(as_plain(body))
-    msg.add_alternative(as_gmail_html(body), subtype="html")
-
+    msg = build_message(to, subject, body, in_reply_to=in_reply_to)
     with _smtp() as conn:
         conn.send_message(msg)
     message_id = msg["Message-ID"]
@@ -532,7 +552,7 @@ def setup_status() -> dict:
 
 
 __all__ = [
-    "AUTH", "ADDRESS", "DISPLAY_NAME", "GmailNotConfigured", "send", "thread_messages", "verify",
+    "AUTH", "ADDRESS", "DISPLAY_NAME", "GmailNotConfigured", "build_message", "send", "thread_messages", "verify",
     "install_app_password", "configured", "authorized", "status", "service", "authorize", "my_address",
     "install_credentials", "validate_client_json", "disconnect", "setup_status", "from_header",
 ]
@@ -542,8 +562,9 @@ _BARE_URL = re.compile(r"(?<![\"'>(])(https?://[^\s<]+)")
 
 
 def as_plain(body: str) -> str:
-    """The text part: "[my resume](url)" becomes "my resume (url)"."""
-    return _MD_LINK.sub(lambda m: f"{m.group(1)} ({m.group(2)})", body or "")
+    """The text part, written the way Gmail writes a link on words: "[my resume](url)"
+    becomes "my resume <url>"."""
+    return _MD_LINK.sub(lambda m: f"{m.group(1)} <{m.group(2)}>", body or "")
 
 
 def as_gmail_html(body: str) -> str:

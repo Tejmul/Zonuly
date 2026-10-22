@@ -626,6 +626,130 @@ def update_job(job_id: int, payload: JobStatusIn) -> dict:
         return {"ok": True, "id": job_id, "status": payload.status}
 
 
+# ---------------------------------------------------------------- the decision brain (decide.py)
+
+@app.get("/api/decide")
+def decide_shortlist(pool: str = "all", verdict: str | None = None, limit: int = Query(200, le=2000)) -> dict:
+    """The ranked Bengaluru / Hyderabad shortlist by P(offer), or the rows parked under one verdict."""
+    from jobhunter import decide
+
+    return decide.shortlist(pool=pool, verdict=verdict, limit=limit)
+
+
+@app.get("/api/decide/today")
+def decide_today() -> dict:
+    """Today's one company — fill it or ask its referrer. Picked on first read of the day."""
+    from jobhunter import decide
+
+    return decide.today()
+
+
+@app.post("/api/decide/today/{status}")
+def decide_mark(status: Literal["asked", "skipped", "filled"], note: str | None = None) -> dict:
+    """Mark today's company; a skip picks the next one on the shortlist."""
+    from jobhunter import decide
+
+    try:
+        return decide.mark(status, note)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+
+
+@app.get("/api/decide/company/{company_id}")
+def decide_company(company_id: int) -> dict:
+    """Every question, its probability and evidence, for one company."""
+    from jobhunter import decide
+
+    d = decide.company_view(company_id)
+    if d is None:
+        raise HTTPException(404, "not decided — not a Bengaluru / Hyderabad company, or the brain has not run")
+    return d
+
+
+@app.post("/api/decide/run")
+def decide_run() -> dict:
+    from jobhunter import decide
+
+    return {"task_id": _run_task("decide", decide.run)}
+
+
+@app.post("/api/decide/outcome")
+def decide_outcome(company_id: int, stage: str, note: str | None = None) -> dict:
+    """What actually happened at a company — scored against the brain by /api/decide/calibration."""
+    from jobhunter import decide
+
+    try:
+        return decide.record_outcome(company_id, stage, note)
+    except (ValueError, LookupError) as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/decide/calibration")
+def decide_calibration() -> dict:
+    from jobhunter import decide
+
+    return decide.calibrate()
+
+
+# ---------------------------------------------------------------- the mixer (mixer.py): decide, then scrape
+
+@app.get("/api/mixer/plan")
+def mixer_plan() -> dict:
+    """The free funnel and who would be bought next, with today's Apify spend. Spends nothing."""
+    from jobhunter import mixer
+
+    return mixer.plan()
+
+
+@app.post("/api/mixer/run")
+def mixer_run(limit: int | None = None) -> dict:
+    """Buy the plan's next companies inside the mixer's share and the referral reserve — a task."""
+    from jobhunter import mixer
+
+    return {"task_id": _run_task("mixer", mixer.run, limit or mixer.PER_RUN)}
+
+
+@app.get("/api/mixer/history")
+def mixer_history(limit: int = Query(50, le=500)) -> list[dict]:
+    from jobhunter import mixer
+
+    return mixer.history(limit)
+
+
+# ---------------------------------------------------------------- upskill (upskill.py)
+
+@app.get("/api/upskill")
+def upskill_view(refresh: bool = False) -> dict:
+    """What is missing from the profile, ranked by expected offers gained across the shortlist."""
+    from jobhunter import upskill
+
+    return upskill.analyse(refresh=refresh)
+
+
+class UpskillMark(BaseModel):
+    status: Literal["todo", "learning", "done"]
+    proof_url: str | None = None
+    proof_note: str | None = None
+
+
+@app.post("/api/upskill/{skill}")
+def upskill_mark(skill: str, body: UpskillMark) -> dict:
+    from jobhunter import upskill
+
+    try:
+        return upskill.mark(skill, body.status, body.proof_url, body.proof_note)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/upskill/{skill}/add-to-profile")
+def upskill_add(skill: str) -> dict:
+    """Add a done skill (with proof) to profile.json, then re-score — a task (a full re-score takes a while)."""
+    from jobhunter import upskill
+
+    return {"task_id": _run_task(f"upskill:{skill}", upskill.add_to_profile, skill)}
+
+
 # ---------------------------------------------------------------- roles by selection confidence
 
 @app.get("/api/roles")
@@ -1040,6 +1164,32 @@ def company_detail(company_id: int) -> dict:
         raise HTTPException(status_code=404, detail=out["error"])
     out["best_role"] = _best_role(company_id)
     return out
+
+
+@app.get("/api/companies/{company_id}/dossier")
+def company_dossier(company_id: int) -> dict:
+    """The research dossier for a company (reports/<name>-dossier.md), when one has been written:
+    who to ask, where to apply, how to crack it — every fact with its source. Operator only: it
+    names people and their addresses, so a public instance never serves it. Housekeeping inside
+    <!-- internal --> … <!-- /internal --> (row ids, backups, before/after) stays in the file."""
+    import re
+
+    from jobhunter import admission
+
+    if not access.can_read_private():
+        raise HTTPException(404, "no dossier")
+    with get_session() as session:
+        company = session.get(Company, company_id)
+    if company is None:
+        raise HTTPException(404, f"no company {company_id}")
+    key = admission.name_key(company.name)
+    reports = ROOT / "reports"
+    for path in sorted(reports.glob("*-dossier.md")) if reports.exists() else []:
+        if admission.name_key(path.stem.removesuffix("-dossier")) == key:
+            text = re.sub(r"<!-- internal -->.*?<!-- /internal -->\n?", "", path.read_text(), flags=re.S)
+            return {"markdown": text, "path": str(path.relative_to(ROOT)),
+                    "updated_at": datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="minutes")}
+    raise HTTPException(404, "no dossier written for this company yet")
 
 
 def _best_role(company_id: int) -> dict | None:

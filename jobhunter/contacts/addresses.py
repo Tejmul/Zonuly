@@ -153,6 +153,13 @@ def plan_company(session, company: Company, *, check_mx: bool = True) -> Plan:
         taken.discard(p.email.lower())
     if not pat or not company.domain:
         return plan
+    # 2026-10-23, Tejmul: "don't [make] the company emails unless you don't find any mail" — a
+    # guessed company address is the last resort (Sarvam: 23 of 24 guessed, 3 bounced, 9 blocked).
+    # When someone ready to refer already has a real address (published or verified), guess none.
+    real = [p for p in rows if p.email and not _pattern_made(p) and not p.do_not_contact and guardrails.is_ready(p)]
+    if real:
+        plan.skipped["real_address_held"] = len(real)
+        return plan
     for p in rows:
         if p.email and not any(r[0] == p.id for r in plan.retract):
             continue

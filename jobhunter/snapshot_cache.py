@@ -31,13 +31,16 @@ _SKIP = ("/api/health", "/api/tasks", "/api/research")
 #: browser keeps it briefly; the CDN keeps it longer and serves stale while it refetches
 CACHE_CONTROL = b"public, max-age=60, s-maxage=600, stale-while-revalidate=604800"
 
-#: what the dashboard opens first, fetched at start so the first visitor does not pay
+#: what the dashboard opens first, fetched at start so the first visitor does not pay.
+#: In the order a visitor meets them: the landing page's counters, then /dashboard, then
+#: the pages one click away — a cold start answers the first screen before the rest.
 PREWARM = (
+    "/api/overview",
+    "/api/network",
     "/api/companies/grouped",
+    "/api/roles?sort=selection&market=india&limit=100&band=high%2Cmedium",
     "/api/companies/grouped?include_rejects=true",
     "/api/companies/filling",
-    "/api/network",
-    "/api/overview",
     "/api/events",
     "/api/audit",
     "/api/graph/map?view=market",
@@ -59,6 +62,10 @@ class SnapshotCache:
         self.max_bytes = max_bytes
         self.store: OrderedDict[str, tuple[int, list, bytes]] = OrderedDict()
         self.size = 0
+        #: keys being computed right now. On a cold start the prewarm and the first
+        #: visitor ask for the same heavy read at once; computing it twice on a small
+        #: instance makes both wait about twice as long, so the second waits for the first.
+        self.inflight: dict[str, asyncio.Event] = {}
 
     def _cacheable(self, scope) -> bool:
         if not access.PUBLIC or scope["type"] != "http" or scope["method"] != "GET":
@@ -74,6 +81,8 @@ class SnapshotCache:
             return
 
         key = scope["path"] + "?" + scope.get("query_string", b"").decode("latin-1")
+        while (pending := self.inflight.get(key)) is not None:
+            await pending.wait()
         hit = self.store.get(key)
         if hit is not None:
             self.store.move_to_end(key)
@@ -104,7 +113,12 @@ class SnapshotCache:
                     self._keep(key, start["headers"], b"".join(chunks))
             await send(message)
 
-        await self.app(scope, receive, capture)
+        done = self.inflight[key] = asyncio.Event()
+        try:
+            await self.app(scope, receive, capture)
+        finally:
+            del self.inflight[key]
+            done.set()
 
     def _keep(self, key: str, headers: list, body: bytes) -> None:
         ctype = next((v for k, v in headers if k.lower() == b"content-type"), b"")

@@ -276,6 +276,59 @@ export type RolesPage = {
   counts: Record<string, Partial<Record<SelectionBand, number>>>;
 };
 
+/* The decision brain (jobhunter/decide.py): P(offer) per Bengaluru / Hyderabad company. */
+export type DecideVerdict = "target" | "fill_first" | "after_dsa" | "skip";
+export type DecideStage = "open" | "reach" | "screen" | "call" | "loop" | "pay";
+export type DecideQuestion = { label: string; p: number; evidence_strength: number; why: string; fill_fixes: boolean };
+export type DecideRow = {
+  company_id: number; name: string | null; city: string | null; pool: string; rank: number | null;
+  verdict: DecideVerdict; verdict_label: string; reason: string | null;
+  p_offer: number; p_lo: number; p_hi: number; one_in: number | null; odds: number; lift: number | null;
+  stages: Record<DecideStage, number>; dsa: number; info: number; weakest: Exclude<DecideStage, "call"> | null;
+  missing: string[]; best_job_id: number | null; best_job_title: string | null; filled_at: string | null; at: string | null;
+  culture: { rating: number; reviews: number; source: string } | null;
+  questions?: Record<string, DecideQuestion>;
+  dsa_evidence?: { signal: string; delta: number; quote?: string | null }[];
+  stage_labels?: Record<DecideStage, string>;
+};
+export type DecidePage = {
+  items: DecideRow[]; counts: Record<string, Record<DecideVerdict | "shortlist", number>>;
+  dsa_level: number; shortlist_sizes: Record<string, number>; generated_at: string | null;
+};
+export type DecideToday = {
+  day: string;
+  pick: {
+    id: number; day: string; action: "fill" | "ask"; status: "picked" | "filled" | "asked" | "skipped"; note: string | null;
+    at_pick: { p_offer: number; p_reach: number; verdict: DecideVerdict }; decision: DecideRow | null;
+  } | null;
+  skipped: { company_id: number; note: string | null }[];
+};
+
+/* The mixer (jobhunter/mixer.py): free layers first, then Apify only where data is missing. */
+export type MixerPlan = {
+  layers: { layer: string; in: number; out: number; dropped_sample: string[] }[];
+  survivors: number;
+  next: { company_id: number; name: string; pool: string; p_offer: number; verdict: DecideVerdict; dsa: number }[];
+  queue_sample: { company_id: number; name: string; pool: string; p_offer: number }[];
+  estimate_usd: number; spent_today_usd: number; mixer_spent_today_usd: number; mixer_daily_usd: number;
+  apify_daily_usd: number; referral_reserve_usd: number; can_spend_now: boolean;
+};
+
+/* Upskill (jobhunter/upskill.py): the profile's gaps, ranked by expected offers gained. */
+export type UpskillStatus = "todo" | "learning" | "done";
+export type UpskillSkill = {
+  skill: string; kind: "learn" | "prove"; companies_n: number; share: number; required_mentions: number;
+  expected_offers_gained: number; pools: Record<string, number>;
+  companies: { company_id: number; name: string; pool: string; rank: number | null; p_offer: number; gain: number }[];
+  quotes: { company_id: number; company: string; role: string; quote: string | null; url: string | null; section: string }[];
+  status: UpskillStatus; proof_url: string | null; proof_note: string | null; in_profile: boolean;
+};
+export type UpskillPage = {
+  skills: UpskillSkill[]; companies_read: number; expected_offers_now: number; generated_at: string;
+  dsa: { level_now: number; status: UpskillStatus;
+         levels: { level: number; expected_offers_gained: number; companies_back: { company_id: number; name: string | null; pool: string; dsa: number }[] }[] };
+};
+
 export type EventRow = {
   id: number; kind: string; status: string; company: string | null; company_id: number;
   contact: string | null; email_id: number; starts_at: string | null; ends_at: string | null;
@@ -508,8 +561,10 @@ export class ApiError extends Error {
    a quiet spell with a gateway error, and a cold start (unpacking the snapshot, loading
    the app) can take 20 s or more. Reads against a remote API are therefore retried for
    about half a minute before the page says it cannot reach it; writes are never retried,
-   and a request the page has already abandoned is not either. */
-const WAKE_RETRIES_MS = [2000, 4000, 8000, 15000];
+   and a request the page has already abandoned is not either. The steps stay short: with
+   a doubling backoff a backend that woke at 7 s was not asked again until 14 s, and the
+   visitor watched a spinner for the difference. */
+const WAKE_RETRIES_MS = [1500, 1500, 2000, 2000, 3000, 4000, 5000, 6000, 7000];
 const sleep = (ms: number, signal?: AbortSignal | null) =>
   new Promise<void>((resolve, reject) => {
     const t = setTimeout(resolve, ms);
