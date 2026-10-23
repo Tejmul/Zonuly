@@ -40,6 +40,8 @@ CLEARED = (
     "upskillitem",     # your own learning notes and proof links (upskill.py)
     "decisionoutcome", # what really happened at a company: interviews, offers, rejections
     "mixerscrape",     # what each paid Apify lookup cost — the operator's ledger, like llm_call
+    "extraction_reject",  # the scrape audit trail: ~16 MB the public page never shows
+    "extraction_write",   # (2026-10-23: the snapshot outgrew AppSail's 512 MB with them in)
 )
 
 
