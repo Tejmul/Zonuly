@@ -28,10 +28,39 @@ const G: { id: string; title: string; intro: string; rows: Row[] }[] = [
   {
     id: "tick", title: "tick — the unattended pipeline", intro: "What launchd runs. Each run takes a lock and skips if another is busy.",
     rows: [
-      ["tick run", "One bounded slice of work", "--kind free | paid | send | all"],
-      ["tick install", "Write and load the LaunchAgents (free, paid, send, referrals, audit)", "—"],
+      ["tick run", "One bounded slice of work", "--kind free | paid | send | apify | all"],
+      ["tick install", "Write and load the LaunchAgents (send, apify, shortlist; free, paid and audit unless tick.scrapers_frozen; the free referral job only with tick.free_referral_job)", "—"],
+      ["shortlist next · company · progress", "Complete the next shortlisted company, a named one, or show progress per pool", "--limit"],
       ["tick uninstall", "Unload and remove them", "—"],
       ["tick status", "Loaded? Last run? What did it do?", "—"],
+    ],
+  },
+  {
+    id: "decide", title: "decide — the decision brain", intro: "Which companies to spend the days on: chance of an offer, the shortlists, one company a day.",
+    rows: [
+      ["decide run", "Decide every Bengaluru / Hyderabad / Remote company and re-rank the shortlists", "—"],
+      ["decide top", "The ranked shortlist, or the companies parked under one verdict", "--pool Bengaluru|Hyderabad|Remote|all · --verdict after_dsa|skip|target|fill_first"],
+      ["decide show COMPANY_ID", "Every question, its chance and the evidence behind it", "--json"],
+      ["decide today", "Today’s company — fill it or ask its referrer", "--asked · --skip \"reason\""],
+      ["decide fill", "Fill one company completely, then decide it again", "--company-id (default: today’s)"],
+      ["decide outcome COMPANY_ID STAGE", "Record what happened: replied | referred | interview | offer | rejected | no_response", "--note"],
+      ["decide calibrate", "Brier score and log loss of what the brain said against what happened", "—"],
+    ],
+  },
+  {
+    id: "mixer", title: "mixer — decide, then buy", intro: "Apify job ads only for companies that pass the free layers and still lack data. Never scheduled.",
+    rows: [
+      ["mixer plan", "The free funnel, layer by layer, and who would be bought next — spends nothing", "--limit"],
+      ["mixer run", "Buy the next companies’ ads (cheapest source first), re-score, decide again", "--limit · --company ID (repeatable)"],
+      ["mixer history", "Every paid lookup: found, matched, saved, cost", "--limit 20"],
+    ],
+  },
+  {
+    id: "upskill", title: "upskill — the learning plan", intro: "What your shortlisted companies ask for that your resume doesn’t show.",
+    rows: [
+      ["upskill gaps", "The gaps, best payoff first, and what DSA practice is worth", "--limit 25"],
+      ["upskill mark SKILL STATUS", "todo | learning | done — done needs a proof link and your own line", "--proof-url · --note"],
+      ["upskill add SKILL", "Put a done skill into profile.json (backed up first), then re-score everything", "—"],
     ],
   },
   {
@@ -140,7 +169,7 @@ export default function Cli() {
   return (
     <Doc slug="cli">
       <Lead>
-        Everything the dashboard does, and more, is a command in <C>scripts/run.py</C> — a Typer app with sixteen
+        Everything the dashboard does, and more, is a command in <C>scripts/run.py</C> — a Typer app with eighteen
         command groups. Run any command with <C>--help</C> for its full options.
       </Lead>
       <Code title="usage">{`

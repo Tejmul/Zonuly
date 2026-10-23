@@ -22,8 +22,12 @@ type Overview = {
   quota?: { daily_cap?: number };
 };
 
-// Figures from the brief of 23 Oct 2026 — shown until (or unless) the API answers.
-const FALLBACK = { roles: 8080, companies: 5909, ready: 573, perDay: 25 };
+// Figures read from /api/overview on 23 Oct 2026 — shown until (or unless) the API answers.
+// The page never waits for the API: a sleeping backend can take half a minute to wake.
+const FALLBACK = { roles: 8085, companies: 5910, ready: 574, perDay: 25 };
+// Past this the label stops saying "reading" and owns up to the dated figures; a late
+// answer still replaces them.
+const PATIENCE_MS = 12_000;
 
 // Share of the plate still lit at each rung: chosen on a log scale so every step reads.
 const KEEP = [1, 0.74, 0.3, 0.07, 0];
@@ -45,7 +49,7 @@ const fmt = (n: number) => n.toLocaleString("en-IN");
 
 export function Sieve() {
   const [nums, setNums] = useState(FALLBACK);
-  const [live, setLive] = useState(false);
+  const [live, setLive] = useState<"reading" | "live" | "dated">("reading");
   const [step, setStep] = useState(0);
   const [run, setRun] = useState(0);
   const plate = useRef<HTMLDivElement>(null);
@@ -67,20 +71,22 @@ export function Sieve() {
 
   useEffect(() => {
     let alive = true;
+    const late = window.setTimeout(() => { if (alive) setLive((l) => (l === "reading" ? "dated" : l)); }, PATIENCE_MS);
     api.get<Overview>("/api/overview").then(
       (o) => {
-        if (!alive || !o?.companies_all) return;
+        if (!alive) return;
+        if (!o?.companies_all) { setLive("dated"); return; }
         setNums({
           roles: o.jobs?.jobs ?? FALLBACK.roles,
           companies: o.companies_all,
           ready: o.companies ?? FALLBACK.ready,
           perDay: o.quota?.daily_cap ?? FALLBACK.perDay,
         });
-        setLive(true);
+        setLive("live");
       },
-      () => {},
+      () => { if (alive) setLive("dated"); },
     );
-    return () => { alive = false; };
+    return () => { alive = false; window.clearTimeout(late); };
   }, []);
 
   // play once the plate is on screen; reduced motion jumps to the end
@@ -148,7 +154,9 @@ export function Sieve() {
           />
         </svg>
         <div className="mt-3 flex items-center justify-between gap-3">
-          <span className="doc-label">{live ? "Live · from your pipeline" : "Figures of 23 Oct 2026"}</span>
+          <span className="doc-label" aria-live="polite">
+            {live === "live" ? "Live · from your pipeline" : live === "reading" ? "Figures of 23 Oct 2026 · reading live…" : "Figures of 23 Oct 2026"}
+          </span>
           <button
             onClick={() => { setStep(0); setRun((r) => r + 1); }}
             className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12px] text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"

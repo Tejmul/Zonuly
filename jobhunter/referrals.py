@@ -40,7 +40,7 @@ from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from sqlmodel import col, select
+from sqlmodel import col, func, select
 
 from jobhunter import CONFIG, ROOT, guardrails
 from jobhunter.db import (DB_PATH, Company, Contact, ExtractionReject, ExtractionWrite, Job, get_session,
@@ -323,24 +323,36 @@ def hunter_step(limit: int = 2) -> dict:
 # ------------------------------------------------------------------ Apify People tab (2026-10-19)
 
 def apify_queue() -> list[int]:
-    """★ list or Bengaluru / Hyderabad companies with a LinkedIn page on record and fewer
-    than two good referrers — pay band first, then priority. Each is bought once
-    (backoff marker), so the free credit never pays twice for the same People tab."""
+    """Companies with a LinkedIn page on record and fewer than two good referrers. The decision
+    brain's shortlist first (2026-10-23: Bengaluru by rank, then Hyderabad, then Remote — "use
+    Apify to its full potential for referrals" on the companies we actually target); then the ★
+    list and the other Bengaluru / Hyderabad companies, pay band first, then priority. Each is
+    bought once (backoff marker), so the credit never pays twice for the same People tab."""
     from jobhunter import backoff
-    from jobhunter.contacts import roles
+    from jobhunter.db import CompanyDecision
 
     init_db()
     with get_session() as session:
+        order = {p: i for i, p in enumerate(((CONFIG.get("shortlist") or {}).get("pool_order")
+                                             or ["Bengaluru", "Hyderabad", "Remote"]))}
+        slot = {d.company_id: (order.get(d.pool, 9), d.rank) for d in session.exec(
+            select(CompanyDecision).where(col(CompanyDecision.rank).is_not(None))).all()}
         rows = session.exec(select(Company).where(
             col(Company.status).is_(None), col(Company.linkedin_url).is_not(None))).all()
         rows = [c for c in rows
                 if not c.overrated and c.tier != "reject" and not c.do_not_contact
-                and (c.list_key or any(x in (c.city or "").lower() for x in _HUNTER_CITIES))
+                and (c.id in slot or c.list_key or any(x in (c.city or "").lower() for x in _HUNTER_CITIES))
                 and backoff.due(c, "apify")]
-        good = roles.good_referrer_counts(session, [c.id for c in rows])
-        picks = [c for c in rows if good.get(c.id, 0) < 2]
-        picks.sort(key=lambda c: (0 if c.list_key else 1, _HUNTER_BANDS.get(c.pay_power_band or "", 3),
-                                  -(c.priority_score or 0), c.id))
+        # the tech team is what the People tab is bought for: a company with four founders on
+        # file and one engineer still needs it (2026-10-23)
+        tech = dict(session.exec(select(Contact.company_id, func.count()).where(
+            col(Contact.company_id).in_([c.id for c in rows] or [-1]),
+            col(Contact.role_class).in_(["senior_engineer", "engineer", "eng_manager"]),
+            col(Contact.affiliation).in_(["verified-current", "likely-current"]),
+            col(Contact.do_not_contact).is_not(True)).group_by(Contact.company_id)).all())
+        picks = [c for c in rows if tech.get(c.id, 0) < 2]
+        picks.sort(key=lambda c: (slot.get(c.id, (9, 9999)), 0 if c.list_key else 1,
+                                  _HUNTER_BANDS.get(c.pay_power_band or "", 3), -(c.priority_score or 0), c.id))
         return [c.id for c in picks]
 
 
@@ -364,7 +376,7 @@ def apify_step(limit: int = 1, *, apify_max: int | None = None, apify_mode: str 
     out = {"queue": len(ids), "companies": []}
     for cid in ids[:limit]:
         r = fill_company(cid, sources=["known", "apify"], max_verify=0, apify=True, apify_max=apify_max,
-                         apify_mode=apify_mode)
+                         apify_mode=apify_mode, titles=list(conf.get("tech_titles") or []) or None)
         err = ((r.get("sources") or {}).get("apify") or {}).get("error")
         with get_session() as session:
             c = session.get(Company, cid)

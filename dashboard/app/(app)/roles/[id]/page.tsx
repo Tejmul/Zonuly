@@ -156,7 +156,7 @@ export default function JobDetailPage() {
         href="/roles"
         className="mb-4 inline-flex items-center gap-1.5 text-xs text-ink-3 transition-colors hover:text-ink"
       >
-        <ArrowLeft size={13} /> All leads
+        <ArrowLeft size={13} /> All roles
       </Link>
 
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">

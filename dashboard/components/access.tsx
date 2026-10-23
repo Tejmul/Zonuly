@@ -22,7 +22,7 @@ const WARM_PATHS = [
   "/api/graph/map?view=market",
   "/api/graph/map?view=pipeline",
   "/api/leads?source=all&city=all&who=ready&offset=0&limit=50",
-  "/api/companies",
+  "/api/companies?include_incomplete=true&has_contacts=false&sort=score&limit=40",
   "/api/overview",
 ];
 

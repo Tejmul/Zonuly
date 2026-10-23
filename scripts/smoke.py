@@ -4,7 +4,7 @@
 Every check here is one that has broken silently before: a snapshot older than the
 code, an image without the list files, a list page with no companies on it.
 
-    python scripts/smoke.py https://<api>.up.railway.app          # after a deploy
+    python scripts/smoke.py https://zonuly-api-50046893527.development.catalystappsail.in   # after a deploy
     python scripts/smoke.py --db demo.db                           # before one (CI)
     python scripts/smoke.py <api-url> --dashboard https://<app>    # and the dashboard
 

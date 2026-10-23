@@ -59,9 +59,14 @@ export default function RolesScoring() {
         an uncovered need.
       </P>
       <P>
-        The best role per company rolls up to the company, which is how <A href="/docs/dashboard">Best bets</A> ranks
-        markets. On 13 Oct 2026 the first run ranked 1,224 India roles (53 high, 280 medium) and 1,920 remote roles (28
-        high, 150 medium).
+        The best role per company rolls up to the company. Every role, by market and band, is the <strong>Roles</strong>{" "}
+        tab of <A href="/docs/dashboard">Best bets</A>; on 13 Oct 2026 the first run ranked 1,224 India roles (53 high, 280
+        medium) and 1,920 remote roles (28 high, 150 medium).
+      </P>
+      <P>
+        These scores and briefs are what the <A href="/docs/decide">decision brain</A> reads when it asks whether a role is
+        open and whether the resume passes a screen — and the uncovered needs across the shortlist become{" "}
+        <A href="/docs/upskill">Upskill</A>&apos;s learning plan.
       </P>
     </Doc>
   );

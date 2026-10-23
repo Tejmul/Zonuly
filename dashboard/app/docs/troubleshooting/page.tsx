@@ -68,9 +68,21 @@ export default function Troubleshooting() {
         />
         <Issue
           title="Apify says the daily cap is reached"
-          symptom={<><C>apify daily cap: $0.148 spent + $0.12 estimated &gt; $0.15</C>.</>}
-          cause="The free-credit guard: the day’s budget is used. Nothing was charged."
-          fix={<>Wait until midnight, run a smaller <C>--apify-max</C>, or raise <C>actors.apify.daily_usd</C> to spend the free $5 faster.</>}
+          symptom={<><C>today&apos;s Apify cap reached ($0.6 of $0.6)</C>, or the Mixer panel says “not buying today: referrals first”.</>}
+          cause="The daily guard: $0.60 a day spreads the $19 Starter credit over the month, and the mixer must leave $0.30 of it for the People-tab job. Nothing was charged past the cap."
+          fix={<>Wait until midnight, run a smaller <C>--apify-max</C>, or raise <C>actors.apify.daily_usd</C> knowing the month&apos;s credit runs out sooner.</>}
+        />
+        <Issue
+          title="Approved mail is held, not sent"
+          symptom={<>The send log says <C>3 cold mails into … already today</C> or <C>cold mail pauses for 48h after a block</C>.</>}
+          cause="Not an error: at most three cold emails a day go into one company’s domain, and after Gmail refuses any mail as spam no cold mail leaves for 48 hours (that company’s domain: 21 days)."
+          fix="Nothing to do — the email stays approved and goes on a later day. Approve asks across several companies so each day has something it may send."
+        />
+        <Issue
+          title="Best bets says “Nothing to pick”"
+          symptom="Today’s card is empty."
+          cause="The brain has not run since roles were scored (the free tick that runs it is not loaded, or the scrapers are paused with tick.scrapers_frozen), or every shortlisted company was picked in the last 30 days or is already being written to."
+          fix={<>Run <C>python scripts/run.py decide run</C>, then reload.</>}
         />
       </div>
       <P>Still stuck? The hourly audit and the watchdog record most problems before you see them:</P>

@@ -44,27 +44,30 @@ export const DOCS: DocSection[] = [
     pages: [
       { slug: "pipeline", title: "Pipeline at a glance", blurb: "From an unknown company to a sent referral ask, stage by stage.", keywords: "flow stages end to end" },
       { slug: "discovery", title: "Discovery", blurb: "Where companies come from, and the gate they pass to get in.", keywords: "scrape sources yc wellfound greenhouse lever ashby india harvest" },
-      { slug: "fill", title: "Fill & enrichment", blurb: "Description, LinkedIn page, funding and pay — completed with evidence.", keywords: "enrich fill description funding linkedin backfill" },
+      { slug: "fill", title: "Fill & enrichment", blurb: "Description, LinkedIn page, funding and pay — completed with evidence.", keywords: "enrich fill description funding linkedin url backfill company page" },
       { slug: "hiring-proof", title: "Hiring proof", blurb: "Proving a company is really hiring, on its own site or board.", keywords: "careers verify ats board jobs" },
       { slug: "roles-scoring", title: "Roles & scoring", blurb: "Scraping roles, matching them to the resume, and ranking the odds.", keywords: "match score selection confidence best bets fit" },
+      { slug: "decide", title: "The decision brain", blurb: "Which companies to spend the days on: P(offer), the shortlists, one company a day.", keywords: "decide p(offer) odds chance offer probability shortlist bengaluru hyderabad remote today pick verdict target fill first after dsa skip calibrate outcome brier laya" },
+      { slug: "mixer", title: "The mixer", blurb: "Decide first, then buy: free layers narrow the field, Apify fills only what is missing.", keywords: "mixer apify linkedin naukri ads ambitionbox culture budget reserve layers paid" },
       { slug: "people", title: "People & referrers", blurb: "Finding the humans who could refer you — without your accounts.", keywords: "leads referrers github linkedin apify actors city" },
-      { slug: "email-addresses", title: "Email addresses", blurb: "Real addresses first, confirmed patterns second, never invented.", keywords: "pattern hunter mx verify guessed" },
-      { slug: "outreach", title: "Drafting & the review gate", blurb: "How each ask is written, and why nothing leaves without your approval.", keywords: "draft email template review approve queue" },
-      { slug: "sending", title: "Sending & deliverability", blurb: "Gmail, the daily cap, pacing like a person, and the bounce brake.", keywords: "send gmail cap pacing warmup bounce spam" },
+      { slug: "email-addresses", title: "Email addresses", blurb: "Real addresses first, confirmed patterns second, never invented.", keywords: "pattern hunter mx verify guessed last resort real address" },
+      { slug: "outreach", title: "Drafting & the review gate", blurb: "How each ask is written, and why nothing leaves without your approval.", keywords: "draft email template review approve queue flags near-duplicate deliverability tech team" },
+      { slug: "sending", title: "Sending & deliverability", blurb: "Gmail, the daily cap, pacing like a person, and the bounce brake.", keywords: "send gmail cap pacing warmup bounce spam per domain 48 hours 21 days block" },
       { slug: "replies", title: "Replies & follow-ups", blurb: "Reading what comes back, classifying it, and following up once.", keywords: "reply poll bounce follow-up calendar" },
     ],
   },
   {
     title: "Using the dashboard",
     pages: [
-      { slug: "dashboard", title: "Dashboard tour", blurb: "Every page in the app, what it shows, and what you can do there.", keywords: "ui pages companies leads queue graph atlas" },
+      { slug: "dashboard", title: "Dashboard tour", blurb: "Every page in the app, what it shows, and what you can do there.", keywords: "ui pages companies leads queue graph atlas best bets upskill dossier settings" },
+      { slug: "upskill", title: "Upskill", blurb: "What is missing from your profile, ranked by the offers it is worth — added only with proof.", keywords: "learn skills gaps resume profile proof dsa practice expected offers" },
     ],
   },
   {
     title: "Reference",
     pages: [
-      { slug: "cli", title: "CLI", blurb: "Every command in scripts/run.py.", keywords: "command line typer run.py" },
-      { slug: "api", title: "HTTP API", blurb: "Every endpoint the dashboard (and you) can call.", keywords: "rest fastapi endpoints routes" },
+      { slug: "cli", title: "CLI", blurb: "Every command in scripts/run.py.", keywords: "command line typer run.py decide mixer upskill" },
+      { slug: "api", title: "HTTP API", blurb: "Every endpoint the dashboard (and you) can call.", keywords: "rest fastapi endpoints routes decide mixer upskill dossier" },
       { slug: "configuration", title: "Configuration", blurb: "config.yaml, section by section, and the environment variables.", keywords: "config yaml settings env secrets" },
     ],
   },
@@ -72,7 +75,8 @@ export const DOCS: DocSection[] = [
     title: "Operations",
     pages: [
       { slug: "runbook", title: "Runbook", blurb: "Day-to-day operation: logs, restarts, pausing, backups.", keywords: "ops logs restart pause backup" },
-      { slug: "troubleshooting", title: "Troubleshooting", blurb: "Known failure modes and exactly what to do about each.", keywords: "error locked gmail 5.4.5 999 sleep blocked" },
+      { slug: "troubleshooting", title: "Troubleshooting", blurb: "Known failure modes and exactly what to do about each.", keywords: "error locked gmail 5.4.5 5.7.1 999 sleep blocked spam cap reserve" },
+      { slug: "deployment", title: "Deployment", blurb: "The public, read-only copy: Vercel in front, Catalyst AppSail behind, a masked snapshot.", keywords: "deploy vercel catalyst appsail snapshot demo.db public read-only zapi proxy cold start masked" },
     ],
   },
 ];

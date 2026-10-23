@@ -54,9 +54,11 @@ export function Doc({ slug, hero, children }: { slug: string; hero?: React.React
 /* ------------------------------------------------------------------ type */
 
 export function H2({ children, id }: { children: React.ReactNode; id?: string }) {
-  const anchor = id ?? slugify(textOf(children));
+  const text = textOf(children);
+  const anchor = id ?? slugify(text);
+  // data-toc carries the heading's own words: the "#" link inside it is not part of the title
   return (
-    <h2 id={anchor} data-toc className="group mt-14 mb-4 scroll-mt-20 font-[family-name:var(--font-display)] text-[24px] leading-tight font-semibold tracking-[-0.025em] first:mt-0">
+    <h2 id={anchor} data-toc={text} className="group mt-14 mb-4 scroll-mt-20 font-[family-name:var(--font-display)] text-[24px] leading-tight font-semibold tracking-[-0.025em] first:mt-0">
       {children}
       <a href={`#${anchor}`} aria-label="Link to this section" className="ml-2 text-ink-muted opacity-0 transition-opacity group-hover:opacity-100">#</a>
     </h2>
@@ -64,9 +66,10 @@ export function H2({ children, id }: { children: React.ReactNode; id?: string })
 }
 
 export function H3({ children, id }: { children: React.ReactNode; id?: string }) {
-  const anchor = id ?? slugify(textOf(children));
+  const text = textOf(children);
+  const anchor = id ?? slugify(text);
   return (
-    <h3 id={anchor} data-toc className="group mt-9 mb-3 scroll-mt-20 text-[17px] font-semibold tracking-[-0.01em]">
+    <h3 id={anchor} data-toc={text} className="group mt-9 mb-3 scroll-mt-20 text-[17px] font-semibold tracking-[-0.01em]">
       {children}
       <a href={`#${anchor}`} aria-label="Link to this section" className="ml-2 text-ink-muted opacity-0 transition-opacity group-hover:opacity-100">#</a>
     </h3>

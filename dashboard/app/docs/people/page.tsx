@@ -24,7 +24,7 @@ export default function People() {
         <Step title="Public LinkedIn, keyless">Search-result titles like “Name – Engineer at Company”, scoped to the company&apos;s city. Profiles are never fetched while logged in.</Step>
         <Step title="GitHub">Members of the company&apos;s GitHub organisation and recent committers to its repositories — engineers by definition, often with a commit address.</Step>
         <Step title="Public mentions">Talks, podcasts and blog bylines that name someone at the company.</Step>
-        <Step title="Apify People tab">For high-paying companies still short of referrers: the company&apos;s LinkedIn People tab bought from Apify, inside the free monthly credit.</Step>
+        <Step title="Apify People tab">For high-paying companies still short of referrers: the company&apos;s LinkedIn People tab bought from Apify by its own job every 30 minutes — up to three companies a run, 25 people each, in the company&apos;s city — inside the daily cap of $0.60 (the $19 Starter credit spread over a month).</Step>
       </Steps>
 
       <H2>The rules</H2>
@@ -44,8 +44,12 @@ export default function People() {
       <H3>Ranked by who can actually refer</H3>
       <Table
         head={["Rank", "Role class"]}
-        rows={[["1", "Founder"], ["2", "Senior, staff or founding engineer"], ["3", "SDE, AI / ML engineer"], ["4", "Engineering manager"], ["5", "Technical recruiter"], ["6", "General HR"], ["9", "Anyone else — never asked first"]]}
+        rows={[["1", "Senior, staff, lead or founding engineer"], ["2", "Software engineer, SDE 1–3"], ["3", "Founder, CTO, co-founder"], ["4", "Engineering manager"], ["5", "Technical recruiter / tech HR"], ["6", "General HR / talent"], ["9", "Anyone else — never asked first"]]}
       />
+      <P>
+        Since 23 Oct 2026 the tech team ranks first: a referral from an engineer on the team you would join carries more than
+        one from a founder&apos;s inbox. The order lives in <C>targeting.people.roles</C> in <C>config.yaml</C>.
+      </P>
 
       <H2>The actors layer</H2>
       <P>

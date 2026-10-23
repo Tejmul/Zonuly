@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Menu, Search, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Menu, Search, X } from "lucide-react";
 import { DOCS, FLAT, docHref } from "@/lib/docs-nav";
 
 function useActiveSlug() {
@@ -102,6 +102,14 @@ export function DocsMobileNav() {
             >
               <X size={15} />
             </button>
+            {/* the header's "Open the app" is hidden at phone width — the way back lives here */}
+            <Link
+              href="/dashboard"
+              onClick={() => setOpen(false)}
+              className="mb-6 flex min-h-11 items-center gap-2 rounded-md border border-line px-3 text-[15px] font-medium text-ink transition-colors hover:border-ink"
+            >
+              <ArrowLeft size={15} /> Back to the app
+            </Link>
             <NavList onPick={() => setOpen(false)} roomy />
           </div>
         </div>
@@ -145,6 +153,10 @@ export function DocsSearch() {
     setOpen(false);
     router.push(docHref(slug));
   };
+  // arrow keys move the highlight; keep it in view when the list is longer than the box
+  useEffect(() => {
+    if (open) document.querySelector(`[data-hit="${sel}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [sel, open]);
 
   return (
     <>
@@ -192,9 +204,12 @@ export function DocsSearch() {
               ) : null}
               {hits.map((p, i) => (
                 <li key={p.slug}>
-                  <button
+                  {/* a real link: it can be opened in a new tab, and it reads as one to a screen reader */}
+                  <Link
+                    href={docHref(p.slug)}
+                    data-hit={i}
                     onMouseEnter={() => setSel(i)}
-                    onClick={() => go(p.slug)}
+                    onClick={() => setOpen(false)}
                     className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left ${i === sel ? "bg-surface-2" : ""}`}
                   >
                     <span className="min-w-0 flex-1">
@@ -205,7 +220,7 @@ export function DocsSearch() {
                       <span className="block truncate text-[12px] text-ink-2">{p.blurb}</span>
                     </span>
                     {i === sel ? <ArrowRight size={14} className="shrink-0 text-ink-muted" /> : null}
-                  </button>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -225,7 +240,12 @@ export function DocsToc() {
   useEffect(() => {
     const hs = Array.from(document.querySelectorAll<HTMLElement>("article [data-toc]"));
     const raf = requestAnimationFrame(() =>
-      setItems(hs.map((h) => ({ id: h.id, text: h.textContent ?? "", level: h.tagName === "H3" ? 3 : 2 }))));
+      setItems(hs.map((h) => ({
+        id: h.id,
+        // the heading's own words (data-toc), never the "#" section link that sits inside it
+        text: h.dataset.toc || (h.textContent ?? "").replace(/#$/, "").trim(),
+        level: h.tagName === "H3" ? 3 : 2,
+      }))));
     if (!hs.length) return () => cancelAnimationFrame(raf);
     const seen = new Map<string, boolean>();
     const io = new IntersectionObserver(

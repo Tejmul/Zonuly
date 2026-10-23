@@ -50,7 +50,7 @@ PREWARM = (
     "/api/lists/india-star",
     "/api/leads",
     "/api/leads?source=all&city=all&who=ready&offset=0&limit=50",
-    "/api/companies",
+    "/api/companies?include_incomplete=true&has_contacts=false&sort=score&limit=40",
 )
 
 

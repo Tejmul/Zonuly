@@ -98,12 +98,19 @@ REFER_LOCK = ROOT / "data" / "referrals.lock"
 _AP = (CONFIG.get("actors") or {}).get("apify") or {}
 APIFY_LABEL = "com.zonuly.apify"
 APIFY_LOCK = ROOT / "data" / "apify.lock"
+# 2026-10-23: the shortlist job (com.zonuly.shortlist) — one shortlisted company at a time, every
+# detail, Bengaluru first (shortlist.py); runs whatever tick.scrapers_frozen says
+SHORTLIST_LABEL = "com.zonuly.shortlist"
+SHORTLIST_LOCK = ROOT / "data" / "shortlist.lock"
+SHORTLIST_INTERVAL_S = int((CONFIG.get("shortlist") or {}).get("interval_seconds", 600))
 APIFY_INTERVAL_S = int(_AP.get("interval_seconds", 1800))
 APIFY_PER_RUN = int(_AP.get("companies_per_run", 3))
 APIFY_LI_BACKFILL = int(_AP.get("linkedin_backfill_per_run", 30))
 # 2026-10-23 (the user, after buying Apify Starter): the home-made scrapers are frozen —
 # tick install leaves free, paid, referrals and audit unloaded while this is true
 SCRAPERS_FROZEN = bool(_T.get("scrapers_frozen", False))
+# 2026-10-23: referrals are Apify's job (com.zonuly.apify); the free people-search job stays off unless asked for
+FREE_REFERRAL_JOB = bool(_T.get("free_referral_job", True))
 REFER_INTERVAL_S = int(_RJ.get("interval_seconds", 900))
 #: while the referral job is loaded, the tick's people step keeps only this share of leads
 SHARE_PEOPLE_YIELD = float(_SHARE.get("people_when_referral_job", 0.3))
@@ -640,6 +647,22 @@ def run_referrals(**kw) -> dict:
     return summary
 
 
+def run_shortlist() -> dict:
+    """The shortlist job (launchd com.zonuly.shortlist): the next shortlisted company, completely."""
+    LOGS.mkdir(exist_ok=True)
+    _net_timeout()
+    try:
+        with _Lock(SHORTLIST_LOCK, "shortlist run"):
+            from jobhunter import shortlist
+
+            summary = {"kind": "shortlist", "started": datetime.now().isoformat(timespec="seconds"), **shortlist.run(1)}
+    except RuntimeError as e:
+        return {"kind": "shortlist", "skipped": str(e)}
+    summary["finished"] = datetime.now().isoformat(timespec="seconds")
+    _record("shortlist", summary)
+    return summary
+
+
 def run_apify() -> dict:
     """The Apify job (launchd com.zonuly.apify): People tabs for the next companies in
     referrals.apify_queue, inside the daily cap, then the complete bar refreshed."""
@@ -703,6 +726,8 @@ def run(kind: str = "free") -> dict:
             raise _UseSendLock()
         if kind == "apify":
             return run_apify()
+        if kind == "shortlist":
+            return run_shortlist()
         with _Lock():
             summary = run_free() if kind == "free" else run_paid() if kind == "paid" else {**run_free(), "paid": run_paid()}
     except _UseSendLock:
@@ -778,6 +803,19 @@ def _apify_plist() -> dict:
     return base
 
 
+def _shortlist_plist() -> dict:
+    base = _plist("free")
+    base.update({
+        "Label": SHORTLIST_LABEL,
+        "ProgramArguments": [PYTHON, str(ROOT / "scripts" / "run.py"), "tick", "run", "--kind", "shortlist"],
+        "StandardOutPath": str(LOGS / "shortlist.log"),
+        "StandardErrorPath": str(LOGS / "shortlist.log"),
+        "StartInterval": SHORTLIST_INTERVAL_S,
+        "RunAtLoad": True,
+    })
+    return base
+
+
 def _unload(path: Path) -> dict:
     r = subprocess.run(["launchctl", "unload", str(path)], capture_output=True, text=True)
     return {"plist": str(path), "unloaded": r.returncode == 0}
@@ -798,6 +836,7 @@ def install() -> dict:
     out = {}
     out["send"] = _load(_agents_dir() / f"{LABEL}.send.plist", _plist("send"))
     out["apify"] = _load(_agents_dir() / f"{APIFY_LABEL}.plist", _apify_plist())
+    out["shortlist"] = _load(_agents_dir() / f"{SHORTLIST_LABEL}.plist", _shortlist_plist())
     if SCRAPERS_FROZEN:
         for kind in ("free", "paid"):
             out[kind] = _unload(_agents_dir() / f"{LABEL}.{kind}.plist")
@@ -807,7 +846,8 @@ def install() -> dict:
         return out
     for kind in ("free", "paid"):
         out[kind] = _load(_agents_dir() / f"{LABEL}.{kind}.plist", _plist(kind))
-    out["referrals"] = _load(_agents_dir() / f"{REFER_LABEL}.plist", _refer_plist())
+    out["referrals"] = (_load(_agents_dir() / f"{REFER_LABEL}.plist", _refer_plist()) if FREE_REFERRAL_JOB
+                        else _unload(_agents_dir() / f"{REFER_LABEL}.plist"))
     from jobhunter import audit
 
     out["audit"] = audit.install()

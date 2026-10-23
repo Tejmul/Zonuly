@@ -40,7 +40,7 @@ export default function Overview() {
 
       <H2>The pipeline in one picture</H2>
       <P>
-        Twelve stages take a company nobody has heard of to a sent referral ask. Eleven are automated. One —
+        Thirteen stages take a company nobody has heard of to a sent referral ask. Twelve are automated. One —
         deciding that <em>this</em> email goes to <em>this</em> person — is yours, and the system is built so that
         decision takes seconds because everything before it is already done.
       </P>
@@ -59,6 +59,15 @@ export default function Overview() {
         product isn&apos;t a list of jobs — it is <strong>a company that is hiring, a role you fit, and a named person
         who works there now with an address that will reach them</strong>. The dashboard calls that “ready to ask”.
       </P>
+      <H3>It decides before it spends</H3>
+      <P>
+        A few thousand companies is too many to work on. The <A href="/docs/decide">decision brain</A> gives each
+        Bengaluru, Hyderabad and remote company one number in plain words — say, “19% chance of an offer, about 1 in 5
+        companies like this” — keeps the best 100 / 50 / 100 on a shortlist, and hands you <strong>one company a
+        day</strong>. Paid data is bought only for shortlisted companies that still lack it (<A href="/docs/mixer">the
+        mixer</A>), and what the shortlist keeps asking for that your resume lacks becomes a ranked learning plan
+        (<A href="/docs/upskill">Upskill</A>).
+      </P>
       <H3>It refuses to make things up</H3>
       <P>
         Every description, funding round, address and claim of employment carries its evidence. An email that
@@ -73,7 +82,7 @@ export default function Overview() {
       </Callout>
 
       <H2>Where to go next</H2>
-      <PageCards slugs={["why", "quickstart", "pipeline", "architecture", "dashboard", "cli"]} />
+      <PageCards slugs={["why", "quickstart", "pipeline", "decide", "dashboard", "cli"]} />
 
       <H2>How these docs are organised</H2>
       <UL>
@@ -81,10 +90,11 @@ export default function Overview() {
         <li><strong>Concepts</strong> — the vocabulary, the targeting rules, the guarantees and the settled decisions.</li>
         <li><strong>Architecture</strong> — the stack, the data model, the background schedule and the knowledge graph.</li>
         <li><strong>The pipeline</strong> — one page per stage, from discovery to the calendar.</li>
+        <li><strong>Using the dashboard</strong> — every page in the app, and the Upskill plan.</li>
         <li><strong>Reference</strong> — every CLI command, API endpoint and configuration key.</li>
-        <li><strong>Operations</strong> — the runbook and the known failure modes, with fixes.</li>
+        <li><strong>Operations</strong> — the runbook, the known failure modes with fixes, and the public deployment.</li>
       </UL>
-      <P>Press <C>⌘K</C> anywhere to search every page.</P>
+      <P>Press <C>⌘K</C> (or <C>/</C>) anywhere in the docs to search every page by its title, summary and topics.</P>
     </Doc>
   );
 }

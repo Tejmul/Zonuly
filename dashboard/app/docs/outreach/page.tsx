@@ -14,8 +14,17 @@ export default function Outreach() {
       <H2>Who gets an email</H2>
       <P>
         A batch picks targets in order: the ★ list first, then complete companies by selection odds. One ask per company
-        per batch, to its best ready referrer — the highest referral rank, a verified address before a guessed one. A
-        company gets at most two open asks at once, and nobody is asked twice inside 30 days.
+        per batch, to its best ready referrer, chosen in this order:
+      </P>
+      <Steps>
+        <Step title="A real address before a guessed one">Anyone whose address is pattern-guessed goes to the back of the line, whatever their role.</Step>
+        <Step title="The tech team first">The referral rank, which since 23 Oct 2026 puts engineers ahead of everyone: senior, staff, lead and founding engineers, then software engineers, then founders and CTOs, then engineering managers, technical recruiters and HR (see <A href="/docs/people">People &amp; referrers</A>).</Step>
+        <Step title="Then the surest">A verified address, confirmed current employment, a known name.</Step>
+      </Steps>
+      <P>
+        A company gets at most two open asks at once, and nobody is asked twice inside 30 days. And since 23 Oct 2026 a
+        guessed company address is <strong>the last resort</strong>: when someone ready to refer at a company already has a
+        real address, no address is guessed for anyone there (see <A href="/docs/email-addresses">Email addresses</A>).
       </P>
 
       <H2>How it is written</H2>
@@ -34,9 +43,18 @@ export default function Outreach() {
           ["ai_tell", "Words that read as machine-written"],
           ["length · one_ask · subject", "Outside the word range, more than one ask, a weak subject"],
           ["guessed", "The address is pattern-guessed — know the risk before approving"],
+          ["deliverability", "What a spam filter would see: an attachment, more than two links, a link shortener, link words naming a different site, a greeting without their name, broken characters, the same subject already sent into that company, three or more asks already going there — or a near-copy (80%+ the same) of mail already approved or sent into the same company’s domain"],
+          ["near_duplicate", "80% or more the same, phrase for phrase, as mail already approved or sent to other companies. Gmail sees everything you send, so vary the wording"],
           ["affiliation", "The person’s current employment is not confirmed"],
         ]}
       />
+
+      <Callout kind="warn" title="Why the deliverability flags exist">
+        On 23 Oct 2026 Gmail refused 9 of 24 asks into one company&apos;s domain as spam (<C>5.7.1 Message blocked</C>) after
+        about fifteen near-identical emails went there within hours. A company&apos;s mail server sees every inbox at once and
+        files a group of look-alikes as bulk. The flags point at that before you approve; the{" "}
+        <A href="/docs/sending">sender</A> also holds mail after a block.
+      </Callout>
 
       <H2>The review gate</H2>
       <P>

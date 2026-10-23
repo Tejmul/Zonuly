@@ -55,7 +55,9 @@ export default function LeadsPage() {
 
   const params = new URLSearchParams({ source, city, who, offset: String(offset), limit: String(PAGE) });
   const leads = useApi<LeadsPayload>(`/api/leads?${params.toString()}`);
-  const companies = useApi<Company[]>("/api/companies");
+  // /api/companies lists complete companies only, and complete means a referrer is on file, so
+  // the companies with no leads have to be asked for explicitly (best-scoring first)
+  const companies = useApi<Company[]>("/api/companies?include_incomplete=true&has_contacts=false&sort=score&limit=40");
   const { tasks, watch, dismiss } = useTaskWatcher();
 
   function pick(set: (v: string) => void) {

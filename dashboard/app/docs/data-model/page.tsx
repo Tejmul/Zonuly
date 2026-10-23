@@ -89,6 +89,11 @@ export default function DataModel() {
           ["email_proposal · email_pattern", "How an email would be written (never sent) · approved templates."],
           ["candidate", "Per-person identity, mailbox and cap — two candidates, one pipeline."],
           ["setting", "Runtime state: last tick per kind, cursors, referral claims, the pause flag, audit history."],
+          ["companydecision", "The brain’s latest answer per company: chance of an offer and its 80% band, the five stage chances, verdict, pool, shortlist rank, and the evidence (why)."],
+          ["dailypick", "One company a day: the pick, its action (ask or fill), status, and the chances frozen at pick time for calibration."],
+          ["decisionoutcome", "What really happened at a company — replied, referred, interview, offer, rejected, no response."],
+          ["mixerscrape", "One paid lookup by the mixer: source, found, matched, saved, cost, cache hit, the culture rating it carried, and why it stopped."],
+          ["upskillitem", "Your progress on one gap: status, proof link, your line, when it went into the profile."],
           ["kg_node · kg_edge · kg_fts", "The knowledge graph and its full-text index."],
         ]}
       />

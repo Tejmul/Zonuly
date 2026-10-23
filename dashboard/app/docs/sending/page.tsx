@@ -25,6 +25,9 @@ export default function Sending() {
           ["guessed_daily_cap", "25", "A separate allowance for pattern-guessed addresses."],
           ["bounce_brake", "6 in 7 days", "Past this, guessed addresses stop; verified ones still go."],
           ["contact / company cooldown", "30 days", "Nobody is asked twice in a month."],
+          ["per_domain_daily_cap", "3", "At most three cold emails a day into one company’s mail domain; the rest wait for a later day."],
+          ["spam_pause_hours", "48", "After Gmail refuses any mail as spam, no cold mail leaves at all for two days."],
+          ["spam_block_cooldown_days", "21", "…and none goes into that company or its domain for three weeks."],
         ]}
       />
 
@@ -43,8 +46,9 @@ export default function Sending() {
         <Step title="Is a slot due?">Every 5 minutes the send job asks how many slots have passed today, minus how many were used, capped at one per run.</Step>
         <Step title="Pick the next approved email">Follow-ups first, then cold asks. A guessed address is skipped if the guessed cap is spent or the brake is on.</Step>
         <Step title="Re-check the person">Still ready, not suppressed, not cooling down — things can change between approval and sending.</Step>
+        <Step title="Check the company’s domain">A cold email waits (it is never rejected) if three have already gone into that domain today, or a spam block is still cooling down.</Step>
         <Step title="Claim and reserve">Atomically move the email from approved to sending, and reserve one unit of today&apos;s cap in the ledger <em>before</em> the mail leaves.</Step>
-        <Step title="Send">Over Gmail SMTP with your app password (or, in dry-run mode, written to <C>outbox/</C>). On failure the reservation is released and the email marked failed.</Step>
+        <Step title="Send">Over Gmail SMTP with your app password (or, in dry-run mode, written to <C>outbox/</C>). The message is built the way Gmail&apos;s own compose builds one — text with a minimal HTML twin, links on words, no tracking, no attachment, none of the headers that give a script away. On failure the reservation is released and the email marked failed.</Step>
       </Steps>
 
       <Callout kind="warn" title="What happens if you push it">
@@ -52,6 +56,12 @@ export default function Sending() {
         into one company within an hour. Four guessed addresses bounced and Gmail refused all further mail with{" "}
         <C>550 5.4.5 Daily user sending limit exceeded</C> after 24 sends. The rules above are the fix. Finish a company over
         more days — never by raising the cap.
+      </Callout>
+      <Callout kind="warn" title="And a second time, a different way">
+        On 23 Oct 2026 Gmail let mail through but refused 9 of 24 asks into one company as spam (<C>5.7.1 Message
+        blocked</C>): about fifteen near-identical asks had gone into the same domain within hours. Hence the per-domain cap,
+        the 48-hour pause and the 21-day cooldown above, and the <A href="/docs/outreach">review gate&apos;s</A>{" "}
+        deliverability flags. These settings only ever hold mail back; the 25-a-day cap is unchanged.
       </Callout>
 
       <H2>Pausing and checking</H2>

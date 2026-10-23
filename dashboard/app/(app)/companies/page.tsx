@@ -43,7 +43,7 @@ type Row = {
   // ranking and a hype flag. All optional — older APIs simply leave them out.
   funding_round_label?: string | null; funding_amount_usd_m?: number | null; funding_announced?: string | null;
   valuation_usd_m?: number | null; hiring_roles?: string[] | string | null; underrated?: boolean | null;
-  overrated?: boolean | null; hype_reason?: string | null; priority_score?: number | null; priority_why?: string | null;
+  overrated?: boolean | null; hype_reason?: string | null; overrated_reason?: string | null; priority_score?: number | null; priority_why?: string | null;
   hiring_post: { text: string | null; url: string; by: string | null; source: string | null; at: string | null } | null;
   roles: { total: number; fresher: number; anywhere: number; internships: number; families: Family[] };
   referrals: {
@@ -286,7 +286,7 @@ function Companies() {
                           {c.pay_bar?.state === "unknown" && (
                             <span className="chip" title="No stated full-time figure yet — kept; hidden only if a posting or the list says under ₹20L">pay unknown</span>
                           )}
-                          {c.overrated && <span className="chip chip-strike" title={c.hype_reason ?? "Too well known to be underrated"}>overrated</span>}
+                          {c.overrated && <span className="chip chip-strike" title={c.hype_reason ?? c.overrated_reason ?? "Too well known to be underrated"}>overrated</span>}
                           {typeof c.priority_score === "number" && Number.isFinite(c.priority_score) && (
                             <span className="chip tnum" title={c.priority_why ?? "Priority score"}>P{Math.round(c.priority_score)}</span>
                           )}

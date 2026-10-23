@@ -20,7 +20,10 @@ export default function Fill() {
         </Step>
         <Step title="Find the LinkedIn page">
           The company&apos;s own homepage usually links its LinkedIn page — that link is kept even when LinkedIn itself is
-          unreadable. When the page can be read (as a guest), size band, founding year and a jobs count are added.
+          unreadable. When the page can be read (as a guest), size band, founding year and a jobs count are added. Since 23
+          Oct 2026 every scrape that comes across a company&apos;s LinkedIn link stores it the same way — normalised, with its
+          source, never overwriting a different value silently — because the People tab can only be bought for a company
+          whose LinkedIn page is known.
         </Step>
         <Step title="Prove hiring">
           <C>careers.run_company()</C> looks for any careers page or board and reads its roles. Any open role on their own
@@ -40,10 +43,13 @@ export default function Fill() {
       <Table
         head={["Trigger", "Scope"]}
         rows={[
-          ["Every free tick", "Up to 20 companies, ★ list → India → remote; a company is refilled after 7 days (30 once complete)"],
+          ["Every free tick", "Up to 20 companies, ★ list → India → remote; a company is refilled after 7 days (30 once complete)."],
+          ["Today’s company (Best bets)", <>“Fill it”, or <C key="d">decide fill</C> — then the brain decides it again</>],
           ["Opening a company page", "That company, unless complete or filled in the last 6 hours"],
           ["Fill now (Graph page)", "That company, now — the result says what is still missing and why"],
-          ["fill.backfill_linkedin()", "One-off: the LinkedIn link from every ★ / BLR / HYD homepage (776 found on 19 Oct 2026)"],
+          ["The Apify job, every 30 minutes", "First, for free: up to 30 homepages read for their LinkedIn link (★ list, Bengaluru / Hyderabad and the remote targets)"],
+          ["A mixer run", "The LinkedIn page the company’s own job ads agree on"],
+          ["fill.backfill_linkedin()", "By hand: the LinkedIn link from every homepage in those cohorts (776 found on 19 Oct 2026)"],
         ]}
       />
 

@@ -329,6 +329,17 @@ export type UpskillPage = {
          levels: { level: number; expected_offers_gained: number; companies_back: { company_id: number; name: string | null; pool: string; dsa: number }[] }[] };
 };
 
+/* The shortlist job (jobhunter/shortlist.py): one company at a time, every detail. */
+export type ShortlistRow = {
+  company_id: number; name: string | null; rank: number; status: "complete" | "partial" | "failed" | "waiting";
+  missing: Record<string, string> | null; at: string | null; cost_usd: number;
+};
+export type ShortlistProgress = {
+  pools: Record<string, { total: number; complete: number; partial: number; waiting: number; rows: ShortlistRow[] }>;
+  next: { company_id: number; pool: string; rank: number; name: string | null } | null;
+  parts: Record<string, string>; order: string[];
+};
+
 export type EventRow = {
   id: number; kind: string; status: string; company: string | null; company_id: number;
   contact: string | null; email_id: number; starts_at: string | null; ends_at: string | null;

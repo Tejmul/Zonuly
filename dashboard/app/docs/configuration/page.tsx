@@ -25,6 +25,8 @@ export default function Configuration() {
           ["pacing", "max_per_run 1 · front_load false · jitter 0.35", "One per run, spread across the window"],
           ["warmup", "first 25 · step 5 · every 2", "Quota = min(cap, first + step × (day ÷ every))"],
           ["bounce_brake", "window_days 7 · max_bounces 6", "Pause guessed addresses after too many bounces"],
+          ["per_domain_daily_cap", "3", "Cold emails a day into one recipient domain"],
+          ["spam_pause_hours · spam_block_cooldown_days", "48 · 21", "After a spam block: no cold mail at all · none into that domain"],
           ["followup_after_days / max_followups", "5 / 1", "One follow-up after five quiet days"],
           ["asks_per_company · contact/company_cooldown_days", "2 · 30 / 30", "Open asks per company; days before asking again"],
           ["draft_expiry_days", "7", "Drafts older than this can’t be approved"],
@@ -54,6 +56,11 @@ export default function Configuration() {
         head={["Key", "Value", "Meaning"]}
         mono={[0, 1]}
         rows={[
+          ["tick.scrapers_frozen", "false", "true pauses all scraping: tick install leaves free, paid and audit unloaded"],
+          ["tick.free_referral_job", "false", "The free people-search job; off because referrals are Apify's"],
+          ["actors.apify.tech_titles", "[engineer, developer, sde, …]", "People-tab search titles: only people who can refer an engineer"],
+          ["shortlist.pool_order · interval_seconds", "[Bengaluru, Hyderabad, Remote] · 600", "The shortlist job: one company every 10 min, in this order"],
+          ["scheduler.daily_scrape", "false", "The API’s 08:00 daily cycle is off"],
           ["tick.free_interval_seconds", "600", "Free tick every 10 minutes"],
           ["tick.budget_seconds · share", "2400 · leads 0.7 / companies 0.3", "Time budget per free tick and its split"],
           ["tick.paid_hour / paid_minute", "6 / 15", "Daily paid tick"],
@@ -61,9 +68,30 @@ export default function Configuration() {
           ["tick.people_per_tick · verify_per_tick", "150 · 120", "Per-tick limits"],
           ["referrals.interval_seconds · cycle_seconds", "900 · 1200", "Referral job: every 15 min, 20 min each"],
           ["referrals.only_buckets", "[Bengaluru, Hyderabad]", "Cities the referral job works"],
-          ["actors.apify.daily_usd · cache_hours", "0.15 · 24", "Apify spend per day (inside the free $5/month)"],
+          ["actors.apify.daily_usd · cache_hours", "0.60 · 24", "Apify spend per day — the $19 Starter credit over ~31 days"],
+          ["actors.apify.mode · per_company · companies_per_run", "full · 25 · 3", "People-tab rows with titles, 25 per company, 3 companies a run"],
+          ["actors.apify.interval_seconds · linkedin_backfill_per_run", "1800 · 30", "The Apify job every 30 min; homepages read first for LinkedIn pages"],
         ]}
       />
+      <H3>decide, mixer — choosing where to spend</H3>
+      <Table
+        head={["Key", "Value", "Meaning"]}
+        mono={[0, 1]}
+        rows={[
+          ["decide.shortlist", "Bengaluru 100 · Hyderabad 50 · Remote 100", "Companies kept on each shortlist"],
+          ["decide.me.dsa_level", "0.35", "Your interview-DSA level, 0–1. Raise it as you practise; parked companies return"],
+          ["decide.dsa", "heavy 0.60 · park_always_above 0.80 · margin 0.15 · high_pay_lpa 35", "When an India company is parked “after DSA”"],
+          ["decide.priors.reply", "alpha 2 · beta 18", "Starting belief about a reply: 10%, updated by every send"],
+          ["decide.priors.referral_odds_ratio", "6.0", "A referral multiplies the screen’s odds by this"],
+          ["decide.gate.min_info", "0.55", "Share of the seven deciding fields needed before deciding (else fill first)"],
+          ["decide.draws · avoid_repeat_days", "4000 · 30", "Samples per company · days before a company is picked again"],
+          ["mixer.daily_usd · referral_reserve_usd", "0.05 · 0.30", "The mixer’s daily share · what it must leave for referrals"],
+          ["mixer.per_run · refresh_days", "2 · 14", "Companies bought per run · days before buying one again"],
+          ["mixer.pay_bands · max_dsa", "pays, deep_pockets, funded · 0.5", "The pay-power and no-DSA layers"],
+          ["mixer.culture_min · culture_min_reviews", "3.0 · 10", "An AmbitionBox rating under this, on enough reviews, is a skip (India)"],
+        ]}
+      />
+
       <H3>openrouter, research, scoring</H3>
       <Table
         head={["Key", "Value", "Meaning"]}
@@ -96,7 +124,7 @@ export default function Configuration() {
           ["GMAIL_APP_PASSWORD", "Sending (SMTP) and reading replies (IMAP)"],
           ["GITHUB_TOKEN", "GitHub API at 5,000 / hour instead of 60"],
           ["EXA_API_KEY", "The metered Exa fallback"],
-          ["APIFY_TOKEN", "Buying People tabs from Apify"],
+          ["APIFY_TOKEN", "Buying People tabs (and the mixer’s job ads) from Apify"],
           ["HUNTER_API_KEY", "Hunter.io pattern lookups"],
           ["SCRAPEDO_TOKEN", "scrape.do reads (levels.fyi)"],
           ["X_AUTH_TOKEN · X_CT0", "A throwaway X session — only with x_session_enabled"],

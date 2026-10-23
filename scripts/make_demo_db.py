@@ -42,6 +42,7 @@ CLEARED = (
     "mixerscrape",     # what each paid Apify lookup cost — the operator's ledger, like llm_call
     "extraction_reject",  # the scrape audit trail: ~16 MB the public page never shows
     "extraction_write",   # (2026-10-23: the snapshot outgrew AppSail's 512 MB with them in)
+    "shortlistfill",      # the shortlist job's work log, with its costs — the operator's
 )
 
 
@@ -179,7 +180,7 @@ def main() -> None:
 
     result = build(args.src, args.out)
     # What git and the image carry: GitHub refuses files over 100 MB and the snapshot has
-    # outgrown that; compressed it is about a fifth. The Dockerfile unpacks it.
+    # outgrown that; compressed it is about a fifth. AppSail's start.sh unpacks it.
     gz = args.out.with_name(args.out.name + ".gz")
     with open(args.out, "rb") as raw, gzip.open(gz, "wb", compresslevel=9) as packed:
         shutil.copyfileobj(raw, packed)

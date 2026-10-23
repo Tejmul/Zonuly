@@ -158,7 +158,9 @@ function Queue() {
 
   async function sendApproved() {
     setNotice(null);
-    const { task_id } = await api.post<{ task_id: string }>("/api/emails/send-approved");
+    // one email per click, like one run of the send agent — never the backlog in a burst
+    // (Gmail blocked the account on 2026-10-19); the agent spreads the rest through the day
+    const { task_id } = await api.post<{ task_id: string }>("/api/emails/send-approved?limit=1");
     watch(task_id, () => {
       void approved.reload();
     });
@@ -181,9 +183,10 @@ function Queue() {
             </OperatorOnly>
             {(approved.data?.length ?? 0) > 0 ? (
               <OperatorOnly>
-                <Button variant="primary" size="sm" onClick={sendApproved}>
+                <Button variant="primary" size="sm" onClick={sendApproved}
+                  title={`Sends the next approved email now. The other ${(approved.data?.length ?? 1) - 1} go out one at a time through the day, inside the daily cap.`}>
                   <Send size={13} />
-                  Send {approved.data?.length} approved
+                  Send the next one ({approved.data?.length} approved)
                 </Button>
               </OperatorOnly>
             ) : null}

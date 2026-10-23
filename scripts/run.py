@@ -1400,7 +1400,7 @@ app.add_typer(tick_app, name="tick")
 
 
 @tick_app.command("run")
-def tick_run(kind: str = typer.Option("free", help="free | paid | all | send | apify")) -> None:
+def tick_run(kind: str = typer.Option("free", help="free | paid | all | send | apify | shortlist")) -> None:
     """Run one bounded slice now (what launchd calls). Takes the lock; skips if another tick is running."""
     _setup_logging()
     from jobhunter import tick
@@ -2501,6 +2501,43 @@ def mixer_history(limit: int = typer.Option(20)) -> None:
     for r in mixer.history(limit):
         typer.echo(f"{r['at'][:16]} {(r['name'] or '')[:24]:24} {r['source']:8} found {r['found']:>3} matched {r['matched']:>3} "
                    f"saved {r['saved']:>3} ${r['cost_usd']:.4f}{' cached' if r['cached'] else ''} {r['error'] or r['stopped'] or ''}")
+
+
+# ---------------------------------------------------------------- the shortlist job
+
+shortlist_app = typer.Typer(help="Complete the shortlist one company at a time, Bengaluru first (shortlist.py)", no_args_is_help=True)
+app.add_typer(shortlist_app, name="shortlist")
+
+
+@shortlist_app.command("next")
+def shortlist_next(limit: int = typer.Option(1, help="how many companies, one after another")) -> None:
+    """Fill the next shortlisted company (or `limit` of them) completely, now."""
+    _setup_logging()
+    from jobhunter import shortlist
+
+    _echo(shortlist.run(limit))
+
+
+@shortlist_app.command("company")
+def shortlist_company(company_id: int) -> None:
+    """Fill one named company completely, now, whatever its place in the queue."""
+    _setup_logging()
+    from jobhunter import shortlist
+
+    _echo(shortlist.one(company_id))
+
+
+@shortlist_app.command("progress")
+def shortlist_progress() -> None:
+    """How far each pool is: complete / partial / waiting, and what the next run takes."""
+    from jobhunter import shortlist
+
+    p = shortlist.progress()
+    for pool in p["order"]:
+        x = p["pools"][pool]
+        typer.echo(f"{pool:10} {x['complete']:>3} complete · {x['partial']:>3} partial · {x['waiting']:>3} waiting of {x['total']}")
+    if p["next"]:
+        typer.echo(f"next: {p['next']['name']} ({p['next']['pool']} #{p['next']['rank']})")
 
 
 # ---------------------------------------------------------------- upskill

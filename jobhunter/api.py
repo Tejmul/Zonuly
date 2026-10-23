@@ -716,6 +716,24 @@ def mixer_history(limit: int = Query(50, le=500)) -> list[dict]:
     return mixer.history(limit)
 
 
+# ---------------------------------------------------------------- the shortlist job (shortlist.py)
+
+@app.get("/api/shortlist/progress")
+def shortlist_progress() -> dict:
+    """Per pool, how far the one-company-at-a-time fill has got, and what each company still lacks."""
+    from jobhunter import shortlist
+
+    return shortlist.progress()
+
+
+@app.post("/api/shortlist/company/{company_id}")
+def shortlist_company(company_id: int) -> dict:
+    """Fill one company completely now — a task."""
+    from jobhunter import shortlist
+
+    return {"task_id": _run_task(f"shortlist:{company_id}", shortlist.one, company_id)}
+
+
 # ---------------------------------------------------------------- upskill (upskill.py)
 
 @app.get("/api/upskill")
@@ -835,7 +853,7 @@ def rebuild_role_brief(job_id: int, synth: bool = True, web: bool = True) -> dic
 
 
 class CompanyUpdateIn(BaseModel):
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 @app.patch("/api/companies/{company_id}")
@@ -1465,8 +1483,11 @@ def send_one(email_id: int, ignore_window: bool = False) -> dict:
 
 @app.post("/api/emails/send-approved")
 def send_all(limit: int | None = None, ignore_window: bool = False) -> dict:
-    from jobhunter.outreach import sender
+    from jobhunter.outreach import sender, warmup
 
+    # 2026-10-19: Gmail blocked the account after a burst. A click sends at most what one
+    # run of the send agent may (outreach.pacing.max_per_run); the agent spreads the rest.
+    limit = min(limit or warmup.MAX_PER_RUN, warmup.MAX_PER_RUN)
     return {
         "task_id": _run_task(
             "send-approved", sender.send_approved, limit=limit, ignore_window=ignore_window
@@ -2091,7 +2112,7 @@ def serve(host: str | None = None, port: int | None = None, reload: bool = False
 
     uvicorn.run(
         "jobhunter.api:app" if reload else app,
-        # Railway (and every other platform) assigns a port and health-checks it, so
+        # AppSail (and every other platform) assigns a port and health-checks it, so
         # $PORT wins over the config default whenever it is set.
         host=host or os.environ.get("ZONULY_HOST") or _API.get("host", "127.0.0.1"),
         port=port or int(os.environ.get("PORT") or _API.get("port", 8000)),

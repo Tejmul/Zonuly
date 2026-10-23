@@ -21,7 +21,7 @@ import Link from "next/link";
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
 import { ArrowRight, Briefcase, Building2, Download, Flag, Filter, MoreHorizontal, Search, Users } from "lucide-react";
-import { useApi } from "@/lib/api";
+import { API_BASE, useApi } from "@/lib/api";
 import { rise } from "@/components/anim";
 import { ErrorNote, Loading } from "@/components/ui/primitives";
 import { Delta, Gauge, Ribbon, Stack, Trend, type Row } from "@/components/charts";
@@ -365,7 +365,7 @@ export default function Dashboard() {
               <Search size={14} /> Search companies
             </Link>
             <span className="grid h-[34px] w-[34px] place-items-center rounded-lg bg-surface-2 text-ink-3" title="Filters live on the Companies page"><Filter size={14} /></span>
-            <a href="/api/jobs?sort=recent&limit=500" className="grid h-[34px] w-[34px] place-items-center rounded-lg bg-surface-2 text-ink-2 hover:text-ink" aria-label="Download the newest roles as JSON"><Download size={14} /></a>
+            <a href={`${API_BASE}/api/jobs?sort=recent&limit=500`} className="grid h-[34px] w-[34px] place-items-center rounded-lg bg-surface-2 text-ink-2 hover:text-ink" aria-label="Download the newest roles as JSON"><Download size={14} /></a>
           </div>
         </div>
         {o.latest_roles ? (

@@ -4,7 +4,7 @@
 AppSail's managed Python runtime does not install anything: the build folder must carry
 the app and every dependency, built for Linux x86_64 (this Mac is arm64, so they are
 fetched as manylinux wheels, never copied from .venv). What ships is the public
-instance only — the same model as the Railway image:
+instance only:
 
   - the code, config and the hand-picked lists
   - demo.db.gz, the stripped snapshot (no cached pages, no spend, no inbound mail),

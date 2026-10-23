@@ -12,7 +12,7 @@
  */
 
 import Link from "next/link";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useApi, type AuditPayload, type AuditReport } from "@/lib/api";
@@ -117,7 +117,12 @@ export default function HealthPage() {
 /* ------------------------------------------------------------------ alert first */
 
 function Banner({ r, every, hours }: { r: AuditReport; every: number; hours: number }) {
-  const alert = r.alerts?.length > 0;
+  // The audit only reports while its agent runs. With the scrapers frozen (tick.scrapers_frozen)
+  // or the LaunchAgent unloaded, the last report stays on screen — say it is old, not "healthy".
+  const [now] = useState(() => Date.now());
+  const ageMin = (now - new Date(r.at).getTime()) / 60_000;
+  const stale = Number.isFinite(ageMin) && ageMin > every * 2;
+  const alert = r.alerts?.length > 0 || stale;
   return (
     <section
       data-anim
@@ -127,9 +132,11 @@ function Banner({ r, every, hours }: { r: AuditReport; every: number; hours: num
       {alert ? <AlertTriangle size={16} className="mt-0.5 shrink-0 text-ink" /> : <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-ink-2" />}
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-medium">
-          {alert ? "Scraping needs a look" : "Scraping is filling fields and every alerted channel is answering"}
+          {stale
+            ? `No audit since ${relTime(r.at)}: the audit agent is not running (scrapers frozen, or its LaunchAgent is not loaded). Everything below is from then.`
+            : alert ? "Scraping needs a look" : "Scraping is filling fields and every alerted channel is answering"}
         </p>
-        {alert ? (
+        {r.alerts?.length ? (
           <ul className="mt-1 space-y-0.5 text-[12.5px] leading-relaxed text-ink-2">
             {r.alerts.map((a) => <li key={a}>{a}</li>)}
           </ul>

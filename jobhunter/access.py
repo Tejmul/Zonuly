@@ -3,7 +3,7 @@
 On your own machine there is one user and nothing to decide, so with `ZONULY_PUBLIC`
 unset every function here is a no-op and the API behaves exactly as it always has.
 
-Setting `ZONULY_PUBLIC=1` — which is what the Railway deployment does — turns the same
+Setting `ZONULY_PUBLIC=1` — which is what the Catalyst AppSail deployment does — turns the same
 process into a read-only exhibit:
 
   * every write is refused, because the write endpoints on this API send mail from your
@@ -38,7 +38,7 @@ _KEY = secret("ZONULY_API_KEY")
 #: Methods a visitor may use. Everything else mutates something.
 _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
-#: Always reachable, whatever the mode — Railway health-checks this.
+#: Always reachable, whatever the mode — AppSail and the deploy workflow health-check this.
 _ALWAYS = ("/api/health",)
 
 #: Readable, but not by the public. Private correspondence, configuration, spend, and

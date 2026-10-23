@@ -16,6 +16,7 @@ const AREAS: { id: string; title: string; rows: R[] }[] = [
     ["POST", "/api/companies/{id}/find-emails", "Web addresses, then fill by pattern"],
     ["POST", "/api/companies/{id}/verify-hiring", "Check hiring proof (?fresh)"],
     ["POST", "/api/companies/{id}/enrich", "Read the site and regrade (?fresh)"],
+    ["GET", "/api/companies/{id}/dossier", "The research dossier (reports/<name>-dossier.md) as markdown — operator only; 404 when none is written"],
     ["GET", "/api/network", "The company atlas"],
   ]},
   { id: "roles", title: "Roles", rows: [
@@ -23,6 +24,25 @@ const AREAS: { id: string; title: string; rows: R[] }[] = [
     ["GET / PATCH", "/api/jobs/{id}", "One role / set its status"],
     ["GET", "/api/roles", "Roles by selection odds: market, band, sort"],
     ["GET / POST", "/api/roles/{id}/brief", "Selection breakdown and needs brief / rebuild it"],
+  ]},
+  { id: "decide", title: "The decision brain", rows: [
+    ["GET", "/api/decide", "The ranked shortlist: pool=Bengaluru|Hyderabad|Remote|all, or verdict=after_dsa|skip|… for parked rows; with counts"],
+    ["GET", "/api/decide/today", "Today’s company — picked on the first read of the day"],
+    ["POST", "/api/decide/today/{status}", "asked | skipped | filled (?note=); a skip picks the next company"],
+    ["GET", "/api/decide/company/{id}", "Every question, its chance and evidence, for one company"],
+    ["POST", "/api/decide/run", "Decide everything again (task)"],
+    ["POST", "/api/decide/outcome", "Record what happened: ?company_id=&stage=replied|referred|interview|offer|rejected|no_response"],
+    ["GET", "/api/decide/calibration", "Brier score and log loss against recorded outcomes, and the reply-rate posterior"],
+  ]},
+  { id: "mixer", title: "The mixer", rows: [
+    ["GET", "/api/mixer/plan", "The free funnel, who would be bought next, the estimate and today’s Apify spend — spends nothing"],
+    ["POST", "/api/mixer/run", "Buy the next companies inside the mixer’s share and the referral reserve (task; ?limit=)"],
+    ["GET", "/api/mixer/history", "Every paid lookup"],
+  ]},
+  { id: "upskill", title: "Upskill", rows: [
+    ["GET", "/api/upskill", "The gaps across the shortlist, ranked by expected offers gained, and the DSA outlook (?refresh)"],
+    ["POST", "/api/upskill/{skill}", "{status: todo|learning|done, proof_url, proof_note} — done needs both"],
+    ["POST", "/api/upskill/{skill}/add-to-profile", "Add a done skill to profile.json, then re-score (task)"],
   ]},
   { id: "people", title: "People", rows: [
     ["GET", "/api/leads", "The Leads page: source, city, who=ready|all, with_email"],

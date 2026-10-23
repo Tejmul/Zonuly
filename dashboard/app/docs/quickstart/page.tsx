@@ -70,11 +70,25 @@ python scripts/run.py tick status
           ["com.zonuly.tick.free", "every 10 min", "The free work: replies, people, addresses, fill, hiring proof, discovery"],
           ["com.zonuly.tick.paid", "06:15 daily", "The model work inside the OpenRouter budget"],
           ["com.zonuly.tick.send", "every 5 min", "Sends at most one approved email whose slot is due"],
-          ["com.zonuly.referrals", "every 15 min", "A referral-only cycle: Bengaluru first, then Hyderabad"],
+          ["com.zonuly.apify", "every 30 min", "Referrals: LinkedIn People tabs for the shortlist, tech team only"],
+          ["com.zonuly.shortlist", "every 10 min", "Completes one shortlisted company at a time, Bengaluru first"],
           ["com.zonuly.audit", "hourly", "Checks every field is still filling and every channel answers"],
+          ["com.zonuly.apify", "every 30 min", "Buys LinkedIn People tabs for companies short of referrers, inside the daily Apify cap"],
         ]}
       />
+      <Callout kind="note" title="Referrals are Apify's job">
+        Since 23 Oct 2026 the free people-search job is off (<C>tick.free_referral_job: false</C>): referrals come from the Apify
+        job, the shortlist first and the tech team only. To pause all scraping, set <C>tick.scrapers_frozen: true</C>. See{" "}
+        <A href="/docs/scheduling">Scheduling</A>.
+      </Callout>
       <P>Details in <A href="/docs/scheduling">Scheduling &amp; the tick</A>.</P>
+
+      <H2>Your first decision</H2>
+      <P>
+        Once roles are scored, let the brain rank the companies and open <strong>Best bets</strong>: today&apos;s company is
+        at the top. See <A href="/docs/decide">The decision brain</A>.
+      </P>
+      <Code title="terminal">{`python scripts/run.py decide run`}</Code>
 
       <Callout kind="warn" title="Before you send anything real">
         Sending starts in dry-run (emails written to <C>outbox/</C>). Connect Gmail in <strong>Settings → Email</strong>,

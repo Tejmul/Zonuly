@@ -28,6 +28,7 @@ export default function EmailAddresses() {
         <Step title="Collect real examples">Only named addresses that were <em>read</em> on the company&apos;s domain — never ones a pattern made.</Step>
         <Step title="Vote">Each example votes for the format that explains it (<C>{"{first}"}</C>, <C>{"{first}.{last}"}</C>, <C>{"{f}{last}"}</C>…). An address two formats could explain is skipped.</Step>
         <Step title="Confirm">A pattern is confirmed only with <strong>at least two agreeing examples</strong> (or one plus the company&apos;s own page stating the format), at least half the votes, and twice the runner-up.</Step>
+        <Step title="Only when nothing real is held">If anyone ready to refer at the company already has a real address (published or verified), no address is guessed for anyone there. A guessed address is the last resort.</Step>
         <Step title="Apply, carefully">Ready referrers with a real first and last name get the pattern address — only after an MX lookup proves the domain takes mail. No SMTP probing. Labelled <C>pattern-guessed</C>.</Step>
         <Step title="Retract">An address an unconfirmed pattern made is taken back, unless a draft already went to it.</Step>
       </Steps>
@@ -36,6 +37,11 @@ export default function EmailAddresses() {
         On 19 Oct 2026 Sarvam AI&apos;s confirmed <C>{"{first}@"}</C> format produced four bounces — one of the four examples that
         had confirmed it belonged to someone who had since left. That is why guessed addresses have their own daily cap and
         a bounce brake, and why a bounce moves the address to <C>dead_email</C> so it is never tried again.
+      </Callout>
+      <Callout kind="note" title="Why guessing became the last resort">
+        At the same company on 23 Oct 2026, 23 of 24 addresses written to had been guessed; three bounced and nine were
+        refused as spam. Real addresses deliver. Since then a guess is made only when no real one is held, and the batch puts
+        anyone with a guessed address behind everyone with a real one.
       </Callout>
 
       <H2>At send time</H2>

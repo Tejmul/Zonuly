@@ -57,7 +57,7 @@ export default function Targeting() {
       <H2>People are targeted too</H2>
       <Defs
         items={[
-          ["Referral rank", "Founder 1 · senior / staff / founding engineer 2 · SDE / AI-ML engineer 3 · engineering manager 4 · technical recruiter 5 · general HR 6 · anyone else 9."],
+          ["Referral rank", "The tech team first: senior / staff / lead / founding engineer 1 · software engineer 2 · founder / CTO 3 · engineering manager 4 · technical recruiter 5 · general HR 6 · anyone else 9."],
           ["City lock", "For a Bengaluru company only people based in Bengaluru are kept; for Hyderabad, only Hyderabad — by the location on their own profile, never a school or a search snippet."],
           ["No alumni targeting", "The people layer targets roles, not colleges."],
           ["One of us per person", "Two candidates never write to the same person in the same month."],
@@ -68,8 +68,9 @@ export default function Targeting() {
       <P>
         The <A href="/docs/dashboard">★ India</A> page lists every Bengaluru and Hyderabad company that clears these
         rules (the hand-picked ones first). <strong>Companies → Worth chasing</strong> shows tier 1, tier 2 and
-        prospects; <strong>Hire from anywhere</strong> the remote-anywhere set; <strong>Best bets</strong> ranks roles
-        by selection odds inside the targeted set.
+        prospects; <strong>Hire from anywhere</strong> the remote-anywhere set; <strong>Best bets</strong> narrows the
+        targeted set to shortlists of Bengaluru 100, Hyderabad 50 and Remote 100 by chance of an offer (see{" "}
+        <A href="/docs/decide">The decision brain</A>), with every role by its selection odds on its second tab.
       </P>
     </Doc>
   );

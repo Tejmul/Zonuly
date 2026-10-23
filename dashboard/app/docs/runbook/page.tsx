@@ -10,7 +10,7 @@ export default function Runbook() {
 
       <H2>The daily routine</H2>
       <UL>
-        <li><strong>Morning:</strong> open the <strong>Queue</strong>, read each draft, fix lines that don&apos;t sound like you, approve or reject. Ten minutes.</li>
+        <li><strong>Morning:</strong> open <strong>Best bets</strong> for today&apos;s company — fill it or ask its referrer, then mark it. Then the <strong>Queue</strong>: read each draft and its flags, fix lines that don&apos;t sound like you, approve or reject. Ten minutes.</li>
         <li><strong>10:00–19:00:</strong> keep the laptop open and on power — approved mail leaves one email every ~20 minutes.</li>
         <li><strong>Evening:</strong> glance at <strong>Replies</strong> and <strong>Scraping health</strong>.</li>
       </UL>
@@ -38,6 +38,8 @@ launchctl load   ~/Library/LaunchAgents/com.zonuly.tick.send.plist   # resume se
           ["Did emails go out?", <>Tracker page · <C key="4">outreach ledger</C> · <C key="5">logs/tick-send.log</C></>],
           ["Why is a company still empty?", "Graph → Fill now — the result names the reason for each missing part"],
           ["Is LinkedIn blocking us?", <C key="6">actor status</C>],
+          ["How much Apify is left today?", <>Mixer panel on Best bets · <C key="9">actor apify</C> · <C key="10">mixer history</C></>],
+          ["Why is an approved email not leaving?", <>Outreach page (“why mail might not be leaving”) · <C key="11">outreach preflight</C> — a per-domain cap or a spam hold waits, it doesn&apos;t fail</>],
           ["How much have models cost?", <C key="7">models costs --month</C>],
         ]}
       />
@@ -47,6 +49,7 @@ launchctl load   ~/Library/LaunchAgents/com.zonuly.tick.send.plist   # resume se
         rows={[
           ["logs/tick-free.log · tick-paid.log · tick-send.log", "The three tick kinds (JSON summary per run)"],
           ["logs/referrals.log", "The referral job"],
+          ["logs/apify.log", "The Apify job"],
           ["logs/audit-run.log · audit.log", "The hourly audit"],
           ["logs/serve.log", "The API"],
           ["data/actors/runs.jsonl", "Every actor run"],

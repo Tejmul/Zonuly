@@ -21,6 +21,7 @@ export default function Guarantees() {
           ["Confidence is always shown", <>Every address is <C key="v">verified</C>, <C key="p">pattern-guessed</C> or <C key="s">scraped</C>.</>, "The label is never defaulted, merged or hidden; guessed addresses have their own daily cap and a bounce brake."],
           ["One follow-up, at most", "A silent thread gets one polite nudge after five days — never two.", <>A per-thread flag is set when the follow-up is queued, and the follow-up goes back through review.</>],
           ["Data stays local", "Secrets never leave the laptop; every outbound call is logged, priced and capped.", "Keys live in .env (git-ignored). The resume and drafts are sent to OpenRouter models, by design."],
+          ["Nothing added to your profile without proof", "Upskill never puts a skill on your profile that you haven’t shown.", "“Done” needs a proof link and a line in your own words; only then can it be added, after a dated backup of the profile."],
           ["No auto-apply", "No portal applications, no contact-list exports. One person, one role, one ask.", "There is no code path that submits an application."],
         ]}
       />
@@ -57,13 +58,17 @@ export default function Guarantees() {
       <UL>
         <li>25 emails a day, spread across 10:00–19:00 — about one every twenty minutes, jittered.</li>
         <li>At most one email per run of the send job, so a laptop waking from sleep never fires a backlog.</li>
-        <li>Plain text. No tracking pixels, no link shorteners, no HTML templates.</li>
+        <li>Written the way Gmail&apos;s own compose writes: text with a minimal HTML twin, links on words. No tracking pixels, no link shorteners, no templates with styles or images, no attachment.</li>
+        <li>At most three cold emails a day into one company&apos;s domain, and a review flag on any near-copy of mail already going there.</li>
         <li>A bounce brake: past six bounces in seven days, guessed addresses stop; verified ones still go.</li>
+        <li>After Gmail refuses any mail as spam: no cold mail for 48 hours, and none into that company for 21 days.</li>
       </UL>
       <Callout kind="warn" title="Learned the hard way">
         On 19 Oct 2026 about thirty near-identical emails went into one company a minute or two apart. Four guessed
         addresses bounced and Gmail refused all further mail for a day (<C>550 5.4.5</C>). The pacing rules above exist
-        because of that day. See <A href="/docs/troubleshooting">Troubleshooting</A>.
+        because of that day. On 23 Oct a different signal arrived — 9 of 24 asks into one company refused as spam
+        (<C>5.7.1</C>) — and the per-domain rules above came from that one. See{" "}
+        <A href="/docs/troubleshooting">Troubleshooting</A>.
       </Callout>
 
       <H2>Permission tiers</H2>

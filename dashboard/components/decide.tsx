@@ -12,6 +12,7 @@ import {
   type DecideToday,
   type DecideVerdict,
   type MixerPlan,
+  type ShortlistProgress,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button, Empty, ErrorNote, Loading, Panel, PanelHead, Table, Td, Th, Tr } from "@/components/ui/primitives";
@@ -359,6 +360,90 @@ export function MixerPanel() {
               {data.can_spend_now ? "" : " — not buying today: referrals first"}
             </p>
             {msg ? <p className="text-xs text-ink-3">{msg}</p> : null}
+          </div>
+        ) : null}
+      </div>
+    </Panel>
+  );
+}
+
+/* ---------------------------------------------------------------- completing the shortlist */
+
+export function ShortlistPanel() {
+  const { data, error, loading, reload } = useApi<ShortlistProgress>("/api/shortlist/progress");
+  const [pool, setPool] = useState<string | null>(null);
+  const shown = pool ?? data?.next?.pool ?? data?.order[0] ?? "Bengaluru";
+  const rows = (data?.pools[shown]?.rows ?? []).filter((r) => r.status !== "waiting");
+
+  return (
+    <Panel className="mt-5">
+      <PanelHead
+        eyebrow="Completing the shortlist · one company at a time"
+        title={data?.next ? `Next: ${data.next.name} (${data.next.pool} #${data.next.rank})` : "Every shortlisted company has had its pass"}
+        action={
+          <Button variant="quiet" size="sm" onClick={reload}>
+            Refresh
+          </Button>
+        }
+      />
+      <div className="px-4 py-3">
+        {loading && !data ? (
+          <Loading label="Reading progress" rows={3} />
+        ) : error ? (
+          <ErrorNote message={error} onRetry={reload} />
+        ) : data ? (
+          <div className="flex flex-col gap-3">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {data.order.map((p) => {
+                const x = data.pools[p];
+                const pct = x.total ? ((x.complete + x.partial) / x.total) * 100 : 0;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPool(p)}
+                    className={cn("cursor-pointer rounded-sm border px-3 py-2 text-left transition-colors",
+                      shown === p ? "border-ink" : "border-line hover:border-line-strong")}
+                  >
+                    <div className="flex items-baseline justify-between text-xs">
+                      <span className="font-medium text-ink">{p}</span>
+                      <span className="tnum text-ink-3">{x.complete + x.partial} / {x.total} done</span>
+                    </div>
+                    <div className="mt-1.5 h-1 rounded-sm bg-surface-3">
+                      <div className="h-1 rounded-sm bg-ink" style={{ width: `${Math.max(1, pct)}%` }} />
+                    </div>
+                    <div className="tnum mt-1 text-[11px] text-ink-3">
+                      {x.complete} complete · {x.partial} with gaps · {x.waiting} waiting
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {rows.length ? (
+              <ul className="flex flex-col divide-y divide-line">
+                {rows.map((r) => (
+                  <li key={r.company_id} className="grid gap-1 py-2 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] sm:gap-4">
+                    <div className="text-xs">
+                      <span className="tnum text-ink-3">#{r.rank} </span>
+                      <Link href={`/companies/${r.company_id}`} className="font-medium text-ink hover:underline">
+                        {r.name}
+                      </Link>
+                      <span className="text-ink-3"> · {r.status === "complete" ? "complete" : "has gaps"}</span>
+                    </div>
+                    <ul className="flex flex-col gap-0.5">
+                      {Object.entries(r.missing ?? {}).map(([part, why]) => (
+                        <li key={part} className="text-xs leading-relaxed">
+                          <span className="text-ink-2">{data.parts[part] ?? part}:</span> <span className="text-ink-3">{why}</span>
+                        </li>
+                      ))}
+                      {!Object.keys(r.missing ?? {}).length ? <li className="text-xs text-ink-3">Every part of the card is filled.</li> : null}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-ink-3">Nothing in {shown} has had its pass yet; the job takes one company every 10 minutes, Bengaluru first.</p>
+            )}
           </div>
         ) : null}
       </div>

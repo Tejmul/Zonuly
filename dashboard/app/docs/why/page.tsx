@@ -80,13 +80,13 @@ export default function Why() {
         <li><strong>Send without you.</strong> Every email passes the review gate. See <A href="/docs/guarantees">Guarantees</A>.</li>
         <li><strong>Invent anything.</strong> No project, number or connection that isn&apos;t in the source material.</li>
         <li><strong>Touch your accounts to scrape.</strong> Your LinkedIn, X and GitHub stay yours; a ban would destroy the network referrals depend on.</li>
-        <li><strong>Send like spam.</strong> 25 a day, spread through the working day, plain text, no tracking pixels.</li>
+        <li><strong>Send like spam.</strong> 25 a day, spread through the working day, at most three into one company, written like a person writes in Gmail, no tracking pixels.</li>
       </UL>
 
       <Callout kind="note" title="The budget">
-        It is meant to cost a student nothing recurring — ₹1,000–2,500 a month at most. Paid services are used only where
-        a free tier exists (OpenRouter models behind a ledger, Apify inside its free monthly credit), and every paid call
-        passes a budget check first.
+        It is meant to cost a student little — ₹1,000–2,500 a month at most. Models come through OpenRouter, free models
+        first, behind a cost ledger. Apify is on its Starter plan, $19 of credit a month, spent evenly at
+        $0.60 a day and kept for finding referrers first. Every paid call passes a budget check before it is made.
       </Callout>
     </Doc>
   );

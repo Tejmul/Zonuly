@@ -539,6 +539,23 @@ class UpskillItem(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class ShortlistFill(SQLModel, table=True):
+    """One pass of shortlist.py over one shortlisted company (2026-10-23): what was missing
+    before, what is still missing after and why, and what it cost."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
+    pool: str = Field(index=True)
+    rank: Optional[int] = None
+    status: str = Field(index=True)          # complete | partial | failed
+    missing_before: Optional[str] = None      # JSON list
+    missing_after: Optional[str] = None       # JSON {part: why}
+    steps: Optional[str] = None               # JSON: what each step did
+    cost_usd: float = 0.0
+    seconds: float = 0.0
+    at: datetime = Field(default_factory=utcnow, index=True)
+
+
 class Setting(SQLModel, table=True):
     """Small key/value store for runtime state the config file shouldn't own (send counters, cursors)."""
 

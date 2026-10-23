@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { A, C, Doc, H2, Lead, P, PageCards, Table } from "@/components/docs/prose";
+import { A, C, Callout, Doc, H2, Lead, P, PageCards, Table } from "@/components/docs/prose";
 import { PipelineDiagram } from "@/components/docs/diagrams";
 import { STAGES } from "@/lib/docs-content";
 
@@ -22,7 +22,9 @@ export default function Pipeline() {
           ["Fill", "Free tick (20 per tick) · Fill now · opening a company", "Free"],
           ["Hiring proof", "Fill, careers and verify steps", "Free"],
           ["Roles & scoring", "Daily cycle in the API; selection odds every tick", "Model rubric on survivors only"],
-          ["People", "Referral job (every 15 min) and the free tick’s people step", "Free; one Exa search; Apify inside its cap"],
+          ["Decide", "Every free tick, after the role scores · decide run · the mixer", "Free — arithmetic over fields already held"],
+          ["People", "The Apify job (every 30 min): People tabs for the shortlist, tech team only; the free tick’s people step", "Apify inside its daily cap"],
+          ["Complete the shortlist", "Shortlist job (every 10 min): one company at a time, Bengaluru first", "Free fill + Exa (Agent Reach); referrals via the Apify job"],
           ["Addresses", "Right after every people step", "Free (MX lookups); Hunter when enabled"],
           ["Draft", "On request: Outreach → batch, or the CLI", "Model polish, optional"],
           ["Review", "You, in the Queue", "Ten minutes"],
@@ -30,6 +32,11 @@ export default function Pipeline() {
           ["Replies & follow-up", "Free tick and the API’s hourly reply cycle", "Cheap model for classification"],
         ]}
       />
+
+      <Callout kind="note" title="Referrals are Apify's job">
+        Company and role scraping runs on the free and paid ticks. Referrals come from the Apify job, the shortlist first and
+        the tech team only; the free people-search job is off. See <A href="/docs/scheduling">Scheduling</A>.
+      </Callout>
 
       <H2>The order work is done in</H2>
       <P>
@@ -39,7 +46,7 @@ export default function Pipeline() {
       </P>
 
       <H2>Stage by stage</H2>
-      <PageCards slugs={["discovery", "fill", "hiring-proof", "roles-scoring", "people", "email-addresses", "outreach", "sending", "replies"]} />
+      <PageCards slugs={["discovery", "fill", "hiring-proof", "roles-scoring", "decide", "mixer", "people", "email-addresses", "outreach", "sending", "replies"]} />
       <P>
         For how these are scheduled, see <A href="/docs/scheduling">Scheduling &amp; the tick</A>.
       </P>
