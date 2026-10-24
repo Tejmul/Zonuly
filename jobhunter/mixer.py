@@ -123,8 +123,8 @@ def plan(limit: int = PER_RUN) -> dict:
     return {"layers": layers, "survivors": len(picks), "next": now, "queue_sample": picks[limit:limit + 12],
             "estimate_usd": round(sum(est_one if p["pool"] == "Remote" else est_india for p in now), 4),
             "spent_today_usd": apify_source.spent_today(), "mixer_spent_today_usd": apify_source.spent_today(LABEL),
-            "mixer_daily_usd": DAILY_USD, "apify_daily_usd": apify_source.DAILY_USD, "referral_reserve_usd": RESERVE_USD,
-            "can_spend_now": apify_source.DAILY_USD - apify_source.spent_today() - est_india >= RESERVE_USD
+            "mixer_daily_usd": DAILY_USD, "apify_daily_usd": apify_source.daily_cap(), "referral_reserve_usd": RESERVE_USD,
+            "can_spend_now": apify_source.daily_cap() - apify_source.spent_today() - est_india >= RESERVE_USD
                              and apify_source.spent_today(LABEL) + est_india <= DAILY_USD}
 
 
@@ -243,9 +243,9 @@ def _buy(company: Company, pool: str) -> dict:
                       lambda it: (it.get("company") or {}).get("name"), _naukri_job))
     for source, conf, inp, who, make in steps:
         est = conf["limit"] * conf["per_item"] + conf["start_fee"]
-        if apify_source.DAILY_USD - apify_source.spent_today() - est < RESERVE_USD:
+        if apify_source.daily_cap() - apify_source.spent_today() - est < RESERVE_USD:
             # referrals first: whatever the People-tab job may still need today is not ours to spend
-            r = {"error": f"referral reserve: ${apify_source.spent_today()} of ${apify_source.DAILY_USD} spent today; "
+            r = {"error": f"referral reserve: ${apify_source.spent_today()} of ${apify_source.daily_cap()} spent today; "
                           f"${RESERVE_USD} stays for referrals"}
         else:
             r = apify_source.run_actor(conf["actor"], inp, per_item=conf["per_item"], start_fee=conf["start_fee"],

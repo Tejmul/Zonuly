@@ -374,9 +374,10 @@ def apify_step(limit: int = 1, *, apify_max: int | None = None, apify_mode: str 
     apify_max = int(apify_max or conf.get("per_company", 25))
     if not apify_source.token():
         return {"skipped": "no APIFY_TOKEN in .env"}
-    left = round(apify_source.DAILY_USD - apify_source.spent_today(), 4)
+    day_cap = apify_source.daily_cap()
+    left = round(day_cap - apify_source.spent_today(), 4)
     if left < apify_max * apify_source.MODES.get(apify_mode, apify_source.MODES["short"])[1] + apify_source.START_FEE:
-        return {"skipped": f"today's Apify cap reached (${apify_source.spent_today()} of ${apify_source.DAILY_USD})"}
+        return {"skipped": f"today's Apify cap reached (${apify_source.spent_today()} of ${day_cap})"}
     ids = apify_queue()
     out = {"queue": len(ids), "companies": []}
 

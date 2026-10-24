@@ -1258,13 +1258,14 @@ actors:
   apify:
     # 2026-10-23: Apify Starter — $19 of credit per cycle (22 Oct → 21 Nov). $0.60/day spends
     # it evenly over ~31 days. Was 0.15 on the free plan.
-    daily_usd: 5.00        # 2026-10-24: "use all of Apify … we need the leads" — fast; monthly_stop_usd is the real stop
+    daily_usd: 1.00        # a ceiling only: the real cap is the credit left ÷ days left in the cycle (apify_source.daily_cap)
+                           # 2026-10-25: was 5.00 — $9.50 of $19 went in two days ("keep limit … I used all in 1 day")
     monthly_stop_usd: 18.5 # never past this of the $19 Starter credit (read from Apify's own usage before each buy)
     cache_hours: 24
     mode: email            # short $4/1k (name, location) · full $8/1k (+ titles, positions) · email $12/1k
                            # 2026-10-24: email — 58 of the first 67 shortlist companies had people but no real address
                            # for an engineer; the address is what cold mail needs, and it teaches the pattern learner
-    per_company: 15        # People-tab rows bought per company (in the company's own city, engineering titles):
+    per_company: 10        # 2026-10-25: 15 → 10, so the paced ~$0.30/day buys 2 companies, not 1. People-tab rows bought per company (in the company's own city, engineering titles):
                            # 2–3 good referrers is the goal; Apify bills per row, so 15 caps a company at ~$0.20
     shortlist_only: true   # only the decision brain's shortlist (Bengaluru 100, Hyderabad 50, Remote 100)
     companies_per_run: 6   # companies per run of com.zonuly.apify

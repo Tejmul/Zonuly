@@ -65,7 +65,7 @@ def spent_today(label: str | None = None) -> float:
 
 
 MONTHLY_STOP_USD = float(_CONF.get("monthly_stop_usd", 18.5))
-_USAGE: dict = {"at": 0.0, "used": None, "max": None}
+_USAGE: dict = {"at": 0.0, "used": None, "max": None, "end": None}
 
 
 def monthly_usage() -> tuple[float | None, float | None]:
@@ -76,10 +76,27 @@ def monthly_usage() -> tuple[float | None, float | None]:
     try:
         d = httpx.get("https://api.apify.com/v2/users/me/limits", params={"token": token()}, timeout=20).json()["data"]
         _USAGE.update(at=time.time(), used=float(d["current"]["monthlyUsageUsd"]),
-                      max=float(d["limits"]["maxMonthlyUsageUsd"]))
+                      max=float(d["limits"]["maxMonthlyUsageUsd"]),
+                      end=((d.get("monthlyUsageCycle") or {}).get("endAt") or "")[:10] or None)
     except Exception:  # noqa: BLE001 — a failed read never blocks on its own
         return None, None
     return _USAGE["used"], _USAGE["max"]
+
+
+def daily_cap() -> float:
+    """Today's cap: what is left of the cycle's credit, spread evenly over the days left in it,
+    never above daily_usd. 2026-10-25, Tejmul: "keep limit … I used all in 1 day" — $9.50 of $19
+    went in two days at a flat $5/day. Falls back to daily_usd when Apify's usage cannot be read."""
+    used, cap = monthly_usage()
+    end = _USAGE.get("end")
+    if used is None or not end:
+        return DAILY_USD
+    stop = min(MONTHLY_STOP_USD, (cap or MONTHLY_STOP_USD) - 0.25)
+    today = datetime.now().date()
+    days_left = max(1, (datetime.strptime(end, "%Y-%m-%d").date() - today).days + 1)
+    # today's own spend is already inside `used`, so add it back before splitting
+    pace = max(0.0, stop - used + spent_today()) / days_left
+    return round(min(DAILY_USD, pace), 4)
 
 
 def _monthly_refusal(estimate: float) -> str | None:
@@ -95,7 +112,8 @@ def _monthly_refusal(estimate: float) -> str | None:
 
 
 def status() -> dict:
-    return {"token": bool(token()), "actor": ACTOR_ID, "spent_today_usd": spent_today(), "daily_usd": DAILY_USD}
+    return {"token": bool(token()), "actor": ACTOR_ID, "spent_today_usd": spent_today(), "daily_usd": daily_cap(),
+            "daily_usd_ceiling": DAILY_USD}
 
 
 def best_email(item: dict) -> tuple[str | None, str | None]:
@@ -168,8 +186,8 @@ def company_employees(company_url: str, *, max_items: int = 50, mode: str = "sho
     if cp.exists() and time.time() - cp.stat().st_mtime < CACHE_HOURS * 3600:
         return {"people": json.loads(cp.read_text()), "cost_usd": 0.0, "cached": True}
     estimate = round(max_items * per + START_FEE, 4)
-    if spent_today() + estimate > DAILY_USD:
-        return {"error": f"apify daily cap: ${spent_today()} spent + ${estimate} estimated > ${DAILY_USD}"}
+    if spent_today() + estimate > (day_cap := daily_cap()):
+        return {"error": f"apify daily cap: ${spent_today()} spent + ${estimate} estimated > ${day_cap}"}
     refused = _monthly_refusal(estimate)
     if refused:
         return {"error": refused}
@@ -205,8 +223,8 @@ def run_actor(actor_id: str, inp: dict, *, per_item: float, start_fee: float, ma
     if cp.exists() and time.time() - cp.stat().st_mtime < CACHE_HOURS * 3600:
         return {"items": json.loads(cp.read_text()), "cost_usd": 0.0, "cached": True}
     estimate = round(max_items * per_item + start_fee, 4)
-    if spent_today() + estimate > DAILY_USD:
-        return {"error": f"apify daily cap: ${spent_today()} spent + ${estimate} estimated > ${DAILY_USD}"}
+    if spent_today() + estimate > (day_cap := daily_cap()):
+        return {"error": f"apify daily cap: ${spent_today()} spent + ${estimate} estimated > ${day_cap}"}
     refused = _monthly_refusal(estimate)
     if refused:
         return {"error": refused}
