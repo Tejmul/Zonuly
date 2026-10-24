@@ -57,8 +57,21 @@ def _row(c: sqlite3.Connection, candidate_id: int, day: str) -> tuple:
 
 
 def status(candidate_id: int = 1) -> dict:
-    with _conn() as c:
-        _, cap, used, gcap, gused = _row(c, candidate_id, _today())
+    try:
+        with _conn() as c:
+            _, cap, used, gcap, gused = _row(c, candidate_id, _today())
+    except sqlite3.Error as e:
+        # 2026-10-24: on the deployed copy the first read of a new day must write that day's row;
+        # when it cannot, report the day's cap, nothing used, and why — never take the page down.
+        # Only there: on the working machine the ledger is the send cap, and a broken one stops loudly.
+        from jobhunter import access
+
+        if not access.PUBLIC:
+            raise
+        log.warning("send ledger unreadable: %s", e)
+        cap = effective_cap(_today())
+        return {"day": _today(), "cap": cap, "used": 0, "left": cap, "guessed_cap": min(GUESSED_CAP, cap),
+                "guessed_used": 0, "guessed_left": min(GUESSED_CAP, cap), "error": f"{type(e).__name__}: {e}"[:200]}
     return {"day": _today(), "cap": cap, "used": used, "left": max(0, cap - used),
             "guessed_cap": gcap, "guessed_used": gused, "guessed_left": max(0, gcap - gused)}
 

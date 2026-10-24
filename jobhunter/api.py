@@ -332,20 +332,29 @@ def health() -> dict:
     from jobhunter.outreach import gmail, sender
 
     profile_path = ROOT / CONFIG["profile_path"]
+    def part(fn):
+        # 2026-10-24: one unreadable part (the deployed copy's send ledger) returned 500 for the
+        # whole health check and failed the deploy; each part now reports its own error instead
+        try:
+            return fn()
+        except Exception as e:  # noqa: BLE001
+            log.warning("health part failed: %s", e)
+            return {"error": f"{type(e).__name__}: {e}"[:300]}
+
     return {
         "ok": True,
-        "llm": llm.health(),
-        "gmail": _sending_setup(gmail.status()),
-        "n8n": n8n.status(),
-        "quota": _sending_setup(sender.quota()),
-        "hunter": {"configured": hunter.available(), "lookups_left": hunter.budget_left()},
+        "llm": part(llm.health),
+        "gmail": part(lambda: _sending_setup(gmail.status())),
+        "n8n": part(n8n.status),
+        "quota": part(lambda: _sending_setup(sender.quota())),
+        "hunter": part(lambda: {"configured": hunter.available(), "lookups_left": hunter.budget_left()}),
         # Resolved the way the callers resolve it (env first, then config). Reading
         # config alone here reported "60 requests/hour" on Settings while the people
         # hunter was in fact authenticated from .env.
         "github_token": bool(backends.github_token()),
         "profile": {"exists": profile_path.exists(), "path": str(profile_path)},
-        "counts": matcher.counts(),
-        "scheduler": scheduler.status(),
+        "counts": part(matcher.counts),
+        "scheduler": part(scheduler.status),
         "access": access.status(),
         "snapshot": _snapshot_status(),
     }
