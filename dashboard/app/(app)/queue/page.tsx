@@ -30,6 +30,7 @@ import {
   type ReviewEmail,
 } from "../outreach/_review/review";
 import { PatternsPanel } from "./patterns";
+import { SendPlanPanel, type SendPlan } from "./plan";
 
 const FLAG_LABEL: Record<string, string> = {
   faithfulness: "unsupported claim", ai_tell: "reads machine-written", length: "length", one_ask: "more than one ask",
@@ -47,7 +48,7 @@ const STRUCTURE_LABEL: Record<string, string> = {
 /* 2026-10-16: three tabs — what waits for you, what is approved but not sent yet (each
    can be undone, and a pattern's approvals say so), and the patterns themselves.
    `?email=ID` opens that email (the proposal page links here); `?tab=` picks a tab. */
-type Tab = "review" | "approved" | "patterns";
+type Tab = "review" | "approved" | "plan" | "patterns";
 
 /* Evidence fields arrive as plain text from older drafts and as a structured hook
    ({type, anchor, sentence, source, specificity}) from newer ones; show the words either way. */
@@ -78,12 +79,13 @@ function Queue() {
   const approved = useApi<ReviewEmail[]>("/api/emails?status=approved");
   const incomplete = useApi<ReviewEmail[]>("/api/emails?status=incomplete");
   const patterns = useApi<Patterns>("/api/outreach/patterns");
+  const plan = useApi<SendPlan>("/api/outreach/plan");
   // /api/gmail/status answers the setup shape: `authorized` at the top, not under `gmail`
   const { data: quota } = useApi<Quota & { authorized?: boolean }>("/api/gmail/status");
   const { tasks, watch, dismiss } = useTaskWatcher();
 
   const [tab, setTab] = useState<Tab>(
-    (["review", "approved", "patterns"] as Tab[]).find((t) => t === params.get("tab")) ?? "review",
+    (["review", "approved", "plan", "patterns"] as Tab[]).find((t) => t === params.get("tab")) ?? "review",
   );
   const [activeId, setActiveId] = useState<number | null>(wanted);
   // a link to an email that is already approved opens the Approved tab, once
@@ -137,7 +139,7 @@ function Queue() {
       }
       if (kind !== "save") setActiveId(null);
       notifyReviewChanged();
-      await Promise.all([drafts.reload(), approved.reload(), patterns.reload()]);
+      await Promise.all([drafts.reload(), approved.reload(), patterns.reload(), plan.reload()]);
       if (kind === "save") setLoadedId(null);
     } catch (e) {
       // 2026-10-17: a refused click used to show only at the top of the page, out of sight
@@ -163,6 +165,7 @@ function Queue() {
     const { task_id } = await api.post<{ task_id: string }>("/api/emails/send-approved?limit=1");
     watch(task_id, () => {
       void approved.reload();
+      void plan.reload();
     });
   }
 
@@ -217,6 +220,7 @@ function Queue() {
           [
             ["review", `Waiting for your review (${list.length})`],
             ["approved", `Approved, not sent yet (${approved.data?.length ?? 0})`],
+            ["plan", plan.data ? `${plan.data.weekday}: ${plan.data.planned.length} of ${plan.data.cap} planned` : "Next send day"],
             ["patterns", `Patterns (${(patterns.data?.patterns ?? []).filter((p) => p.status === "active").length} active)`],
           ] as [Tab, string][]
         ).map(([k, label]) => (
@@ -236,12 +240,16 @@ function Queue() {
 
       {tab === "approved" ? (
         <ApprovedList rows={approved.data ?? []} loading={approved.loading && !approved.data} focus={wanted}
-          onChange={async () => { await Promise.all([drafts.reload(), approved.reload(), patterns.reload()]); }} />
+          onChange={async () => { await Promise.all([drafts.reload(), approved.reload(), patterns.reload(), plan.reload()]); }} />
+      ) : null}
+
+      {tab === "plan" ? (
+        <SendPlanPanel data={plan.data} error={plan.error} loading={plan.loading && !plan.data} />
       ) : null}
 
       {tab === "patterns" ? (
         <PatternsPanel data={patterns.data} error={patterns.error} loading={patterns.loading && !patterns.data}
-          onChange={async () => { await Promise.all([drafts.reload(), approved.reload(), patterns.reload()]); }} />
+          onChange={async () => { await Promise.all([drafts.reload(), approved.reload(), patterns.reload(), plan.reload()]); }} />
       ) : null}
 
       {tab === "review" ? (
