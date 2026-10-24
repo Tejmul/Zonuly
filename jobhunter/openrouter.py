@@ -253,7 +253,26 @@ def _ceiling_today() -> bool:
         return False
 
 
-def check_budget() -> None:
+# 2026-10-25: the free tier answers ~50 requests a UTC day, and the scrapers (careers pages,
+# rubric, company profiles) used all of them before the drafter ran: 0 drafts written on the
+# 24th while 156 verified engineers waited. The last OUTREACH_RESERVE of the day are kept for
+# the stages that write to people.
+FREE_PER_DAY = int(_OR.get("free_requests_per_day", 50))
+OUTREACH_RESERVE = int(_OR.get("outreach_reserve", 20))
+OUTREACH_PURPOSES = {"draft", "followup", "writer", "reply-classify", "verify"}
+
+
+def _requests_today() -> int:
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        with _conn() as conn:
+            return conn.execute("SELECT COUNT(*) FROM llm_call WHERE REPLACE(ts, ' ', 'T') >= ?",
+                                (today,)).fetchone()[0]
+    except sqlite3.Error:
+        return 0
+
+
+def check_budget(purpose: str = "") -> None:
     """Raise BudgetExceeded if a cap is already spent. Called before every request.
 
     Checked *before* the call, not after: a cap that only notices once the money is
@@ -263,6 +282,10 @@ def check_budget() -> None:
         raise BudgetExceeded(
             "OpenRouter's free-model daily ceiling was reached today (free-models-per-day) — "
             "it lifts at 00:00 UTC; adding 10 credits to the account raises it to 1,000 requests a day")
+    if FREE_ONLY and purpose not in OUTREACH_PURPOSES and _requests_today() >= FREE_PER_DAY - OUTREACH_RESERVE:
+        raise BudgetExceeded(
+            f"the last {OUTREACH_RESERVE} of today's ~{FREE_PER_DAY} free requests are kept for writing emails "
+            "(openrouter.outreach_reserve) — this stage resumes after 00:00 UTC")
     status = budget_status()
     if status["day"]["spent_inr"] >= DAILY_CAP_INR:
         raise BudgetExceeded(
@@ -416,7 +439,7 @@ def _complete_one(
             "never in config.yaml. Get one at https://openrouter.ai/keys"
         )
 
-    check_budget()
+    check_budget(purpose)
     _space_requests()
     sys_text = (system or "").strip()
     if today_iso:

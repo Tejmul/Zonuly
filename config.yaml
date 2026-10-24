@@ -3,6 +3,8 @@ openrouter:
   base_url: https://openrouter.ai/api/v1
   default_alias: cheap
   free_only: true
+  free_requests_per_day: 50   # OpenRouter's free tier without credits (1,000 once 10 credits are added)
+  outreach_reserve: 20        # 2026-10-25: the last 20 of them are kept for drafting; scrapers stop before
   # 2026-09-22: both MiniMax free ids vanished from the roster and nemotron-3-super spends
   # its 500 output tokens thinking, so research JSON came back truncated. nex-n2.5 answered
   # clean JSON in ~3s; gemma/qwen were at the free daily ceiling. Re-check with
@@ -1235,7 +1237,7 @@ shortlist:
   seconds_per_company: 540     # the fill's time budget for one company
   tech_referrers_wanted: 2     # fewer engineers ready to ask than this → buy the People tab (inside actors.apify.daily_usd)
   refresh_days: 14             # a company is not taken again inside this
-  drafts_per_day: 10           # drafts written into the review queue a day (real addresses only); you approve in the Queue
+  drafts_per_day: 15           # drafts written into the review queue a day (real addresses only); you approve in the Queue
 
 # NEEDS ANALYSIS (jobhunter/needs.py): what they actually need, mapped to the resume
 needs:

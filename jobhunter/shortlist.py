@@ -327,6 +327,35 @@ def one(cid: int) -> dict:
     return out
 
 
+def catch_up(limit: int = 2) -> list[dict]:
+    """Drafts for shortlisted companies already visited, whose referrers arrived after the
+    visit. 2026-10-25: Apify bought 156 verified engineers for companies the shortlist had
+    passed (GoComet, SatSure, AntStack…), and `one` drafts only on its own visit, so none of
+    them had a draft. Pool order, then rank; draft() keeps the one-per-company and daily caps."""
+    from jobhunter.db import Email
+
+    init_db()
+    with get_session() as s:
+        decs = s.exec(select(CompanyDecision).where(col(CompanyDecision.rank).is_not(None))).all()
+        has_mail = set(s.exec(select(Email.company_id).where(
+            Email.kind == "cold", col(Email.status).in_(["draft", "approved", "sending", "sent", "replied"]))).all())
+        ready = set(s.exec(select(Contact.company_id).where(
+            col(Contact.email).is_not(None), col(Contact.role_class).in_(list(_DRAFT_ORDER)),
+            Contact.confidence != "pattern-guessed", col(Contact.do_not_contact).is_not(True))).all())
+        order = {p: i for i, p in enumerate(POOL_ORDER)}
+        todo = sorted((d for d in decs if d.company_id in ready and d.company_id not in has_mail),
+                      key=lambda d: (order.get(d.pool, 99), d.rank))
+        jobs = {d.company_id: (s.get(Company, d.company_id).best_selection_job_id
+                               if s.get(Company, d.company_id) else None) for d in todo[:limit * 3]}
+    out = []
+    for d in todo[:limit * 3]:
+        r = draft(d.company_id, jobs.get(d.company_id))
+        out.append({"company_id": d.company_id, **r})
+        if "drafts are written" in str(r.get("skipped", "")) or len([x for x in out if x.get("email_id")]) >= limit:
+            break
+    return out
+
+
 def run(limit: int = 1) -> dict:
     """The next `limit` companies on the shortlist, one after another; then up to three
     template drafts re-written by the model, which does nothing while its daily ceiling holds."""
@@ -334,10 +363,14 @@ def run(limit: int = 1) -> dict:
 
     done = [one(q["company_id"]) for q in queue(limit)]
     try:
+        caught = catch_up(limit=2)
+    except Exception as e:  # noqa: BLE001
+        caught = [{"error": f"{type(e).__name__}: {e}"[:200]}]
+    try:
         polish = drafter.polish_pending(limit=3)
     except Exception as e:  # noqa: BLE001
         polish = {"error": f"{type(e).__name__}: {e}"[:200]}
-    return {"done": done, "polish": polish, "left": len(queue())}
+    return {"done": done, "catch_up": caught, "polish": polish, "left": len(queue())}
 
 
 def progress() -> dict:
