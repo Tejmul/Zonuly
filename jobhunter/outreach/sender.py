@@ -25,6 +25,14 @@ _O = CONFIG["outreach"]
 DAILY_CAP = int(_O.get("daily_send_cap", 25))
 SEND_WINDOW = _O.get("send_window", [10, 19])
 STAGGER_SECONDS = _O.get("stagger_seconds", [45, 210])
+# 2026-10-24, Tejmul: "send with a time gap so it feels like a real person". A person writes
+# to someone abroad in THAT person's working morning, not at 1 a.m. their time; India keeps the
+# 10–19 IST window and its jittered slots. And never two mails close together.
+RECIPIENT_HOURS = _O.get("recipient_hours", [9, 12])
+MIN_GAP_MINUTES = float(_O.get("min_gap_minutes", 15))
+_LOCAL_TZ = str(_O.get("timezone", "Asia/Kolkata"))
+_TZ_BY_REGION = {"us": "America/New_York", "remote": "America/New_York", "uk": "Europe/London",
+                 "de": "Europe/Berlin", "eu": "Europe/Berlin", "nl": "Europe/Amsterdam"}
 # dryrun: the whole loop runs (ledger, cap, window, statuses) but the mail is written to
 # outbox/ instead of leaving the machine. gmail: the real thing, after gmail-auth.
 # "live" is accepted as another name for gmail (2026-10-14).
@@ -263,6 +271,42 @@ def _queue(session, limit: int) -> list[Email]:
     return rows[:limit]
 
 
+def recipient_tz(session, email: Email) -> str:
+    """Where the recipient works, from their company: an India company (or one with no region
+    on file) is the local zone; a US / UK / EU / remote-first company is that region's."""
+    from jobhunter.db import Company
+
+    c = session.get(Company, email.company_id)
+    if c is None or (c.hq_region or "india") == "india" or (c.city or "").lower().startswith(("bengaluru", "hyderabad")):
+        return _LOCAL_TZ
+    return _TZ_BY_REGION.get(c.hq_region, _LOCAL_TZ)
+
+
+def _local(now: datetime, tz: str) -> datetime:
+    from zoneinfo import ZoneInfo
+
+    base = now if now.tzinfo else now.replace(tzinfo=ZoneInfo(_LOCAL_TZ))
+    return base.astimezone(ZoneInfo(tz))
+
+
+def in_recipient_morning(session, email: Email, now: datetime) -> bool:
+    """A weekday morning where the recipient is (outreach.recipient_hours, outreach.send_days)."""
+    from jobhunter.outreach import warmup
+
+    t = _local(now, recipient_tz(session, email))
+    return int(RECIPIENT_HOURS[0]) <= t.hour < int(RECIPIENT_HOURS[1]) and warmup.is_send_day(t.date())
+
+
+def _gap_ok(session, now: datetime) -> bool:
+    """At least MIN_GAP_MINUTES (plus up to half again, fixed per last mail) since the last send."""
+    last = session.exec(select(Email).where(col(Email.sent_at).is_not(None)).order_by(col(Email.sent_at).desc())).first()
+    if last is None or last.sent_at is None:
+        return True
+    gap = MIN_GAP_MINUTES * (1 + 0.5 * ((last.id * 2654435761) % 1000) / 1000)
+    sent = last.sent_at.replace(tzinfo=timezone.utc)
+    return (_local(now, "UTC") - sent).total_seconds() >= gap * 60
+
+
 def send_due(now: datetime | None = None, *, stagger: bool = True, max_per_run: int | None = None) -> dict:
     """The send agent's one run (every few minutes, launchd): send what today's jittered
     slots say is due — the warm-up quota spread across the window — and no more than
@@ -273,21 +317,31 @@ def send_due(now: datetime | None = None, *, stagger: bool = True, max_per_run: 
 
     init_db()
     now = now or datetime.now()
-    if not in_send_window(now):
-        return {"sent": 0, "skipped": "outside the send window / not a sending day"}
-    led = ledger.status()
-    due = warmup.due(now)
-    want = min(max(0, due - led["used"]), led["left"], max_per_run or warmup.MAX_PER_RUN)
-    out = {"sent": 0, "due_slots": due, "used": led["used"], "quota": led["cap"], "results": []}
-    if want <= 0:
-        out["skipped"] = "nothing due yet" if led["left"] else "today's quota is spent"
-        return out
+    india_open = in_send_window(now)
     with get_session() as session:
         queue = _queue(session, 200)
+        # who may be written to now: an India recipient inside the IST window; anyone abroad in
+        # their own weekday morning — and then only with the gap since the last send kept
+        abroad = {e.id for e in queue if recipient_tz(session, e) != _LOCAL_TZ and in_recipient_morning(session, e, now)}
+        home = {e.id for e in queue if recipient_tz(session, e) == _LOCAL_TZ} if india_open else set()
+        gap_ok = _gap_ok(session, now)
+    if not home and not abroad:
+        return {"sent": 0, "skipped": "outside the send window / not a sending day (here or where the recipients are)"}
+    led = ledger.status()
+    due = warmup.due(now) if india_open else 0
+    want_home = max(0, due - led["used"])
+    want = min(max(want_home, 1 if (abroad and gap_ok) else 0), led["left"], max_per_run or warmup.MAX_PER_RUN)
+    out = {"sent": 0, "due_slots": due, "used": led["used"], "quota": led["cap"], "results": []}
+    if want <= 0:
+        out["skipped"] = ("nothing due yet" if led["left"] else "today's quota is spent") if not abroad else \
+            f"waiting {MIN_GAP_MINUTES:g}+ min since the last send"
+        return out
+    with get_session() as session:
         guessed_paused = suppress.brake(session)
+        allowed = (home if want_home > 0 else set()) | (abroad if gap_ok else set())
         ids = [(e.id, (e.address_confidence or "verified") != "verified" and not (
             e.kind != "cold" and _delivered(session.get(Email, e.parent_email_id) if e.parent_email_id else None)))
-            for e in queue]
+            for e in queue if e.id in allowed]
     guessed_left = 0 if guessed_paused else led["guessed_left"]
     for eid, guessed in ids:
         if out["sent"] >= want:

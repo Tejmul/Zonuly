@@ -340,6 +340,18 @@ export type ShortlistProgress = {
   parts: Record<string, string>; order: string[];
 };
 
+/* Every person at every shortlisted company (shortlist.referrals). */
+export type ReferralPerson = {
+  id: number; name: string | null; role: string | null; role_class: string; current: boolean; ready: boolean;
+  email: string | null; address: string | null; email_kind: string | null; linkedin: string | null; github: string | null;
+  x: string | null; source: string; found: string | null;
+};
+export type ShortlistReferrals = {
+  totals: { companies: number; people: number; engineers: number; ready: number; with_address: number; real_address: number };
+  companies: { company_id: number; name: string | null; pool: string; rank: number; p_offer: number; linkedin_url: string | null;
+               engineers: number; with_address: number; people: ReferralPerson[] }[];
+};
+
 export type EventRow = {
   id: number; kind: string; status: string; company: string | null; company_id: number;
   contact: string | null; email_id: number; starts_at: string | null; ends_at: string | null;

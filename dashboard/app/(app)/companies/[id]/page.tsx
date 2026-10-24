@@ -37,6 +37,7 @@ type Person = {
 type Detail = {
   id: number; name: string; description: string | null; website: string | null;
   domain: string | null; github_org: string | null; region: string | null; locations: string[];
+  linkedin_url?: string | null;
   segment: { id: string; label: string; layer: string };
   trust?: string; evidence?: Record<string, boolean>;
   story: string | null; story_evidence: string | null;
@@ -152,6 +153,8 @@ export default function CompanyPage() {
   const senior = data.jobs.filter((j) => j.is_senior);
   const leads = data.people.filter((p) => p.reachable);
   const others = data.people.filter((p) => !p.reachable);
+  // the tech team first (referral rank), then everyone else with a public profile
+  const onLinkedIn = others.filter((p) => p.linkedin).sort((a, b) => (a.rank ?? 9) - (b.rank ?? 9));
   const lastTask = tasks[0];
 
   return (
@@ -204,6 +207,7 @@ export default function CompanyPage() {
           {data.website && <OutLink href={data.website} icon={<ExternalLink size={13} />}>Website</OutLink>}
           {data.hiring.careers_url && <OutLink href={data.hiring.careers_url} icon={<ExternalLink size={13} />}>Careers</OutLink>}
           {data.github_org && <OutLink href={`https://github.com/${data.github_org}`} icon={<GitBranch size={13} />}>GitHub</OutLink>}
+          {data.linkedin_url && <OutLink href={data.linkedin_url} icon={<ExternalLink size={13} />}>LinkedIn</OutLink>}
           {!data.description && (
             <ActionButton busy={busy === "enrich"} onClick={() => run("enrich", `/api/companies/${data.id}/enrich`)}>
               Read their site
@@ -339,7 +343,12 @@ export default function CompanyPage() {
                 <span className="chip">{p.confidence}</span>
                 <span className="ml-auto flex items-center gap-2">
                   {p.github && <a href={p.github} target="_blank" rel="noreferrer" title="GitHub" className="text-ink-3 hover:text-ink"><GitBranch size={13} /></a>}
-                  {p.linkedin && <a href={p.linkedin} target="_blank" rel="noreferrer" title="LinkedIn (public profile)" className="font-mono text-[11px] text-ink-3 hover:text-ink">in</a>}
+                  {p.linkedin && (
+                    <a href={p.linkedin} target="_blank" rel="noreferrer" title="Their public LinkedIn profile — message them there too"
+                      className="rounded-sm border border-line px-1.5 py-0.5 text-[11px] text-ink-2 hover:border-ink hover:text-ink">
+                      LinkedIn
+                    </a>
+                  )}
                   {/* a DM route, found never sent — the ask still goes through the queue */}
                   {p.x_handle && <a href={`https://x.com/${p.x_handle}`} target="_blank" rel="noreferrer" title="X — a DM route" className="font-mono text-[11px] text-ink-3 hover:text-ink">@{p.x_handle}</a>}
                   <ActionButton
@@ -354,11 +363,34 @@ export default function CompanyPage() {
             ))}
           </ul>
         )}
-        {others.length > 0 && (
-          <details className="mt-3">
-            <summary className="cursor-pointer text-[12px] text-ink-3">{others.length} more on file without a usable address</summary>
+        {onLinkedIn.length > 0 && (
+          <div className="mt-5">
+            <h3 className="text-[12.5px] font-semibold">Message on LinkedIn ({onLinkedIn.length})</h3>
+            <p className="mt-0.5 text-[11.5px] text-ink-3">No usable address yet, but their public profile is known: a connection note or message there works too.</p>
             <ul className="mt-2 divide-y divide-line">
-              {others.slice(0, 20).map((p) => (
+              {onLinkedIn.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                  <span className="text-[13px] font-medium">{p.name ?? "unnamed"}</span>
+                  <span className="text-[12px] text-ink-3">{p.label ?? p.role_class}</span>
+                  {p.role ? <span className="max-w-[28rem] truncate text-[11.5px] text-ink-3">{p.role}</span> : null}
+                  <span className="ml-auto flex items-center gap-2">
+                    {p.github && <a href={p.github} target="_blank" rel="noreferrer" title="GitHub" className="text-ink-3 hover:text-ink"><GitBranch size={13} /></a>}
+                    {p.x_handle && <a href={`https://x.com/${p.x_handle}`} target="_blank" rel="noreferrer" title="X — a DM route" className="font-mono text-[11px] text-ink-3 hover:text-ink">@{p.x_handle}</a>}
+                    <a href={p.linkedin ?? undefined} target="_blank" rel="noreferrer" title="Open their LinkedIn profile"
+                      className="rounded-sm border border-line-strong px-2 py-0.5 text-[11px] font-medium text-ink hover:border-ink">
+                      LinkedIn
+                    </a>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {others.length > onLinkedIn.length && (
+          <details className="mt-3">
+            <summary className="cursor-pointer text-[12px] text-ink-3">{others.length - onLinkedIn.length} more on file with neither an address nor a LinkedIn profile</summary>
+            <ul className="mt-2 divide-y divide-line">
+              {others.filter((p) => !p.linkedin).slice(0, 20).map((p) => (
                 <li key={p.id} className="flex items-center gap-3 py-2 text-[12.5px] text-ink-3">
                   <span>{p.name ?? "unnamed"}</span><span>{p.label ?? p.role_class}</span>
                   <span className="ml-auto">{p.email ?? "no address"}</span>

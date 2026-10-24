@@ -726,6 +726,31 @@ def shortlist_progress() -> dict:
     return shortlist.progress()
 
 
+@app.get("/api/shortlist/referrals")
+def shortlist_referrals(pool: str = "all", tech_only: bool = False, format: Literal["json", "csv"] = "json"):
+    """Every person at every shortlisted company, Best bets order, tech team first; CSV on request."""
+    from jobhunter import shortlist
+
+    data = shortlist.referrals(pool, tech_only=tech_only)
+    if not access.can_read_private():
+        for c in data["companies"]:
+            c["people"] = [access.redact_contact(p) for p in c["people"]]
+    if format == "json":
+        return data
+    import csv
+    import io
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["pool", "rank", "company", "name", "role", "class", "current", "email", "address", "linkedin", "github", "x"])
+    for c in data["companies"]:
+        for p in c["people"]:
+            w.writerow([c["pool"], c["rank"], c["name"], p["name"], p["role"], p["role_class"], p["current"],
+                        p["email"] or "", p["address"] or "", p["linkedin"] or "", p["github"] or "", p["x"] or ""])
+    return PlainTextResponse(buf.getvalue(), media_type="text/csv",
+                             headers={"Content-Disposition": 'attachment; filename="shortlist-referrals.csv"'})
+
+
 @app.post("/api/shortlist/company/{company_id}")
 def shortlist_company(company_id: int) -> dict:
     """Fill one company completely now — a task."""

@@ -66,7 +66,7 @@ export default function Mixer() {
         head={["Setting", "Value", "Meaning"]}
         mono={[0, 1]}
         rows={[
-          ["mixer.daily_usd", "$0.05", "The mixer’s own share of a day’s Apify spend — about a cent a company"],
+          ["mixer.daily_usd", "$0 (since 24 Oct 2026)", "The mixer’s own share of a day’s Apify spend. Zero: Apify is for referrals only, so the paid job-ad layers buy nothing; raise it to use them again"],
           ["mixer.referral_reserve_usd", "$0.30", "It refuses to buy unless this much of today’s Apify cap stays free for referrals afterwards"],
           ["actors.apify.daily_usd", "$0.60", "The whole day’s Apify cap, shared with the People-tab job"],
           ["mixer.per_run · refresh_days", "2 · 14", "Companies per run · days before a company may be bought again"],

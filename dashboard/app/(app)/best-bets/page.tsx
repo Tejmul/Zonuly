@@ -8,7 +8,7 @@ import { lpa } from "@/lib/utils";
 import { PageHead } from "@/components/shell";
 import { BAND_LABEL, BandChip } from "@/components/selection";
 import { Empty, ErrorNote, Loading, Panel, Table, Td, Th, Tr } from "@/components/ui/primitives";
-import { DecideShortlist, MixerPanel, ShortlistPanel, TodayCard } from "@/components/decide";
+import { DecideShortlist, MixerPanel, ReferralsPanel, ShortlistPanel, TodayCard } from "@/components/decide";
 
 /* Best bets: roles ordered by the odds of getting selected (jobhunter/confidence.py).
    One engine, two weight profiles — India (Bengaluru / Hyderabad on-site or hybrid) and
@@ -62,6 +62,7 @@ export default function BestBetsPage() {
           <TodayCard />
           <DecideShortlist />
           <ShortlistPanel />
+          <ReferralsPanel />
           <MixerPanel />
         </>
       ) : (

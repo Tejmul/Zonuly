@@ -339,16 +339,21 @@ def apify_queue() -> list[int]:
             select(CompanyDecision).where(col(CompanyDecision.rank).is_not(None))).all()}
         rows = session.exec(select(Company).where(
             col(Company.status).is_(None), col(Company.linkedin_url).is_not(None))).all()
+        # 2026-10-24, Tejmul: "make sure you're using every penny of Apify and that it is really
+        # worth it … I am still a student": the shortlist only (actors.apify.shortlist_only), and a
+        # company is bought only while it lacks two engineers WITH A REAL ADDRESS — names alone
+        # cannot be cold-mailed
+        shortlist_only = bool(((CONFIG.get("actors") or {}).get("apify") or {}).get("shortlist_only", True))
         rows = [c for c in rows
                 if not c.overrated and c.tier != "reject" and not c.do_not_contact
-                and (c.id in slot or c.list_key or any(x in (c.city or "").lower() for x in _HUNTER_CITIES))
+                and (c.id in slot or (not shortlist_only and (c.list_key or any(x in (c.city or "").lower()
+                                                                                for x in _HUNTER_CITIES))))
                 and backoff.due(c, "apify")]
-        # the tech team is what the People tab is bought for: a company with four founders on
-        # file and one engineer still needs it (2026-10-23)
         tech = dict(session.exec(select(Contact.company_id, func.count()).where(
             col(Contact.company_id).in_([c.id for c in rows] or [-1]),
             col(Contact.role_class).in_(["senior_engineer", "engineer", "eng_manager"]),
             col(Contact.affiliation).in_(["verified-current", "likely-current"]),
+            col(Contact.email).is_not(None), Contact.confidence != "pattern-guessed",
             col(Contact.do_not_contact).is_not(True)).group_by(Contact.company_id)).all())
         picks = [c for c in rows if tech.get(c.id, 0) < 2]
         picks.sort(key=lambda c: (slot.get(c.id, (9, 9999)), 0 if c.list_key else 1,
@@ -374,7 +379,17 @@ def apify_step(limit: int = 1, *, apify_max: int | None = None, apify_mode: str 
         return {"skipped": f"today's Apify cap reached (${apify_source.spent_today()} of ${apify_source.DAILY_USD})"}
     ids = apify_queue()
     out = {"queue": len(ids), "companies": []}
+
+    def real_engineers(cid: int) -> int:
+        with get_session() as session:
+            return len(session.exec(select(Contact.id).where(
+                Contact.company_id == cid, col(Contact.role_class).in_(["senior_engineer", "engineer", "eng_manager"]),
+                col(Contact.email).is_not(None), Contact.confidence != "pattern-guessed",
+                col(Contact.do_not_contact).is_not(True))).all())
+
     for cid in ids[:limit]:
+        had = real_engineers(cid)
+        spent0 = apify_source.spent_today()
         r = fill_company(cid, sources=["known", "apify"], max_verify=0, apify=True, apify_max=apify_max,
                          apify_mode=apify_mode, titles=list(conf.get("tech_titles") or []) or None)
         err = ((r.get("sources") or {}).get("apify") or {}).get("error")
@@ -384,8 +399,13 @@ def apify_step(limit: int = 1, *, apify_max: int | None = None, apify_mode: str 
                 backoff.fail(c, "apify", err or f"bought: {r.get('found', 0)} people", retryable=bool(err))
                 session.add(c)
                 session.commit()
+        now = real_engineers(cid)
+        cost = round(apify_source.spent_today() - spent0, 4)
+        # worth it? engineers with a real address gained per dollar (2026-10-24: "every penny")
         out["companies"].append({"id": cid, "name": r.get("company"), "found": r.get("found"),
-                                 "saved": r.get("saved"), "referrers_now": r.get("referrers_now"), "error": err})
+                                 "saved": r.get("saved"), "referrers_now": r.get("referrers_now"), "error": err,
+                                 "engineers_with_address": now, "gained": now - had, "cost_usd": cost,
+                                 "usd_per_lead": round(cost / (now - had), 3) if now > had and cost else None})
         if err and "cap" in err:
             break
     out["spent_today_usd"] = apify_source.spent_today()

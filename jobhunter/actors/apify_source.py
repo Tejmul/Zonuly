@@ -64,8 +64,65 @@ def spent_today(label: str | None = None) -> float:
     return round(total, 4)
 
 
+MONTHLY_STOP_USD = float(_CONF.get("monthly_stop_usd", 18.5))
+_USAGE: dict = {"at": 0.0, "used": None, "max": None}
+
+
+def monthly_usage() -> tuple[float | None, float | None]:
+    """(used, max) this billing cycle, from Apify itself, cached 10 minutes. (None, None) when it
+    cannot be read — the daily cap still applies then."""
+    if time.time() - _USAGE["at"] < 600 and _USAGE["used"] is not None:
+        return _USAGE["used"], _USAGE["max"]
+    try:
+        d = httpx.get("https://api.apify.com/v2/users/me/limits", params={"token": token()}, timeout=20).json()["data"]
+        _USAGE.update(at=time.time(), used=float(d["current"]["monthlyUsageUsd"]),
+                      max=float(d["limits"]["maxMonthlyUsageUsd"]))
+    except Exception:  # noqa: BLE001 — a failed read never blocks on its own
+        return None, None
+    return _USAGE["used"], _USAGE["max"]
+
+
+def _monthly_refusal(estimate: float) -> str | None:
+    """2026-10-24, Tejmul: "even if you use all of Apify, it doesn't matter" — so the day's cap is
+    high, and this is what stops it: the account's real usage, short of its monthly credit."""
+    used, cap = monthly_usage()
+    if used is None:
+        return None
+    stop = min(MONTHLY_STOP_USD, (cap or MONTHLY_STOP_USD) - 0.25)
+    if used + estimate > stop:
+        return f"apify monthly credit: ${used:.2f} used + ${estimate} estimated > ${stop:.2f} (of ${cap:g})"
+    return None
+
+
 def status() -> dict:
     return {"token": bool(token()), "actor": ACTOR_ID, "spent_today_usd": spent_today(), "daily_usd": DAILY_USD}
+
+
+def best_email(item: dict) -> tuple[str | None, str | None]:
+    """(address, "verified" | "risky") from the actor's `emails` list — [{email, status,
+    deliverable, catchAllDomain, foundInLinkedInProfile, qualityScore}]. 2026-10-24: this
+    list was read as if it were a string, so every address email mode paid for was dropped.
+    Verified = the vendor's SMTP check says deliverable on a domain that is not catch-all, or
+    the address is on the person's own LinkedIn profile; risky = a catch-all domain."""
+    rows = item.get("emails")
+    if isinstance(rows, str):
+        return rows, None
+    if not isinstance(rows, list):
+        return (item.get("email") if isinstance(item.get("email"), str) else None), None
+    good = []
+    for r in rows:
+        if isinstance(r, str):
+            good.append((1, 0, r, None))
+            continue
+        if not isinstance(r, dict) or not r.get("email") or r.get("status") == "invalid":
+            continue
+        verified = (r.get("deliverable") and not r.get("catchAllDomain") and r.get("status") == "valid") \
+            or bool(r.get("foundInLinkedInProfile"))
+        good.append((0 if verified else 1, -(r.get("qualityScore") or 0), r["email"], "verified" if verified else "risky"))
+    if not good:
+        return None, None
+    _, _, addr, status = min(good)
+    return addr.strip().lower(), status
 
 
 def _normalise(item: dict) -> dict:
@@ -87,7 +144,8 @@ def _normalise(item: dict) -> dict:
         "linkedin_url": item.get("linkedinUrl"),
         "location": (loc.get("linkedinText") if isinstance(loc, dict) else loc) or parsed.get("text"),
         "current": current,
-        "email": (item.get("emails") or [None])[0] if isinstance(item.get("emails"), list) else item.get("email"),
+        "email": best_email(item)[0],
+        "email_status": best_email(item)[1],
         "open_to_work": item.get("openToWork"),
         "hiring": item.get("hiring"),
     }
@@ -112,6 +170,9 @@ def company_employees(company_url: str, *, max_items: int = 50, mode: str = "sho
     estimate = round(max_items * per + START_FEE, 4)
     if spent_today() + estimate > DAILY_USD:
         return {"error": f"apify daily cap: ${spent_today()} spent + ${estimate} estimated > ${DAILY_USD}"}
+    refused = _monthly_refusal(estimate)
+    if refused:
+        return {"error": refused}
     try:
         r = httpx.post(f"https://api.apify.com/v2/acts/{ACTOR_ID}/run-sync-get-dataset-items",
                        params={"token": token(), "timeout": 280}, json=inp, timeout=300)
@@ -146,6 +207,9 @@ def run_actor(actor_id: str, inp: dict, *, per_item: float, start_fee: float, ma
     estimate = round(max_items * per_item + start_fee, 4)
     if spent_today() + estimate > DAILY_USD:
         return {"error": f"apify daily cap: ${spent_today()} spent + ${estimate} estimated > ${DAILY_USD}"}
+    refused = _monthly_refusal(estimate)
+    if refused:
+        return {"error": refused}
     if cap_usd is not None and spent_today(label) + estimate > cap_usd:
         return {"error": f"{label} cap: ${spent_today(label)} spent + ${estimate} estimated > ${cap_usd}"}
     try:

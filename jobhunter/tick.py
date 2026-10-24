@@ -37,6 +37,9 @@ log = logging.getLogger(__name__)
 
 _T = CONFIG.get("tick") or {}
 LOCK = ROOT / "data" / "tick.lock"
+# 2026-10-24: the paid tick (scrape.do + metered Exa) took tick.lock too, so with the free tick now
+# running back to back it skipped every 06:15 start from 10-19 on ("another tick is running")
+PAID_LOCK = ROOT / "data" / "tick-paid.lock"
 LOGS = ROOT / "logs"
 LABEL = "com.zonuly.tick"
 PYTHON = str(ROOT / ".venv" / "bin" / "python")
@@ -728,8 +731,12 @@ def run(kind: str = "free") -> dict:
             return run_apify()
         if kind == "shortlist":
             return run_shortlist()
-        with _Lock():
-            summary = run_free() if kind == "free" else run_paid() if kind == "paid" else {**run_free(), "paid": run_paid()}
+        if kind == "paid":
+            with _Lock(PAID_LOCK, "paid tick"):
+                summary = run_paid()
+        else:
+            with _Lock():
+                summary = run_free() if kind == "free" else {**run_free(), "paid": run_paid()}
     except _UseSendLock:
         try:
             with _Lock(SEND_LOCK):

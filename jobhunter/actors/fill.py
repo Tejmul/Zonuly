@@ -69,7 +69,7 @@ def fill_company(company_id: int, *, sources: list[str] | None = None, max_verif
     # namesakes — eight wrong contacts, removed the same minute.
     strong = {"jobs", "yc", "apify"}
     li = [{"name": p["name"], "url": p["linkedin_url"], "role": p["title"] or p["headline"] or "",
-           "headline": p["headline"] or p["title"]}
+           "headline": p["headline"] or p["title"], "email": p.get("email"), "email_status": p.get("email_status")}
           for p in fresh if p["linkedin_url"] and (p["status"] == "verified-current"
                                                     or (p["status"] == "likely-current" and strong & set(p["sources"])))]
     team = [{"name": p["name"], "title": p["title"] or "", "url": next(

@@ -270,7 +270,8 @@ def _src_apify(book: Book, *, company: str, slug: str | None, apify_max: int, ap
         book.add(name=p["name"], title=(cur or {}).get("title") or p.get("title"), linkedin_url=p.get("linkedin_url"),
                  source="apify", quote=p.get("headline"), url=p.get("linkedin_url"),
                  strength="verified-current" if cur else "likely-current",
-                 location=p.get("location"), headline=p.get("headline"), email=p.get("email"))
+                 location=p.get("location"), headline=p.get("headline"), email=p.get("email"),
+                 email_status=p.get("email_status"))
     return len(out["people"])
 
 
@@ -328,7 +329,8 @@ def _shape(rec: dict, company: str) -> dict:
         "role_class": v.role_class, "seniority": v.seniority, "referral_rank": v.referral_rank,
         "can_refer": v.can_refer,
         "linkedin_url": rec.get("linkedin_url"), "public_identifier": L.profile_slug(rec.get("linkedin_url") or ""),
-        "github": rec.get("github"), "email": rec.get("email"), "location": rec.get("location"),
+        "github": rec.get("github"), "email": rec.get("email"), "email_status": rec.get("email_status"),
+        "location": rec.get("location"),
         "education": rec.get("education"), "past": rec.get("past"), "hiring_for": rec.get("hiring_for"),
         "sources": rec["sources"], "evidence": rec["evidence"],
         "source_url": rec.get("linkedin_url") or (rec["evidence"][0]["url"] if rec["evidence"] else None),

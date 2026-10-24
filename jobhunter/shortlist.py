@@ -21,6 +21,12 @@ ONE COMPANY, IN THIS ORDER
                 shortlist's People tabs in this same order, filtered to the tech team; this step
                 records the company's place in that queue                paid (referrals)
     rescore     the company's roles re-scored, the brain re-run
+    draft       2026-10-24 ("the cold mailing part is pending"): one draft into the review queue for
+                the best engineer (then founder) whose address is REAL — never a pattern guess —
+                when the company has no cold mail yet; at most shortlist.drafts_per_day. Nothing
+                is approved here: the Queue is where you approve, the send job paces it out.
+                A template draft (the model at its daily ceiling) is marked for polishing, and
+                every run re-writes up to three of them once the model is back.
 
 WHAT "COMPLETE" MEANS — the card the user reads, part by part (PARTS). A part still missing
 after the pass carries its reason: the fill's own (company.fill_state), or "not public" for
@@ -49,6 +55,7 @@ POOL_ORDER = tuple(_S.get("pool_order") or ("Bengaluru", "Hyderabad", "Remote"))
 REFRESH_DAYS = int(_S.get("refresh_days", 14))
 TECH_WANTED = int(_S.get("tech_referrers_wanted", 2))
 BUDGET_S = int(_S.get("seconds_per_company", 540))
+DRAFTS_PER_DAY = int(_S.get("drafts_per_day", 10))
 TECH = ("senior_engineer", "engineer", "eng_manager")
 
 PARTS = {
@@ -224,6 +231,38 @@ def people(cid: int) -> dict:
     return {"skipped": "People tab already bought (Apify) — no more engineers there"}
 
 
+_DRAFT_ORDER = {"senior_engineer": 0, "engineer": 1, "eng_manager": 2, "founder": 3}
+
+
+def draft(cid: int, job_id: int | None) -> dict:
+    """One draft for the company's best real-address referrer, into the review queue."""
+    from jobhunter import guardrails
+    from jobhunter.db import Email
+    from jobhunter.outreach import drafter
+
+    day0 = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    with get_session() as s:
+        if s.exec(select(Email.id).where(Email.company_id == cid, Email.kind == "cold",
+                                         col(Email.status).in_(["draft", "approved", "sending", "sent", "replied"]))).first():
+            return {"skipped": "the company already has a cold email"}
+        made_today = len(s.exec(select(Email.id).where(Email.kind == "cold", Email.created_at >= day0)).all())
+        if made_today >= DRAFTS_PER_DAY:
+            return {"skipped": f"today's {DRAFTS_PER_DAY} drafts are written"}
+        people = [p for p in s.exec(select(Contact).where(Contact.company_id == cid, col(Contact.email).is_not(None),
+                                                          col(Contact.role_class).in_(list(_DRAFT_ORDER)))).all()
+                  if guardrails.is_ready(p) and p.confidence != "pattern-guessed"]
+    if not people:
+        return {"skipped": "no engineer or founder with a real address yet"}
+    best = min(people, key=lambda p: (_DRAFT_ORDER[p.role_class], p.confidence != "verified", p.id))
+    try:
+        r = drafter.draft_for(best.id, job_id, mark_polish=True)
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"{type(e).__name__}: {e}"[:300]}
+    return {"email_id": r.get("email_id"), "to": best.name, "error": r.get("error"),
+            "incomplete": r.get("missing_labels") if r.get("incomplete") else None,
+            "flags": [f.get("kind") for f in r.get("flags") or []]}
+
+
 def one(cid: int) -> dict:
     """Fill one company completely, record it, return the record."""
     from jobhunter import confidence, decide, fill
@@ -264,6 +303,9 @@ def one(cid: int) -> dict:
     if job_ids:
         confidence.recompute(job_ids=job_ids, force=True)
     decide.run()
+    with get_session() as s:
+        best_job = (s.get(Company, cid).best_selection_job_id if s.get(Company, cid) else None)
+    steps["draft"] = draft(cid, best_job)
 
     with get_session() as s:
         c = s.get(Company, cid)
@@ -286,9 +328,16 @@ def one(cid: int) -> dict:
 
 
 def run(limit: int = 1) -> dict:
-    """The next `limit` companies on the shortlist, one after another."""
+    """The next `limit` companies on the shortlist, one after another; then up to three
+    template drafts re-written by the model, which does nothing while its daily ceiling holds."""
+    from jobhunter.outreach import drafter
+
     done = [one(q["company_id"]) for q in queue(limit)]
-    return {"done": done, "left": len(queue())}
+    try:
+        polish = drafter.polish_pending(limit=3)
+    except Exception as e:  # noqa: BLE001
+        polish = {"error": f"{type(e).__name__}: {e}"[:200]}
+    return {"done": done, "polish": polish, "left": len(queue())}
 
 
 def progress() -> dict:
@@ -318,4 +367,51 @@ def progress() -> dict:
             "parts": PARTS, "order": list(POOL_ORDER)}
 
 
-__all__ = ["queue", "one", "run", "progress", "state", "PARTS"]
+_ROLE_ORDER = {"senior_engineer": 0, "engineer": 1, "eng_manager": 2, "founder": 3, "tech_recruiter": 4, "recruiter": 5}
+
+
+def referrals(pool: str | None = None, *, tech_only: bool = False) -> dict:
+    """Every person at every shortlisted company, Best bets order, the tech team first —
+    the leads list the user works from (2026-10-24: "I need the full list of the people")."""
+    from jobhunter import guardrails
+
+    init_db()
+    order = {p: i for i, p in enumerate(POOL_ORDER)}
+    with get_session() as s:
+        decs = sorted((d for d in s.exec(select(CompanyDecision).where(col(CompanyDecision.rank).is_not(None))).all()
+                       if d.pool in order and (pool in (None, "all") or d.pool == pool)),
+                      key=lambda d: (order[d.pool], d.rank))
+        ids = [d.company_id for d in decs]
+        comps = {c.id: c for c in s.exec(select(Company).where(col(Company.id).in_(ids or [-1]))).all()}
+        people: dict[int, list[Contact]] = {}
+        for p in s.exec(select(Contact).where(col(Contact.company_id).in_(ids or [-1]),
+                                              col(Contact.do_not_contact).is_not(True))).all():
+            people.setdefault(p.company_id, []).append(p)
+    out, totals = [], {"companies": 0, "people": 0, "engineers": 0, "ready": 0, "with_address": 0, "real_address": 0}
+    for d in decs:
+        c = comps.get(d.company_id)
+        rows = []
+        for p in people.get(d.company_id, []):
+            if p.role_class not in _ROLE_ORDER or (tech_only and p.role_class not in TECH):
+                continue
+            ready = guardrails.is_ready(p) if p.email else p.affiliation in guardrails.READY
+            rows.append({"id": p.id, "name": p.name or p.handle, "role": p.role, "role_class": p.role_class,
+                         "current": p.affiliation in guardrails.READY, "ready": ready,
+                         "email": p.email, "address": p.confidence if p.email else None, "email_kind": p.email_kind,
+                         "linkedin": p.linkedin, "github": p.github, "x": p.x_handle, "source": p.source,
+                         "found": p.created_at.isoformat() if p.created_at else None})
+        rows.sort(key=lambda r: (_ROLE_ORDER[r["role_class"]], not r["current"], r["email"] is None, r["name"] or ""))
+        eng = [r for r in rows if r["role_class"] in TECH]
+        totals["companies"] += 1
+        totals["people"] += len(rows)
+        totals["engineers"] += len(eng)
+        totals["ready"] += sum(r["ready"] for r in rows)
+        totals["with_address"] += sum(1 for r in rows if r["email"])
+        totals["real_address"] += sum(1 for r in rows if r["email"] and r["address"] != "pattern-guessed")
+        out.append({"company_id": d.company_id, "name": c.name if c else None, "pool": d.pool, "rank": d.rank,
+                    "p_offer": d.p_offer, "linkedin_url": c.linkedin_url if c else None, "engineers": len(eng),
+                    "with_address": sum(1 for r in rows if r["email"]), "people": rows})
+    return {"totals": totals, "companies": out}
+
+
+__all__ = ["queue", "one", "run", "progress", "state", "referrals", "PARTS"]

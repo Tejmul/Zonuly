@@ -13,6 +13,8 @@ import {
   type DecideVerdict,
   type MixerPlan,
   type ShortlistProgress,
+  type ShortlistReferrals,
+  API_BASE,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button, Empty, ErrorNote, Loading, Panel, PanelHead, Table, Td, Th, Tr } from "@/components/ui/primitives";
@@ -446,6 +448,90 @@ export function ShortlistPanel() {
             )}
           </div>
         ) : null}
+      </div>
+    </Panel>
+  );
+}
+
+/* ---------------------------------------------------------------- the leads list */
+
+const CLASS_LABEL: Record<string, string> = {
+  senior_engineer: "Senior engineer", engineer: "Engineer", eng_manager: "Eng manager", founder: "Founder",
+  tech_recruiter: "Tech recruiter", recruiter: "Recruiter",
+};
+
+export function ReferralsPanel() {
+  const [pool, setPool] = useState("Bengaluru");
+  const [tech, setTech] = useState(true);
+  const { data, error, loading, reload } = useApi<ShortlistReferrals>(`/api/shortlist/referrals?pool=${pool}&tech_only=${tech}`);
+  const csv = `${API_BASE}/api/shortlist/referrals?pool=${pool}&tech_only=${tech}&format=csv`;
+  return (
+    <Panel className="mt-5">
+      <PanelHead
+        eyebrow="Referrals for your shortlist"
+        title={data ? `${data.totals.engineers} engineers · ${data.totals.real_address} with a real address · ${data.totals.people} people at ${data.totals.companies} companies` : "Referrals"}
+        action={<a href={csv} className="text-xs text-ink-2 underline decoration-line-strong underline-offset-2 hover:text-ink">Download CSV</a>}
+      />
+      <div className="px-4 py-3">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <div role="tablist" className="inline-flex rounded-sm border border-line p-0.5">
+            {["Bengaluru", "Hyderabad", "Remote", "all"].map((p) => (
+              <button key={p} type="button" role="tab" aria-selected={pool === p} onClick={() => setPool(p)}
+                className={`h-7 cursor-pointer rounded-sm px-3 text-xs ${pool === p ? "bg-ink font-medium text-on-ink" : "text-ink-2 hover:text-ink"}`}>
+                {p === "all" ? "All" : p}
+              </button>
+            ))}
+          </div>
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-ink-2">
+            <input type="checkbox" checked={tech} onChange={(e) => setTech(e.target.checked)} /> Tech team only
+          </label>
+        </div>
+        {loading && !data ? (
+          <Loading label="Reading referrals" rows={4} />
+        ) : error ? (
+          <ErrorNote message={error} onRetry={reload} />
+        ) : (
+          <ul className="flex flex-col divide-y divide-line">
+            {(data?.companies ?? []).map((c) => (
+              <li key={c.company_id}>
+                <details>
+                  <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-3 py-2 text-xs">
+                    <span className="tnum text-ink-3">#{c.rank}</span>
+                    <span className="font-medium text-ink">{c.name}</span>
+                    <span className="text-ink-3">{c.pool}</span>
+                    <span className="tnum text-ink-2">{c.people.length} people · {c.engineers} engineers · {c.with_address} with an address</span>
+                    <Link href={`/companies/${c.company_id}`} className="ml-auto text-ink-3 hover:text-ink hover:underline">company page</Link>
+                  </summary>
+                  {c.people.length ? (
+                    <ul className="mb-2 ml-6 flex flex-col gap-1">
+                      {c.people.map((p) => (
+                        <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+                          <span className="font-medium text-ink">{p.name ?? "unnamed"}</span>
+                          <span className="text-ink-3">{CLASS_LABEL[p.role_class] ?? p.role_class}{p.current ? "" : " · not confirmed current"}</span>
+                          {p.email ? (
+                            <span className="tnum text-ink-2">{p.email} <span className="text-ink-3">({p.address})</span></span>
+                          ) : (
+                            <span className="text-ink-3">no address</span>
+                          )}
+                          <span className="ml-auto flex items-center gap-2">
+                            {p.x ? <a href={`https://x.com/${p.x}`} target="_blank" rel="noreferrer" className="text-ink-3 hover:text-ink">@{p.x}</a> : null}
+                            {p.github ? <a href={p.github} target="_blank" rel="noreferrer" className="text-ink-3 hover:text-ink">GitHub</a> : null}
+                            {p.linkedin ? (
+                              <a href={p.linkedin} target="_blank" rel="noreferrer"
+                                className="rounded-sm border border-line px-1.5 py-0.5 text-[11px] text-ink-2 hover:border-ink hover:text-ink">LinkedIn</a>
+                            ) : null}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mb-2 ml-6 text-xs text-ink-3">No {tech ? "engineers" : "people"} on file yet — the Apify referral job gets to it in Best bets order.</p>
+                  )}
+                </details>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </Panel>
   );

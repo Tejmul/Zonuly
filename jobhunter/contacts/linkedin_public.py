@@ -223,17 +223,35 @@ def _save(company_id: int, people: list[dict], via: str) -> int:
         domain, pattern = c.domain, patterns.confirmed(c)
         rows = session.exec(select(Contact).where(Contact.company_id == company_id)).all()
         existing = {(k.name or "").lower() for k in rows}
+        by_name = {(k.name or "").lower(): k for k in rows}
         # 2026-10-17: {first}@ gave two Adityas the same guess; an address someone already
         # holds (or another new person here would get) is never guessed for a second person
         taken = {(k.email or "").lower() for k in rows if k.email}
         added = 0
         for p in people:
+            own = (p.get("email") or "").strip().lower() or None
+            own_conf = "verified" if p.get("email_status") == "verified" else None
             if p["name"].lower() in existing:
+                # 2026-10-24: a person already on file gets the address a paid lookup found for them
+                k = by_name.get(p["name"].lower())
+                if k is not None and own and (not k.email or k.confidence == "pattern-guessed") and own not in taken:
+                    g = guardrails.vet_contact(session, company=c, name=k.name, email_addr=own, source="linkedin-public",
+                                               channel=f"linkedin:{via}", url=p["url"], name_source="linkedin",
+                                               linkedin_headline=p.get("headline") or p["role"], smtp=own_conf)
+                    if g and g.get("email"):
+                        k.email, k.confidence, k.email_kind = g["email"], g["confidence"], g.get("email_kind")
+                        k.research_notes = ((k.research_notes or "") + f"\naddress via {via} ({p.get('email_status') or 'unrated'})").strip()
+                        session.add(k)
+                        taken.add(own)
+                        added += 1
                 continue
             existing.add(p["name"].lower())
             email = None
             confidence = None
-            if domain and pattern:
+            if own and own not in taken:
+                email, confidence = own, own_conf
+                taken.add(own)
+            elif domain and pattern:
                 cands = patterns.candidates(p["name"], domain, pattern)
                 if cands:
                     got, v = verify.best_candidate([x for x in cands if x.lower() not in taken])
@@ -241,7 +259,8 @@ def _save(company_id: int, people: list[dict], via: str) -> int:
                         email, confidence = got, (v.confidence if v else "pattern-guessed")
                         taken.add(got.lower())
             g = guardrails.vet_contact(session, company=c, name=p["name"], email_addr=email,
-                                       source="pattern" if email else "linkedin-public", channel=f"linkedin:{via}",
+                                       source="pattern" if email and email != own else "linkedin-public",
+                                       channel=f"linkedin:{via}",
                                        url=p["url"], name_source="linkedin",
                                        linkedin_headline=p.get("headline") or p["role"], smtp=confidence)
             if g is None or not g.get("name"):

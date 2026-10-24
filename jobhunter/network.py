@@ -346,6 +346,7 @@ def company_detail(company_id: int) -> dict:
     return {
         "id": c.id,
         "name": c.name,
+        "linkedin_url": c.linkedin_url,
         "description": c.description,
         "website": c.website,
         "domain": c.domain,
