@@ -363,7 +363,12 @@ def run(limit: int = 1) -> dict:
 
     done = [one(q["company_id"]) for q in queue(limit)]
     try:
-        caught = catch_up(limit=2)
+        # keep enough waiting for review to fill the next send day (2026-10-25: "use all the 25")
+        from jobhunter.outreach import sender
+
+        nxt = sender.plan()
+        need = nxt["open_slots"] - nxt["drafts_sendable"]
+        caught = catch_up(limit=min(2, need)) if need > 0 else [{"skipped": f"{nxt['drafts_sendable']} sendable drafts already wait for review"}]
     except Exception as e:  # noqa: BLE001
         caught = [{"error": f"{type(e).__name__}: {e}"[:200]}]
     try:

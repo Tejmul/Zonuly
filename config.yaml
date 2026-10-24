@@ -935,7 +935,8 @@ outreach:
   spam_pause_hours: 48             # after any spam block, no cold mail at all for this long
   # never written to, whatever the pipeline finds: addresses, whole domains, company names
   do_not_contact:
-    emails: []
+    emails: [rachit@sarvam.ai]   # firstname@ at Sarvam could be Rachit Kumar's; it was a guess and was blocked on 10-19 anyway
+    people: ["Rachit Kumar @ Sarvam AI"]   # 2026-10-25: a classmate — not at Sarvam; anywhere else is fine
     domains: []
     companies: []
   # the review queue should hold at least this many approved drafts the evening before a send day
@@ -1237,7 +1238,7 @@ shortlist:
   seconds_per_company: 540     # the fill's time budget for one company
   tech_referrers_wanted: 2     # fewer engineers ready to ask than this → buy the People tab (inside actors.apify.daily_usd)
   refresh_days: 14             # a company is not taken again inside this
-  drafts_per_day: 15           # drafts written into the review queue a day (real addresses only); you approve in the Queue
+  drafts_per_day: 25           # drafts written into the review queue a day (real addresses only); you approve in the Queue
 
 # NEEDS ANALYSIS (jobhunter/needs.py): what they actually need, mapped to the resume
 needs:

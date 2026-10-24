@@ -270,7 +270,33 @@ def run_send() -> dict:
         return {"kind": "send", "mode": sender.SEND_MODE, "sent": 0, "skipped": f"sending {paused}"}
     out = sender.send_due()
     out.pop("results", None) if not out.get("sent") else None
-    return {"kind": "send", "mode": sender.SEND_MODE, **out}
+    notice = plan_notice()
+    return {"kind": "send", "mode": sender.SEND_MODE, **out, **({"plan_notice": notice} if notice else {})}
+
+
+PLAN_NOTICE_HOUR = int((CONFIG.get("outreach") or {}).get("plan_notice_hour", 20))
+PLAN_NOTICE_FILE = ROOT / "data" / "plan-notice.txt"
+
+
+def plan_notice() -> dict | None:
+    """Once an evening (outreach.plan_notice_hour): a Mac notification saying what goes out on
+    the next send day and how many more approvals would fill it, so the next day is settled
+    the night before (2026-10-25, Tejmul). Nothing is approved here; the review gate stays."""
+    from jobhunter import notify
+    from jobhunter.outreach import sender
+
+    now = datetime.now()
+    today = now.date().isoformat()
+    if now.hour < PLAN_NOTICE_HOUR or (PLAN_NOTICE_FILE.exists() and PLAN_NOTICE_FILE.read_text().strip() == today):
+        return None
+    p = sender.plan()
+    PLAN_NOTICE_FILE.write_text(today)
+    planned, open_ = len(p["planned"]), p["open_slots"]
+    detail = (f"{planned} of {p['cap']} planned for {p['weekday']}"
+              + (f" — approve {min(open_, p['drafts_sendable'])} more to fill it ({p['drafts_sendable']} ready in the queue)"
+                 if open_ else " — the day is full"))
+    notify.send("ZoNuLy: tomorrow's mail", detail)
+    return {"day": p["day"], "planned": planned, "open_slots": open_, "drafts_sendable": p["drafts_sendable"]}
 
 
 def hygiene_step() -> dict:

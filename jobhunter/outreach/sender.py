@@ -10,7 +10,7 @@ import base64
 import logging
 import random
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
 
 from sqlmodel import col, func, select
@@ -456,3 +456,96 @@ def _wants_opt_out(email) -> bool:
     from jobhunter.outreach import compose
 
     return not (getattr(email, "structure", None) == "direct_intro" and not compose.DIRECT_OPT_OUT)
+
+
+def next_send_day(now: datetime | None = None) -> date:
+    """The day the next batch goes: today while the window is still ahead, else the next send day."""
+    from jobhunter.outreach import warmup
+
+    now = now or datetime.now()
+    d = now.date()
+    if warmup.is_send_day(d) and now.hour < SEND_WINDOW[1] - 1:
+        return d
+    d += timedelta(days=1)
+    while not warmup.is_send_day(d):
+        d += timedelta(days=1)
+    return d
+
+
+def plan(day: date | str | None = None) -> dict:
+    """What goes out on `day` (default: the next send day) and roughly when, worked out now
+    from the approved queue with the same rules send_due applies on the day: the cap, the
+    jittered India slots, the recipient's own morning abroad, the gap between sends, three a
+    day per domain, the bounce brake on guessed addresses. 2026-10-25, Tejmul: "whatever
+    should go the next day should be scheduled the day before itself". A preview, not a
+    promise: an approval, a bounce or a reply before then changes it."""
+    from zoneinfo import ZoneInfo
+
+    from jobhunter.db import Company
+    from jobhunter.outreach import suppress, warmup
+
+    init_db()
+    day = date.fromisoformat(day) if isinstance(day, str) else (day or next_send_day())
+    cap = ledger.effective_cap(day.isoformat())
+    used = ledger.status()["used"] if day == datetime.now().date() else 0
+    india = [t.replace(tzinfo=None) for t in warmup.slots(day, cap)]
+    if day == datetime.now().date():
+        india = [t for t in india if t > datetime.now()]
+    planned, waiting, taken = [], [], []
+    per_domain: dict[str, int] = {}
+    with get_session() as session:
+        brake = suppress.brake(session)
+        guessed_left = 0 if brake else ledger.GUESSED_CAP
+        for e in _queue(session, 200):
+            c = session.get(Company, e.company_id)
+            contact = session.get(Contact, e.contact_id)
+            row = {"email_id": e.id, "company": c.name if c else None, "to": contact.name if contact else e.to_email,
+                   "kind": e.kind, "address": e.address_confidence or "verified", "subject": e.subject}
+            why = _referrer_problem(session, e)
+            guessed = (e.address_confidence or "verified") != "verified"
+            dom = suppress._domain(e.to_email)
+            if not why and guessed and guessed_left <= 0:
+                why = brake or f"today's {ledger.GUESSED_CAP} guessed-address sends are planned already"
+            if not why and e.kind == "cold" and per_domain.get(dom, 0) >= suppress.PER_DOMAIN_DAILY_CAP:
+                why = f"{suppress.PER_DOMAIN_DAILY_CAP} mails into {dom} that day already — the next day"
+            if not why and len(planned) + used >= cap:
+                why = f"the day's {cap} are planned — the next send day"
+            if why:
+                waiting.append({**row, "why": why})
+                continue
+            tz = recipient_tz(session, e)
+            def clear(x: datetime) -> bool:
+                return all(abs((x - y).total_seconds()) >= MIN_GAP_MINUTES * 60 for y in taken)
+
+            if tz == _LOCAL_TZ:
+                at = next((x for x in india if clear(x)), None)
+                if at is not None:
+                    india.remove(at)
+            else:  # their own morning, in IST, the gap kept from everything already planned
+                start = datetime.combine(day, datetime.min.time()).replace(hour=int(RECIPIENT_HOURS[0]), tzinfo=ZoneInfo(tz))
+                end = start.replace(hour=int(RECIPIENT_HOURS[1]))
+                at, t = None, start
+                while t < end:
+                    local = t.astimezone(ZoneInfo(_LOCAL_TZ)).replace(tzinfo=None)
+                    if clear(local):
+                        at = local
+                        break
+                    t += timedelta(minutes=5)
+            if at is None:
+                waiting.append({**row, "why": "no free time left in the recipient's morning that day"})
+                continue
+            taken.append(at)
+            per_domain[dom] = per_domain.get(dom, 0) + 1
+            guessed_left -= 1 if guessed else 0
+            planned.append({**row, "at": at.strftime("%Y-%m-%d %H:%M"), "tz": tz,
+                            "their_time": at.replace(tzinfo=ZoneInfo(_LOCAL_TZ)).astimezone(ZoneInfo(tz)).strftime("%H:%M")})
+        drafts = session.exec(select(Email).where(Email.status == "draft")).all()
+        to_review = len(drafts)
+        # the ones that could go if approved: a real address, and nothing stopping the referrer
+        sendable = sum(1 for d in drafts if (d.address_confidence or "verified") != "pattern-guessed"
+                       and not (d.expires_at and d.expires_at < utcnow()) and not _referrer_problem(session, d))
+    planned.sort(key=lambda r: r["at"])
+    return {"day": day.isoformat(), "weekday": day.strftime("%A"), "cap": cap, "planned": planned,
+            "open_slots": max(0, cap - used - len(planned)), "waiting": waiting, "drafts_to_review": to_review,
+            "drafts_sendable": sendable,
+            "bounce_brake": brake}

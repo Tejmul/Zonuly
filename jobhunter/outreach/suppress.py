@@ -97,6 +97,13 @@ def blocked(session, *, contact: Contact | None, company: Company | None, to_ema
     if company is not None and company.do_not_contact:
         return f"{company.name} asked not to be contacted ({company.dnc_reason or 'do-not-contact'})"
     if contact is not None:
+        # "Name @ Company" blocks that person at that company only; a bare name, everywhere
+        name = " ".join((contact.name or "").lower().split())
+        for entry in _DNC.get("people") or []:
+            who, _, where = str(entry).partition("@")
+            if name and name == " ".join(who.lower().split()) and (
+                    not where.strip() or (company is not None and _norm_company(company.name) == _norm_company(where))):
+                return f"{contact.name} is on outreach.do_not_contact.people ({entry})"
         if contact.do_not_contact:
             return f"{contact.name or contact.email or 'this person'} asked not to be contacted ({contact.dnc_reason or 'do-not-contact'})"
         if contact.email_status == "bounced" and not contact.email:

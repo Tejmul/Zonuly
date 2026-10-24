@@ -1779,6 +1779,18 @@ def outreach_polish(limit: int = 10) -> dict:
     return {"task_id": _run_task("outreach-polish", drafter.polish_pending, limit)}
 
 
+@app.get("/api/outreach/plan")
+def outreach_plan(day: str | None = None) -> dict:
+    """The next send day (or `day`): which approved mail goes when, what waits and why, and
+    how many more approvals would fill the day. Names people, so the public copy gets counts."""
+    from jobhunter.outreach import sender
+
+    p = sender.plan(day)
+    if access.PUBLIC:
+        p = {**p, "planned": [{"at": r["at"]} for r in p["planned"]], "waiting": [{"why": r["why"]} for r in p["waiting"]]}
+    return p
+
+
 @app.get("/api/outreach/pipeline")
 def outreach_pipeline() -> dict:
     """The send pipeline in one read: every stage's count, reply sentiment, today's cap,
