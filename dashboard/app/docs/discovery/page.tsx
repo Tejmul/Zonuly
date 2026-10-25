@@ -50,7 +50,7 @@ export default function Discovery() {
       </P>
       <H3>The pay floor</H3>
       <P>
-        An India company whose best full-time pay evidence is under <C>targeting.india.min_lpa</C> (₹25 LPA) is hidden as{" "}
+        An India company whose best full-time pay evidence is under <C>targeting.india.min_lpa</C> (₹20 LPA) is hidden as{" "}
         <C>below_pay_bar</C> — not deleted — and comes back by itself when a posting states more.
       </P>
 

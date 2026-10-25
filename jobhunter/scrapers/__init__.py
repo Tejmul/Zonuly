@@ -18,6 +18,7 @@ REGISTRY: dict[str, str] = {
     "wwr": "jobhunter.scrapers.wwr",
     "yc": "jobhunter.scrapers.yc",
     "wellfound": "jobhunter.scrapers.wellfound",
+    "freehire": "jobhunter.scrapers.freehire",
     "cutshort": "jobhunter.scrapers.cutshort",
     "instahyre": "jobhunter.scrapers.instahyre",
 }

@@ -8,10 +8,10 @@ The rules are Tejmul's, from MOTIV §2 and the 2026-09-03 refinement, and they l
                          thresholds are config). Thousands of applications are already
                          pending there; our odds are not. Headcount is never a criterion.
   2. RECENTLY FUNDED   — pre-seed to Series C; this orders (priority), it does not exclude.
-  3. THE STIPEND BAR   — an internship paying under ₹50k/month is a hard reject. It is
-                         a predictor, not a perk: a company that will not pay ₹50k for
-                         an intern does not pay ₹30 LPA on conversion.
-  4. THE TIERS         — PPO / full-time package ≥ ₹30 LPA → tier1; ≥ ₹24 LPA → tier2
+  3. THE STIPEND BAR   — an internship paying under ₹40k/month (config) is a hard reject:
+                         a company that will not pay that for an intern does not pay
+                         ₹20 LPA+ on conversion.
+  4. THE TIERS         — PPO / full-time package ≥ ₹30 LPA → tier1; ≥ ₹20 LPA → tier2
                          ("category two"); below → reject.
   5. SILENCE IS NOT A NO — most postings never state a PPO, so a company that states no
                          pay is not rejected. If it is underrated, employs real engineers
@@ -191,14 +191,16 @@ def grade(
             + (f", {age} months old — stale" if stale else "")
         )
 
-    # 3. the stipend bar
+    # 3. the stipend bar. 2026-10-26, Tejmul: "if the company is paying you 20+ LPA, that
+    # doesn't give a very low stipend … if it is less than 40, I don't think that company
+    # is giving 20+ LPA."
     if stipend_inr_month is not None:
         if stipend_inr_month < STIPEND_MIN:
             g.checks.append(f"stipend ₹{stipend_inr_month:,}/month < ₹{STIPEND_MIN:,}")
             g.tier = REJECT
             g.reason = (
                 f"internship stipend ₹{stipend_inr_month:,}/month is under the ₹{STIPEND_MIN:,} bar — "
-                "a company paying this will not convert at ₹30 LPA"
+                f"a company paying this will not convert at ₹{TIER2_LPA:g} LPA"
             )
             return g
         g.checks.append(f"stipend ₹{stipend_inr_month:,}/month clears the ₹{STIPEND_MIN:,} bar")

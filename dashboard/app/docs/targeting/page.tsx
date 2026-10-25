@@ -43,10 +43,10 @@ export default function Targeting() {
         head={["Rule", "Value", "What happens below it"]}
         rows={[
           ["Tier 1", "≥ ₹30 LPA stated", "—"],
-          ["Tier 2", <>₹24–30 LPA by D24 — but <C key="t2">ppo_tier2_lpa</C> is 30 in config, so currently empty</>, "—"],
-          ["Reject", "< ₹24 LPA stated", "Kept in the database, never chased."],
+          ["Tier 2", <>₹20–30 LPA (<C key="t2">ppo_tier2_lpa</C> = 20 since 2026-10-26)</>, "—"],
+          ["Reject", "< ₹20 LPA stated", "Kept in the database, never chased."],
           ["India company floor", <><C key="f">targeting.india.min_lpa</C> = 25</>, "Hidden as below_pay_bar — not deleted; back automatically when a posting states more. Unknown pay is kept."],
-          ["Internship stipend", "≥ ₹50,000 / month", "A hard bar — the stipend predicts the full-time offer."],
+          ["Internship stipend", "≥ ₹40,000 / month", "A hard bar — a ₹20 LPA+ company does not pay an intern less."],
         ]}
       />
       <P>

@@ -1964,9 +1964,11 @@ decisions:
       Tejmul, 2026-09-03: "If the company is not giving more than 50, I don't think that
       company will give more than 24 or 30 plus." So the stipend is not a perk to weigh, it
       is a gate to fail. Internships stop being excluded by title as a consequence.
+      Revised 2026-10-26: the bar is ₹40k/month and stays hard — "if it is less than 40, I
+      don't think that company is giving 20+ LPA". ₹20 LPA is a floor, not a target.
     adopts: [feature:stipend-bar-50k]
   - id: decision:d24-tier2-is-24-to-30
-    label: D24 — tier1 ≥ ₹30 LPA, tier2 ₹24–30 LPA, reject below
+    label: D24 — tier1 ≥ ₹30 LPA, tier2 ₹20–30 LPA (was 24 until 2026-10-26), reject below
     summary: >
       "Category two" companies are kept and queued behind tier1, never dropped. Below ₹24 LPA
       the company stays in the database but is never queued.

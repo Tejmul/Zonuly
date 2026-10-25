@@ -110,9 +110,13 @@ matching:
   fit_prefilter_percentile: 70
   high_match_threshold: 65
 targeting:
-  stipend_min_inr_month: 50000
+  # 2026-10-26, Tejmul: "even if the intern is giving 40k and 50k as stipend … while converting
+  # into PPO … at least the cap is 20, so maybe if it gives 30, 40, sab chalega".
+  # Stipend: "if it is less than 40, I don't think that company is giving 20+ LPA" — a hard bar.
+  # 20 is a floor, not a target: every company at ₹20 LPA or above is in the zone; 30+ only sorts first.
+  stipend_min_inr_month: 40000
   ppo_tier1_lpa: 30
-  ppo_tier2_lpa: 30
+  ppo_tier2_lpa: 20
   funding:
     stages_ok:
     - pre-seed
@@ -220,7 +224,7 @@ targeting:
     - estonia
     - tallinn
   - key: india
-    min_lpa: 30
+    min_lpa: 20   # 2026-10-26: "at least the cap is 20"
     # only Bengaluru and Hyderabad are India targets; "india" alone (no city) still
     # counts, but text that names only another Indian city does not (targeting.region_of)
     match:
@@ -585,7 +589,8 @@ targeting:
     # deleted; any evidence at or above it keeps it; unknown pay keeps it. Internship
     # stipends are not full-time pay. Re-evaluated every tick (jobhunter/india.py).
     # 2026-10-15: raised to 25 ("scrap the Indian companies where cap is 25 lpa and +").
-    min_lpa: 25
+    # 2026-10-26: back to 20 — "at least the cap is 20" (PPO / full-time on conversion).
+    min_lpa: 20
     # a stated full-time figure below this is a misparse (a monthly number read as
     # annual), not evidence — it is ignored rather than allowed to hide a company
     implausible_below_lpa: 3
@@ -994,6 +999,10 @@ sources:
   wwr: true
   yc: true
   wellfound: true
+  freehire: true      # 2026-10-26: junior + intern tech roles, BLR/HYD and remote-global (scrapers/freehire.py)
+  freehire_opts:
+    posted_within_days: 14
+    max_pages: 10
   cutshort: false
   instahyre: false
   request_timeout: 25

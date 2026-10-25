@@ -418,12 +418,13 @@ def term_pay_india(job: Job, company: Company | None, w: float) -> tuple[Term, B
     floor = PAY_FLOOR_LPA
     stated = job.salary_max_lpa or job.salary_min_lpa
     if job.is_internship and job.stipend_inr_month:
-        if job.ppo_lpa and job.ppo_lpa >= floor:
-            return Term("pay", w, 0.95, f"PPO ₹{job.ppo_lpa:g} L stated", quote=job.salary_raw, url=job.url), None
+        # the stipend is checked first: a ₹20 LPA+ company does not pay an intern under the bar
         if job.stipend_inr_month < STIPEND_MIN:
             return (Term("pay", w, 0.0, f"stipend ₹{job.stipend_inr_month:,}/month", url=job.url),
                     Blocker("low_stipend", CAPS["low_stipend"], f"stipend ₹{job.stipend_inr_month:,}/month is under the ₹{STIPEND_MIN:,} bar",
                             quote=job.salary_raw, url=job.url))
+        if job.ppo_lpa and job.ppo_lpa >= floor:
+            return Term("pay", w, 0.95, f"PPO ₹{job.ppo_lpa:g} L stated", quote=job.salary_raw, url=job.url), None
         return Term("pay", w, 0.6, f"stipend ₹{job.stipend_inr_month:,}/month clears the bar", quote=job.salary_raw, url=job.url), None
     if stated and not job.is_internship:
         if stated >= floor:

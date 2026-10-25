@@ -41,7 +41,7 @@ _INDIA_OK = re.compile(r"\b(bengaluru|bangalore|hyderabad|secunderabad)\b", re.I
 _ROLE_WORDS = re.compile(
     r"\b(engineer|engineering|developer|programmer|sde|swe|scientist|architect|"
     r"ml|ai|llm|genai|nlp|research|backend|back[- ]end|full[- ]?stack|platform|"
-    r"infrastructure|founding)\b",
+    r"infrastructure|founding|sdet|devops|sre)\b",
     re.I,
 )
 # senior-only / non-engineering / wrong-discipline titles a new grad shouldn't chase

@@ -26,7 +26,7 @@ const D: [string, string, string, string?][] = [
   ["D20", "Three scraping channels, one gate", "A polite keyless core, Apify no-cookies, and research search — behind one staging area and one audit, driven by the launchd tick."],
   ["D21", "A second review surface", "Telegram for approvals, with atomic pending → processing claims."],
   ["D22", "Underrated companies only", "Hyped names are rejected by name. If everybody knows them, a fresher’s ask is lost in the pile."],
-  ["D23", "₹50k/month stipend is a hard bar", "Because the stipend predicts the full-time offer."],
+  ["D23", "₹40k/month stipend is a hard bar", "Under ₹40k, the company does not pay ₹20 LPA+ (2026-10-26)."],
   ["D24", "Pay tiers", "tier1 ≥ ₹30 LPA, tier2 ₹24–30 LPA, reject below — rejected companies stay in the database."],
   ["D25", "No stated pay is not a rejection", "Engineers on staff plus verified hiring make a company a prospect."],
   ["D26", "No alumni targeting", "The people layer targets roles, not colleges."],
