@@ -103,8 +103,8 @@ def _mail_positive() -> dict:
     try:
         from jobhunter import notify_bot, tick
 
-        if not notify_bot.ENABLED:
-            return {"skipped": "notify.email is off"}
+        if not (notify_bot.ENABLED or notify_bot.REPLIES):
+            return {"skipped": "notify.email and notify.replies are off"}
         with tick._Lock(tick.NOTIFY_LOCK, "notification run"):
             return notify_bot.email_positive_replies()
     except Exception as e:  # noqa: BLE001 — a notification must never fail the reply cycle

@@ -450,7 +450,8 @@ def write(g: dict, *, use_model: bool = True, key=None) -> dict:
         body = compose.assemble(message, sig, opt, c.structure)
         v = gates.check(body, corpus=corpus, signature=sig, address_confidence=g["person"].get("confidence"),
                         affiliation=g["person"].get("affiliation"), forbidden=forbidden,
-                        exclude=[opt or ""], subject=subject, word_band=compose.word_band(c))
+                        exclude=[opt or ""], subject=subject, word_band=compose.word_band(c),
+                        roles=[c.target_role, c.target_role_full])
         v.flags += _shape_flags(message, c)
         v.flags += gates.deliverability(subject, body, first_name=c.first_name, signature=sig, sent=sent,
                                         to_email=g["person"].get("email"))
@@ -459,6 +460,25 @@ def write(g: dict, *, use_model: bool = True, key=None) -> dict:
                 "blocked": v.blocked}
 
     tpl = evaluate(filled["message"])
+    if direct and _into_same_domain(tpl["flags"]):
+        # 2026-10-26: a colleague at the same company already has this wording or subject (only
+        # four of each, picked by a hash) — their mail server groups such mail as bulk. Step
+        # through the other wordings and keep the first that is new there.
+        for off in range(1, max(len(compose.DIRECT_VARIANTS), len(compose.DIRECT_SUBJECTS), 1)):
+            c.variant_offset = off
+            alt_filled = compose.fill(c, me_)
+            alt_subjects = compose.subject_options(c, me_)
+            j = compose.pick(alt_subjects, key if key is not None else g["person"]["id"])
+            subject = alt_subjects[j]["subject"] if j >= 0 else subject
+            alt = evaluate(alt_filled["message"])
+            if not _into_same_domain(alt["flags"]):
+                tpl, filled, subjects, i = alt, alt_filled, alt_subjects, j
+                pattern = subjects[i]["pattern"] if i >= 0 else pattern
+                out["contract"] = c.as_dict()
+                break
+        else:
+            c.variant_offset = 0
+            subject = subjects[i]["subject"] if i >= 0 else subject
     chosen, writer, model_note, model_version = tpl, "template", None, None
     if use_model and c.structure == "direct_intro":
         # the user's own pattern, word for word: a model rewrite would only drift from it
@@ -521,7 +541,7 @@ def evaluate_body(g: dict, r: dict, subject: str, body: str) -> dict:
     v = gates.check(body, corpus=_corpus(g, c), signature=sig, address_confidence=g["person"].get("confidence"),
                     affiliation=g["person"].get("affiliation"), forbidden=forbidden,
                     exclude=[x for x in [opt, *suppress.opt_out_lines()] if x], subject=subject,
-                    word_band=compose.word_band(c))
+                    word_band=compose.word_band(c), roles=[c.target_role, c.target_role_full])
     v.flags += _shape_flags(message, c)
     v.flags += gates.deliverability(subject, body, first_name=c.first_name, signature=sig,
                                     sent=sent_like(g["person"].get("id")), to_email=g["person"].get("email"))
@@ -530,18 +550,26 @@ def evaluate_body(g: dict, r: dict, subject: str, body: str) -> dict:
             "blocked": v.blocked, "dropped": compose.keeps_contract(message, c)}
 
 
+def _into_same_domain(flags: list[dict]) -> bool:
+    """The gate found a near-copy of this mail, or its subject, already going to the same company."""
+    return any(f.get("kind") == "deliverability" and ("near-copies" in f.get("detail", "")
+                                                      or "already went to" in f.get("detail", "")) for f in flags)
+
+
 def sent_like(contact_id: int | None, days: int = 30) -> list[dict]:
-    """Cold mail approved, sending or already out in the last `days` (to anyone but this
-    person): what the deliverability gate compares a new draft against."""
+    """Cold mail drafted, approved, sending or already out in the last `days` (to anyone but
+    this person): what the deliverability gate compares a new draft against. Drafts count
+    (2026-10-26): a company's three drafts of an evening are approved together."""
     from datetime import timedelta
 
     since = utcnow() - timedelta(days=days)
     with get_session() as session:
-        rows = session.exec(select(Email.to_email, Email.subject, Email.body).where(
+        rows = session.exec(select(Email.to_email, Email.subject, Email.body, Email.sent_at, Email.created_at).where(
             Email.kind == "cold", Email.contact_id != (contact_id or -1),
-            col(Email.status).in_(["approved", "sending", "sent", "replied", "failed"]),
+            col(Email.status).in_(["draft", "approved", "sending", "sent", "replied", "failed"]),
             col(Email.created_at) >= since)).all()
-    return [{"to": t, "subject": sj, "body": b} for t, sj, b in rows if b]
+    # "at": when it reached their server; None = not sent yet (it goes the same day as this one)
+    return [{"to": t, "subject": sj, "body": b, "at": sa} for t, sj, b, sa, _ in rows if b]
 
 
 def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = True,

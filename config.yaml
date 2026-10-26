@@ -965,7 +965,6 @@ outreach:
     enabled: true
     start: "2026-10-26T19:00"   # nothing approved during today's send window ("today is ok")
     min_quality: 75             # the composer's own score (0–100)
-    max_near_duplicate: 0.88    # a draft more alike than this to mail already sent is rejected
   spam_block_cooldown_days: 21     # after a spam block, no cold mail into that domain / company for this long
   spam_pause_hours: 48             # after any spam block, no cold mail at all for this long
   # never written to, whatever the pipeline finds: addresses, whole domains, company names
@@ -1005,6 +1004,7 @@ notifications:
 # any of them with `approve 12 14` / `reject 15` / `pause` / `resume` / `status`.
 notify:
   email: false                 # the automatic bot (send tick every 5 min + hourly audit); true = on
+  replies: true                # 2026-10-26: every reply from a person is mailed + shown on the Mac, even with email off
   email_to: ''                 # '' = outreach.user_email (from the same Gmail account)
   send_in_dryrun: true         # these go to you, so they send even while outreach is in dryrun
   digest_hour: 8               # local (IST): the digest goes with the first run after this hour

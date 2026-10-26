@@ -736,7 +736,10 @@ def _notify_cycle() -> dict:
         from jobhunter import notify_bot
 
         if not notify_bot.ENABLED:
-            return {"skipped": "notify.email is off"}
+            if not notify_bot.REPLIES:
+                return {"skipped": "notify.email is off"}
+            with _Lock(NOTIFY_LOCK, "notification run"):
+                return {"replies": notify_bot.email_positive_replies()}   # replies only (notify.replies)
         with _Lock(NOTIFY_LOCK, "notification run"):
             return notify_bot.cycle()
     except Exception as e:  # noqa: BLE001

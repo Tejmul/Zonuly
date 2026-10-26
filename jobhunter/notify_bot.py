@@ -59,6 +59,9 @@ log = logging.getLogger(__name__)
 _N = CONFIG.get("notify") or {}
 _O = CONFIG.get("outreach") or {}
 ENABLED = bool(_N.get("email", False))
+# 2026-10-26, Tejmul: "someone replied to my email, I wasn't notified" — every reply from a person,
+# whatever it says, is mailed and shown on the Mac, even while the rest of the bot is off
+REPLIES = bool(_N.get("replies", True))
 EMAIL_TO = str(_N.get("email_to") or _O.get("user_email") or "").strip()
 SEND_IN_DRYRUN = bool(_N.get("send_in_dryrun", True))
 DIGEST_HOUR = int(_N.get("digest_hour", 8))
@@ -287,8 +290,18 @@ def _reply_mail(session, r: Reply) -> EmailMessage:
                 f"{' — ' + e.link if e.link else ''}{' — ' + e.needs_action if e.needs_action else ''}" for e in evs) + "\n"
     except Exception:  # noqa: BLE001
         pass
+    mood = {"positive": "and it reads as a yes", "negative": "and it reads as a no",
+            "closed": "and it closes the door for now", "neutral": "with no yes or no in it"}.get(r.sentiment or "", "")
+    if r.sentiment != "positive":
+        return compose("reply", f"Reply: {who} at {cname}", (
+            f"{who}{role} at {cname} replied — {mood}.\n"
+            f"From: {r.from_addr}\n\n"
+            f"What they wrote:\n{quoted}\n\n"
+            f"How it reads: {reason.strip() or '-'}\n"
+            f"Next: {action.strip() or 'Answer them from Gmail, in the same thread.'}\n{events}\n"
+            f"---\n{orig}\n\n---\n{HELP}"))
     body = (
-        f"{who}{role} at {cname} replied — and it reads as a yes.\n"
+        f"{who}{role} at {cname} replied — {mood}.\n"
         f"From: {r.from_addr}\n\n"
         f"What they wrote:\n{quoted}\n\n"
         f"Why it was marked positive: {reason.strip() or '-'}\n{events}\n"
@@ -303,14 +316,17 @@ def _reply_mail(session, r: Reply) -> EmailMessage:
 
 
 def email_positive_replies(*, now: datetime | None = None, force_dry: bool = False) -> dict:
-    """Every positive reply from the last REPLY_LOOKBACK_H hours not yet mailed, one mail each."""
+    """Every reply from the last REPLY_LOOKBACK_H hours not yet mailed, one mail each — the
+    positive ones only, unless notify.replies (then every one: 2026-10-26)."""
     since = utcnow() - timedelta(hours=REPLY_LOOKBACK_H)
     with _state() as st:
         done = set(st["replies_emailed"])
     out = {"mailed": 0, "errors": []}
     with get_session() as s:
-        rows = s.exec(select(Reply).where(Reply.sentiment == "positive", col(Reply.received_at) >= since)
-                      .order_by(col(Reply.received_at))).all()
+        q = select(Reply).where(col(Reply.received_at) >= since)
+        if not REPLIES:
+            q = q.where(Reply.sentiment == "positive")
+        rows = s.exec(q.order_by(col(Reply.received_at))).all()
         for r in rows:
             if r.id in done:
                 continue
@@ -319,7 +335,8 @@ def email_positive_replies(*, now: datetime | None = None, force_dry: bool = Fal
                 out["mailed"] += 1
                 with _state() as st:
                     st["replies_emailed"] = _trim_list(st["replies_emailed"] + [r.id], 2000)
-                _macos("Positive reply", f"{r.from_addr[:60]} — details in your mail")
+                _macos("Positive reply" if r.sentiment == "positive" else "New reply",
+                       f"{r.from_addr[:60]} — details in your mail")
             else:
                 out["errors"].append(res.get("error"))
     return out

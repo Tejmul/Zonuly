@@ -10,6 +10,8 @@ from __future__ import annotations
 import base64
 import logging
 import re
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 from sqlmodel import col, func, select
@@ -18,6 +20,8 @@ from jobhunter.db import Email, Reply, get_session, init_db, utcnow
 from jobhunter.outreach import gmail
 
 log = logging.getLogger(__name__)
+
+FROM_DOMAIN_DAYS = 30   # mail from a recipient's company is read for this long after we wrote
 
 CLASSIFY_SYSTEM = """You classify replies to a job-seeker's cold referral request.
 You are conservative: if the reply is ambiguous, automated, or you are unsure, choose NEUTRAL.
@@ -224,10 +228,29 @@ def poll(limit: int = 400) -> dict:
     return stats
 
 
+def _when(msg: dict) -> datetime | None:
+    """A message's Date header as naive UTC, like Email.sent_at."""
+    try:
+        d = parsedate_to_datetime(msg.get("date") or "")
+    except (TypeError, ValueError):
+        return None
+    return d.astimezone(timezone.utc).replace(tzinfo=None) if d.tzinfo else d
+
+
 def _poll_imap(stats: dict, limit: int = 400) -> dict:
-    """The same walk over IMAP: every sent thread, every message in it that is not ours.
-    A bounce marks the email failed (the address is dead) and is never classified —
-    a mailer-daemon is not a person saying no."""
+    """The same walk over IMAP, in two passes.
+
+    1. every sent thread, every message in it that is not ours. A bounce marks the email
+       failed (the address is dead) and is never classified — a mailer-daemon is not a
+       person saying no.
+    2. mail from the recipients' companies outside those threads (2026-10-26: CynLr's
+       engineer forwarded the ask to HR, who answered in a new thread). One search per
+       company domain — per address for a personal one — for mail sent in the last
+       FROM_DOMAIN_DAYS. A message is filed under the mail its References name; otherwise
+       under the latest mail to that domain sent before it. Machine mail (newsletters, job
+       alerts, auto-replies, no-reply senders) is skipped."""
+    from jobhunter.guardrails import FREEMAIL
+
     if not gmail.configured():
         return {**stats, "error": gmail.status()["hint"]}
 
@@ -237,16 +260,25 @@ def _poll_imap(stats: dict, limit: int = 400) -> dict:
                 col(Email.status).in_(["sent", "replied"]), col(Email.gmail_thread_id).is_not(None)
             ).order_by(col(Email.sent_at).desc()).limit(limit)
         ).all()
-        threads = [(e.id, e.gmail_thread_id, e.to_email, e.gmail_message_id) for e in sent]
+        threads = [(e.id, e.gmail_thread_id, e.to_email, e.gmail_message_id, e.sent_at) for e in sent
+                   if not str(e.gmail_thread_id).startswith("dryrun:")]
         known = {
             r.gmail_message_id for r in session.exec(
                 select(Reply).where(col(Reply.gmail_message_id).is_not(None))
             ).all()
         }
 
-    for email_id, thread_id, to_email, message_id in threads:
-        if str(thread_id).startswith("dryrun:"):
-            continue
+    def record(email_id: int, msg: dict, where: str) -> None:
+        body = _strip_quoted(msg["text"])
+        if not body:
+            return
+        sentiment = record_reply(email_id, body, sender=msg["from"], message_id=msg["id"])["sentiment"]
+        known.add(msg["id"])
+        stats["new_replies"] += 1
+        stats[sentiment] += 1
+        log.info("reply (%s) to email %s from %s -> %s", where, email_id, msg["from"], sentiment)
+
+    for email_id, thread_id, to_email, message_id, sent_at in threads:
         stats["threads_checked"] += 1
         try:
             messages = gmail.thread_messages(str(thread_id), message_id=message_id)
@@ -272,14 +304,40 @@ def _poll_imap(stats: dict, limit: int = 400) -> dict:
                 stats["bounced"] += 1
                 log.warning("bounce on thread %s (%s)", thread_id, to_email)
                 continue
-            body = _strip_quoted(msg["text"])
-            if not body:
+            record(email_id, msg, "thread")
+
+    # pass 2: the companies' mail outside our threads
+    recent = utcnow() - timedelta(days=FROM_DOMAIN_DAYS)
+    by_who: dict[str, list[tuple]] = {}
+    for t in threads:
+        email_id, _, to_email, message_id, sent_at = t
+        if not sent_at or sent_at < recent or "@" not in (to_email or ""):
+            continue
+        addr = to_email.strip().lower()
+        dom = addr.rsplit("@", 1)[1]
+        by_who.setdefault(addr if dom in FREEMAIL else dom, []).append(t)
+    ours = {m.strip("<>"): t[0] for t in threads for m in [t[3] or ""] if m.startswith("<")}
+    for who, mails in by_who.items():
+        mails.sort(key=lambda t: t[4])                  # oldest first
+        try:
+            messages = gmail.messages_from(who, mails[0][4] - timedelta(days=1))
+        except gmail.GmailNotConfigured as e:
+            return {**stats, "error": str(e)}
+        except Exception as e:  # noqa: BLE001
+            log.debug("mail from %s unreadable: %s", who, e)
+            continue
+        stats["domains_checked"] = stats.get("domains_checked", 0) + 1
+        for msg in messages:
+            if msg["is_ours"] or msg["is_bounce"] or msg.get("is_auto") or msg["id"] in known:
                 continue
-            sentiment = record_reply(email_id, body, sender=msg["from"] or to_email, message_id=msg["id"])["sentiment"]
-            known.add(msg["id"])
-            stats["new_replies"] += 1
-            stats[sentiment] += 1
-            log.info("reply on thread %s from %s -> %s", thread_id, msg["from"], sentiment)
+            named = [ours[r] for r in re.findall(r"<([^>]+)>", msg.get("refs") or "") if r in ours]
+            if named:
+                record(named[-1], msg, "forwarded")
+                continue
+            when = _when(msg)
+            before = [t for t in mails if when and t[4] <= when]
+            if before:
+                record(before[-1][0], msg, "same company")
 
     log.info("reply poll: %s", stats)
     return stats

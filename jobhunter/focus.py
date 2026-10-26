@@ -37,7 +37,7 @@ from sqlmodel import col, or_, select
 
 from jobhunter import CONFIG, admission
 from jobhunter.db import Company, CompanyDecision, Contact, Email, Setting, get_session, init_db, utcnow
-from jobhunter.outreach import suppress
+from jobhunter.outreach import sender, suppress
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +47,7 @@ PER_COMPANY = suppress.FOCUS_PER_COMPANY
 MIN_READY = int(_F.get("min_ready", 2))
 GOAL = suppress.FOCUS_GOAL
 _WAITING = ("draft", "approved", "sending")
+DUD_AFTER = 3   # rejected drafts, with none ever approved, before a company leaves the circle
 TECH = {"senior_engineer": 0, "engineer": 1, "eng_manager": 2}
 
 
@@ -96,10 +97,40 @@ def _asks(session, cid: int) -> list[str]:
         Email.company_id == cid, Email.kind == "cold", col(Email.status).in_(["draft", *suppress._LIVE]))).all())
 
 
-def _blocked(c: Company | None) -> bool:
+def _rejected(session, cid: int, since: datetime | None = None) -> int:
+    """Cold drafts at the company the review rejected (outreach/autoreview.py), since `since`."""
+    q = select(Email.id).where(Email.company_id == cid, Email.kind == "cold", Email.status == "rejected",
+                               col(Email.error).like("auto-review:%"))
+    if since is not None:
+        q = q.where(col(Email.created_at) >= since)
+    return len(session.exec(q).all())
+
+
+def _blocked(s, c: Company | None) -> bool:
     if c is None or c.status or c.overrated or c.do_not_contact or c.tier == "reject":
         return True
-    return not c.list_key and bool(admission.body_shop(c.name, industry=c.description))  # the drafter refuses them
+    if not c.list_key and admission.body_shop(c.name, industry=c.description):
+        return True       # the drafter refuses staffing agencies and body shops
+    # no fresher role there to ask about: every draft would be rejected (outreach/autoreview.py)
+    return role_for(s, c) is False
+
+
+def role_for(s, c: Company) -> int | None | bool:
+    """The role a draft at the company asks about: its best bet, or — when that one is senior or
+    wants 3+ years — its best fresher role. None when no role is on file (the drafter frames a
+    fresher ask); False when every role there is senior."""
+    from jobhunter.db import Job
+    from jobhunter.outreach import autoreview
+
+    best = s.get(Job, c.best_selection_job_id) if c.best_selection_job_id else None
+    if best is not None and not autoreview.role_problem(best):
+        return best.id
+    jobs = s.exec(select(Job).where(Job.company_id == c.id, col(Job.status).not_in(["closed", "expired", "dead"]))
+                  .order_by(col(Job.selection_score).desc().nulls_last(), col(Job.id).desc())).all()
+    ok = [j for j in jobs if not autoreview.role_problem(j)]
+    if ok:
+        return ok[0].id
+    return False if jobs or best is not None else None
 
 
 def _candidates(s):
@@ -153,9 +184,12 @@ def pick(day: date | None = None) -> dict:
         for m in circle["companies"]:
             c = s.get(Company, m["company_id"])
             asks = _asks(s, m["company_id"])
-            ready[m["company_id"]] = [] if _blocked(c) else sendable(s, m["company_id"])
+            blocked = _blocked(s, c)
+            ready[m["company_id"]] = [] if blocked else sendable(s, m["company_id"])
             pending = sum(1 for x in asks if x in _WAITING)
-            finished = _blocked(c) or len(asks) >= GOAL or not ready[m["company_id"]]
+            # every draft there rejected and none ever passed: the role or the company is wrong for us
+            dud = _rejected(s, m["company_id"]) >= DUD_AFTER and not any(x in suppress._LIVE for x in asks)
+            finished = blocked or dud or len(asks) >= GOAL or not ready[m["company_id"]]
             if finished and not pending:
                 done.append(m["company_id"])
             else:
@@ -163,26 +197,46 @@ def pick(day: date | None = None) -> dict:
         room: dict[int, int] = {}
 
         def share(cid: int) -> int:
-            # a day's share: what is waiting plus who is left, never past the goal or per_company
-            asks = _asks(s, cid)
-            pending = sum(1 for x in asks if x in _WAITING)
-            return max(0, min(PER_COMPANY, pending + len(ready[cid]), GOAL - (len(asks) - pending)))
+            # the day's share: new people only — mail already waiting goes before this day —
+            # never past the goal or per_company
+            return max(0, min(PER_COMPANY, len(ready[cid]), GOAL - len(_asks(s, cid))))
+
+        # a foreign time zone's morning holds only so many sends (sender.abroad_per_day):
+        # what the circle can really send that day is counted per zone
+        tz: dict[int, str] = {}
+        abroad = sender.abroad_per_day()
+        # approved mail into a foreign morning from outside the circle goes first: it is counted
+        backlog: dict[str, int] = {}
+        mine = {m["company_id"] for m in members}
+        for e in s.exec(select(Email).where(Email.kind == "cold", col(Email.status).in_(["approved", "sending"]))).all():
+            if e.company_id not in mine:
+                z = sender.company_tz(s.get(Company, e.company_id))
+                if z != sender._LOCAL_TZ:
+                    backlog[z] = backlog.get(z, 0) + 1
+
+        def capacity() -> int:
+            by: dict[str, int] = {}
+            for cid, n in room.items():
+                by[tz[cid]] = by.get(tz[cid], 0) + n
+            return sum(n if z == sender._LOCAL_TZ else min(n, max(0, abroad - backlog.get(z, 0)))
+                       for z, n in by.items())
 
         for m in members:
             room[m["company_id"]] = share(m["company_id"])
+            tz[m["company_id"]] = sender.company_tz(s.get(Company, m["company_id"]))
         # refill the circle to its size — and past it on a day its members cannot fill the cap
-        if len(members) < COMPANIES or sum(room.values()) < cap:
+        if len(members) < COMPANIES or capacity() < cap:
             since = utcnow() - timedelta(days=suppress.COMPANY_COOLDOWN_DAYS)
             asked = set(s.exec(select(Email.company_id).where(
                 Email.kind == "cold", col(Email.status).in_(list(suppress._LIVE)), col(Email.created_at) >= since)).all())
             inside = {m["company_id"] for m in members} | set(done)
             for d in _candidates(s):
-                if len(members) >= COMPANIES and sum(room.values()) >= cap:
+                if len(members) >= COMPANIES and capacity() >= cap:
                     break
                 if d.company_id in inside or d.company_id in asked:
                     continue
                 c = s.get(Company, d.company_id)
-                if _blocked(c):
+                if _blocked(s, c):
                     continue
                 r = sendable(s, c.id)
                 if len(r) < MIN_READY:
@@ -191,16 +245,21 @@ def pick(day: date | None = None) -> dict:
                 members.append({"company_id": c.id, "name": c.name, "pool": d.pool, "rank": d.rank,
                                 "joined": key})
                 room[c.id] = share(c.id)
+                tz[c.id] = sender.company_tz(c)
                 inside.add(c.id)
         # share the day round-robin: one more per company per pass, up to its room
         take = {m["company_id"]: 0 for m in members}
+        per_tz = dict(backlog)
         slots, moved = 0, True
         while slots < cap and moved:
             moved = False
             for m in members:
                 cid = m["company_id"]
-                if slots < cap and take[cid] < room[cid]:
+                z = tz[cid]
+                full = z != sender._LOCAL_TZ and per_tz.get(z, 0) >= abroad
+                if slots < cap and take[cid] < room[cid] and not full:
                     take[cid] += 1
+                    per_tz[z] = per_tz.get(z, 0) + 1
                     slots += 1
                     moved = True
         targets = [{**m, "ready": len(ready[m["company_id"]]), "take": take[m["company_id"]],
@@ -229,9 +288,8 @@ def circle() -> dict:
 
 
 def prepare(day: date | None = None) -> dict:
-    """Pick the day's plan and draft for it: each target gets drafts until it has `take`
-    waiting (drafted or approved, not yet sent). Idempotent, and a backlog nobody approved
-    is not added to."""
+    """Pick the day's plan and draft for it: each target gets `take` drafts, counted from
+    when the plan was made. Idempotent: a run that finds them written does nothing."""
     from jobhunter.outreach import drafter
 
     plan = pick(day)
@@ -239,10 +297,16 @@ def prepare(day: date | None = None) -> dict:
     for t in plan["targets"]:
         cid = t["company_id"]
         with get_session() as s:
-            waiting = sum(1 for x in _asks(s, cid) if x in _WAITING)
-            people = [p.id for p in sendable(s, cid)][:max(0, t["take"] - waiting)]
+            have = len(s.exec(select(Email.id).where(
+                Email.company_id == cid, Email.kind == "cold", col(Email.status).in_(["draft", *suppress._LIVE]),
+                col(Email.created_at) >= _since(plan))).all())
+            # a rejected draft is replaced by the next person — up to `take` times a day, so a
+            # company whose drafts all fail does not use up its people in one evening
+            spare = t["take"] - _rejected(s, cid, _since(plan))
+            people = [p.id for p in sendable(s, cid)][:max(0, min(t["take"] - have, spare))]
             c = s.get(Company, cid)
-            job_id = c.best_selection_job_id if c else None
+            job_id = role_for(s, c) if c else None
+            job_id = job_id or None
         for pid in people:
             try:
                 r = drafter.draft_for(pid, job_id, mark_polish=True)

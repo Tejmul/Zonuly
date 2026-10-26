@@ -23,6 +23,7 @@ import logging
 import re
 import smtplib
 import time
+from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, parseaddr, parsedate_to_datetime
 from pathlib import Path
@@ -190,6 +191,30 @@ def send(to: str, subject: str, body: str, *, in_reply_to: str | None = None) ->
     return {"id": message_id, "threadId": thread_id}
 
 
+def sent_already(to: str, subject: str, since: datetime) -> dict | None:
+    """The mail to `to` with this exact subject in Sent Mail since `since`, as send() returns
+    it — or None. A connection that drops after Gmail took the mail looks like a failure; the
+    retry asks here first, so a retried mail never goes twice (2026-10-26)."""
+    addr = re.sub(r"[^a-z0-9@._+-]", "", (to or "").lower())
+    if not addr:
+        return None
+    with _imap() as conn:
+        conn.select('"[Gmail]/Sent Mail"', readonly=True)
+        _, data = conn.search(None, "X-GM-RAW", f'"to:({addr}) after:{since:%Y/%m/%d}"')
+        for num in reversed((data[0] or b"").split()):
+            _, fetched = conn.fetch(num, "(X-GM-THRID BODY.PEEK[HEADER.FIELDS (SUBJECT MESSAGE-ID)])")
+            if not fetched or not isinstance(fetched[0], tuple):
+                continue
+            meta, raw = fetched[0]
+            head = email_lib.message_from_bytes(raw, policy=email.policy.default)
+            if " ".join(str(head.get("Subject") or "").split()) != " ".join((subject or "").split()):
+                continue
+            m = re.search(rb"X-GM-THRID (\d+)", meta)
+            mid = str(head.get("Message-ID") or "").strip()
+            return {"id": mid, "threadId": m.group(1).decode() if m else mid}
+    return None
+
+
 def _thread_of(message_id: str, attempts: int = 4) -> str | None:
     """Gmail's thread id for a message we just sent, from the Sent Mail copy."""
     for i in range(attempts):
@@ -210,70 +235,74 @@ def _thread_of(message_id: str, attempts: int = 4) -> str | None:
     return None
 
 
+def _read(conn, num: bytes, **extra) -> dict | None:
+    _, fetched = conn.fetch(num, "(X-GM-MSGID BODY.PEEK[])")
+    if not fetched or not isinstance(fetched[0], tuple):
+        return None
+    meta, raw = fetched[0]
+    gm = re.search(rb"X-GM-MSGID (\d+)", meta)
+    msg = email_lib.message_from_bytes(raw, policy=email.policy.default)
+    sender = (msg.get("From") or "").strip()
+    return {"id": gm.group(1).decode() if gm else (msg.get("Message-ID") or f"imap:{num.decode()}"),
+            "from": sender, "date": msg.get("Date"), "text": _plain_text(msg), "is_bounce": _is_bounce(msg),
+            "is_ours": parseaddr(sender)[1].lower() == ADDRESS.lower(), "is_auto": _is_auto(msg),
+            "refs": f"{msg.get('In-Reply-To') or ''} {msg.get('References') or ''}", **extra}
+
+
 def thread_messages(thread_id: str, *, message_id: str | None = None) -> list[dict]:
     """Every message Gmail files under a thread, oldest first, as
-    {id, from, date, text, is_bounce, is_ours}. `id` is Gmail's X-GM-MSGID, stable
-    across polls, so a reply is recorded once.
-
-    With `message_id` (our mail's Message-ID), anything that references it is read too,
-    whatever thread Gmail filed it under — a colleague answering from another address
-    with a new subject, a bounce Gmail did not thread."""
+    {id, from, date, text, is_bounce, is_ours, is_auto, refs}. `id` is Gmail's X-GM-MSGID,
+    stable across polls, so a reply is recorded once. (`message_id` is kept for callers;
+    Gmail's IMAP cannot search the References header, so mail outside the thread is found
+    by messages_from instead.)"""
     out: list[dict] = []
     with _imap() as conn:
         conn.select('"[Gmail]/All Mail"', readonly=True)
-        if thread_id.isdigit():
-            _, data = conn.search(None, "X-GM-THRID", thread_id)
-        else:
-            # not yet resolved to a Gmail thread: anything referencing our Message-ID
-            _, data = conn.search(None, "OR", "HEADER", "In-Reply-To", thread_id, "HEADER", "References", thread_id)
-        nums = list(dict.fromkeys((data[0] or b"").split()))
-        ref = message_id if (message_id or "").startswith("<") else None
-        if ref and ref != thread_id:
+        if not thread_id.isdigit():
+            # not yet resolved to a Gmail thread: find our mail by its Message-ID, then its thread
+            _, data = conn.search(None, "X-GM-RAW", f'"rfc822msgid:{thread_id.strip("<>")}"')
+            nums = (data[0] or b"").split()
+            if not nums:
+                return []
+            _, fetched = conn.fetch(nums[-1], "(X-GM-THRID)")
+            m = re.search(rb"X-GM-THRID (\d+)", fetched[0] if isinstance(fetched[0], bytes) else fetched[0][0])
+            if not m:
+                return []
+            thread_id = m.group(1).decode()
+        _, data = conn.search(None, "X-GM-THRID", thread_id)
+        for num in dict.fromkeys((data[0] or b"").split()):
+            m = _read(conn, num)
+            if m:
+                out.append(m)
+    out.sort(key=_when)
+    return out
+
+
+def messages_from(who: str, since: datetime) -> list[dict]:
+    """Mail from `who` (a domain, or one address) since `since`, in All Mail and in Spam,
+    oldest first — the same dicts as thread_messages. 2026-10-26: the engineer at CynLr
+    forwarded the ask to HR, and HR answered in a new thread with a new subject, which no
+    thread walk sees. Gmail's own search (X-GM-RAW) is used: IMAP's HEADER search cannot
+    read References on Gmail. A reply Gmail filed as spam is still a reply (2026-10-14)."""
+    who = re.sub(r"[^a-z0-9@._+-]", "", (who or "").lower())
+    if not who:
+        return []
+    raw = f'"from:({who}) after:{since:%Y/%m/%d}"'
+    out: list[dict] = []
+    with _imap() as conn:
+        for box, extra in (('"[Gmail]/All Mail"', {}), ('"[Gmail]/Spam"', {"spam": True})):
             try:
-                _, more = conn.search(None, "OR", "HEADER", "In-Reply-To", ref, "HEADER", "References", ref)
-                nums += [n for n in (more[0] or b"").split() if n not in nums]
+                typ, _ = conn.select(box, readonly=True)
+                if typ != "OK":
+                    continue
+                _, data = conn.search(None, "X-GM-RAW", raw)
             except imaplib.IMAP4.error as e:
-                log.debug("reference search failed: %s", e)
-        for num in nums:
-            _, fetched = conn.fetch(num, "(X-GM-MSGID BODY.PEEK[])")
-            if not fetched or not isinstance(fetched[0], tuple):
+                log.debug("search %s in %s failed: %s", raw, box, e)
                 continue
-            meta, raw = fetched[0]
-            gm = re.search(rb"X-GM-MSGID (\d+)", meta)
-            msg = email_lib.message_from_bytes(raw, policy=email.policy.default)
-            sender = (msg.get("From") or "").strip()
-            out.append({
-                "id": gm.group(1).decode() if gm else (msg.get("Message-ID") or f"imap:{num.decode()}"),
-                "from": sender,
-                "date": msg.get("Date"),
-                "text": _plain_text(msg),
-                "is_bounce": _is_bounce(msg),
-                "is_ours": parseaddr(sender)[1].lower() == ADDRESS.lower(),
-            })
-        # All Mail holds every archived / filtered / labelled message, but not Spam: a reply
-        # Gmail filed as spam is still a reply (2026-10-14). Only messages that reference
-        # our own Message-ID are read there.
-        if ref:
-            try:
-                typ, _ = conn.select('"[Gmail]/Spam"', readonly=True)
-                if typ == "OK":
-                    _, spam = conn.search(None, "OR", "HEADER", "In-Reply-To", ref, "HEADER", "References", ref)
-                    for num in (spam[0] or b"").split():
-                        _, fetched = conn.fetch(num, "(X-GM-MSGID BODY.PEEK[])")
-                        if not fetched or not isinstance(fetched[0], tuple):
-                            continue
-                        meta, raw = fetched[0]
-                        gm = re.search(rb"X-GM-MSGID (\d+)", meta)
-                        msg = email_lib.message_from_bytes(raw, policy=email.policy.default)
-                        sender = (msg.get("From") or "").strip()
-                        mid = gm.group(1).decode() if gm else (msg.get("Message-ID") or f"spam:{num.decode()}")
-                        if any(o["id"] == mid for o in out):
-                            continue
-                        out.append({"id": mid, "from": sender, "date": msg.get("Date"), "text": _plain_text(msg),
-                                    "is_bounce": _is_bounce(msg),
-                                    "is_ours": parseaddr(sender)[1].lower() == ADDRESS.lower(), "spam": True})
-            except imaplib.IMAP4.error as e:
-                log.debug("spam folder search failed: %s", e)
+            for num in (data[0] or b"").split():
+                m = _read(conn, num, **extra)
+                if m and not any(o["id"] == m["id"] for o in out):
+                    out.append(m)
     out.sort(key=_when)
     return out
 
@@ -310,6 +339,20 @@ def _plain_text(msg) -> str:
 
             return html_to_text(_text_of(part)).strip()
     return ""
+
+
+_ROBOT = re.compile(r"^(no-?reply|do-?not-?reply|donotreply|notifications?|newsletters?|news|marketing|"
+                    r"updates|alerts?|digest|mailer|bounces?)\b", re.I)
+
+
+def _is_auto(msg) -> bool:
+    """Sent by a machine, not a person: a newsletter, a job alert, an ATS acknowledgement,
+    an out-of-office. Never a reply to a referral ask."""
+    auto = (msg.get("Auto-Submitted") or "no").strip().lower()
+    prec = (msg.get("Precedence") or "").strip().lower()
+    local = parseaddr(msg.get("From") or "")[1].split("@")[0]
+    return (auto != "no" or prec in ("bulk", "list", "junk") or bool(msg.get("List-Unsubscribe"))
+            or bool(msg.get("List-Id")) or bool(_ROBOT.match(local)))
 
 
 def _is_bounce(msg) -> bool:
@@ -552,7 +595,7 @@ def setup_status() -> dict:
 
 
 __all__ = [
-    "AUTH", "ADDRESS", "DISPLAY_NAME", "GmailNotConfigured", "build_message", "send", "thread_messages", "verify",
+    "AUTH", "ADDRESS", "DISPLAY_NAME", "GmailNotConfigured", "build_message", "send", "sent_already", "thread_messages", "messages_from", "verify",
     "install_app_password", "configured", "authorized", "status", "service", "authorize", "my_address",
     "install_credentials", "validate_client_json", "disconnect", "setup_status", "from_header",
 ]

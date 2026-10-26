@@ -182,7 +182,8 @@ def _world(eng, *, sentiment="positive", age_h=1, name="Acme AI"):
         return em.id
 
 
-def test_positive_reply_mailed_once_with_context(bot):
+def test_positive_reply_mailed_once_with_context(bot, monkeypatch):
+    monkeypatch.setattr(notify_bot, "REPLIES", False)
     _world(bot["engine"])
     _world(bot["engine"], age_h=100, name="Old Co")     # older than the lookback: no backlog mail
     _world(bot["engine"], sentiment="negative", name="No Co")
@@ -191,6 +192,15 @@ def test_positive_reply_mailed_once_with_context(bot):
     assert "Positive reply: Priya Sharma at Acme AI" in eml
     assert "Happy to refer you" in eml and "Hi Priya, I built" in eml and "send the resume" in eml
     assert "> Hi Priya" not in eml.split("What they wrote:")[1].split("Why it")[0]   # quoted original stripped
+    assert notify_bot.email_positive_replies()["mailed"] == 0
+
+
+def test_with_notify_replies_every_reply_is_mailed(bot, monkeypatch):
+    """2026-10-26: "someone replied to my email, I wasn't notified" — a no is news too."""
+    monkeypatch.setattr(notify_bot, "REPLIES", True)
+    _world(bot["engine"], sentiment="negative", name="No Co")
+    assert notify_bot.email_positive_replies()["mailed"] == 1
+    assert "Reply: " in _emls(bot)[0] and "reads as a no" in _emls(bot)[0]
     assert notify_bot.email_positive_replies()["mailed"] == 0
 
 

@@ -105,13 +105,15 @@ def check(body: str, *, corpus: str, signature: str | None = None,
           address_confidence: str | None = None, affiliation: str | None = None,
           affiliation_evidence: str | None = None, forbidden: list[str] | None = None,
           exclude: list[str] | None = None, subject: str | None = None,
-          word_band: tuple[int, int] | None = None) -> GateResult:
+          word_band: tuple[int, int] | None = None, roles: list[str] | None = None) -> GateResult:
     """Run every gate over `body` against the facts in `corpus`.
 
     `forbidden` are skills the needs brief marked uncovered (needs.forbidden_terms): the
     body naming one is a claim the resume cannot back, whatever the corpus contains.
     `word_band` overrides the configured length band (the user's direct_intro pattern
-    carries a track record and runs longer)."""
+    carries a track record and runs longer). `roles` are the titles of the role asked about:
+    naming the role ("the Full stack AI Engineer opening") is not claiming its skills
+    (2026-10-26, GoComet: every draft was rejected for "Full-stack")."""
     r = GateResult()
     text = _body_only(body or "", signature)
     norm_corpus = " " + _normalise(corpus) + " "
@@ -120,8 +122,11 @@ def check(body: str, *, corpus: str, signature: str | None = None,
     if forbidden:
         from jobhunter.skills import pattern
 
+        claims = text
+        for title in sorted({t.strip() for t in roles or [] if t and t.strip()}, key=len, reverse=True):
+            claims = re.sub(re.escape(title), " ", claims, flags=re.I)
         for skill in forbidden:
-            if re.search(pattern(skill), text, re.I):
+            if re.search(pattern(skill), claims, re.I):
                 r.forbidden_hits.append(skill)
         if r.forbidden_hits:
             r.flags.append({"kind": "uncovered_claim",
@@ -236,6 +241,10 @@ def check(body: str, *, corpus: str, signature: str | None = None,
 # 2026-10-23 (Sarvam): Gmail refused 9 of 24 asks into sarvam.ai as spam (5.7.1). What a spam
 # filter sees before a person does. FLAGS only, like every gate: the human decides.
 
+# 2026-10-26: the circle writes to a company for weeks, three a day. A company's server groups like
+# mail arriving together, so the same-domain checks read mail still to go there (it goes the same
+# day as this one) and mail sent there in the last SAME_DOMAIN_HOURS — not yesterday's.
+SAME_DOMAIN_HOURS = 3
 SIMILAR_AT = 0.8          # token-shingle Jaccard over the message at or above this = a near-duplicate
 SHORTENERS = {"bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd", "buff.ly", "rebrand.ly", "cutt.ly",
               "lnkd.in", "shorturl.at", "tiny.cc", "rb.gy", "t.ly", "s.id", "bl.ink", "short.io", "linktr.ee"}
@@ -302,11 +311,22 @@ def deliverability(subject: str, body: str, *, first_name: str | None = None, si
         flag("broken characters (mojibake) in the subject or body")
     message = _body_only(body or "", signature)
     mine = shingles(message)
+    from jobhunter.guardrails import FREEMAIL
+
     dom = (to_email or "").rsplit("@", 1)[-1].lower() if "@" in (to_email or "") else ""
+    if dom in FREEMAIL:
+        dom = ""          # gmail.com is a thousand people, not one company's mail server
     near, near_here, best, same_subject, same_domain = 0, 0, 0.0, 0, 0
+    from datetime import timedelta
+
+    from jobhunter.db import utcnow
+
+    recent = utcnow() - timedelta(hours=SAME_DOMAIN_HOURS)
     for o in sent or []:
         sim = jaccard(mine, shingles(_body_only(o.get("body") or "", signature)))
-        here = bool(dom and str(o.get("to") or "").lower().endswith("@" + dom))
+        # an item with no "at" (not sent yet, or an old caller) always counts
+        here = bool(dom and str(o.get("to") or "").lower().endswith("@" + dom)) and (
+            o.get("at") is None or o["at"] >= recent)
         best = max(best, sim)
         near += sim >= SIMILAR_AT
         near_here += here and sim >= SIMILAR_AT
@@ -324,8 +344,11 @@ def deliverability(subject: str, body: str, *, first_name: str | None = None, si
     if same_subject:
         flag(f'the subject "{subject}" already went to {same_subject} other inbox(es) at {dom}')
     if same_domain >= 3:
-        flag(f"{same_domain} other asks to {dom} are approved or sent: one company's mail server sees every "
-             "inbox, so spread them over days")
+        # a note, not a spam signal: the spread over days is enforced where mail is planned and
+        # sent (focus.py's daily share, suppress.domain_cap — three a day), 2026-10-26
+        flags.append({"kind": "domain_volume",
+                      "detail": f"{same_domain} other asks to {dom} are approved or sent: one company's mail "
+                                "server sees every inbox, so they go at most three a day"})
     return flags
 
 

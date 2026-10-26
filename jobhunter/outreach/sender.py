@@ -167,6 +167,7 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
                 session.add(email)
                 session.commit()
         to, subject, body = email.to_email, email.subject, email.body
+        retried = retries(email.error) > 0
         thread_id = email.gmail_thread_id
         candidate_id = email.candidate_id
         guessed = (email.address_confidence or "verified") != "verified"
@@ -199,7 +200,9 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
 
     try:
         if SEND_MODE == "gmail" and gmail.AUTH == "app_password":
-            result = gmail.send(to, subject, body, in_reply_to=in_reply_to)
+            # a retry first asks Sent Mail: the drop may have come after Gmail took the mail
+            result = (gmail.sent_already(to, subject, utcnow() - timedelta(days=3)) if retried else None) \
+                or gmail.send(to, subject, body, in_reply_to=in_reply_to)
         elif SEND_MODE == "gmail":
             svc = gmail.service()
             result = svc.users().messages().send(userId="me", body=_build_message(to, subject, body, thread_id)).execute()
@@ -319,10 +322,20 @@ def recipient_tz(session, email: Email) -> str:
     on file) is the local zone; a US / UK / EU / remote-first company is that region's."""
     from jobhunter.db import Company
 
-    c = session.get(Company, email.company_id)
+    return company_tz(session.get(Company, email.company_id))
+
+
+def company_tz(c) -> str:
     if c is None or (c.hq_region or "india") == "india" or (c.city or "").lower().startswith(("bengaluru", "hyderabad")):
         return _LOCAL_TZ
     return _TZ_BY_REGION.get(c.hq_region, _LOCAL_TZ)
+
+
+def abroad_per_day() -> int:
+    """Sends one foreign time zone's morning holds (recipient_hours, min_gap_minutes apart,
+    the gap jittered up to 50%): the most mail a day that should be planned into it."""
+    span = (int(RECIPIENT_HOURS[1]) - int(RECIPIENT_HOURS[0])) * 60
+    return max(1, int(span / (MIN_GAP_MINUTES * 1.25)) - 1)
 
 
 def _local(now: datetime, tz: str) -> datetime:

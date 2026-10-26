@@ -474,6 +474,7 @@ class Contract:
     link: str | None = None              # the one link the body carries (the role, or the gift's)
     record: list[dict] = field(default_factory=list)   # direct_intro: 3–4 proofs, the role's first
     to_email: str | None = None                        # picks the recipient's wording (variant_index)
+    variant_offset: int = 0              # the drafter steps past a wording a colleague already got
     more_experience: str | None = None   # evidence the role asks for more experience than he has
     structure: str | None = None
     structure_why: str | None = None
@@ -734,7 +735,7 @@ def variant_index(c: Contract, n: int) -> int:
     import hashlib
 
     key = (getattr(c, "to_email", None) or f"{c.first_name}|{c.company}|{c.recipient_role}").lower()
-    return int(hashlib.sha1(key.encode()).hexdigest(), 16) % max(1, n)
+    return (int(hashlib.sha1(key.encode()).hexdigest(), 16) + (c.variant_offset or 0)) % max(1, n)
 
 
 def _direct(c: Contract, me: dict) -> str:
