@@ -47,7 +47,10 @@ CONTACT_COOLDOWN_DAYS = int(_O.get("contact_cooldown_days", 30))
 #: 2026-10-26, Tejmul: a send day goes to a set of target companies, picked the evening
 #: before (jobhunter/focus.py); each may take up to this many cold mails that day
 FOCUS_PER_COMPANY = int((_O.get("focus") or {}).get("per_company", 3))
+FOCUS_GOAL = int((_O.get("focus") or {}).get("asks_per_company", 25))
 FOCUS_KEY = "focus:"
+from jobhunter.guardrails import FREEMAIL  # noqa: E402
+CIRCLE_KEY = FOCUS_KEY + "circle"
 OPT_OUT_LINE = str(_O.get("opt_out_line") or "").strip()
 #: opt-out lines earlier drafts carry (and replies quote): a body with one of these already
 #: has its opt-out line, and a reply quoting one is not asking us to stop
@@ -148,11 +151,22 @@ def focus_companies(session, day: str) -> set[int]:
     return _focus_rows(session, day, day)
 
 
+def circle_ids(session) -> set[int]:
+    """The companies in the circle now (focus.py): each is written to until FOCUS_GOAL asks."""
+    import json
+
+    row = session.get(Setting, CIRCLE_KEY)
+    try:
+        return {int(x["company_id"]) for x in json.loads(row.value)["companies"]} if row else set()
+    except (ValueError, KeyError, TypeError):
+        return set()
+
+
 def focus_ids(session, since: str | None = None) -> set[int]:
-    """Target companies for `since` (default today) and every later day already picked."""
+    """The circle, and the target companies for `since` (default today) and every later day picked."""
     from datetime import date
 
-    return _focus_rows(session, since or date.today().isoformat())
+    return _focus_rows(session, since or date.today().isoformat(), date.max.isoformat()) | circle_ids(session)
 
 
 # ------------------------------------------------------------------ cooldown
@@ -187,7 +201,7 @@ def cooldown(session, email: Email) -> str | None:
         co = session.get(Company, email.company_id) if email.company_id else None
         limit = ASKS_OVERRIDES.get((co.name if co else "").lower(), ASKS_PER_COMPANY)
     if email.company_id in focus_ids(session):
-        limit = max(limit, FOCUS_PER_COMPANY)
+        limit = max(limit, FOCUS_GOAL)   # the circle: no waiting for a reply; the domain cap spreads it over days
     if len(ahead) >= limit:
         return (f"{ahead[0]} — at most {limit} open ask(s) per company until a reply or "
                 f"{COMPANY_COOLDOWN_DAYS} days (outreach.asks_per_company)")
@@ -398,8 +412,8 @@ def domain_cap(session, email: Email) -> str | None:
     if email.kind != "cold" or not PER_DOMAIN_DAILY_CAP:
         return None
     dom = _domain(email.to_email)
-    if not dom:
-        return None
+    if not dom or dom in FREEMAIL:
+        return None       # gmail.com is a thousand people, not one company's mail server
     from datetime import datetime, timezone
 
     midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -423,5 +437,5 @@ def dead_addresses(session, company_id: int | None = None) -> set[str]:
 
 
 __all__ = ["blocked", "config_block", "cooldown", "spam_hold", "domain_cap", "domain_cap_for",
-           "focus_companies", "focus_ids", "is_spam_block", "spam_blocks", "with_opt_out", "has_opt_out", "opt_out_lines", "is_opt_out", "opt_out", "mark_bounced",
+           "focus_companies", "focus_ids", "circle_ids", "is_spam_block", "spam_blocks", "with_opt_out", "has_opt_out", "opt_out_lines", "is_opt_out", "opt_out", "mark_bounced",
            "brake", "bounced_in_window", "dead_addresses", "OPT_OUT_LINE"]

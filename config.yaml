@@ -955,9 +955,17 @@ outreach:
   # day goes to up to companies_per_day target companies, picked the evening before, each
   # taking up to per_company cold mails to its best engineers (jobhunter/focus.py)
   focus:
-    companies_per_day: 10
-    per_company: 3
+    companies_per_day: 10 # the circle: companies written to at once (jobhunter/focus.py)
+    per_company: 3        # cold mails into one target company a day
+    asks_per_company: 25  # 2026-10-26: a company stays in the circle until this many of its engineers are asked
     min_ready: 2          # engineers with a real address a company needs to be a target
+  # 2026-10-26, Tejmul: "remove the approval gate and claude will approve from now on" — cold drafts
+  # are approved or rejected by rules (jobhunter/outreach/autoreview.py), every verdict in logs/autoreview.log
+  autoreview:
+    enabled: true
+    start: "2026-10-26T19:00"   # nothing approved during today's send window ("today is ok")
+    min_quality: 75             # the composer's own score (0–100)
+    max_near_duplicate: 0.88    # a draft more alike than this to mail already sent is rejected
   spam_block_cooldown_days: 21     # after a spam block, no cold mail into that domain / company for this long
   spam_pause_hours: 48             # after any spam block, no cold mail at all for this long
   # never written to, whatever the pipeline finds: addresses, whole domains, company names

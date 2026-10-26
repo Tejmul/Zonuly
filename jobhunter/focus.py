@@ -1,22 +1,25 @@
 """The send day's target companies, picked and readied the day before (2026-10-26).
 
 Tejmul: "suppose tomorrow you gonna target Aurva — check the leads and other things today
-itself … once it's done then only go to next company", and then "target 10 companies,
-then it should not be marked as spam". So a send day is not a scatter of one ask per
-company: it goes to up to `outreach.focus.companies_per_day` target companies, each
-taking up to `outreach.focus.per_company` cold mails to its best engineers — 10 × 3
-fills the 25-a-day cap while no company's mail server sees more than three.
+itself … once it's done then only go to next company", then "target 10 companies, then it
+should not be marked as spam", then "create a small circle of 10 companies … send 25 emails
+to each … once all the employees of the 10 companies are fulfilled, we can send to the next 10".
 
-    pick      the evening before (any time after the current send day), the next
-              companies in the decision brain's order (Bengaluru, Hyderabad, Remote by
-              rank) that have at least `min_ready` engineers with a REAL address —
-              confirmed current, never a pattern guess — and nobody asked there in the
-              last company_cooldown_days. Stored in the setting `focus:<day>`, so the
-              plan stays put once made.
-    draft     up to per_company drafts per target, engineers first, verified first, into
-              the review queue. Nothing is approved here: the review gate stays.
-    send      the sender lets a target take per_company asks (outreach/suppress.py);
-              every other rule — the cap, the gaps, the bounce brake — is unchanged.
+    circle    `outreach.focus.companies_per_day` companies (setting `focus:circle`). A company
+              stays until `asks_per_company` of its engineers are asked or nobody with a real
+              address is left there; then the next company in the decision brain's order
+              (the ranked shortlist, then the other "target" companies) with at least
+              `min_ready` sendable engineers and no ask in company_cooldown_days joins.
+    pick      the evening before (any time after the current send day): the day's cap shared
+              across the circle round-robin, at most `per_company` into one company a day —
+              10 × 3 covers the 25 while no mail server sees more than three. Stored in the
+              setting `focus:<day>`, so the plan stays put once made.
+    draft     each target is drafted up to its share for the day (drafts and approvals still
+              waiting count), engineers first, verified first, into the review queue. Nothing
+              is approved here: the review gate stays.
+    send      circle companies may hold up to asks_per_company open asks
+              (outreach/suppress.py); the day's per-domain cap is per_company for that day's
+              targets; the cap, the gaps and the bounce brake are unchanged.
 
 Referrers are bought by the Apify job in the same order (actors.apify.per_company), so the
 companies after today's targets are already being filled for the days after.
@@ -30,7 +33,7 @@ import json
 import logging
 from datetime import date, datetime, timedelta
 
-from sqlmodel import col, select
+from sqlmodel import col, or_, select
 
 from jobhunter import CONFIG, admission
 from jobhunter.db import Company, CompanyDecision, Contact, Email, Setting, get_session, init_db, utcnow
@@ -42,6 +45,8 @@ _F = (CONFIG.get("outreach") or {}).get("focus") or {}
 COMPANIES = int(_F.get("companies_per_day", 10))
 PER_COMPANY = suppress.FOCUS_PER_COMPANY
 MIN_READY = int(_F.get("min_ready", 2))
+GOAL = suppress.FOCUS_GOAL
+_WAITING = ("draft", "approved", "sending")
 TECH = {"senior_engineer": 0, "engineer": 1, "eng_manager": 2}
 
 
@@ -57,14 +62,22 @@ def target_day(today: date | None = None) -> date:
 
 def sendable(session, cid: int) -> list[Contact]:
     """Engineers at the company who can be asked now: confirmed current, a real address,
-    not asked before. Verified first, then seniority."""
+    not asked before, not refused by the drafter. Verified first, then seniority."""
     from jobhunter import guardrails
 
     asked = set(session.exec(select(Email.contact_id).where(
         Email.company_id == cid, Email.kind == "cold", col(Email.status).in_(["draft", *suppress._LIVE]))).all())
+    # the drafter could not write to them (no real first name, no role to ask about): not again
+    asked |= set(session.exec(select(Email.contact_id).where(
+        Email.company_id == cid, Email.status == "incomplete", col(Email.expires_at) > utcnow())).all())
+    # a draft to them was rejected (by hand or by outreach/autoreview.py): fix the cause, not redraft
+    asked |= set(session.exec(select(Email.contact_id).where(
+        Email.company_id == cid, Email.kind == "cold", Email.status == "rejected")).all())
     people = session.exec(select(Contact).where(
         Contact.company_id == cid, col(Contact.role_class).in_(list(TECH)), col(Contact.email).is_not(None))).all()
-    ok = [p for p in people if p.id not in asked and p.confidence != "pattern-guessed" and guardrails.is_ready(p)]
+    # while the bounce brake holds, the sender sends verified addresses only — so count only those
+    real = ("verified",) if suppress.brake(session) else ("verified", "scraped")
+    ok = [p for p in people if p.id not in asked and p.confidence in real and guardrails.is_ready(p)]
     return sorted(ok, key=lambda p: (p.confidence != "verified", TECH[p.role_class], p.id))
 
 
@@ -77,8 +90,53 @@ def _since(plan: dict) -> datetime:
     return datetime.fromisoformat(plan["picked_at"])
 
 
+def _asks(session, cid: int) -> list[str]:
+    """Statuses of every cold ask made (or drafted) at the company."""
+    return list(session.exec(select(Email.status).where(
+        Email.company_id == cid, Email.kind == "cold", col(Email.status).in_(["draft", *suppress._LIVE]))).all())
+
+
+def _blocked(c: Company | None) -> bool:
+    if c is None or c.status or c.overrated or c.do_not_contact or c.tier == "reject":
+        return True
+    return not c.list_key and bool(admission.body_shop(c.name, industry=c.description))  # the drafter refuses them
+
+
+def _candidates(s):
+    """Companies in the decision brain's order. 2026-10-26, Tejmul: "the best bets are our
+    priority, let's complete that first" — so the Best bets shortlists come first, city by
+    city (Bengaluru, Hyderabad, Remote) by rank; only then the companies the brain also
+    judged "target" but left past the shortlist cut, Bengaluru first, best odds first."""
+    order = {p: i for i, p in enumerate((CONFIG.get("shortlist") or {}).get("pool_order")
+                                        or ["Bengaluru", "Hyderabad", "Remote"])}
+    rows = s.exec(select(CompanyDecision).where(or_(col(CompanyDecision.rank).is_not(None),
+                                                    CompanyDecision.verdict == "target"))).all()
+    return sorted((d for d in rows if d.pool in order),
+                  key=lambda d: (d.rank is None, order[d.pool], d.rank or 0, -d.p_offer, d.company_id))
+
+
+def _circle(s) -> dict:
+    row = s.get(Setting, suppress.CIRCLE_KEY)
+    if row:
+        return json.loads(row.value)
+    # first run: the circle starts as the latest day already picked
+    seed = s.exec(select(Setting).where(col(Setting.key) >= suppress.FOCUS_KEY + "0",
+                                        col(Setting.key) <= suppress.FOCUS_KEY + "9")
+                  .order_by(col(Setting.key).desc())).first()
+    members = [{k: t[k] for k in ("company_id", "name", "pool", "rank")} for t in json.loads(seed.value)["targets"]] if seed else []
+    return {"companies": members, "done": []}
+
+
 def pick(day: date | None = None) -> dict:
-    """The day's targets: stored ones, or picked now and stored."""
+    """The day's plan: stored, or made now from the circle and stored.
+
+    2026-10-26, Tejmul: "create a small circle of 10 companies … send 25 emails to each of
+    the 10 companies … once all the employees of the 10 companies are fulfilled, we can send
+    to the next 10". The circle holds `companies_per_day` companies; a company stays until
+    `asks_per_company` of its engineers are asked or nobody with a real address is left, and
+    the next company in the brain's order takes its place. The day's cap is shared across
+    the circle round-robin, at most `per_company` into one company a day — the spread that
+    keeps one mail server from seeing a burst."""
     from jobhunter.outreach import ledger
 
     init_db()
@@ -89,43 +147,91 @@ def pick(day: date | None = None) -> dict:
         if have:
             return have
         cap = ledger.effective_cap(key)
-        earlier = suppress._focus_rows(s, "0000")
-        since = utcnow() - timedelta(days=suppress.COMPANY_COOLDOWN_DAYS)
-        asked = set(s.exec(select(Email.company_id).where(
-            Email.kind == "cold", col(Email.status).in_(list(suppress._LIVE)), col(Email.created_at) >= since)).all())
-        order = {p: i for i, p in enumerate((CONFIG.get("shortlist") or {}).get("pool_order")
-                                            or ["Bengaluru", "Hyderabad", "Remote"])}
-        decs = sorted((d for d in s.exec(select(CompanyDecision).where(col(CompanyDecision.rank).is_not(None))).all()
-                       if d.pool in order), key=lambda d: (order[d.pool], d.rank))
-        targets, slots = [], 0
-        for d in decs:
-            if len(targets) >= COMPANIES or slots >= cap:
-                break
-            if d.company_id in earlier or d.company_id in asked:
-                continue
-            c = s.get(Company, d.company_id)
-            if c is None or c.status or c.overrated or c.do_not_contact or c.tier == "reject":
-                continue
-            if not c.list_key and admission.body_shop(c.name, industry=c.description):
-                continue      # the drafter refuses staffing agencies and body shops
-            ready = sendable(s, c.id)
-            if len(ready) < MIN_READY:
-                continue
-            take = min(len(ready), PER_COMPANY)
-            targets.append({"company_id": c.id, "name": c.name, "pool": d.pool, "rank": d.rank,
-                            "ready": len(ready), "take": take})
-            slots += take
+        circle = _circle(s)
+        members, done = [], list(circle.get("done") or [])
+        ready: dict[int, list[Contact]] = {}
+        for m in circle["companies"]:
+            c = s.get(Company, m["company_id"])
+            asks = _asks(s, m["company_id"])
+            ready[m["company_id"]] = [] if _blocked(c) else sendable(s, m["company_id"])
+            pending = sum(1 for x in asks if x in _WAITING)
+            finished = _blocked(c) or len(asks) >= GOAL or not ready[m["company_id"]]
+            if finished and not pending:
+                done.append(m["company_id"])
+            else:
+                members.append(m)
+        room: dict[int, int] = {}
+
+        def share(cid: int) -> int:
+            # a day's share: what is waiting plus who is left, never past the goal or per_company
+            asks = _asks(s, cid)
+            pending = sum(1 for x in asks if x in _WAITING)
+            return max(0, min(PER_COMPANY, pending + len(ready[cid]), GOAL - (len(asks) - pending)))
+
+        for m in members:
+            room[m["company_id"]] = share(m["company_id"])
+        # refill the circle to its size — and past it on a day its members cannot fill the cap
+        if len(members) < COMPANIES or sum(room.values()) < cap:
+            since = utcnow() - timedelta(days=suppress.COMPANY_COOLDOWN_DAYS)
+            asked = set(s.exec(select(Email.company_id).where(
+                Email.kind == "cold", col(Email.status).in_(list(suppress._LIVE)), col(Email.created_at) >= since)).all())
+            inside = {m["company_id"] for m in members} | set(done)
+            for d in _candidates(s):
+                if len(members) >= COMPANIES and sum(room.values()) >= cap:
+                    break
+                if d.company_id in inside or d.company_id in asked:
+                    continue
+                c = s.get(Company, d.company_id)
+                if _blocked(c):
+                    continue
+                r = sendable(s, c.id)
+                if len(r) < MIN_READY:
+                    continue
+                ready[c.id] = r
+                members.append({"company_id": c.id, "name": c.name, "pool": d.pool, "rank": d.rank,
+                                "joined": key})
+                room[c.id] = share(c.id)
+                inside.add(c.id)
+        # share the day round-robin: one more per company per pass, up to its room
+        take = {m["company_id"]: 0 for m in members}
+        slots, moved = 0, True
+        while slots < cap and moved:
+            moved = False
+            for m in members:
+                cid = m["company_id"]
+                if slots < cap and take[cid] < room[cid]:
+                    take[cid] += 1
+                    slots += 1
+                    moved = True
+        targets = [{**m, "ready": len(ready[m["company_id"]]), "take": take[m["company_id"]],
+                    "asked": len(_asks(s, m["company_id"]))} for m in members if take[m["company_id"]]]
         plan = {"day": key, "picked_at": utcnow().isoformat(timespec="seconds"), "cap": cap,
                 "slots": slots, "targets": targets}
+        s.merge(Setting(key=suppress.CIRCLE_KEY, value=json.dumps({"companies": members, "done": done})))
         s.add(Setting(key=suppress.FOCUS_KEY + key, value=json.dumps(plan)))
         s.commit()
-    log.info("focus: %s — %d targets, %d slots", key, len(targets), slots)
+    log.info("focus: %s — circle of %d, %d slots", key, len(members), slots)
     return plan
 
 
+def circle() -> dict:
+    """The circle now, with each company's asks so far against the goal."""
+    init_db()
+    with get_session() as s:
+        cur = _circle(s)
+        for m in cur["companies"]:
+            asks = _asks(s, m["company_id"])
+            m["asked"] = len(asks)
+            m["sent"] = sum(1 for x in asks if x in ("sent", "replied"))
+            m["ready"] = len(sendable(s, m["company_id"]))
+        cur["goal"] = GOAL
+    return cur
+
+
 def prepare(day: date | None = None) -> dict:
-    """Pick the day's targets and draft for them, up to per_company each. Idempotent: a
-    run that finds the drafts written does nothing."""
+    """Pick the day's plan and draft for it: each target gets drafts until it has `take`
+    waiting (drafted or approved, not yet sent). Idempotent, and a backlog nobody approved
+    is not added to."""
     from jobhunter.outreach import drafter
 
     plan = pick(day)
@@ -133,10 +239,8 @@ def prepare(day: date | None = None) -> dict:
     for t in plan["targets"]:
         cid = t["company_id"]
         with get_session() as s:
-            have = len(s.exec(select(Email.id).where(
-                Email.company_id == cid, Email.kind == "cold", col(Email.status).in_(["draft", *suppress._LIVE]),
-                col(Email.created_at) >= _since(plan))).all())
-            people = [p.id for p in sendable(s, cid)][:max(0, t["take"] - have)]
+            waiting = sum(1 for x in _asks(s, cid) if x in _WAITING)
+            people = [p.id for p in sendable(s, cid)][:max(0, t["take"] - waiting)]
             c = s.get(Company, cid)
             job_id = c.best_selection_job_id if c else None
         for pid in people:

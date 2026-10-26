@@ -40,7 +40,10 @@ for the visual.
   and orchestration, FINAL-PLAN.md. The graph encodes the decisions as `decision:d1`…`decision:d21`.
 - **No Ollama, no local model.** It has wrecked the machine. Models are OpenRouter aliases behind a ledger.
 - **Nothing is built without a numbered approval** (FINAL-PLAN-V3 §14).
-- Never cut: the review gate, the send cap, the confidence labels (`guarantee:*` nodes).
+- Never cut: the review gate, the send cap, the confidence labels (`guarantee:*` nodes). Since
+  2026-10-26 the review gate is run by rules, not clicks (`jobhunter/outreach/autoreview.py`, on Tejmul's
+  instruction): every cold draft is approved or rejected with its reason in `logs/autoreview.log`. Each
+  session, read that log's rejections and fix the stage that produced them — that is the loop.
 - Layering: `db/llm/normalize` ← `scrapers/contacts/outreach` ← `pipeline/matcher/kg` ← `api` ← `dashboard`.
   Nothing imports upward.
 - The machine has 8 GB RAM and no model runtime. Until step 1 of v3 lands, `llm.py` still contains the old

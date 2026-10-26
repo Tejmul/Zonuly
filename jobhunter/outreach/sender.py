@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import logging
 import random
+import re
 import time
 from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -213,8 +214,13 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
         ledger.release(candidate_id, guessed=guessed)
         with get_session() as session:
             email = session.get(Email, email_id)
-            email.status = "failed"
-            email.error = str(e)[:500]
+            tries = retries(email.error)
+            # 2026-10-26, Tejmul: "if an email gets missed it should wire up next" — a dropped
+            # network or a timeout puts it back at the front of the queue for the next run
+            if transient(e) and tries < MAX_RETRIES:
+                email.status, email.error = "approved", f"retry {tries + 1}: {str(e)[:450]}"
+            else:
+                email.status, email.error = "failed", str(e)[:500]
             session.add(email)
             session.commit()
         return {"error": str(e)[:300], "email_id": email_id}
@@ -234,6 +240,43 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
     log.info("sent email %s to %s (thread %s, mode %s)", email_id, to, result.get("threadId"), SEND_MODE)
     return {"sent": True, "email_id": email_id, "to": to, "thread_id": result.get("threadId"),
             "mode": SEND_MODE, **({"path": result["path"]} if result.get("path") else {})}
+
+
+MAX_RETRIES = 3
+_TRANSIENT = re.compile(r"ssl|eof occurred|timed? ?out|nodename|name or service|temporar|try again|"
+                        r"connection (reset|refused|aborted)|network is unreachable|errno (8|50|51|54|60|61|64|65)|"
+                        r"\b421\b|\b4\.\d\.\d", re.I)
+_PERMANENT = re.compile(r"\b5\.\d\.\d|\b55\d\b|limit exceeded|spam|blocked|not found|auth", re.I)
+
+
+def transient(e: BaseException | str) -> bool:
+    """A failure that says nothing about the mail or the account: a dropped network, DNS,
+    a TLS hiccup, a timeout, a 4xx try-later. A refusal (5xx, limit, spam, auth) never is."""
+    text = f"{type(e).__name__}: {e}" if isinstance(e, BaseException) else str(e)
+    return bool(_TRANSIENT.search(text)) and not _PERMANENT.search(text)
+
+
+def retries(error: str | None) -> int:
+    m = re.match(r"retry (\d+):", error or "")
+    return int(m.group(1)) if m else 0
+
+
+def requeue_failed(days: int = 3) -> list[int]:
+    """Failed sends of the last `days` whose failure was transient: back to approved, in the
+    queue's front, under the same cap and gaps as everything else."""
+    from datetime import timedelta
+
+    init_db()
+    out = []
+    with get_session() as session:
+        for e in session.exec(select(Email).where(Email.status == "failed",
+                                                  col(Email.approved_at) >= utcnow() - timedelta(days=days))).all():
+            if transient(e.error or "") and retries(e.error) < MAX_RETRIES:
+                e.status, e.error = "approved", f"retry {retries(e.error) + 1}: {(e.error or '')[:450]}"
+                session.add(e)
+                out.append(e.id)
+        session.commit()
+    return out
 
 
 def _delivered(parent: Email | None, days: int = 2) -> bool:
@@ -316,6 +359,7 @@ def send_due(now: datetime | None = None, *, stagger: bool = True, max_per_run: 
     from jobhunter.outreach import suppress, warmup
 
     init_db()
+    requeue_failed()      # a send that failed on the network goes again, first (2026-10-26)
     now = now or datetime.now()
     india_open = in_send_window(now)
     with get_session() as session:
@@ -507,7 +551,7 @@ def plan(day: date | str | None = None) -> dict:
             if not why and guessed and guessed_left <= 0:
                 why = brake or f"today's {ledger.GUESSED_CAP} guessed-address sends are planned already"
             dcap = suppress.domain_cap_for(session, e.company_id, day.isoformat())
-            if not why and e.kind == "cold" and per_domain.get(dom, 0) >= dcap:
+            if not why and e.kind == "cold" and dom not in suppress.FREEMAIL and per_domain.get(dom, 0) >= dcap:
                 why = f"{dcap} mails into {dom} that day already — the next day"
             if not why and len(planned) + used >= cap:
                 why = f"the day's {cap} are planned — the next send day"

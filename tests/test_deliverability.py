@@ -154,7 +154,8 @@ def test_the_sender_holds_a_cold_mail_after_a_block_without_changing_its_status(
 
 def test_a_target_company_takes_focus_per_company_asks_and_nothing_else_changes(world, monkeypatch):
     """2026-10-26: a send day's target companies (focus.py) may take outreach.focus.per_company
-    cold asks; a company that is not a target keeps asks_per_company."""
+    cold asks a day and outreach.focus.asks_per_company in all; a company that is not a target
+    keeps asks_per_company."""
     import json
     from datetime import date
 
@@ -176,6 +177,28 @@ def test_a_target_company_takes_focus_per_company_asks_and_nothing_else_changes(
         s.add(Setting(key=suppress.FOCUS_KEY + today, value=json.dumps({"targets": [{"company_id": cid}]})))
         s.commit()
         assert suppress.focus_companies(s, today) == {cid}
-        assert suppress.cooldown(s, nxt) is None                             # a target: up to three
+        assert suppress.cooldown(s, nxt) is None                             # a target: no waiting for replies
+        monkeypatch.setattr(suppress, "FOCUS_GOAL", 3)
         _mail(s, cid, pid, "p8@blocked-co.example", status="sent", hours_ago=1)
-        assert "open ask" in suppress.cooldown(s, nxt)                       # the fourth waits
+        assert "open ask" in suppress.cooldown(s, nxt)                       # past the goal it waits
+
+
+def test_a_send_lost_to_the_network_goes_again_and_a_refusal_does_not():
+    """2026-10-26: "if an email gets missed it should wire up next" — DNS / TLS / timeouts are
+    retried (MAX_RETRIES), a 5xx, a limit or a spam block never is."""
+    from jobhunter.outreach import sender
+
+    assert sender.transient("[Errno 8] nodename nor servname provided, or not known")
+    assert sender.transient("[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol")
+    assert sender.transient("421 4.7.0 Try again later")
+    assert not sender.transient("550 5.4.5 Daily user sending limit exceeded")
+    assert not sender.transient("bounced: ** Address not found **")
+    assert sender.retries("retry 2: timed out") == 2 and sender.retries(None) == 0
+
+
+def test_personal_mail_domains_are_not_one_company():
+    from jobhunter.outreach import suppress
+
+    e = Email(contact_id=1, company_id=1, to_email="someone@gmail.com", subject="s", body="b", kind="cold",
+              status="approved")
+    assert suppress.domain_cap(None, e) is None

@@ -381,7 +381,15 @@ def run(limit: int = 1) -> dict:
         polish = drafter.polish_pending(limit=3)
     except Exception as e:  # noqa: BLE001
         polish = {"error": f"{type(e).__name__}: {e}"[:200]}
-    return {"focus": targets, "done": done, "catch_up": caught, "polish": polish, "left": len(queue())}
+    try:
+        # the review gate, by rules (2026-10-26, outreach/autoreview.py): approve or reject every draft
+        from jobhunter.outreach import autoreview
+
+        review = autoreview.run()
+    except Exception as e:  # noqa: BLE001
+        review = {"error": f"{type(e).__name__}: {e}"[:200]}
+    return {"focus": targets, "done": done, "catch_up": caught, "polish": polish, "review": review,
+            "left": len(queue())}
 
 
 def progress() -> dict:

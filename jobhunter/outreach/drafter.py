@@ -496,7 +496,7 @@ def write(g: dict, *, use_model: bool = True, key=None) -> dict:
                     model_note = "model draft scored lower than the template"
         elif model_note is None:
             model_note = "model gave nothing usable"
-    out.update(subject=subject, subject_pattern=pattern, subjects=subjects, hook_type=c.hook["type"],
+    out.update(subject=subject, subject_pattern=pattern, subjects=subjects, hook_type=(c.hook or {}).get("type"),
                writer=writer, polish_pending=bool(use_model and writer == "template" and out.get("budget")),
                model_note=model_note, template=tpl, model=model_version, **{k: chosen[k] for k in (
                    "message", "body", "flags", "words", "quality", "blocked")},
