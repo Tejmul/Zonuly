@@ -57,6 +57,7 @@ type Detail = {
   jobs: Job[];
   people: Person[];
   leads: number;
+  outreach?: { sent: number; replied: number; approved: number; last_sent_at: string | null; target_day: string | null };
   graph: { verdict: { act: string; why: string } | null; skills_they_want_that_i_have: string[]; who_to_ask: { name: string; employment: string | null; employment_why: string | null }[] } | null;
 };
 
@@ -169,6 +170,7 @@ export default function CompanyPage() {
           <h1 className="text-3xl font-semibold tracking-tight">{data.name}</h1>
           {data.tier && <TierPill tier={data.tier} />}
           {data.bet && <span className="chip chip-solid">ready to ask</span>}
+          {data.outreach && <OutreachCorner o={data.outreach} />}
         </div>
         <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-2">
           <span className="inline-flex items-center gap-1.5">
@@ -602,5 +604,24 @@ function ActionButton({ busy, onClick, children }: { busy: boolean; onClick: () 
       {busy ? <Loader2 size={13} className="animate-spin" /> : null}
       {children}
     </button>
+  );
+}
+
+
+/* 2026-10-26, Tejmul: once the day's mails to a company have gone, its page says so in the
+   corner — waiting for a reply, or answered — and a company picked as a send day's target
+   says which day. Times arrive in UTC without a zone. */
+function OutreachCorner({ o }: { o: NonNullable<Detail["outreach"]> }) {
+  const day = (iso: string) => new Date(iso.length === 10 ? `${iso}T00:00:00` : `${iso}Z`)
+    .toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+  let text: string | null = null;
+  if (o.replied > 0) text = `Replied · ${o.replied} of ${o.sent}`;
+  else if (o.sent > 0) text = `Waiting for reply · ${o.sent} sent${o.last_sent_at ? `, last ${day(o.last_sent_at)}` : ""}`;
+  else if (o.target_day) text = `Target for ${day(o.target_day)}${o.approved ? ` · ${o.approved} approved` : ""}`;
+  if (!text) return null;
+  return (
+    <span className={`chip ml-auto ${o.replied > 0 ? "chip-solid" : ""}`} title="Cold mail to this company">
+      {text}
+    </span>
   );
 }

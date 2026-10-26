@@ -255,6 +255,21 @@ targeting:
     borderline_pay_bands:
     - pays
     - deep_pockets
+    # 2026-10-26, Tejmul: "these names are not that famous and overrated like Google, Amazon".
+    # Kept even when listed or large; matched on leading words like the famous list.
+    keep:
+    - electronic arts
+    - wayfair
+    - marvell
+    - cargill
+    - toyota industries
+    - dbs bank
+    - lowe's
+    - ntt data
+    - dp world
+    - iqvia
+    - mettler-toledo
+    - zebra
     # famous names. An entry matches the leading words of a name ("google" hits "Google
     # DeepMind"); "=name" must be the whole name ("=ramp" is Ramp, not Ramp Network).
     famous:
@@ -881,15 +896,15 @@ outreach:
       line: "built Python and AWS data pipelines that reduced manual processing time by 70%"
       topic: "data pipelines, 70% less manual work"
     - match: "multi-agent system that scraped"
-      line: "built Zonuly, a multi-agent system that mapped 3,528 companies and 19,159 referrers with resume-to-role matching"
-      topic: "a multi-agent system over 3,528 companies"
+      line: "built Zonuly, a multi-agent system that finds companies and referrers, with resume-to-role matching"   # 2026-10-26: no counts, "we are continuously evolving"
+      topic: "a multi-agent referral system"
   send_window:
   - 10         # 2026-10-17: the user — start at 10, when people are at their desks; the front-loaded run finishes ~11
   - 19
   user_name: Tejmul Movin
   user_headline: AI/ML Engineer • B.Tech CS+AI '27, Newton School of Technology
   user_links:
-  - "Resume: https://drive.google.com/file/d/1O6Mit9eKX7LigytCjf3D9CRzaF7vnZuC/view"
+  - "Resume: https://drive.google.com/file/d/13V0TnHpW842gR7BuOthN51pwUpVOMJgl/view"
   - github.com/Tejmul
   - https://www.linkedin.com/in/tejmulmovin-softwareengineer/
   - spylook.vercel.app
@@ -936,6 +951,13 @@ outreach:
   # blocked") after ~15 near-identical asks went into one domain within hours. These only HOLD
   # mail (outreach/suppress.py); nothing is rejected and the 25/day cap is untouched.
   per_domain_daily_cap: 3          # cold mails a day into one recipient domain (a company's mail server sees them all)
+  # 2026-10-26, Tejmul: "target 10 companies, then it should not be marked as spam" — a send
+  # day goes to up to companies_per_day target companies, picked the evening before, each
+  # taking up to per_company cold mails to its best engineers (jobhunter/focus.py)
+  focus:
+    companies_per_day: 10
+    per_company: 3
+    min_ready: 2          # engineers with a real address a company needs to be a target
   spam_block_cooldown_days: 21     # after a spam block, no cold mail into that domain / company for this long
   spam_pause_hours: 48             # after any spam block, no cold mail at all for this long
   # never written to, whatever the pipeline finds: addresses, whole domains, company names
@@ -1277,7 +1299,7 @@ actors:
     mode: email            # short $4/1k (name, location) · full $8/1k (+ titles, positions) · email $12/1k
                            # 2026-10-24: email — 58 of the first 67 shortlist companies had people but no real address
                            # for an engineer; the address is what cold mail needs, and it teaches the pattern learner
-    per_company: 10        # 2026-10-25: 15 → 10, so the paced ~$0.30/day buys 2 companies, not 1. People-tab rows bought per company (in the company's own city, engineering titles):
+    per_company: 25        # 2026-10-26: 10 → 25 ("25 referrals for a company should be there"); ~$0.30 a company in email mode. 2026-10-25: 15 → 10, so the paced ~$0.30/day buys 2 companies, not 1. People-tab rows bought per company (in the company's own city, engineering titles):
                            # 2–3 good referrers is the goal; Apify bills per row, so 15 caps a company at ~$0.20
     shortlist_only: true   # only the decision brain's shortlist (Bengaluru 100, Hyderabad 50, Remote 100)
     companies_per_run: 6   # companies per run of com.zonuly.apify

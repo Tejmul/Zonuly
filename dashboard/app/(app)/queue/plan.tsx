@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { Empty, ErrorNote, Loading, Panel, PanelHead } from "@/components/ui/primitives";
 
 /* 2026-10-25, Tejmul: "whatever should go the next day should be scheduled the day before".
@@ -17,6 +19,7 @@ export type SendPlan = {
   bounce_brake: string | null;
   planned: { email_id?: number; at: string; company?: string | null; to?: string | null; address?: string; tz?: string; their_time?: string; subject?: string }[];
   waiting: { email_id?: number; company?: string | null; to?: string | null; why: string }[];
+  targets?: { company_id: number; name: string; ready: number; take: number; drafts?: number; approved?: number; sent?: number }[];
 };
 
 export function SendPlanPanel({ data, error, loading }: { data: SendPlan | null; error: string | null; loading: boolean }) {
@@ -65,6 +68,25 @@ export function SendPlanPanel({ data, error, loading }: { data: SendPlan | null;
           <Empty title="Nothing approved for that day yet." />
         )}
       </Panel>
+      {data.targets?.length ? (
+        <Panel>
+          <PanelHead
+            eyebrow="Picked the evening before"
+            title={`Target companies (${data.targets.length})`}
+            action={<span className="text-xs text-ink-2">up to {Math.max(...data.targets.map((t) => t.take))} engineers each</span>}
+          />
+          <ul className="divide-y divide-line text-sm">
+            {data.targets.map((t) => (
+              <li key={t.company_id} className="flex items-center justify-between gap-3 px-4 py-2">
+                <Link href={`/companies/${t.company_id}`} className="text-ink hover:underline">{t.name}</Link>
+                <span className="text-xs tabular-nums text-ink-2">
+                  {t.ready} ready · {t.drafts ?? 0} to review · {t.approved ?? 0} approved{t.sent ? ` · ${t.sent} sent` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
       {data.waiting.length ? (
         <Panel>
           <PanelHead title={`Approved but waiting (${data.waiting.length})`} />

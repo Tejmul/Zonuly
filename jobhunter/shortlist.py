@@ -359,8 +359,14 @@ def catch_up(limit: int = 2) -> list[dict]:
 def run(limit: int = 1) -> dict:
     """The next `limit` companies on the shortlist, one after another; then up to three
     template drafts re-written by the model, which does nothing while its daily ceiling holds."""
+    from jobhunter import focus
     from jobhunter.outreach import drafter
 
+    # the next send day's target companies, drafted first (2026-10-26, focus.py)
+    try:
+        targets = focus.prepare()
+    except Exception as e:  # noqa: BLE001
+        targets = {"error": f"{type(e).__name__}: {e}"[:200]}
     done = [one(q["company_id"]) for q in queue(limit)]
     try:
         # keep enough waiting for review to fill the next send day (2026-10-25: "use all the 25")
@@ -375,7 +381,7 @@ def run(limit: int = 1) -> dict:
         polish = drafter.polish_pending(limit=3)
     except Exception as e:  # noqa: BLE001
         polish = {"error": f"{type(e).__name__}: {e}"[:200]}
-    return {"done": done, "catch_up": caught, "polish": polish, "left": len(queue())}
+    return {"focus": targets, "done": done, "catch_up": caught, "polish": polish, "left": len(queue())}
 
 
 def progress() -> dict:

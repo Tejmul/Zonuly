@@ -48,6 +48,8 @@ _T = CONFIG.get("targeting") or {}
 _O = _T.get("overrated") or {}
 
 MAX_VALUATION_USD_M = float(_O.get("max_valuation_usd_m", 5000))
+# names Tejmul has cleared by hand: kept even when listed or large (2026-10-26)
+KEEP: list[str] = [str(x) for x in (_O.get("keep") or [])]
 MAX_RAISED_USD_M = float(_O.get("max_total_raised_usd_m", 1000))
 BORDERLINE_RAISED_USD_M = float(_O.get("borderline_raised_usd_m", 400))
 BORDERLINE_VALUATION_USD_M = float(_O.get("borderline_valuation_usd_m", 2000))
@@ -126,6 +128,12 @@ def famous(name: str) -> tuple[str, str] | None:
         if joined == e or (not exact and (joined + " ").startswith(e + " ")):
             return group, entry.lstrip("=")
     return None
+
+
+def kept(name: str) -> bool:
+    """On targeting.overrated.keep — matched on leading words like the famous list."""
+    toks = " ".join(_famous_tokens(name)) + " "
+    return any(toks.startswith(" ".join(_famous_tokens(k)) + " ") for k in KEEP if _famous_tokens(k))
 
 
 # ------------------------------------------------------------------ name cleanup
@@ -547,6 +555,8 @@ def overrated_verdict(name: str, *, stage: str | None = None, amount_usd_m: floa
     visibly hiring and can clearly pay: Tejmul — "if the company is actively hiring a lot
     of people and paying really well, it's also a good fit".
     """
+    if kept(name):
+        return Overrated(False, "on the keep list (targeting.overrated.keep) — cleared by hand")
     hit = famous(name)
     if hit:
         return Overrated(True, f"famous ({hit[0]}: '{hit[1]}') — thousands of applications already waiting")

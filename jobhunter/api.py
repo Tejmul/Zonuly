@@ -14,7 +14,7 @@ import os
 import threading
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 import yaml
@@ -1215,7 +1215,29 @@ def company_detail(company_id: int) -> dict:
     if out.get("error"):
         raise HTTPException(status_code=404, detail=out["error"])
     out["best_role"] = _best_role(company_id)
+    out["outreach"] = _company_outreach(company_id)
     return out
+
+
+def _company_outreach(company_id: int) -> dict:
+    """Cold mail to this company at a glance — the page's "waiting for reply" corner (2026-10-26):
+    how many went, when the last one did, how many were answered, and the send day it is a
+    target for, if any. Counts only, so the public copy may read it."""
+    from jobhunter import focus
+    from jobhunter.outreach import suppress
+
+    with get_session() as session:
+        rows = session.exec(select(Email).where(Email.company_id == company_id, Email.kind == "cold",
+                                                col(Email.status).in_(["approved", "sending", "sent", "replied"]))).all()
+        sent = [e for e in rows if e.status in ("sent", "replied")]
+        replied = {r for r in session.exec(select(Reply.email_id).where(
+            col(Reply.email_id).in_([e.id for e in sent] or [-1]))).all()}
+        replied |= {e.id for e in sent if e.status == "replied"}
+        target = next((day for day in [focus.target_day().isoformat(), date.today().isoformat()]
+                       if company_id in suppress.focus_companies(session, day)), None)
+    last = max((e.sent_at for e in sent if e.sent_at), default=None)
+    return {"sent": len(sent), "replied": len(replied), "approved": sum(1 for e in rows if e.status in ("approved", "sending")),
+            "last_sent_at": last.isoformat() if last else None, "target_day": target}
 
 
 @app.get("/api/companies/{company_id}/dossier")
@@ -1785,7 +1807,11 @@ def outreach_plan(day: str | None = None) -> dict:
     how many more approvals would fill the day. Names people, so the public copy gets counts."""
     from jobhunter.outreach import sender
 
+    from jobhunter import focus
+
     p = sender.plan(day)
+    # the day's target companies (focus.py): names companies, not people
+    p["targets"] = (focus.status(p["day"]) or {}).get("targets", [])
     if access.PUBLIC:
         p = {**p, "planned": [{"at": r["at"]} for r in p["planned"]], "waiting": [{"why": r["why"]} for r in p["waiting"]]}
     return p

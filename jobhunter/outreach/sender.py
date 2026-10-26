@@ -506,8 +506,9 @@ def plan(day: date | str | None = None) -> dict:
             dom = suppress._domain(e.to_email)
             if not why and guessed and guessed_left <= 0:
                 why = brake or f"today's {ledger.GUESSED_CAP} guessed-address sends are planned already"
-            if not why and e.kind == "cold" and per_domain.get(dom, 0) >= suppress.PER_DOMAIN_DAILY_CAP:
-                why = f"{suppress.PER_DOMAIN_DAILY_CAP} mails into {dom} that day already — the next day"
+            dcap = suppress.domain_cap_for(session, e.company_id, day.isoformat())
+            if not why and e.kind == "cold" and per_domain.get(dom, 0) >= dcap:
+                why = f"{dcap} mails into {dom} that day already — the next day"
             if not why and len(planned) + used >= cap:
                 why = f"the day's {cap} are planned — the next send day"
             if why:

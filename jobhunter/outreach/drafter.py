@@ -188,6 +188,10 @@ def _cooldown(session, contact_id: int, company_id: int, candidate_id: int) -> s
     if recent:
         who = "you" if recent.candidate_id == candidate_id else "your teammate"
         return f"{who} already wrote to this person on {recent.created_at:%d %b} — {CONTACT_COOLDOWN_DAYS}-day cooldown"
+    from jobhunter.outreach import suppress
+
+    if company_id in suppress.focus_ids(session):
+        return None       # a target company takes outreach.focus.per_company asks (suppress.cooldown)
     since_c = utcnow() - timedelta(days=COMPANY_COOLDOWN_DAYS)
     recent_c = session.exec(
         select(Email).where(Email.company_id == company_id, Email.candidate_id == candidate_id, Email.kind == "cold",

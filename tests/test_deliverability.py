@@ -150,3 +150,32 @@ def test_the_sender_holds_a_cold_mail_after_a_block_without_changing_its_status(
     assert "spam" in r["error"]
     with Session(engine) as s:
         assert s.get(Email, nxt).status == "approved"
+
+
+def test_a_target_company_takes_focus_per_company_asks_and_nothing_else_changes(world, monkeypatch):
+    """2026-10-26: a send day's target companies (focus.py) may take outreach.focus.per_company
+    cold asks; a company that is not a target keeps asks_per_company."""
+    import json
+    from datetime import date
+
+    from jobhunter.db import Setting
+
+    engine, cid, pid = world
+    monkeypatch.setattr(suppress, "ASKS_PER_COMPANY", 1)
+    monkeypatch.setattr(suppress, "ASKS_OVERRIDES", {})
+    monkeypatch.setattr(suppress, "FOCUS_PER_COMPANY", 3)
+    with Session(engine) as s:
+        for i in range(2):
+            _mail(s, cid, pid, f"p{i}@blocked-co.example", status="sent", hours_ago=1)
+        nxt = Email(contact_id=pid + 1000, company_id=cid, to_email="z@blocked-co.example", subject="s", body="b",
+                    kind="cold", status="approved", approved_at=utcnow())
+        s.add(nxt)
+        s.commit()
+        assert "open ask" in suppress.cooldown(s, nxt)                      # not a target: one ask
+        today = date.today().isoformat()
+        s.add(Setting(key=suppress.FOCUS_KEY + today, value=json.dumps({"targets": [{"company_id": cid}]})))
+        s.commit()
+        assert suppress.focus_companies(s, today) == {cid}
+        assert suppress.cooldown(s, nxt) is None                             # a target: up to three
+        _mail(s, cid, pid, "p8@blocked-co.example", status="sent", hours_ago=1)
+        assert "open ask" in suppress.cooldown(s, nxt)                       # the fourth waits

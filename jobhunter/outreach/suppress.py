@@ -13,7 +13,8 @@ and the one-ask-per-company cooldown, checked again at approval and at send.
                 approved mail to that company is withdrawn, and the reply is filed negative.
     config      outreach.do_not_contact: addresses, whole domains, company names.
     cooldown    one cold ask per company until someone there replies or 30 days pass, and
-                never two approved asks to one company waiting at once.
+                never two approved asks to one company waiting at once. The day's target
+                companies (focus.py, outreach.focus) may take outreach.focus.per_company each.
     spam block  a bounce saying Gmail refused the mail as spam (5.7.1 "Message blocked"):
                 no cold mail for spam_pause_hours, none into that domain / company for
                 spam_block_cooldown_days. And per_domain_daily_cap cold mails a day per domain.
@@ -32,7 +33,7 @@ from datetime import timedelta
 from sqlmodel import col, select
 
 from jobhunter import CONFIG
-from jobhunter.db import Company, Contact, Email, Reply, utcnow
+from jobhunter.db import Company, Contact, Email, Reply, Setting, utcnow
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +44,10 @@ ASKS_PER_COMPANY = max(1, int(_O.get("asks_per_company", 1)))
 #: per company (by name) — 2026-10-17: everyone at Sarvam AI's Bangalore office, the user's call
 ASKS_OVERRIDES = {str(k).lower(): int(v) for k, v in (_O.get("asks_per_company_overrides") or {}).items()}
 CONTACT_COOLDOWN_DAYS = int(_O.get("contact_cooldown_days", 30))
+#: 2026-10-26, Tejmul: a send day goes to a set of target companies, picked the evening
+#: before (jobhunter/focus.py); each may take up to this many cold mails that day
+FOCUS_PER_COMPANY = int((_O.get("focus") or {}).get("per_company", 3))
+FOCUS_KEY = "focus:"
 OPT_OUT_LINE = str(_O.get("opt_out_line") or "").strip()
 #: opt-out lines earlier drafts carry (and replies quote): a body with one of these already
 #: has its opt-out line, and a reply quoting one is not asking us to stop
@@ -122,6 +127,34 @@ def blocked(session, *, contact: Contact | None, company: Company | None, to_ema
     return config_block(email=addr or None, company=company)
 
 
+# ------------------------------------------------------------------ the day's target companies
+
+def _focus_rows(session, since: str, until: str | None = None) -> set[int]:
+    import json
+
+    out: set[int] = set()
+    stmt = select(Setting).where(col(Setting.key) >= FOCUS_KEY + since,
+                                 col(Setting.key) <= FOCUS_KEY + (until or "9"))
+    for row in session.exec(stmt).all():
+        try:
+            out.update(int(x["company_id"]) for x in json.loads(row.value)["targets"])
+        except (ValueError, KeyError, TypeError):
+            continue
+    return out
+
+
+def focus_companies(session, day: str) -> set[int]:
+    """The target companies picked for `day` (YYYY-MM-DD). Written by focus.py."""
+    return _focus_rows(session, day, day)
+
+
+def focus_ids(session, since: str | None = None) -> set[int]:
+    """Target companies for `since` (default today) and every later day already picked."""
+    from datetime import date
+
+    return _focus_rows(session, since or date.today().isoformat())
+
+
 # ------------------------------------------------------------------ cooldown
 
 def cooldown(session, email: Email) -> str | None:
@@ -153,6 +186,8 @@ def cooldown(session, email: Email) -> str | None:
     if ASKS_OVERRIDES:
         co = session.get(Company, email.company_id) if email.company_id else None
         limit = ASKS_OVERRIDES.get((co.name if co else "").lower(), ASKS_PER_COMPANY)
+    if email.company_id in focus_ids(session):
+        limit = max(limit, FOCUS_PER_COMPANY)
     if len(ahead) >= limit:
         return (f"{ahead[0]} — at most {limit} open ask(s) per company until a reply or "
                 f"{COMPANY_COOLDOWN_DAYS} days (outreach.asks_per_company)")
@@ -348,6 +383,14 @@ def spam_hold(session, email: Email) -> str | None:
     return None
 
 
+def domain_cap_for(session, company_id: int | None, day: str) -> int:
+    """Cold mails a day into one domain: PER_DOMAIN_DAILY_CAP, or FOCUS_PER_COMPANY when
+    that is higher and the company is one of the day's targets."""
+    if company_id and FOCUS_PER_COMPANY > PER_DOMAIN_DAILY_CAP and company_id in focus_companies(session, day):
+        return FOCUS_PER_COMPANY
+    return PER_DOMAIN_DAILY_CAP
+
+
 def domain_cap(session, email: Email) -> str | None:
     """At most PER_DOMAIN_DAILY_CAP cold mails a day into one recipient domain: a company's
     mail server (sarvam.ai is Google Workspace) sees every inbox, and a dozen near-identical
@@ -365,8 +408,9 @@ def domain_cap(session, email: Email) -> str | None:
                                                      col(Email.status).in_(["sent", "replied", "failed", "sending"]),
                                                      Email.id != email.id)).all()
     n = sum(1 for a in rows if _domain(a) == dom)
-    if n >= PER_DOMAIN_DAILY_CAP:
-        return (f"{n} cold mails into {dom} already today — at most {PER_DOMAIN_DAILY_CAP} a day per domain "
+    cap = domain_cap_for(session, email.company_id, midnight.date().isoformat())
+    if n >= cap:
+        return (f"{n} cold mails into {dom} already today — at most {cap} a day per domain "
                 "(outreach.per_domain_daily_cap); it goes on a later day")
     return None
 
@@ -378,5 +422,6 @@ def dead_addresses(session, company_id: int | None = None) -> set[str]:
     return {(a or "").lower() for a in session.exec(stmt).all() if a}
 
 
-__all__ = ["blocked", "config_block", "cooldown", "spam_hold", "domain_cap", "is_spam_block", "spam_blocks", "with_opt_out", "has_opt_out", "opt_out_lines", "is_opt_out", "opt_out", "mark_bounced",
+__all__ = ["blocked", "config_block", "cooldown", "spam_hold", "domain_cap", "domain_cap_for",
+           "focus_companies", "focus_ids", "is_spam_block", "spam_blocks", "with_opt_out", "has_opt_out", "opt_out_lines", "is_opt_out", "opt_out", "mark_bounced",
            "brake", "bounced_in_window", "dead_addresses", "OPT_OUT_LINE"]
