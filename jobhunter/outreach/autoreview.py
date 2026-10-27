@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -38,7 +39,7 @@ from pathlib import Path
 from sqlmodel import col, select
 
 from jobhunter import CONFIG
-from jobhunter.db import Contact, Email, get_session, init_db, utcnow
+from jobhunter.db import DB_PATH, Contact, Email, get_session, init_db, utcnow
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +47,10 @@ _A = (CONFIG.get("outreach") or {}).get("autoreview") or {}
 ENABLED = bool(_A.get("enabled", True))
 MIN_QUALITY = int(_A.get("min_quality", 75))
 START = str(_A.get("start", "2026-10-26T19:00"))   # "today is ok, don't make any changes in today"
-LOG = Path(__file__).resolve().parents[2] / "logs" / "autoreview.log"
+# next to the live database's logs/; a run against a copy (ZONULY_DB_PATH) logs beside that copy,
+# so a rehearsal never writes into the real log (2026-10-27: ten simulated days had)
+LOG = (DB_PATH.parent / "autoreview.log") if os.environ.get("ZONULY_DB_PATH", "").strip() \
+    else Path(__file__).resolve().parents[2] / "logs" / "autoreview.log"
 BY = "auto-review (rules, on Tejmul's instruction 2026-10-26)"
 
 # deliverability = a spam signal the gate found: a near-copy or the same subject into the same
