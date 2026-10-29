@@ -3,6 +3,6 @@
   "build_path": "build",
   "stack": "python_3_12",
   "env_variables": {},
-  "memory": 1024,
+  "memory": 2048,
   "scripts": {}
 }
