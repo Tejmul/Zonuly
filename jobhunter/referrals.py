@@ -35,6 +35,7 @@ import json
 import logging
 import re
 import sqlite3
+import threading
 import time
 from collections import Counter
 from datetime import datetime, timedelta
@@ -54,6 +55,8 @@ REVERIFY_DAYS = int(_R.get("reverify_days", 90))
 REVALIDATE_PER_TICK = int(_R.get("revalidate_per_tick", 30))
 #: how long a company rests after a people pass, by queue band (list / only-referrer / rest)
 REST_DAYS = tuple(_R.get("rest_days") or (3, 7, 21))
+#: companies the people step works at once (2026-10-29: one at a time spent most of its 25 min waiting)
+PEOPLE_WORKERS = int(_R.get("people_workers", 3))
 #: re-run GitHub + site discovery only when the last run is older than this
 DISCOVER_FRESH_DAYS = int(_R.get("discover_fresh_days", 7))
 #: GitHub mining for a company needs about this many calls of the hourly budget
@@ -488,25 +491,40 @@ def people_queue(limit: int | None = None, *, list_key: str | None = None, top: 
             stmt = stmt.where(Company.list_key == list_key)
         rows = session.exec(stmt).all()
         counts = guardrails.ready_counts(session)
+        best = best_bets(session)
     pending = []
     for c in rows:
         r, e = counts.get(c.id, (0, 0))
         if r >= TARGET and e >= 1:
             continue
-        if not c.list_key and (c.overrated or c.tier == "reject"):
+        if not c.list_key and (c.overrated or c.tier == "reject") and c.id not in best:
             continue
-        rest = REST_DAYS[min(_band(c), 2)]
+        rest = REST_DAYS[0] if c.id in best else REST_DAYS[min(_band(c), 2)]
         last = _marked(c.notes)
         if not force and last and now - last < timedelta(days=rest):
             continue
         pending.append(c)
-    pending.sort(key=lambda c: (*people_order(c), -(c.priority_score or 0), c.id))
+    # the best bets first, in shortlist order (2026-10-29, "focus on this and complete this": they
+    # sat at #645 of 3,350 behind the general pool), then db.people_order for everyone else
+    pending.sort(key=lambda c: (best.get(c.id, len(best)), *people_order(c), -(c.priority_score or 0), c.id))
     if top is not None:
         listed = [c for c in pending if c.list_key]
         rest = sorted((c for c in pending if not c.list_key), key=lambda c: (-(c.priority_score or 0), c.id))[:top]
         pending = listed + rest
     ids = [c.id for c in pending]
     return ids[:limit] if limit else ids
+
+
+def best_bets(session) -> dict[int, int]:
+    """company_id -> position on the decision brain's shortlists (Bengaluru by rank, then
+    Hyderabad, then Remote — shortlist.pool_order), 0 first."""
+    from jobhunter.db import CompanyDecision
+
+    order = {p: i for i, p in enumerate((CONFIG.get("shortlist") or {}).get("pool_order")
+                                         or ("Bengaluru", "Hyderabad", "Remote"))}
+    decs = session.exec(select(CompanyDecision).where(col(CompanyDecision.rank).is_not(None))).all()
+    ranked = sorted((d for d in decs if d.pool in order), key=lambda d: (order[d.pool], d.rank))
+    return {d.company_id: i for i, d in enumerate(ranked)}
 
 
 def _counts(cid: int) -> tuple[int, int]:
@@ -671,44 +689,69 @@ def people_step(limit: int = 100, *, budget_s: int = 1500, ids: list[int] | None
     out["linkedin_skipped"] = 0
     if owner:
         out["yielded_to_claims"] = len(skipped)
-    for cid in queue[:limit] if limit else queue:
-        if time.time() - t0 > budget_s:
-            out["stopped"] = f"time budget ({budget_s}s) reached"
-            break
-        if owner and not claim(cid, owner, ttl_s=900):
-            out["yielded_to_claims"] = out.get("yielded_to_claims", 0) + 1
-            continue
+    todo = iter(queue[:limit] if limit else queue)
+    lock = threading.Lock()
+
+    def one(cid: int) -> None:
         # the keyless backends cool down for a few minutes after repeated failures; while
         # they do, LinkedIn is skipped (and the company is not rested), then tried again
         use_li = linkedin and not web.search_down()
-        if linkedin and not use_li:
-            out["linkedin_skipped"] += 1
-            out["linkedin_down"] = "every keyless search backend was cooling down for part of the run"
+        with lock:
+            if linkedin and not use_li:
+                out["linkedin_skipped"] += 1
+                out["linkedin_down"] = "every keyless search backend was cooling down for part of the run"
         try:
             r = people_for_company(cid, linkedin=use_li)
         except Exception as e:  # noqa: BLE001 — one company must not end the step
             log.warning("referrals: company %s failed: %s", cid, e)
-            out["errors"] += 1
-            continue
+            with lock:
+                out["errors"] += 1
+            return
         finally:
             if owner:
                 release(cid, owner)
-        out["companies"] += 1
-        out.setdefault("touched", []).append(cid)
-        if r.get("search_down"):
-            out["linkedin_down"] = r.get("linkedin_error") or "keyless search cooling down"
         b, a = r.get("before") or [0, 0], r.get("after") or [0, 0]
-        out["added_ready"] += max(0, a[0] - b[0])
-        out["added_with_email"] += max(0, a[1] - b[1])
-        out["by_pattern"] += r.get("by_pattern", 0)
-        out["linkedin_added"] += r.get("linkedin", 0)
-        out["github_site_added"] += r.get("github_site", 0)
-        out["team_added"] += r.get("team_pages", 0)
-        out["mentions_added"] = out.get("mentions_added", 0) + r.get("mentions", 0)
-        if r.get("github_skipped"):
-            out["github_skipped"] = out.get("github_skipped", 0) + 1
-        out["reached_target"] += (a[0] >= TARGET and a[1] >= 1) and not (b[0] >= TARGET and b[1] >= 1)
-        out["gained_email"] += a[1] >= 1 and b[1] == 0
+        with lock:
+            out["companies"] += 1
+            out.setdefault("touched", []).append(cid)
+            if r.get("search_down"):
+                out["linkedin_down"] = r.get("linkedin_error") or "keyless search cooling down"
+            out["added_ready"] += max(0, a[0] - b[0])
+            out["added_with_email"] += max(0, a[1] - b[1])
+            out["by_pattern"] += r.get("by_pattern", 0)
+            out["linkedin_added"] += r.get("linkedin", 0)
+            out["github_site_added"] += r.get("github_site", 0)
+            out["team_added"] += r.get("team_pages", 0)
+            out["mentions_added"] = out.get("mentions_added", 0) + r.get("mentions", 0)
+            if r.get("github_skipped"):
+                out["github_skipped"] = out.get("github_skipped", 0) + 1
+            out["reached_target"] += (a[0] >= TARGET and a[1] >= 1) and not (b[0] >= TARGET and b[1] >= 1)
+            out["gained_email"] += a[1] >= 1 and b[1] == 0
+
+    def worker() -> None:
+        # each worker takes the next company until the queue or the time budget runs out; the
+        # channels (GitHub, Jina, company sites, LinkedIn guest pages) keep their own pacing, so
+        # one company's wait on Jina is another company's GitHub call (2026-10-29)
+        while True:
+            with lock:
+                if time.time() - t0 > budget_s:
+                    out["stopped"] = f"time budget ({budget_s}s) reached"
+                    return
+                cid = next(todo, None)
+            if cid is None:
+                return
+            if owner and not claim(cid, owner, ttl_s=900):
+                with lock:
+                    out["yielded_to_claims"] = out.get("yielded_to_claims", 0) + 1
+                continue
+            one(cid)
+
+    threads = [threading.Thread(target=worker, name=f"people-{i}", daemon=True) for i in range(max(1, PEOPLE_WORKERS))]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    out["workers"] = len(threads)
     out["seconds"] = round(time.time() - t0)
     _log_run("people", out)
     log.info("referrals people: %s", out)

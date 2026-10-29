@@ -19,6 +19,7 @@ import ipaddress
 import json
 import logging
 import re
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
@@ -328,6 +329,12 @@ KEYLESS: tuple[str, ...] = ("jina-ddg", "jina-startpage", "exa-mcp")
 
 _JDDG_GAP_S = float(RESEARCH.get("jina_ddg_min_gap_seconds", 3.5))   # Jina keyless ≈ 20/min
 _jina_last = 0.0
+#: the people step runs several companies at once (2026-10-29): the gap is Jina's, so every
+#: thread takes its turn through one lock
+_jina_lock = threading.Lock()
+#: a DuckDuckGo bot challenge does not clear in minutes — 28 five-minute cooldowns on 2026-10-29
+#: alone; after one, DDG rests this long and the search goes straight to the other engines
+_DDG_CHALLENGE_COOLDOWN_S = float(RESEARCH.get("ddg_challenge_cooldown_seconds", 1800))
 #: per engine read through Jina: consecutive failures and the cooldown they opened
 _kl_state: dict[str, dict] = {"jina-ddg": {"fails": 0, "cool_until": 0.0},
                               "jina-startpage": {"fails": 0, "cool_until": 0.0}}
@@ -361,10 +368,11 @@ def _jina_read_engine(name: str, url: str, timeout: int) -> str | None:
     if _kl_cooling(name):
         _errors.append(f"{name}: cooling down after repeated failures")
         return None
-    wait = _JDDG_GAP_S - (time.monotonic() - _jina_last)
-    if wait > 0:
-        time.sleep(wait)
-    _jina_last = time.monotonic()
+    with _jina_lock:
+        wait = _JDDG_GAP_S - (time.monotonic() - _jina_last)
+        if wait > 0:
+            time.sleep(wait)
+        _jina_last = time.monotonic()
     try:
         r = httpx.get(JINA + url, headers={"User-Agent": JINA_UA, "Accept": "text/plain"},
                       timeout=timeout, follow_redirects=True)
@@ -396,6 +404,8 @@ def _jina_ddg_search(query: str, limit: int, timeout: int) -> list[SearchResult]
     if "bots use DuckDuckGo" in text[:2000] or "complete the following challenge" in text[:2000]:
         # DuckDuckGo challenged Jina's address: a failure (so the cooldown engages), not "no results"
         _kl_fail("jina-ddg", "DuckDuckGo bot challenge")
+        _kl_state["jina-ddg"]["cool_until"] = time.monotonic() + _DDG_CHALLENGE_COOLDOWN_S
+        _kl_state["jina-ddg"]["fails"] = 0
         return []
     results = _parse_jina_ddg(text, limit)
     _kl_ok("jina-ddg", results)

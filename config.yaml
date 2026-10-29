@@ -1048,6 +1048,7 @@ tick:
   # `tick install` leaves free, paid, referrals and audit unloaded; send and apify run
   scrapers_frozen: false       # 2026-10-23: company scraping runs again; referrals go to Apify (actors.apify)
   free_referral_job: false     # the free people-search job stays off — referrals are Apify's job
+  recompute_minutes: 60        # 2026-10-29: priority / selection / decide / pay floor at most this often (~2.5 min a run)
   free_interval_seconds: 600   # 2026-10-07: round the clock — a tick holds a lock, so a start that finds one running just exits
   socket_timeout_seconds: 120  # 2026-10-16: default timeout for any socket opened without one (tick + referrals)
   paid_hour: 6
@@ -1290,6 +1291,7 @@ needs:
 # Bengaluru (★ first) → Hyderabad → other India → remote; its own lock (data/referrals.lock).
 referrals:
   interval_seconds: 900     # every 15 min (+ at load)
+  people_workers: 3         # 2026-10-29: companies the tick's people step works at once (channels keep their own pacing)
   cycle_seconds: 1200       # the work budget of one cycle; a cycle still running blocks the next (the lock)
   only_buckets: [Bengaluru, Hyderabad]   # 2026-10-17: India focus, Bengaluru first; remove to work every bucket again
   cycle_companies: 40       # companies per cycle (the claimed window)

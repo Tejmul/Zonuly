@@ -27,8 +27,9 @@ import os
 import plistlib
 import subprocess
 import sys
+import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from jobhunter import CONFIG, ROOT
@@ -36,6 +37,8 @@ from jobhunter import CONFIG, ROOT
 log = logging.getLogger(__name__)
 
 _T = CONFIG.get("tick") or {}
+#: the whole-table recomputes run at most this often (2026-10-29: ~2.5 min of every tick)
+RECOMPUTE_MINUTES = int(_T.get("recompute_minutes", 60))
 LOCK = ROOT / "data" / "tick.lock"
 # 2026-10-24: the paid tick (scrape.do + metered Exa) took tick.lock too, so with the free tick now
 # running back to back it skipped every 06:15 start from 10-19 on ("another tick is running")
@@ -420,6 +423,27 @@ def _set_cursor(i: int) -> None:
         set_setting(s, CURSOR_KEY, str(i))
 
 
+RECOMPUTE_KEY = "tick:recompute_at"
+
+
+def _recompute_due() -> bool:
+    from jobhunter.db import get_session, get_setting
+
+    try:
+        with get_session() as s:
+            at = get_setting(s, RECOMPUTE_KEY, "")
+        return not at or datetime.now() - datetime.fromisoformat(at) >= timedelta(minutes=RECOMPUTE_MINUTES)
+    except Exception:  # noqa: BLE001 — when in doubt, recompute
+        return True
+
+
+def _recomputed() -> None:
+    from jobhunter.db import get_session, set_setting
+
+    with get_session() as s:
+        set_setting(s, RECOMPUTE_KEY, datetime.now().isoformat(timespec="seconds"))
+
+
 def _addresses_step(touched: list[int], limit: int = 400) -> dict:
     """Address resolution right after the people step: the pattern learned from every
     company's own confirmed addresses, applied to the ready referrers without one — the
@@ -438,9 +462,10 @@ def _addresses_step(touched: list[int], limit: int = 400) -> dict:
 
 def run_free(budget_s: int | None = None) -> dict:
     """Keyless work, LEADS FIRST (2026-10-14): replies and follow-ups, the guard, then the
-    people step + address resolution + re-verification inside `share.leads` of the
-    budget, then the company steps in rotation inside `share.companies`, then the cheap
-    tail (pay, grade, the complete bar)."""
+    people step + address resolution + re-verification inside `share.leads` of the budget,
+    alongside (2026-10-29, a second thread) the company steps in rotation inside
+    `share.companies`, then the cheap tail (pay, grade, the complete bar) and, at most every
+    RECOMPUTE_MINUTES, the whole-table recomputes."""
     from jobhunter import harvest, targeting
 
     budget_s = budget_s or BUDGET_S
@@ -457,45 +482,57 @@ def run_free(budget_s: int | None = None) -> dict:
     # the guard: stale hiring verdicts downgraded, completeness recomputed
     _step(s, "guard", _guard)
     _step(s, "scrape_first", _mark_empty)
-    _step(s, "priority", targeting.refresh_priority)
+    # the whole-table recomputes (priority, selection, the decision brain, the pay floor) take
+    # ~2.5 min and change little between ticks: at most every RECOMPUTE_MINUTES (2026-10-29)
+    recompute = _recompute_due()
+    s["recompute"] = recompute
+    if recompute:
+        _step(s, "priority", targeting.refresh_priority)
 
-    # ---- LEADS: the ★ list, then companies complete except for a referrer with an address,
-    # then the rest by priority (referrals.people_queue) — GitHub inside its hourly budget,
-    # team pages via Jina, public LinkedIn, podcasts / talks / bylines, the confirmed pattern
-    referrals = _ref()
-    t_leads = time.time()
-    reserve = min(240, leads_s // 6)          # address resolution + re-verification after people
-    people_s, people_n = max(60, leads_s - reserve), L["people"]
-    # the referral job (com.zonuly.referrals) owns India referrals while it is loaded: the
-    # tick's people step yields — a smaller share, and never a company in the job's claimed
-    # window (referrals.claim), so the two never search the same company at once
-    try:
-        yielding = referrals.job_active()
-    except Exception:  # noqa: BLE001
-        yielding = False
-    if yielding:
-        people_s = max(60, int(people_s * SHARE_PEOPLE_YIELD))
-        people_n = max(5, int(people_n * SHARE_PEOPLE_YIELD))
-        s["people_yield"] = {"to": REFER_LABEL, "budget_s": people_s, "limit": people_n}
-    _step(s, "people", referrals.people_step, limit=people_n, budget_s=people_s, owner="tick")
-    touched = []
-    try:
-        touched = [int(x) for x in ((s.get("people") or {}).pop("touched", None) or [])]
-    except (TypeError, ValueError, AttributeError):
+    # ---- LEADS: the best bets, then the ★ list, then companies complete except for a referrer
+    # with an address, then the rest by priority (referrals.people_queue) — GitHub inside its
+    # hourly budget, team pages via Jina, public LinkedIn, podcasts / talks / bylines, the
+    # confirmed pattern. They run in their own thread while the fill and the company steps run
+    # here: different sites, so neither waits on the other (2026-10-29: one after the other, a
+    # tick took ~40 min)
+    def _leads() -> None:
+        referrals = _ref()
+        t_leads = time.time()
+        reserve = min(240, leads_s // 6)          # address resolution + re-verification after people
+        people_s, people_n = max(60, leads_s - reserve), L["people"]
+        # the referral job (com.zonuly.referrals) owns India referrals while it is loaded: the
+        # tick's people step yields — a smaller share, and never a company in the job's claimed
+        # window (referrals.claim), so the two never search the same company at once
+        try:
+            yielding = referrals.job_active()
+        except Exception:  # noqa: BLE001
+            yielding = False
+        if yielding:
+            people_s = max(60, int(people_s * SHARE_PEOPLE_YIELD))
+            people_n = max(5, int(people_n * SHARE_PEOPLE_YIELD))
+            s["people_yield"] = {"to": REFER_LABEL, "budget_s": people_s, "limit": people_n}
+        _step(s, "people", referrals.people_step, limit=people_n, budget_s=people_s, owner="tick")
         touched = []
-    _step(s, "addresses", _addresses_step, touched)
-    # 2026-10-19: the month's Hunter lookups, two a tick, on the companies one lookup can finish
-    _step(s, "hunter", referrals.hunter_step, limit=L["hunter"])
-    # …and the People tab from Apify, inside the free-credit cap, for companies short of referrers
-    _step(s, "apify", referrals.apify_step, limit=L["apify"])
-    if time.time() - t_leads < leads_s:
-        _step(s, "reverify", referrals.reverify_referrers, limit=L["reverify"])
-    if L["affiliation"] and time.time() - t_leads < leads_s:
-        from jobhunter.contacts import affiliation
+        try:
+            touched = [int(x) for x in ((s.get("people") or {}).pop("touched", None) or [])]
+        except (TypeError, ValueError, AttributeError):
+            touched = []
+        _step(s, "addresses", _addresses_step, touched)
+        # 2026-10-19: the month's Hunter lookups, two a tick, on the companies one lookup can finish
+        _step(s, "hunter", referrals.hunter_step, limit=L["hunter"])
+        # …and the People tab from Apify, inside the free-credit cap, for companies short of referrers
+        _step(s, "apify", referrals.apify_step, limit=L["apify"])
+        if time.time() - t_leads < leads_s:
+            _step(s, "reverify", referrals.reverify_referrers, limit=L["reverify"])
+        if L["affiliation"] and time.time() - t_leads < leads_s:
+            from jobhunter.contacts import affiliation
 
-        _step(s, "affiliation", lambda: {k: v for k, v in affiliation.run(
-            L["affiliation"], reserve=L["affiliation_reserve"]).items() if k != "labels"})
-    s["leads_seconds"] = round(time.time() - t_leads)
+            _step(s, "affiliation", lambda: {k: v for k, v in affiliation.run(
+                L["affiliation"], reserve=L["affiliation_reserve"]).items() if k != "labels"})
+        s["leads_seconds"] = round(time.time() - t_leads)
+
+    leads = threading.Thread(target=_leads, name="tick-leads", daemon=True)
+    leads.start()
 
     # ---- FILL (2026-10-14): every tick, before the rotation — the ★ list, then India, then
     # the remote targets, each company scraped completely (fill.py; referrers are the people
@@ -524,20 +561,23 @@ def run_free(budget_s: int | None = None) -> dict:
     if _saturated(s) and time.time() - t_co < companies_s + 120:
         _step(s, "discover", lambda: harvest.admit_exa_keyless(L["discover_queries"]).as_dict())
         _step(s, "probe_new", harvest.probe_ats)
+    leads.join()
 
     # ---- the cheap tail
     _step(s, "pay", targeting.extract_job_pay, only_missing=True)
     _step(s, "grade", targeting.grade_companies, regrade=False)
     from jobhunter import india as _india
 
-    _step(s, "pay_floor", lambda: {k: v for k, v in _india.apply_pay_floor().items()
-                                   if k not in ("sample_hidden",)})
-    _step(s, "priority_after", targeting.refresh_priority)
+    if recompute:
+        _step(s, "pay_floor", lambda: {k: v for k, v in _india.apply_pay_floor().items()
+                                       if k not in ("sample_hidden",)})
+        _step(s, "priority_after", targeting.refresh_priority)
 
-    # SELECTION CONFIDENCE (confidence.py, 2026-10-14): re-score roles whose inputs changed, then a few needs briefs within the model budget
-    _step(s, "selection", lambda: __import__("jobhunter.confidence", fromlist=["tick"]).tick())
-    # THE DECISION BRAIN (decide.py, 2026-10-23): P(offer) per Bengaluru / Hyderabad company from those role scores, the shortlists re-ranked
-    _step(s, "decide", lambda: __import__("jobhunter.decide", fromlist=["tick"]).tick())
+        # SELECTION CONFIDENCE (confidence.py, 2026-10-14): re-score roles whose inputs changed, then a few needs briefs within the model budget
+        _step(s, "selection", lambda: __import__("jobhunter.confidence", fromlist=["tick"]).tick())
+        # THE DECISION BRAIN (decide.py, 2026-10-23): P(offer) per Bengaluru / Hyderabad company from those role scores, the shortlists re-ranked
+        _step(s, "decide", lambda: __import__("jobhunter.decide", fromlist=["tick"]).tick())
+        _recomputed()
 
     _step(s, "complete", _complete)
     if PAID_HOURLY and time.time() - t0 < budget_s + 600:

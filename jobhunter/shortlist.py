@@ -401,15 +401,23 @@ def progress() -> dict:
         latest: dict[int, ShortlistFill] = {}
         for r in s.exec(select(ShortlistFill).order_by(col(ShortlistFill.at))).all():
             latest[r.company_id] = r
-        names = {c.id: c.name for c in s.exec(select(Company).where(col(Company.id).in_([d.company_id for d in decs] or [-1]))).all()}
+        companies = {c.id: c for c in s.exec(select(Company).where(col(Company.id).in_([d.company_id for d in decs] or [-1]))).all()}
+        names = {cid: c.name for cid, c in companies.items()}
+        # what is missing NOW, not what was missing when the last pass ended — addresses and
+        # facts arrive between passes (2026-10-29: 19 companies shown short of an address had one)
+        live = {cid: state(s, c) for cid, c in companies.items()}
     pools = {}
     for p in POOL_ORDER:
         ds = sorted((d for d in decs if d.pool == p), key=lambda d: d.rank)
         rows = []
         for d in ds:
             r = latest.get(d.company_id)
+            was = json.loads(r.missing_after or "{}") if r else {}
+            now = live.get(d.company_id) or {}
+            missing = {k: was.get(k, "not found by the free sources yet") for k, ok in now.items() if not ok}
             rows.append({"company_id": d.company_id, "name": names.get(d.company_id), "rank": d.rank,
-                         "status": r.status if r else "waiting", "missing": json.loads(r.missing_after or "{}") if r else None,
+                         "status": ("complete" if not missing else "partial") if r else "waiting",
+                         "missing": missing if r else None,
                          "at": r.at.isoformat() if r else None, "cost_usd": r.cost_usd if r else 0})
         pools[p] = {"total": len(rows), "complete": sum(1 for x in rows if x["status"] == "complete"),
                     "partial": sum(1 for x in rows if x["status"] == "partial"),
