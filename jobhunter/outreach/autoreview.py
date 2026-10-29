@@ -24,6 +24,10 @@ What a draft must pass, all of it:
     the letter itself         a greeting by first name, the current resume link, no
                               unfilled template slot, no Zonuly counts
 
+A follow-up (2026-10-29) passes followup_problems: its first mail delivered and unanswered,
+the person not suppressed, not stale, and the same letter checks. It waits out a spam pause
+or a domain's spam cooldown like a cold mail.
+
 Layering: outreach layer — db, guardrails and the other outreach modules below; shortlist above.
 """
 
@@ -163,15 +167,46 @@ def problems(session, e: Email) -> list[str]:
     if not first:
         contact = session.get(Contact, e.contact_id)
         first = ((contact.name or "").split() or [""])[0] if contact else ""
-    if not first or not re.match(rf"^(hi|hello|hey|dear)\s+{re.escape(first)}\b", body.strip(), re.I):
-        out.append("the greeting is not to their first name")
     if _RESUME and _RESUME not in body:
         out.append("the current resume link is missing")
+    return out + _letter(e, first)
+
+
+def _letter(e: Email, first: str) -> list[str]:
+    """The checks every letter passes, a cold ask or a follow-up."""
+    out: list[str] = []
+    body = e.body or ""
+    if not first or not re.match(rf"^(hi|hello|hey|dear)\s+{re.escape(first)}\b", body.strip(), re.I):
+        out.append("the greeting is not to their first name")
     if _SLOT.search(body) or _SLOT.search(e.subject or ""):
         out.append("an unfilled template slot")
     if re.search(r"zonuly[^.\n]{0,60}\d", body, re.I):
         out.append("quotes Zonuly numbers")
     return out
+
+
+def followup_problems(session, e: Email) -> list[str]:
+    """Why this follow-up may never go, or [] when it may (2026-10-29: follow-ups waited for a
+    click that no longer comes). It nudges an ask already delivered, so the address is proven
+    by that delivery and the role and resume were judged on the first mail; what is left is
+    whether the thread is still silent and the person still reachable."""
+    from jobhunter.db import Company
+    from jobhunter.outreach import suppress
+
+    out: list[str] = []
+    parent = session.get(Email, e.parent_email_id) if e.parent_email_id else None
+    if parent is None or parent.status != "sent":
+        out.append(f"the first mail is not a delivered, unanswered ask ({parent.status if parent else 'missing'})")
+    contact = session.get(Contact, e.contact_id)
+    why = suppress.blocked(session, contact=contact, company=session.get(Company, e.company_id), to_email=e.to_email)
+    if why:
+        out.append(why)
+    if contact is None:
+        out.append("the contact this follow-up was written to no longer exists")
+    if e.expires_at and e.expires_at < utcnow():
+        out.append("the follow-up is stale")
+    first = ((contact.name or "").split() or [""])[0] if contact else ""
+    return out + _letter(e, first)
 
 
 def run(limit: int = 200, *, now: datetime | None = None) -> dict:
@@ -187,11 +222,11 @@ def run(limit: int = 200, *, now: datetime | None = None) -> dict:
     init_db()
     out = {"approved": [], "rejected": [], "waiting": []}
     with get_session() as s:
-        drafts = s.exec(select(Email).where(Email.status == "draft", Email.kind == "cold")
+        drafts = s.exec(select(Email).where(Email.status == "draft", col(Email.kind).in_(["cold", "followup"]))
                         .order_by(col(Email.created_at)).limit(limit)).all()
         verdicts = []
         for e in drafts:
-            why = problems(s, e)
+            why = followup_problems(s, e) if e.kind == "followup" else problems(s, e)
             hold = None if why else waits(s, e)
             verdicts.append((e.id, why, hold))
     lines = []
@@ -227,4 +262,4 @@ def run(limit: int = 200, *, now: datetime | None = None) -> dict:
     return out
 
 
-__all__ = ["run", "problems", "waits", "role_problem", "MIN_QUALITY"]
+__all__ = ["run", "problems", "followup_problems", "waits", "role_problem", "MIN_QUALITY"]

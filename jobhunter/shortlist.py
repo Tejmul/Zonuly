@@ -337,8 +337,11 @@ def catch_up(limit: int = 2) -> list[dict]:
     init_db()
     with get_session() as s:
         decs = s.exec(select(CompanyDecision).where(col(CompanyDecision.rank).is_not(None))).all()
+        # a rejected draft counts too (2026-10-29): without it Recro and Businessonbot were
+        # redrafted every 10 minutes to the same person for the same senior role, 30 rejections a day
         has_mail = set(s.exec(select(Email.company_id).where(
-            Email.kind == "cold", col(Email.status).in_(["draft", "approved", "sending", "sent", "replied"]))).all())
+            Email.kind == "cold",
+            col(Email.status).in_(["draft", "approved", "sending", "sent", "replied", "rejected"]))).all())
         ready = set(s.exec(select(Contact.company_id).where(
             col(Contact.email).is_not(None), col(Contact.role_class).in_(list(_DRAFT_ORDER)),
             Contact.confidence != "pattern-guessed", col(Contact.do_not_contact).is_not(True))).all())

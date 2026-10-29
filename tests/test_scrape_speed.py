@@ -122,3 +122,29 @@ def test_a_ddg_bot_challenge_rests_ddg_for_the_long_cooldown(monkeypatch):
     assert web._jina_ddg_search("acme engineers", 5, 10) == []
     assert web._kl_state["jina-ddg"]["cool_until"] - time.monotonic() > web._DDG_CHALLENGE_COOLDOWN_S - 5
     assert web._kl_cooling("jina-ddg") and not web._kl_cooling("jina-startpage")
+
+
+def test_catch_up_does_not_redraft_a_company_whose_draft_was_rejected(engine, monkeypatch):
+    from jobhunter import shortlist
+    from jobhunter.db import Contact, Email
+
+    monkeypatch.setattr(shortlist, "get_session", lambda: Session(engine))
+    monkeypatch.setattr(shortlist, "init_db", lambda: None)
+    drafted = []
+    monkeypatch.setattr(shortlist, "draft", lambda cid, job_id=None: drafted.append(cid) or {"email_id": 1})
+    with Session(engine) as s:
+        ids = []
+        for name in ("Recro", "Fresh"):
+            c = Company(name=name, domain=f"{name.lower()}.com")
+            s.add(c)
+            s.commit()
+            s.refresh(c)
+            ids.append(c.id)
+            s.add(Contact(company_id=c.id, name="Asha Rao", email=f"asha@{name.lower()}.com", role_class="engineer",
+                          confidence="verified", source="github"))
+            s.add(_decision(c.id, "Bengaluru", len(ids)))
+        s.add(Email(company_id=ids[0], contact_id=1, to_email="asha@recro.com", subject="s", body="b",
+                    kind="cold", status="rejected"))
+        s.commit()
+    shortlist.catch_up(limit=2)
+    assert drafted == [ids[1]]

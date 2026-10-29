@@ -398,3 +398,44 @@ def test_a_company_whose_best_bet_is_senior_is_asked_about_its_fresher_role(db):
         s.add(junior)
         s.commit()
         assert focus.role_for(s, c) is False and focus._blocked(s, c)
+
+
+# ------------------------------------------------------------------ follow-ups (2026-10-29)
+
+def _followup(engine, cid, pid, parent, *, body=None):
+    with Session(engine) as s:
+        p = s.get(Contact, pid)
+        e = Email(contact_id=pid, company_id=cid, to_email=p.email, subject="Re: Referral at Acme",
+                  body=body or f"Hi {p.name.split()[0]},\n\nA short note on my message from last week.\n\nBest,\nTejmul",
+                  kind="followup", status="draft", parent_email_id=parent, address_confidence="pattern-guessed",
+                  review_flags=json.dumps([{"kind": "template", "detail": "fixed template"}]),
+                  expires_at=utcnow() + timedelta(days=2))
+        s.add(e)
+        s.commit()
+        return e.id
+
+
+def test_a_follow_up_on_a_silent_thread_is_approved_without_a_click(db):
+    cid, (p1, p2) = _company(db)
+    fu = _followup(db, cid, p1, _sent(db, cid, p1, n=1))
+    with Session(db) as s:
+        replied = s.get(Email, _sent(db, cid, p2, n=2))
+        replied.status = "replied"
+        s.add(replied)
+        s.commit()
+        late = _followup(db, cid, p2, replied.id)
+    out = autoreview.run()
+    assert out["approved"] == [fu]
+    assert [r["email_id"] for r in out["rejected"]] == [late] and "unanswered" in out["rejected"][0]["why"][0]
+    with Session(db) as s:
+        assert s.get(Email, fu).status == "approved" and s.get(Email, fu).approved_by == autoreview.BY
+
+
+def test_a_follow_up_waits_out_a_spam_pause(db, monkeypatch):
+    cid, (p1, _) = _company(db)
+    fu = _followup(db, cid, p1, _sent(db, cid, p1, n=1))
+    block = Email(id=999, company_id=0, to_email="x@other.com", kind="cold", status="failed",
+                  sent_at=utcnow() - timedelta(hours=2))
+    monkeypatch.setattr(suppress, "spam_blocks", lambda session, hours: [block])
+    out = autoreview.run()
+    assert [w["email_id"] for w in out["waiting"]] == [fu] and not out["approved"]

@@ -379,8 +379,9 @@ def spam_hold(session, email: Email) -> str | None:
     """Why this cold mail must wait because Gmail refused earlier mail as spam, or None:
     any block in the last SPAM_PAUSE_HOURS pauses every cold mail (the account is being
     watched); a block at this company or this recipient domain in the last
-    SPAM_COOLDOWN_DAYS holds every ask there. Only ever holds; nothing is rejected."""
-    if email.kind != "cold":
+    SPAM_COOLDOWN_DAYS holds every ask there. Only ever holds; nothing is rejected. A follow-up
+    waits too (2026-10-29): it goes from the same account into the same domain."""
+    if email.kind not in ("cold", "followup"):
         return None
     recent = spam_blocks(session, hours=SPAM_PAUSE_HOURS) if SPAM_PAUSE_HOURS else []
     if recent:
