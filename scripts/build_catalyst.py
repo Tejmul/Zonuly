@@ -39,6 +39,9 @@ START = """#!/bin/sh
 set -e
 cd "$(dirname "$0")"
 python3 -c "import gzip,shutil; shutil.copyfileobj(gzip.open('demo.db.gz','rb'), open('/tmp/zonuly.db','wb'))"
+# the image shares AppSail's memory with /tmp: once unpacked, the 50 MB archive is dead weight
+# (2026-10-29: the snapshot grew 54 MB and the instance stopped coming up)
+rm -f demo.db.gz 2>/dev/null || true
 export ZONULY_DB_PATH=/tmp/zonuly.db
 export ZONULY_PUBLIC=1
 export PYTHONPATH="$PWD/vendor:$PWD"
