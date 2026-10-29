@@ -80,6 +80,44 @@ def mask_addresses(con: sqlite3.Connection) -> dict:
     return out
 
 
+#: AppSail unpacks the snapshot onto its 256 MB disk (2026-10-29: 242 MB came up, 296 MB never
+#: did, at 1024 and at 2048 MB of memory). Kept under this with room for the app's own files.
+MAX_MB = 235
+
+_JSON_COLUMNS = (("job", "selection_why"), ("kg_node", "props"), ("company", "field_meta"))
+
+
+def slim(con: sqlite3.Connection, existing: set[str]) -> dict:
+    """Make the snapshot fit the deployed disk without losing a row: merge the full-text
+    index's segments, write stored JSON without spaces, and drop the posting text of senior
+    roles — the pipeline never asks about them (fresher roles only), and each keeps its
+    title and link."""
+    out = {}
+    if "job" in existing:
+        cur = con.execute("update job set description = null, selection_why = null "
+                          "where is_senior = 1 and (description is not null or selection_why is not null)")
+        out["senior_job_texts_dropped"] = cur.rowcount
+    compacted = 0
+    for table, column in _JSON_COLUMNS:
+        if table not in existing:
+            continue
+        for rowid, value in con.execute(f'select rowid, "{column}" from "{table}" where "{column}" is not null').fetchall():
+            try:
+                small = json.dumps(json.loads(value), separators=(",", ":"), ensure_ascii=False)
+            except (TypeError, ValueError):
+                continue
+            if len(small) < len(value):
+                con.execute(f'update "{table}" set "{column}" = ? where rowid = ?', (small, rowid))
+                compacted += 1
+    out["json_compacted"] = compacted
+    con.commit()
+    if "kg_fts" in existing:
+        con.execute("insert into kg_fts(kg_fts) values('optimize')")
+        con.commit()
+        out["fts_optimized"] = True
+    return out
+
+
 def build(src: Path, out: Path) -> dict:
     if not src.exists():
         sys.exit(f"no database at {src}")
@@ -102,6 +140,7 @@ def build(src: Path, out: Path) -> dict:
             cleared[table] = before
         con.commit()
         masked = mask_addresses(con)
+        slimmed = slim(con, existing)
         # VACUUM outside a transaction; without it the pages are freed but the file is not.
         con.isolation_level = None
         con.execute("VACUUM")
@@ -118,10 +157,15 @@ def build(src: Path, out: Path) -> dict:
     with sqlite3.connect(out) as plain:
         plain.execute("PRAGMA journal_mode=DELETE")
 
+    mb = out.stat().st_size / 1_048_576
+    if mb > MAX_MB:
+        sys.exit(f"snapshot is {mb:.0f} MB, over {MAX_MB} MB: AppSail unpacks it onto a 256 MB disk and "
+                 "never comes up — slim it further before committing")
     return {
         "stamp": stamp,
         "out": str(out),
-        "mb": round(out.stat().st_size / 1_048_576, 1),
+        "mb": round(mb, 1),
+        "slimmed": slimmed,
         "was_mb": round(src.stat().st_size / 1_048_576, 1),
         "cleared": cleared,
         "kept": kept,
