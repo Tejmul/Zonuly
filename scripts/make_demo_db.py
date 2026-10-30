@@ -43,6 +43,7 @@ CLEARED = (
     "extraction_reject",  # the scrape audit trail: ~16 MB the public page never shows
     "extraction_write",   # (2026-10-23: the snapshot outgrew AppSail's 512 MB with them in)
     "shortlistfill",      # the shortlist job's work log, with its costs — the operator's
+    "email_check",        # 2026-10-30: per-address check-if-email-exists verdicts — the operator's
 )
 
 
