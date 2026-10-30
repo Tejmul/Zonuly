@@ -27,6 +27,7 @@ Nothing here can push the day past outreach.total_daily_cap.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
@@ -227,6 +228,35 @@ def gap_ok(session, inbox: Inbox, now: datetime | None = None) -> bool:
     return (now_utc - last.sent_at).total_seconds() >= gap * 60
 
 
+BRAKE_HOURS = float(_O.get("inbox_brake_hours", 48))
+_REFUSAL = re.compile(r"\b5\.\d\.\d|\b55\d\b|limit exceeded|spam|blocked|rejected", re.I)
+
+
+def brake(session, inbox: Inbox, now: datetime | None = None) -> str | None:
+    """Why this inbox must rest, or None. 2026-10-30, Tejmul: "nothing should go in spam and
+    nothing should go blocked". One bounce or one refusal from an inbox in the last
+    BRAKE_HOURS stops that inbox (the others go on): a provider that refused once is watching,
+    and a second strike is what turns a pause into a block."""
+    from jobhunter.db import Email
+
+    if BRAKE_HOURS <= 0:
+        return None
+    since = (now or datetime.now()).astimezone(timezone.utc).replace(tzinfo=None) - timedelta(hours=BRAKE_HOURS)
+    who = Email.sender_inbox == inbox.key
+    if inbox.is_gmail:
+        who = (Email.sender_inbox == inbox.key) | col(Email.sender_inbox).is_(None)
+    bad = session.exec(select(Email).where(who, Email.status == "failed", col(Email.error).is_not(None),
+                                           func.coalesce(Email.sent_at, Email.approved_at) >= since)).all()
+    # a bounce, or a provider's refusal (5xx, blocked, spam, a sending limit) — not a dropped
+    # network, a sign-in problem or a draft the address check stopped before it left
+    bad = [e for e in bad if (e.error or "").startswith("bounced") or _REFUSAL.search(e.error or "")]
+    if not bad:
+        return None
+    last = bad[-1]
+    return (f"{inbox.address} rests {BRAKE_HOURS:g}h: mail to {last.to_email} failed "
+            f"({(last.error or '')[:80]})")
+
+
 def takes(inbox: Inbox, *, guessed: bool) -> bool:
     """A domain inbox writes to verified addresses only (verified_only, the default)."""
     return not (guessed and inbox.verified_only)
@@ -237,6 +267,7 @@ def describe(session, now: datetime | None = None) -> list[dict]:
     for i in all_inboxes():
         s = start(session, i)
         out.append({"key": i.key, "address": i.address, "ready": i.ready(), "cap": i.cap,
+                    "resting": brake(session, i, now),
                     "quota_today": quota(session, i, now), "used_today": used_today(session, i, now),
                     "warmup_start": s.isoformat() if s else None, "verified_only": i.verified_only,
                     "password_env": None if i.is_gmail else i.password_env})
@@ -244,4 +275,4 @@ def describe(session, now: datetime | None = None) -> list[dict]:
 
 
 __all__ = ["Inbox", "GMAIL", "TOTAL_CAP", "all_inboxes", "ready", "sending", "get", "quota", "total_quota", "used_today",
-           "left_today", "due", "gap_ok", "takes", "describe", "start"]
+           "left_today", "due", "gap_ok", "takes", "brake", "describe", "start"]

@@ -156,9 +156,13 @@ def _inbox_for(session, email: Email, parent: Email | None, want: str | None, gu
             return f"{box.address} writes to verified addresses only — this one is a guess"
         if inboxes.left_today(session, box) <= 0:
             return f"{box.address} has sent today's {inboxes.quota(session, box)}"
+        rest = inboxes.brake(session, box)
+        if rest:
+            return rest
         return box
     pool = [b for b in inboxes.sending(live)
-            if inboxes.takes(b, guessed=guessed) and inboxes.left_today(session, b) > 0]
+            if inboxes.takes(b, guessed=guessed) and inboxes.left_today(session, b) > 0
+            and not inboxes.brake(session, b)]
     if not pool:
         return "no inbox has mail left today that can take this address"
     return max(pool, key=lambda b: inboxes.left_today(session, b))
@@ -276,6 +280,7 @@ def send_email(email_id: int, *, ignore_window: bool = False, inbox: str | None 
                 email.status, email.error = "approved", f"retry {tries + 1}: {str(e)[:450]}"
             else:
                 email.status, email.error = "failed", str(e)[:500]
+                email.sender_inbox = box.key     # a refusal rests the inbox that got it (inboxes.brake)
             session.add(email)
             session.commit()
         return {"error": str(e)[:300], "email_id": email_id}
@@ -450,6 +455,10 @@ def send_due(now: datetime | None = None, *, stagger: bool = True, max_per_run: 
         for b in sorted(inboxes.sending(live), key=lambda b: b.is_gmail):
             if inboxes.left_today(session, b, now) <= 0:
                 out["inboxes"][b.key] = "today's quota is spent"
+                continue
+            rest = inboxes.brake(session, b, now)
+            if rest:
+                out["inboxes"][b.key] = rest
                 continue
             home_due = india_open and inboxes.due(session, b, now) > inboxes.used_today(session, b, now)
             gap = inboxes.gap_ok(session, b, now)

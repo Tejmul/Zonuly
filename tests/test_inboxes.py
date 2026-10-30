@@ -3,6 +3,7 @@ a follow-up from the inbox its first mail left from."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta
 
 import pytest
@@ -27,7 +28,7 @@ def db(tmp_path, monkeypatch):
     monkeypatch.setattr(ledger, "effective_cap", lambda day: 100)
     monkeypatch.setattr(sender, "OUTBOX", tmp_path / "outbox")
     monkeypatch.setattr(sender, "SEND_MODE", "dryrun")
-    gmail_box = inboxes._gmail()
+    gmail_box = replace(inboxes._gmail(), verified_only=False)
     monkeypatch.setattr(inboxes, "all_inboxes", lambda: [gmail_box, ZOHO])
     monkeypatch.setattr(inboxes, "sending", lambda live: [gmail_box, ZOHO])
     monkeypatch.setattr(sender, "in_send_window", lambda now=None: True)
@@ -136,3 +137,33 @@ def test_each_inbox_has_its_own_send_times():
     a = warmup.slots("2026-11-02", 5, window=(10, 19))
     b = warmup.slots("2026-11-02", 5, window=(10, 19), seed="zoho-test")
     assert a == warmup.slots("2026-11-02", 5, window=(10, 19), seed="gmail") and a != b
+
+
+def test_one_bounce_rests_that_inbox_and_the_others_go_on(db, monkeypatch):
+    (c1, p1), (c2, p2), (c3, p3) = _people(db, [("Acme", "Priya Sharma", "verified"), ("Beta", "Kiran Das", "verified"),
+                                               ("Gamma", "Meena Iyer", "verified")])
+    dead = _email(db, c1, p1, "verified")
+    with Session(db) as s:
+        e = s.get(Email, dead)
+        e.status, e.sender_inbox, e.sent_at = "failed", ZOHO.key, utcnow() - timedelta(hours=3)
+        e.error = "bounced: 550 5.1.1 address not found"
+        s.add(e)
+        s.commit()
+        assert "rests" in inboxes.brake(s, ZOHO)
+        assert inboxes.brake(s, inboxes._gmail()) is None
+    _email(db, c2, p2, "verified")
+    _email(db, c3, p3, "verified")
+    out = sender.send_due(datetime.now(), stagger=False)      # the bounce is 3 h old by the real clock
+    assert out["sent"] == 1 and "rests" in out["inboxes"][ZOHO.key], out
+    assert all(r.get("inbox") == inboxes.GMAIL for r in out["results"] if r.get("sent"))
+
+
+def test_a_network_drop_does_not_rest_an_inbox(db):
+    (cid, pid), = _people(db, [("Acme", "Priya Sharma", "verified")])
+    eid = _email(db, cid, pid, "verified")
+    with Session(db) as s:
+        e = s.get(Email, eid)
+        e.status, e.sender_inbox, e.error = "failed", ZOHO.key, "OSError: [Errno 60] Operation timed out"
+        s.add(e)
+        s.commit()
+        assert inboxes.brake(s, ZOHO) is None
