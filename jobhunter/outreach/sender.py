@@ -203,6 +203,17 @@ def send_email(email_id: int, *, ignore_window: bool = False, inbox: str | None 
         thread_id = email.gmail_thread_id
         candidate_id = email.candidate_id
         guessed = (email.address_confidence or "verified") != "verified"
+        # 2026-10-30, Tejmul: only an address proved real ever gets a mail — no guessed lane
+        from jobhunter.db import EmailCheck
+
+        proof = session.get(EmailCheck, (to or "").strip().lower())
+        if proof is None or proof.verdict != "safe":
+            email.status = "failed"
+            email.error = "address not proved real (check-if-email-exists) — not sent"
+            session.add(email)
+            session.commit()
+            return {"error": email.error, "email_id": email_id}
+        guessed = False
         # a follow-up or reschedule threads under the mail it answers
         parent = session.get(Email, email.parent_email_id) if email.parent_email_id else None
         in_reply_to = parent.gmail_message_id if parent and (parent.gmail_message_id or "").startswith("<") else None

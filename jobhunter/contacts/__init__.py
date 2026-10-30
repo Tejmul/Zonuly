@@ -130,8 +130,10 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
                     )
                     stats["hunter"] += 1
 
-        # ---- 5. fill the gaps by a CONFIRMED pattern, MX-checked (no SMTP probing)
-        if domain and pattern:
+        # ---- 5. (off) filling gaps by pattern made addresses nobody ever saw; they bounced and
+        # got the Gmail blocked. 2026-10-30, Tejmul: never again — a lead without a found,
+        # proved address stays without one (contacts/reacher.py, db._only_verified_addresses).
+        if False:
             for p in nameless:
                 cands = patterns.candidates(p["name"], domain, pattern)
                 if not cands:

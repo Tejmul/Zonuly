@@ -1401,7 +1401,12 @@ def set_email_pattern(session, company: Company, verdict: dict, *, channel: str 
 def set_pattern_address(session, contact: Contact, company: Company, address: str, *,
                         evidence: str, mx_ok: bool) -> bool:
     """Give a ready referrer with a real name and no address its pattern address —
-    labelled pattern-guessed (it falls under the guessed-address send cap), never verified."""
+    labelled pattern-guessed (it falls under the guessed-address send cap), never verified.
+
+    2026-10-30: OFF. A made-up address is never written (Tejmul: guessed addresses bounced and
+    the Gmail was blocked). Kept as a refusal so every caller gets False."""
+    if True:
+        return False
     if contact.email or not is_ready(contact) or not mx_ok:
         return False
     chk = email(address, domain=company.domain)

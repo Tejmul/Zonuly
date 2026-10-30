@@ -204,6 +204,11 @@ guarantees:
     order: 2
     summary: Never a project, number or shared connection that isn't in the source material. Currently prompt-level only — the mechanical check is GAP-2.
     enforced_by: [feature:person-research-honest-hook]
+  - id: guarantee:verified-addresses-only
+    label: Only proved addresses, never a guess
+    order: 2
+    summary: "2026-10-30 (Tejmul): guessed addresses bounced and Gmail blocked the inbox. An address goes on contact.email only with a safe check-if-email-exists verdict (contacts/reacher.py), a delivery, or a vendor proof; db._only_verified_addresses enforces it on every flush. Pattern filling is off. Unproved addresses stay in contact.email_unverified, never mailed or shown. Audit: 28,630 addresses — 241 proved, 658 guessed (removed), the rest unchecked: Google/Microsoft/Zoho refuse SMTP checks from the home IP, so Reacher needs a server with port 25."
+    enforced_by: [module:jobhunter.contacts, module:jobhunter.outreach]
   - id: guarantee:budget-spent-well
     label: 25/day, irreversibly spent, visible everywhere
     order: 3

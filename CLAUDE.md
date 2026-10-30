@@ -44,6 +44,14 @@ for the visual.
   2026-10-26 the review gate is run by rules, not clicks (`jobhunter/outreach/autoreview.py`, on Tejmul's
   instruction): every cold draft is approved or rejected with its reason in `logs/autoreview.log`. Each
   session, read that log's rejections and fix the stage that produced them — that is the loop.
+- **Never guess an email address. Ever.** (2026-10-30: guessed addresses were mailed, bounced, and
+  Gmail blocked the inbox.) An address goes on a lead only when check-if-email-exists
+  (`tools/reacher/`, `jobhunter/contacts/reacher.py`) proves it `safe`, it was delivered to, or the
+  person published it AND it was then proved. `db._only_verified_addresses` enforces this on every
+  write; anything unproved is kept in `contact.email_unverified`, never mailed, never shown. Pattern
+  filling (`addresses.py`, `contacts/__init__` step 5, `linkedin_public`) is switched off — do not
+  switch it back on. Real/fake is internal (`contact.email_status` real | fake:<why>); the dashboard
+  shows only real addresses and no "fake" label. No Apify for verification (cost).
 - Layering: `db/llm/normalize` ← `scrapers/contacts/outreach` ← `pipeline/matcher/kg` ← `api` ← `dashboard`.
   Nothing imports upward.
 - The machine has 8 GB RAM and no model runtime. Until step 1 of v3 lands, `llm.py` still contains the old

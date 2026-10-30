@@ -269,6 +269,12 @@ class Contact(SQLModel, table=True):
     dead_email: Optional[str] = Field(default=None, index=True)
     do_not_contact: Optional[bool] = Field(default=None, index=True)
     dnc_reason: Optional[str] = None
+    # ---- verified addresses only (2026-10-30, Tejmul: "if I send the mail, the mail should be
+    # delivered"). `email` holds an address ONLY when email_check says it is safe — the flush
+    # hook (_only_verified_addresses) enforces it for every writer. Anything else waits here,
+    # kept, never erased: the person is still a lead, the address only a hint until proved.
+    email_unverified: Optional[str] = Field(default=None, index=True)
+    email_verified_by: Optional[str] = None   # reacher | apify | delivered — who proved `email`
 
 
 class ExtractionReject(SQLModel, table=True):
@@ -447,6 +453,24 @@ class EmailPattern(SQLModel, table=True):
     edited: bool = False                      # the user changed the draft before approving the pattern
     created_at: datetime = Field(default_factory=utcnow)
     revoked_at: Optional[datetime] = None
+
+
+class EmailCheck(SQLModel, table=True):
+    """What is known about whether one address takes mail (contacts/reacher.py).
+
+    safe     proved: check-if-email-exists said deliverable on a domain that is not
+             catch-all, Apify's email search said the same, or a mail to it was delivered
+    risky    catch-all domain, full inbox, role account — not proof
+    invalid  the mailbox server said the mailbox does not exist
+    unknown  nothing could be learned (greylisting, a server that will not talk to us)
+    Only `safe` lets an address onto contact.email."""
+    __tablename__ = "email_check"
+    address: str = Field(primary_key=True)      # lower-case
+    verdict: str = Field(index=True)
+    source: str = "reacher"                     # reacher | apify | delivered
+    catch_all: Optional[bool] = None
+    detail: Optional[str] = None
+    checked_at: datetime = Field(default_factory=utcnow)
 
 
 class Reply(SQLModel, table=True):
@@ -634,6 +658,33 @@ def ensure_columns() -> list[str]:
 
         logging.getLogger(__name__).info("schema: added %d column(s): %s", len(added), ", ".join(added))
     return added
+
+
+_KEEP_STATUS = ("bounced", "opted_out")
+
+
+@event.listens_for(Session, "before_flush")
+def _only_verified_addresses(session, _flush_context, _instances) -> None:
+    """No writer puts an unproved address on contact.email (2026-10-30: guessed addresses at
+    sarvam.ai and kapture.cx bounced and got the Gmail blocked). A new or changed address
+    without a `safe` email_check row is moved to email_unverified — kept as a hint, never
+    mailed — and contacts/reacher.verify_pending proves or replaces it later."""
+    from sqlalchemy import inspect as sa_inspect
+
+    for obj in list(session.new) + list(session.dirty):
+        if not isinstance(obj, Contact) or not obj.email:
+            continue
+        if obj not in session.new and not sa_inspect(obj).attrs.email.history.has_changes():
+            continue
+        addr = obj.email.strip().lower()
+        with session.no_autoflush:
+            chk = session.get(EmailCheck, addr)
+        if chk is not None and chk.verdict == "safe":
+            obj.email, obj.email_verified_by = addr, chk.source
+            continue
+        obj.email, obj.email_unverified, obj.email_verified_by = None, addr, None
+        if obj.email_status not in _KEEP_STATUS:
+            obj.email_status = f"fake:{chk.verdict}" if chk is not None else "fake:not-proved"
 
 
 def init_db() -> None:

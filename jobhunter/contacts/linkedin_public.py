@@ -251,7 +251,7 @@ def _save(company_id: int, people: list[dict], via: str) -> int:
             if own and own not in taken:
                 email, confidence = own, own_conf
                 taken.add(own)
-            elif domain and pattern:
+            elif False:   # 2026-10-30: no pattern guesses — only an address the person or a check proved
                 cands = patterns.candidates(p["name"], domain, pattern)
                 if cands:
                     got, v = verify.best_candidate([x for x in cands if x.lower() not in taken])

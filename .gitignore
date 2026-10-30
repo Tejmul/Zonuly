@@ -35,3 +35,7 @@ data/backups/
 
 # research dossiers name people and their addresses — never pushed (2026-10-23)
 reports/
+
+# email audit output holds people's addresses; the Reacher binary is downloaded (tools/reacher, v0.11.9)
+data/audit/
+tools/reacher/
