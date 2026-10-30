@@ -370,8 +370,7 @@ def readability(text: str) -> tuple[int, float]:
 
 
 def subject_problems(subject: str) -> list[str]:
-    """What breaks the researched subject rules (playbook §1): 2–8 words / ≤60 chars, no
-    "quick question" (Hunter: 2.5% vs 2.9% reply), no fake reply/forward prefix on a cold
+    """What breaks the researched subject rules (playbook §1): 2–8 words / ≤60 chars, no fake reply/forward prefix on a cold
     mail, no spam words, no exclamation marks, no shouting."""
     s = (subject or "").strip()
     out = []
@@ -380,8 +379,8 @@ def subject_problems(subject: str) -> list[str]:
         out.append(f"{n} words — keep it {SUBJECT_MIN_WORDS}–{SUBJECT_MAX_WORDS}")
     if len(s) > SUBJECT_MAX_CHARS:
         out.append(f"{len(s)} characters — over {SUBJECT_MAX_CHARS}, it gets cut off on a phone")
-    if re.search(r"quick question", s, re.I):
-        out.append('"quick question" underperforms (Hunter 2026)')
+    # 2026-10-30: the "quick question" ban (Hunter 2026: 2.5% vs 2.9% reply) is lifted — Tejmul
+    # chose "Quick question, {first_name}" for his subjects, and the body does ask a real question
     if re.match(r"^\s*(re|fwd?)\s*:", s, re.I):
         out.append("a fake Re:/Fwd: on a first mail reads as a trick")
     if "!" in s:

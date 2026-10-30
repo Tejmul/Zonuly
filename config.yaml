@@ -793,51 +793,55 @@ outreach:
     # pattern for everyone (who he is, 3–4 results for the role, a polite referral ask, resume
     # link); auto = the research picker (advice_first / give_first / fit_question / recruiter_direct)
     structure: direct_intro
-    # 2026-10-17: the user's own email, word for word ("this looks good, use this"). Slots:
-    # {first_name} {role} {company} {resume_link}. Edit the wording here, not in code.
+    # 2026-10-30, Tejmul: "strictly follow this and in the same pattern; the numbers should appear":
+    # who he is and where he studies → 4 internships (YC companies, startups), AI Lead for YC clients (past: he left it),
+    # 3 years freelancing, 50+ projects, $5k MRR, startups / communities / open source → came
+    # across the company, liked {liked}, saw the {role} opening, the ask, resume, an easy out.
+    # Slots: {first_name} {role} {company} {liked} {resume_link}. {liked} is company_likes[company]
+    # (written by hand, true) or "what you're building". Edit the wording here, not in code.
     direct_template: |-
       Hi {first_name},
 
-      I'm Tejmul, a final-year CS & AI student at Newton School of Technology.
+      I'm Tejmul, a final-year undergrad in CS & AI at Newton School of Technology.
 
-      I've spent the past year interning at startups. Most recently I built three agentic systems at MVRX Labs (YC P26), and before that I fine-tuned Mistral 7B at eWealth Tech, which took its accuracy from 20% to 92%.
+      I've done 4 internships as a software engineer at YC companies and startups, and most recently I was an AI Lead, working with 10+ YC clients. Over the past 3 years I've also freelanced on 50+ projects and generated $5k MRR, while building communities and contributing to open source.
 
-      I saw that {company} is hiring for {role}, and I'd be really grateful if you'd consider referring me. Here's [my resume]({resume_link}) in case it helps. Completely understand if it's not possible.
-    # 2026-10-17: every recipient gets one of these wordings (picked by their address), so a
-    # company's inboxes never hold 50 identical bodies — the pattern Google Workspace files
-    # as bulk. Same facts, same ask, same tone. Links are written [words](url): the mail
-    # carries them on the words, the way a person writes in Gmail (gmail.as_gmail_html).
+      I recently came across {company}, really liked {liked}, and saw the opening for {role}. Could you please refer me for it? Here's [my resume]({resume_link}). No problem at all if you can't.
+    # the same email in other words (same structure, same facts, same numbers): one per recipient,
+    # so a company's inboxes never hold identical bodies — the pattern mail servers file as bulk
     direct_variants:
     - |-
       Hi {first_name},
 
-      My name is Tejmul, and I'm in my final year of CS & AI at Newton School of Technology.
+      I'm Tejmul, a final-year CS & AI undergrad at Newton School of Technology.
 
-      Over my internships I've shipped three agentic systems at MVRX Labs (YC P26), and at eWealth Tech I cut infrastructure costs by 95% by moving the product to AWS Lambda.
+      I've completed 4 software engineering internships at YC companies and startups, and most recently I worked as an AI Lead handling 10+ YC clients. I've also freelanced for 3 years, shipping 50+ projects and generating $5k MRR, and I've spent that time in startups, community building and open source.
 
-      I came across the {role} opening at {company} and wanted to ask if you'd be open to referring me. I've put [my resume here]({resume_link}). No worries at all if it's not something you can do.
+      I came across {company} recently, really liked {liked}, and noticed the {role} opening. Would you be open to referring me for it? Here's [my resume]({resume_link}). Completely fine if you can't.
     - |-
       Hello {first_name},
 
-      I'm Tejmul, a final-year student in CS & AI at Newton School of Technology.
+      I'm Tejmul, in the final year of my CS & AI undergrad at Newton School of Technology.
 
-      This year I worked on production AI at a couple of startups: three agentic systems at MVRX Labs (YC P26), and a Mistral 7B fine-tune at eWealth Tech that went from 20% to 92% accuracy.
+      So far I've done 4 internships as a software engineer at YC companies and startups, and most recently I was an AI Lead, working with 10+ YC clients. Over 3 years of freelancing I've delivered 50+ projects and generated $5k MRR, and I've been deep into startups, building communities and open source.
 
-      The {role} role at {company} really caught my eye, and if you'd be willing to refer me, it would mean a lot. [Here's my resume]({resume_link}). Totally fine if you can't.
-    - |-
-      Hi {first_name},
-
-      I'm Tejmul, finishing my B.Tech in CS & AI at Newton School of Technology.
-
-      I've done four internships, most recently building three agentic systems at MVRX Labs (YC P26). Before that I fine-tuned Mistral 7B at eWealth Tech and moved their product to AWS Lambda, cutting costs by 95%.
-
-      I noticed the {role} opening at {company}, and I'd be grateful if you'd consider referring me. My resume is [here]({resume_link}). I understand completely if it doesn't work out.
+      I recently came across {company}, liked {liked}, and saw that you're hiring for {role}. Could you refer me for this role? Here's [my resume]({resume_link}). No worries at all if it's not possible.
+    # what Tejmul liked about a company, in his words; must be true. Without an entry the
+    # email says "what you're building".
+    #   GoComet: "what you're building for global logistics"
+    company_likes: {}
+    # 2026-10-30, Tejmul: "follow my style" — short curiosity questions, not "Referral for …"
+    # (his two, plus two in the same voice so one company never sees a subject twice in a day)
+    # 2026-10-30, mixed with the pasted playbook: "Quick question, {first_name}" joins the rotation,
+    # and a person with a real hook (their commits / repo, found on their GitHub) gets a subject
+    # naming it, which the body names too (compose._direct_subject, compose.liked_phrase).
     direct_subjects:
-    - "Referral for {role} at {company}"
-    - "{role} at {company}"
-    - "Referral request: {role}"
-    - "Referral for the {role} role"
-    direct_sign_off: "Thanks so much for your time,"
+    - "Quick question, {first_name}"
+    - "What do you think of this?"
+    - "What's your view on it?"
+    - "What's your take on this?"
+    - "Would love your view on this"
+    direct_sign_off: "Thanks for your time,"
     # his template carries no opt-out line; a "stop" / "unsubscribe" reply still suppresses
     # the person and the company forever (suppress.py)
     direct_opt_out: false

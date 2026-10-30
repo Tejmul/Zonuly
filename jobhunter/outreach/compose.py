@@ -80,6 +80,9 @@ DIRECT_TEMPLATE = str(_C.get("direct_template") or "").strip()
 DIRECT_VARIANTS = [DIRECT_TEMPLATE, *[str(v).strip() for v in (_C.get("direct_variants") or []) if str(v).strip()]] \
     if DIRECT_TEMPLATE else []
 DIRECT_SUBJECTS = [str(v) for v in (_C.get("direct_subjects") or []) if str(v).strip()]
+#: what Tejmul liked about a company, by name (config company_likes) — the {liked} slot
+COMPANY_LIKES = {str(k).lower(): str(v).strip() for k, v in (_C.get("company_likes") or {}).items() if str(v).strip()}
+DEFAULT_LIKE = "what you're building"
 DIRECT_SIGN_OFF = str(_C.get("direct_sign_off") or "Thank you for your time,")
 DIRECT_OPT_OUT = bool(_C.get("direct_opt_out", True))
 DIRECT_MAX_WORDS = int(_C.get("direct_max_words", 170))
@@ -623,12 +626,44 @@ def hook_subject(c: Contract) -> str | None:
             "company_funding": f"{c.company}'s {a}"}.get(h.get("type") or "")
 
 
+_PERSON_HOOKS = ("person_commit", "person_repo", "person_bio")
+
+
+def liked_phrase(c: Contract) -> str:
+    """The {liked} slot: Tejmul's own line for the company (company_likes), else the person's
+    real work when we found it (their commits or repo on GitHub, the same thing the subject
+    names), else "what you're building"."""
+    own = COMPANY_LIKES.get((c.company or "").lower())
+    if own:
+        return own
+    h = c.hook or {}
+    a = str(h.get("anchor") or "").strip()
+    short = a.split("/")[-1]
+    if h.get("type") == "person_commit" and a:
+        return f"your work on {a}"           # org/repo: "templates" alone says nothing
+    if h.get("type") == "person_repo" and short:
+        return f"your {short} repo"
+    if h.get("type") == "person_bio" and a:
+        return f"your work on {a}"
+    return DEFAULT_LIKE
+
+
 def _direct_subject(c: Contract, role: str, co: str) -> str:
-    """The referral subject in one of its wordings (config direct_subjects), same pick as the body."""
-    if DIRECT_TEMPLATE and DIRECT_SUBJECTS:
-        subj = DIRECT_SUBJECTS[variant_index(c, len(DIRECT_SUBJECTS))].format(role=role, company=co)
-        if not gates.subject_problems(subj):
+    """The referral subject in one of its wordings (config direct_subjects), same pick as the body.
+    A person whose own work we found gets a subject naming it (2026-10-30: "the specific thing
+    they did" gets the most replies), and the body names the same thing (liked_phrase)."""
+    if DIRECT_TEMPLATE and (c.hook or {}).get("type") in _PERSON_HOOKS and not COMPANY_LIKES.get((co or "").lower()):
+        subj = liked_phrase(c)               # the same words the body uses
+        if subj != DEFAULT_LIKE and not gates.subject_problems(subj):
             return subj
+    if DIRECT_TEMPLATE and DIRECT_SUBJECTS:
+        # his subjects in turn from this recipient's pick; the first that passes the rules
+        start = variant_index(c, len(DIRECT_SUBJECTS))
+        for k in range(len(DIRECT_SUBJECTS)):
+            subj = DIRECT_SUBJECTS[(start + k) % len(DIRECT_SUBJECTS)].format(
+                role=role, company=co, first_name=c.first_name or "there")
+            if not gates.subject_problems(subj):
+                return subj
     full = f"Referral for {role} at {co}"
     return full if not gates.subject_problems(full) else f"Referral for {role}"
 
@@ -742,6 +777,7 @@ def _direct(c: Contract, me: dict) -> str:
     if DIRECT_TEMPLATE:                      # the user's own email, in one of its wordings (config)
         text = DIRECT_VARIANTS[variant_index(c, len(DIRECT_VARIANTS))] if DIRECT_VARIANTS else DIRECT_TEMPLATE
         return text.format(first_name=c.first_name, role=c.target_role, company=c.company,
+                           liked=liked_phrase(c),
                            resume_link=c.resume_link or "").strip()
     school = me.get("school")
     paras = [f"My name is {me.get('first_name')}, and I'm a final-year B.Tech CS+AI student at {school}.",

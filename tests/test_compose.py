@@ -299,7 +299,7 @@ def test_the_gate_counts_the_message_not_the_blurb_or_the_opt_out():
 
 @pytest.mark.parametrize("subject,bad", [
     ("Backend Engineer at Acme AI?", False), ("Referral for Backend Engineer at Acme AI", False),
-    ("Quick question", True), ("Re: your post", True), ("Referral!", True), ("hi", True),
+    ("Quick question", False), ("Re: your post", True), ("Referral!", True), ("hi", True),   # quick question: allowed 2026-10-30
     ("FREE referral opportunity for you", True), ("URGENT: Backend Engineer role", True),
     ("A very long subject line that goes on and on about the backend engineer role", True),
 ])
