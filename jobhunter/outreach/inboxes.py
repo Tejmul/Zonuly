@@ -250,11 +250,37 @@ def brake(session, inbox: Inbox, now: datetime | None = None) -> str | None:
     # a bounce, or a provider's refusal (5xx, blocked, spam, a sending limit) — not a dropped
     # network, a sign-in problem or a draft the address check stopped before it left
     bad = [e for e in bad if (e.error or "").startswith("bounced") or _REFUSAL.search(e.error or "")]
+    cleared = _cleared(session, inbox)
+    if cleared:   # Tejmul lifted the rest: only what failed after that counts
+        bad = [e for e in bad if (e.sent_at or e.approved_at) and (e.sent_at or e.approved_at) > cleared]
     if not bad:
         return None
     last = bad[-1]
     return (f"{inbox.address} rests {BRAKE_HOURS:g}h: mail to {last.to_email} failed "
             f"({(last.error or '')[:80]})")
+
+
+def _cleared(session, inbox: Inbox) -> datetime | None:
+    from jobhunter.db import get_setting
+
+    raw = get_setting(session, f"inbox:brake_cleared:{inbox.key}", "")
+    try:
+        return datetime.fromisoformat(raw) if raw else None
+    except ValueError:
+        return None
+
+
+def lift(session, key: str) -> dict:
+    """Lift an inbox's rest by hand (2026-10-30, Tejmul: "at least 25+ should be sent today"):
+    the failures so far stop counting; a new bounce or refusal rests it again. The caller commits."""
+    from jobhunter.db import set_setting, utcnow
+
+    box = get(key)
+    if box is None:
+        return {"error": f"no inbox {key}"}
+    was = brake(session, box)
+    set_setting(session, f"inbox:brake_cleared:{box.key}", utcnow().isoformat())
+    return {"inbox": box.key, "was": was, "lifted": True}
 
 
 def takes(inbox: Inbox, *, guessed: bool) -> bool:
@@ -275,4 +301,4 @@ def describe(session, now: datetime | None = None) -> list[dict]:
 
 
 __all__ = ["Inbox", "GMAIL", "TOTAL_CAP", "all_inboxes", "ready", "sending", "get", "quota", "total_quota", "used_today",
-           "left_today", "due", "gap_ok", "takes", "brake", "describe", "start"]
+           "left_today", "due", "gap_ok", "takes", "brake", "lift", "describe", "start"]

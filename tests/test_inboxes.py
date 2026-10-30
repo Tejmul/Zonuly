@@ -167,3 +167,24 @@ def test_a_network_drop_does_not_rest_an_inbox(db):
         s.add(e)
         s.commit()
         assert inboxes.brake(s, ZOHO) is None
+
+
+def test_a_lifted_rest_ignores_old_failures_but_a_new_one_rests_it_again(db):
+    (c1, p1), (c2, p2) = _people(db, [("Acme", "Priya Sharma", "verified"), ("Beta", "Kiran Das", "verified")])
+    old = _email(db, c1, p1, "verified")
+    with Session(db) as s:
+        e = s.get(Email, old)
+        e.status, e.sender_inbox, e.sent_at, e.error = "failed", ZOHO.key, utcnow() - timedelta(hours=5), "bounced: 5.1.1"
+        s.add(e)
+        s.commit()
+        assert inboxes.brake(s, ZOHO)
+        inboxes.lift(s, ZOHO.key)
+        s.commit()
+        assert inboxes.brake(s, ZOHO) is None
+    new = _email(db, c2, p2, "verified")
+    with Session(db) as s:
+        e = s.get(Email, new)
+        e.status, e.sender_inbox, e.sent_at, e.error = "failed", ZOHO.key, utcnow() + timedelta(seconds=5), "bounced: 5.1.1"
+        s.add(e)
+        s.commit()
+        assert inboxes.brake(s, ZOHO)
