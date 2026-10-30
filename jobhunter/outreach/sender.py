@@ -462,11 +462,15 @@ def send_due(now: datetime | None = None, *, stagger: bool = True, max_per_run: 
                 continue
             home_due = india_open and inboxes.due(session, b, now) > inboxes.used_today(session, b, now)
             gap = inboxes.gap_ok(session, b, now)
-            allowed = (home if home_due else set()) | (abroad if gap else set())
+            # 2026-10-30: the gap holds for every send, India included. An inbox behind its
+            # slots (a rest lifted, a Mac that slept) caught up one mail every 5 minutes —
+            # 12 in an hour from the Gmail — and Gmail blocked the next mail as suspicious.
+            # Behind schedule means fewer mails today, never a faster pace.
+            allowed = ((home if home_due else set()) | abroad) if gap else set()
             if allowed:
                 boxes.append((b, allowed))
             else:
-                out["inboxes"][b.key] = "nothing due yet" if not abroad else f"waiting {MIN_GAP_MINUTES:g}+ min since its last send"
+                out["inboxes"][b.key] = f"waiting {MIN_GAP_MINUTES:g}+ min since its last send" if not gap else "nothing due yet"
     if not boxes:
         out["skipped"] = "nothing due yet"
         return out

@@ -188,3 +188,19 @@ def test_a_lifted_rest_ignores_old_failures_but_a_new_one_rests_it_again(db):
         s.add(e)
         s.commit()
         assert inboxes.brake(s, ZOHO)
+
+
+def test_an_inbox_behind_its_slots_never_catches_up_faster_than_the_gap(db, monkeypatch):
+    """2026-10-30: 12 catch-up mails in an hour from the Gmail, then a block."""
+    (c1, p1), (c2, p2) = _people(db, [("Acme", "Priya Sharma", "verified"), ("Beta", "Kiran Das", "verified")])
+    first = _email(db, c1, p1, "verified")
+    with Session(db) as s:
+        e = s.get(Email, first)
+        e.status, e.sender_inbox, e.sent_at = "sent", inboxes.GMAIL, utcnow() - timedelta(minutes=5)
+        s.add(e)
+        s.commit()
+    _email(db, c2, p2, "verified")
+    monkeypatch.setattr(inboxes, "sending", lambda live: [inboxes._gmail()])
+    monkeypatch.setattr(inboxes, "due", lambda session, inbox, now=None: 20)    # far behind its slots
+    out = sender.send_due(datetime.now(), stagger=False)
+    assert out["sent"] == 0 and "waiting" in out["inboxes"][inboxes.GMAIL]
