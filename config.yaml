@@ -832,15 +832,16 @@ outreach:
     company_likes: {}
     # 2026-10-30, Tejmul: "follow my style" — short curiosity questions, not "Referral for …"
     # (his two, plus two in the same voice so one company never sees a subject twice in a day)
-    # 2026-10-30, mixed with the pasted playbook: "Quick question, {first_name}" joins the rotation,
-    # and a person with a real hook (their commits / repo, found on their GitHub) gets a subject
-    # naming it, which the body names too (compose._direct_subject, compose.liked_phrase).
+    # 2026-10-30, after Gmail blocked the first "Would love your view on this" as suspicious: no
+    # vague "what do you think of this?" subjects (with a Drive link they are the shape of a
+    # phishing mail, and the body asks for a referral, not an opinion). Personal and honest only.
+    # A person whose own work we found (commits / repo on GitHub) gets "your work on …" instead,
+    # and the body names the same thing (compose._direct_subject, compose.liked_phrase).
     direct_subjects:
     - "Quick question, {first_name}"
-    - "What do you think of this?"
-    - "What's your view on it?"
-    - "What's your take on this?"
-    - "Would love your view on this"
+    - "{first_name}, quick question"
+    - "Question about the {role} role"
+    - "{role} at {company}"
     direct_sign_off: "Thanks for your time,"
     # his template carries no opt-out line; a "stop" / "unsubscribe" reply still suppresses
     # the person and the company forever (suppress.py)
