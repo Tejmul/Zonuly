@@ -310,6 +310,12 @@ def mark_bounced(session, email: Email, text: str | None = None) -> dict:
     session.add(email)
     out = {"email_id": email.id, "address": addr, "contact_id": email.contact_id, "withdrawn": 0,
            "guessed": (email.address_confidence or "verified") != "verified"}
+    if is_spam_block(text):
+        # 2026-10-30 (Kapture): "Message blocked" is the SENDER's provider refusing our mail, not a
+        # dead address — the person keeps it; the company cools down (spam_hold) and the inbox rests
+        out["spam_block"] = True
+        log.warning("blocked as spam: %s (email %s) — the address is kept", addr, email.id)
+        return out
     contact = session.get(Contact, email.contact_id)
     if contact is not None and (contact.email or "").lower() in (addr, ""):
         contact.dead_email = addr or contact.dead_email
@@ -383,7 +389,12 @@ def spam_hold(session, email: Email) -> str | None:
     waits too (2026-10-29): it goes from the same account into the same domain."""
     if email.kind not in ("cold", "followup"):
         return None
-    recent = spam_blocks(session, hours=SPAM_PAUSE_HOURS) if SPAM_PAUSE_HOURS else []
+    # 2026-10-30: the 48 h pause after a block is per inbox now (inboxes.brake rests the inbox
+    # that was refused; the Zoho inboxes are other accounts on another domain and go on). Only
+    # with no inbox pool does a block still pause everything.
+    from jobhunter.outreach import inboxes
+
+    recent = spam_blocks(session, hours=SPAM_PAUSE_HOURS) if SPAM_PAUSE_HOURS and len(inboxes.ready()) <= 1 else []
     if recent:
         last = max(recent, key=lambda e: e.sent_at)
         return (f"Gmail refused a mail as spam on {last.sent_at:%d %b %H:%M} UTC ({last.to_email}) — cold mail "
