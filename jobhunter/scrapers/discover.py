@@ -42,7 +42,16 @@ def slug_candidates(name: str, website: str | None = None) -> list[str]:
         host = re.sub(r"^https?://", "", website).split("/")[0]
         host = host.removeprefix("www.")
         add(host.split(".")[0])
-    return [s for s in out if len(s) > 1][:5]
+    # 2026-10-30: Harness's board is "harnessinc", which nothing above can produce, so it sat
+    # at "no public board" with 67 open roles. Boards often carry a suffix or prefix the name
+    # doesn't: tried after the plain forms.
+    cores = [re.sub(r"[\s-]+", "", base)]
+    if website:
+        cores.insert(0, host.split(".")[0])     # the domain is the surer root: harness.io -> harness
+    for core in dict.fromkeys(c for c in cores if len(c) > 1):
+        for s in (f"{core}inc", f"{core}hq", f"get{core}", f"{core}ai", f"{core}io", f"{core}labs"):
+            add(s)
+    return [s for s in out if len(s) > 1][:11]
 
 
 # What a probe found. MISS is definitive (the provider answered: no such board, or an

@@ -148,3 +148,12 @@ def test_catch_up_does_not_redraft_a_company_whose_draft_was_rejected(engine, mo
         s.commit()
     shortlist.catch_up(limit=2)
     assert drafted == [ids[1]]
+
+
+def test_board_slugs_include_the_suffixed_forms_boards_use():
+    from jobhunter.scrapers.discover import slug_candidates
+
+    # 2026-10-30: Harness's Greenhouse board is "harnessinc"; the probe never tried it
+    assert "harnessinc" in slug_candidates("harnessio", "https://harness.io")
+    assert "harnessinc" in slug_candidates("Harness", "https://harness.io")
+    assert slug_candidates("Scale AI")[0] == "scale"           # the plain forms still lead

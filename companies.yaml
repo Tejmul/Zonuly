@@ -581,3 +581,9 @@ companies:
     ats: "greenhouse"
     ats_slug: "mercury"
     tags: [added-by-hand]
+  - name: "Harness"
+    website: "https://harness.io"
+    domain: "harness.io"
+    ats: "greenhouse"
+    ats_slug: "harnessinc"
+    tags: [added-by-hand]
