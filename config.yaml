@@ -270,6 +270,7 @@ targeting:
     - iqvia
     - mettler-toledo
     - zebra
+    - =harness        # 2026-10-30, Tejmul: pays really well, Bengaluru
     # famous names. An entry matches the leading words of a name ("google" hits "Google
     # DeepMind"); "=name" must be the whole name ("=ramp" is Ramp, not Ramp Network).
     famous:
@@ -909,6 +910,40 @@ outreach:
   - https://www.linkedin.com/in/tejmulmovin-softwareengineer/
   - spylook.vercel.app
   user_email: tejmulmovin9@gmail.com
+  # ---- sending inboxes (2026-10-30, Tejmul: "100 to 300 emails per day without getting failed or
+  # marked as spam") — outreach/inboxes.py. Volume comes from many inboxes at a person's pace,
+  # never from one inbox pushed harder. Each ramps on its own from its first send (5, 5, 10, 10,
+  # 15 ... up to cap), has its own slots and gap, and writes to verified addresses only. An inbox
+  # whose password_env is not in .env sends nothing, so these wait safely until the inbox exists.
+  # The Gmail above stays at daily_send_cap. The day never exceeds total_daily_cap.
+  total_daily_cap: 300
+  # 2026-10-30, resuming after "stop the mails": the 3 sends of 10-29 to scraped addresses all
+  # bounced. Until a paid address check (MILLIONVERIFIER_API_KEY) is in, the Gmail writes to
+  # verified addresses only too; set false to let it take checked guesses again.
+  gmail_verified_only: true
+  address_checks_per_run: 6     # guessed addresses checked (verify_address.py) per send run
+  inboxes:
+    - key: zoho-tejmul
+      address: tejmul@tejmul.in
+      smtp: smtppro.zoho.in:465     # paid org (Workplace): the "pro" hosts, per Zoho → IMAP settings
+      imap: imappro.zoho.in:993
+      password_env: ZOHO_PASS_TEJMUL
+      cap: 30
+      warmup: {first: 5, step: 5, every: 2}
+    - key: zoho-movin
+      address: movin@tejmul.in
+      smtp: smtppro.zoho.in:465     # paid org (Workplace): the "pro" hosts, per Zoho → IMAP settings
+      imap: imappro.zoho.in:993
+      password_env: ZOHO_PASS_MOVIN
+      cap: 30
+      warmup: {first: 5, step: 5, every: 2}
+    - key: zoho-tejmulmovin
+      address: tejmul.movin@tejmul.in
+      smtp: smtppro.zoho.in:465     # paid org (Workplace): the "pro" hosts, per Zoho → IMAP settings
+      imap: imappro.zoho.in:993
+      password_env: ZOHO_PASS_TEJMULMOVIN
+      cap: 30
+      warmup: {first: 5, step: 5, every: 2}
   # the cold signature (2026-10-17): name, this line, LinkedIn — one link, no link row
   signature_line: Final-year B.Tech CS+AI, Newton School of Technology
   # ---- launch (2026-10-14, first live sends Mon 2026-10-19) — outreach/warmup.py,

@@ -142,7 +142,8 @@ def _forget_app_password() -> None:
     _verified.update(at=0.0, ok=False, error=None)
 
 
-def build_message(to: str, subject: str, body: str, *, in_reply_to: str | None = None) -> EmailMessage:
+def build_message(to: str, subject: str, body: str, *, in_reply_to: str | None = None,
+                  sender: tuple[str, str] | None = None) -> EmailMessage:
     """The exact message send() hands to Gmail, built and never sent (deliverability checks,
     the review queue's preview, tests).
 
@@ -155,15 +156,18 @@ def build_message(to: str, subject: str, body: str, *, in_reply_to: str | None =
     way Gmail writes them ("my resume <https://...>").
     No List-Unsubscribe: this is one person writing to one person, and Gmail and Yahoo
     require it only of bulk senders (5,000+ a day); on a personal note it marks the mail as
-    a campaign. A "stop" reply is the opt-out (suppress.py)."""
+    a campaign. A "stop" reply is the opt-out (suppress.py).
+    `sender` (name, address) is another inbox's identity (outreach/inboxes.py); the default is
+    the Gmail's."""
     import secrets as _secrets
     import uuid
 
+    name, address = sender or (DISPLAY_NAME, ADDRESS)
     msg = EmailMessage()
-    msg["From"] = from_header()
+    msg["From"] = formataddr((name, address)) if name else address
     msg["To"] = to
     msg["Subject"] = subject
-    msg["Message-ID"] = f"<{str(uuid.uuid4()).upper()}@{ADDRESS.split('@')[-1] or 'gmail.com'}>"
+    msg["Message-ID"] = f"<{str(uuid.uuid4()).upper()}@{address.split('@')[-1] or 'gmail.com'}>"
     if in_reply_to:
         msg["In-Reply-To"] = in_reply_to
         msg["References"] = in_reply_to

@@ -330,6 +330,9 @@ class Email(SQLModel, table=True):
     error: Optional[str] = None
     gmail_thread_id: Optional[str] = None
     gmail_message_id: Optional[str] = None
+    # which inbox sent it (outreach/inboxes.py, 2026-10-30); None = the Gmail, before inboxes.
+    # A follow-up goes from the same inbox, and the tracker reads replies there.
+    sender_inbox: Optional[str] = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=utcnow)
     approved_at: Optional[datetime] = None
     sent_at: Optional[datetime] = None

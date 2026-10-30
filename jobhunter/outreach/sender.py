@@ -18,7 +18,7 @@ from sqlmodel import col, func, select
 
 from jobhunter import CONFIG, ROOT, guardrails
 from jobhunter.db import Contact, Email, Reply, get_session, init_db, utcnow
-from jobhunter.outreach import gmail, ledger
+from jobhunter.outreach import gmail, inboxes, ledger
 
 log = logging.getLogger(__name__)
 
@@ -56,11 +56,11 @@ def sent_today() -> int:
 def remaining_today(candidate_id: int = 1) -> int:
     # the ledger is the truth (a slot is taken inside the send, its cap is the warm-up
     # quota); the DB count is the cross-check
-    return min(ledger.status(candidate_id)["left"], max(0, DAILY_CAP - sent_today()))
+    return min(ledger.status(candidate_id)["left"], max(0, ledger.effective_cap(ledger._today()) - sent_today()))
 
 
 def _dryrun_send(email_id: int, to: str, subject: str, body: str, *, in_reply_to: str | None = None,
-                 thread_id: str | None = None) -> dict:
+                 thread_id: str | None = None, box: inboxes.Inbox | None = None) -> dict:
     """Write the mail to outbox/ and return a fake Gmail result, so the loop completes.
     The .eml carries a real-looking Message-ID and, for a follow-up, In-Reply-To /
     References — so the rehearsal exercises the threading the live send uses."""
@@ -69,7 +69,8 @@ def _dryrun_send(email_id: int, to: str, subject: str, body: str, *, in_reply_to
     OUTBOX.mkdir(exist_ok=True)
     path = OUTBOX / f"{email_id:05d}.eml"
     msg = EmailMessage()
-    msg["From"] = gmail.from_header()   # the rehearsal shows the same identity the real send will
+    # the rehearsal shows the same identity the real send will
+    msg["From"] = gmail.build_message(to, subject, "", sender=(box.name, box.address) if box else None)["From"]
     msg["To"] = to
     msg["Subject"] = subject
     msg["Message-ID"] = f"<dryrun-{email_id}-{uuid.uuid4().hex[:10]}@zonuly.local>"
@@ -77,6 +78,8 @@ def _dryrun_send(email_id: int, to: str, subject: str, body: str, *, in_reply_to
         msg["In-Reply-To"] = in_reply_to
         msg["References"] = in_reply_to
     msg["X-ZoNuLy-Mode"] = "dryrun"
+    if box is not None:
+        msg["X-ZoNuLy-Inbox"] = box.key
     msg.set_content(body)
     path.write_bytes(msg.as_bytes())
     return {"id": msg["Message-ID"], "threadId": thread_id or f"dryrun:{email_id}", "path": str(path)}
@@ -137,8 +140,33 @@ def _referrer_problem(session, email: Email) -> str | None:
     return None
 
 
-def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
-    """Send one approved email. Refuses if the cap is hit or we're outside the send window."""
+def _inbox_for(session, email: Email, parent: Email | None, want: str | None, guessed: bool) -> inboxes.Inbox | str:
+    """The inbox this mail leaves from, or why none can send it now. A follow-up goes from the
+    inbox its first mail went from; a cold mail from the one asked for, else the ready inbox
+    with the most left today that takes its address."""
+    live = SEND_MODE == "gmail"
+    pinned = email.sender_inbox or ((parent.sender_inbox or inboxes.GMAIL) if parent is not None else None)
+    if pinned or want:
+        box = inboxes.get(pinned or want)
+        if box is None:
+            return f"inbox {pinned or want} is not configured (outreach.inboxes)"
+        if live and not box.ready():
+            return f"inbox {box.address} is not ready: set {box.password_env} in .env"
+        if not pinned and not inboxes.takes(box, guessed=guessed):
+            return f"{box.address} writes to verified addresses only — this one is a guess"
+        if inboxes.left_today(session, box) <= 0:
+            return f"{box.address} has sent today's {inboxes.quota(session, box)}"
+        return box
+    pool = [b for b in inboxes.sending(live)
+            if inboxes.takes(b, guessed=guessed) and inboxes.left_today(session, b) > 0]
+    if not pool:
+        return "no inbox has mail left today that can take this address"
+    return max(pool, key=lambda b: inboxes.left_today(session, b))
+
+
+def send_email(email_id: int, *, ignore_window: bool = False, inbox: str | None = None) -> dict:
+    """Send one approved email. Refuses if the cap is hit or we're outside the send window.
+    `inbox` names the sending inbox (outreach/inboxes.py); without it one is chosen."""
     init_db()
 
     with get_session() as session:
@@ -176,6 +204,25 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
         in_reply_to = parent.gmail_message_id if parent and (parent.gmail_message_id or "").startswith("<") else None
         if guessed and email.kind != "cold" and _delivered(parent):
             guessed = False   # the address took a mail days ago without bouncing: it is not a guess any more
+        if guessed and email.kind == "cold":
+            # checked before it leaves (2026-10-30): a bounce costs the inbox, not just the mail
+            from jobhunter.outreach import verify_address
+
+            contact = session.get(Contact, email.contact_id)
+            st = verify_address.state(contact, to, email.address_confidence)
+            if contact is not None:
+                session.add(contact)
+            if st == "dead":
+                email.status = "failed"
+                email.error = f"address check: {(contact.email_status if contact else None) or 'no mail server'} — not sent"
+                session.add(email)
+                session.commit()
+                return {"error": email.error, "email_id": email_id}
+            guessed = st != "verified"
+            session.commit()
+        box = _inbox_for(session, email, parent, inbox, guessed)
+        if isinstance(box, str):
+            return {"error": box, "email_id": email_id}
 
     if not ignore_window and not in_send_window():
         return {"error": f"outside send window {SEND_WINDOW[0]}:00-{SEND_WINDOW[1]}:00 local on a sending day"}
@@ -199,7 +246,12 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
         return {"error": why}
 
     try:
-        if SEND_MODE == "gmail" and gmail.AUTH == "app_password":
+        if SEND_MODE == "gmail" and not box.is_gmail:
+            from jobhunter.outreach import mailbox
+
+            result = (mailbox.sent_already(box, to, subject, utcnow() - timedelta(days=3)) if retried else None) \
+                or mailbox.send(box, to, subject, body, in_reply_to=in_reply_to)
+        elif SEND_MODE == "gmail" and gmail.AUTH == "app_password":
             # a retry first asks Sent Mail: the drop may have come after Gmail took the mail
             result = (gmail.sent_already(to, subject, utcnow() - timedelta(days=3)) if retried else None) \
                 or gmail.send(to, subject, body, in_reply_to=in_reply_to)
@@ -207,7 +259,7 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
             svc = gmail.service()
             result = svc.users().messages().send(userId="me", body=_build_message(to, subject, body, thread_id)).execute()
         else:
-            result = _dryrun_send(email_id, to, subject, body, in_reply_to=in_reply_to, thread_id=thread_id)
+            result = _dryrun_send(email_id, to, subject, body, in_reply_to=in_reply_to, thread_id=thread_id, box=box)
     except gmail.GmailNotConfigured as e:
         ledger.release(candidate_id, guessed=guessed)
         _unclaim(email_id)
@@ -236,13 +288,14 @@ def send_email(email_id: int, *, ignore_window: bool = False) -> dict:
         email.send_hour, email.send_weekday = local.hour, local.strftime("%a")   # for learn.py
         email.gmail_message_id = result.get("id")
         email.gmail_thread_id = result.get("threadId") or thread_id
+        email.sender_inbox = box.key
         email.error = None
         session.add(email)
         session.commit()
 
-    log.info("sent email %s to %s (thread %s, mode %s)", email_id, to, result.get("threadId"), SEND_MODE)
+    log.info("sent email %s to %s from %s (thread %s, mode %s)", email_id, to, box.address, result.get("threadId"), SEND_MODE)
     return {"sent": True, "email_id": email_id, "to": to, "thread_id": result.get("threadId"),
-            "mode": SEND_MODE, **({"path": result["path"]} if result.get("path") else {})}
+            "mode": SEND_MODE, "inbox": box.key, **({"path": result["path"]} if result.get("path") else {})}
 
 
 MAX_RETRIES = 3
@@ -353,22 +406,13 @@ def in_recipient_morning(session, email: Email, now: datetime) -> bool:
     return int(RECIPIENT_HOURS[0]) <= t.hour < int(RECIPIENT_HOURS[1]) and warmup.is_send_day(t.date())
 
 
-def _gap_ok(session, now: datetime) -> bool:
-    """At least MIN_GAP_MINUTES (plus up to half again, fixed per last mail) since the last send."""
-    last = session.exec(select(Email).where(col(Email.sent_at).is_not(None)).order_by(col(Email.sent_at).desc())).first()
-    if last is None or last.sent_at is None:
-        return True
-    gap = MIN_GAP_MINUTES * (1 + 0.5 * ((last.id * 2654435761) % 1000) / 1000)
-    sent = last.sent_at.replace(tzinfo=timezone.utc)
-    return (_local(now, "UTC") - sent).total_seconds() >= gap * 60
-
-
 def send_due(now: datetime | None = None, *, stagger: bool = True, max_per_run: int | None = None) -> dict:
     """The send agent's one run (every few minutes, launchd): send what today's jittered
     slots say is due — the warm-up quota spread across the window — and no more than
     max_per_run at once. Approved mail only; outside the window or on a non-sending day it
     does nothing. A guessed address waits while the guessed cap (or the bounce brake) is
-    spent; a verified one behind it goes instead."""
+    spent; a verified one behind it goes instead. Each sending inbox (outreach/inboxes.py)
+    is paced on its own, so N inboxes send up to N mails a run, each at a person's pace."""
     from jobhunter.outreach import suppress, warmup
 
     init_db()
@@ -381,37 +425,81 @@ def send_due(now: datetime | None = None, *, stagger: bool = True, max_per_run: 
         # their own weekday morning — and then only with the gap since the last send kept
         abroad = {e.id for e in queue if recipient_tz(session, e) != _LOCAL_TZ and in_recipient_morning(session, e, now)}
         home = {e.id for e in queue if recipient_tz(session, e) == _LOCAL_TZ} if india_open else set()
-        gap_ok = _gap_ok(session, now)
+        pinned = {}
+        guessed_of = {}
+        for e in queue:
+            parent = session.get(Email, e.parent_email_id) if e.parent_email_id else None
+            pinned[e.id] = e.sender_inbox or ((parent.sender_inbox or inboxes.GMAIL) if parent is not None else None)
+            guessed_of[e.id] = (e.address_confidence or "verified") != "verified" and not (
+                e.kind != "cold" and _delivered(parent))
     if not home and not abroad:
         return {"sent": 0, "skipped": "outside the send window / not a sending day (here or where the recipients are)"}
     led = ledger.status()
-    due = warmup.due(now) if india_open else 0
-    want_home = max(0, due - led["used"])
-    want = min(max(want_home, 1 if (abroad and gap_ok) else 0), led["left"], max_per_run or warmup.MAX_PER_RUN)
-    out = {"sent": 0, "due_slots": due, "used": led["used"], "quota": led["cap"], "results": []}
-    if want <= 0:
-        out["skipped"] = ("nothing due yet" if led["left"] else "today's quota is spent") if not abroad else \
-            f"waiting {MIN_GAP_MINUTES:g}+ min since the last send"
+    per_run = max_per_run or warmup.MAX_PER_RUN
+    out = {"sent": 0, "used": led["used"], "quota": led["cap"], "results": [], "inboxes": {}}
+    if led["left"] <= 0:
+        out["skipped"] = "today's quota is spent"
         return out
+    # 2026-10-30: the pace is per inbox — each one its own jittered slots in the India window,
+    # its own gap before a mail abroad, at most max_per_run a run. Domain inboxes go first
+    # (they take verified addresses only); the Gmail after them takes what is left.
     with get_session() as session:
-        guessed_paused = suppress.brake(session)
-        allowed = (home if want_home > 0 else set()) | (abroad if gap_ok else set())
-        ids = [(e.id, (e.address_confidence or "verified") != "verified" and not (
-            e.kind != "cold" and _delivered(session.get(Email, e.parent_email_id) if e.parent_email_id else None)))
-            for e in queue if e.id in allowed]
-    guessed_left = 0 if guessed_paused else led["guessed_left"]
-    for eid, guessed in ids:
-        if out["sent"] >= want:
-            break
-        if guessed and guessed_left <= 0:
-            continue
-        r = send_email(eid)
-        out["results"].append(r)
-        if r.get("sent"):
-            out["sent"] += 1
-            guessed_left -= 1 if guessed else 0
-            if stagger and out["sent"] < want:
+        guessed_left = 0 if suppress.brake(session) else led["guessed_left"]
+        live = SEND_MODE == "gmail"
+        boxes = []
+        for b in sorted(inboxes.sending(live), key=lambda b: b.is_gmail):
+            if inboxes.left_today(session, b, now) <= 0:
+                out["inboxes"][b.key] = "today's quota is spent"
+                continue
+            home_due = india_open and inboxes.due(session, b, now) > inboxes.used_today(session, b, now)
+            gap = inboxes.gap_ok(session, b, now)
+            allowed = (home if home_due else set()) | (abroad if gap else set())
+            if allowed:
+                boxes.append((b, allowed))
+            else:
+                out["inboxes"][b.key] = "nothing due yet" if not abroad else f"waiting {MIN_GAP_MINUTES:g}+ min since its last send"
+    if not boxes:
+        out["skipped"] = "nothing due yet"
+        return out
+    taken: set[int] = set()
+    pause = False
+    checks = int(_O.get("address_checks_per_run", 6))
+    for b, allowed in boxes:
+        sent_here = 0
+        for e in queue:
+            if sent_here >= per_run or out["sent"] >= led["left"]:
+                break
+            if e.id in taken or e.id not in allowed or pinned[e.id] not in (None, b.key):
+                continue
+            guessed = guessed_of[e.id]
+            if guessed and not inboxes.takes(b, guessed=True):
+                if e.kind != "cold" or checks <= 0:
+                    continue
+                from jobhunter.outreach import verify_address
+
+                checks -= 1
+                with get_session() as session:
+                    contact = session.get(Contact, e.contact_id)
+                    st = verify_address.state(contact, e.to_email, e.address_confidence)
+                    if contact is not None:
+                        session.add(contact)
+                        session.commit()
+                if st != "verified":
+                    continue        # a guess stays for the Gmail (or, dead, is failed when it is tried)
+                guessed = guessed_of[e.id] = False
+            if guessed and guessed_left <= 0:
+                continue
+            taken.add(e.id)
+            if stagger and pause:
                 time.sleep(random.uniform(float(STAGGER_SECONDS[0]), float(STAGGER_SECONDS[1])))
+            r = send_email(e.id, inbox=b.key)
+            out["results"].append(r)
+            pause = bool(r.get("sent"))
+            if r.get("sent"):
+                out["sent"] += 1
+                sent_here += 1
+                guessed_left -= 1 if guessed else 0
+        out["inboxes"][b.key] = f"sent {sent_here}"
     out["remaining_today"] = remaining_today()
     return out
 
@@ -504,7 +592,13 @@ def quota() -> dict:
         "sender_address": gmail.ADDRESS or None,
         "ledger": ledger.status(),
         "gmail": gmail.status(),
+        "inboxes": _inbox_rows(),
     }
+
+
+def _inbox_rows() -> list[dict]:
+    with get_session() as session:
+        return inboxes.describe(session)
 
 
 def _wants_opt_out(email) -> bool:
@@ -553,6 +647,8 @@ def plan(day: date | str | None = None) -> dict:
     with get_session() as session:
         brake = suppress.brake(session)
         guessed_left = 0 if brake else ledger.GUESSED_CAP
+        # the gap is kept per inbox: with N inboxes, N mails can share a stretch of the morning
+        gap_s = MIN_GAP_MINUTES * 60 / max(1, len(inboxes.ready()))
         for e in _queue(session, 200):
             c = session.get(Company, e.company_id)
             contact = session.get(Contact, e.contact_id)
@@ -573,7 +669,7 @@ def plan(day: date | str | None = None) -> dict:
                 continue
             tz = recipient_tz(session, e)
             def clear(x: datetime) -> bool:
-                return all(abs((x - y).total_seconds()) >= MIN_GAP_MINUTES * 60 for y in taken)
+                return all(abs((x - y).total_seconds()) >= gap_s for y in taken)
 
             if tz == _LOCAL_TZ:
                 at = next((x for x in india if clear(x)), None)

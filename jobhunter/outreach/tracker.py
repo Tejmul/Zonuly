@@ -17,7 +17,7 @@ from typing import Any
 from sqlmodel import col, func, select
 
 from jobhunter.db import Email, Reply, get_session, init_db, utcnow
-from jobhunter.outreach import gmail
+from jobhunter.outreach import gmail, inboxes, mailbox
 
 log = logging.getLogger(__name__)
 
@@ -262,6 +262,8 @@ def _poll_imap(stats: dict, limit: int = 400) -> dict:
         ).all()
         threads = [(e.id, e.gmail_thread_id, e.to_email, e.gmail_message_id, e.sent_at) for e in sent
                    if not str(e.gmail_thread_id).startswith("dryrun:")]
+        # 2026-10-30: mail from a domain inbox (outreach/inboxes.py) is read back in that inbox
+        box_of = {e.id: e.sender_inbox for e in sent if e.sender_inbox and e.sender_inbox != inboxes.GMAIL}
         known = {
             r.gmail_message_id for r in session.exec(
                 select(Reply).where(col(Reply.gmail_message_id).is_not(None))
@@ -280,9 +282,19 @@ def _poll_imap(stats: dict, limit: int = 400) -> dict:
 
     for email_id, thread_id, to_email, message_id, sent_at in threads:
         stats["threads_checked"] += 1
+        box = inboxes.get(box_of[email_id]) if email_id in box_of else None
         try:
-            messages = gmail.thread_messages(str(thread_id), message_id=message_id)
+            if email_id in box_of:
+                if box is None or not box.ready():
+                    continue
+                messages = mailbox.thread_messages(box, message_id or str(thread_id), to_email,
+                                                   (sent_at or utcnow()) - timedelta(days=1))
+            else:
+                messages = gmail.thread_messages(str(thread_id), message_id=message_id)
         except gmail.GmailNotConfigured as e:
+            if box is not None:
+                log.warning("inbox %s unreadable: %s", box.address, e)
+                continue
             return {**stats, "error": str(e)}
         except Exception as e:  # noqa: BLE001 — transient IMAP error; next poll retries
             log.debug("thread %s unreadable: %s", thread_id, e)
@@ -315,13 +327,21 @@ def _poll_imap(stats: dict, limit: int = 400) -> dict:
             continue
         addr = to_email.strip().lower()
         dom = addr.rsplit("@", 1)[1]
-        by_who.setdefault(addr if dom in FREEMAIL else dom, []).append(t)
+        by_who.setdefault((box_of.get(email_id) or inboxes.GMAIL, addr if dom in FREEMAIL else dom), []).append(t)
     ours = {m.strip("<>"): t[0] for t in threads for m in [t[3] or ""] if m.startswith("<")}
-    for who, mails in by_who.items():
+    for (key, who), mails in by_who.items():
         mails.sort(key=lambda t: t[4])                  # oldest first
+        box = inboxes.get(key) if key != inboxes.GMAIL else None
         try:
-            messages = gmail.messages_from(who, mails[0][4] - timedelta(days=1))
+            if key != inboxes.GMAIL:
+                if box is None or not box.ready():
+                    continue
+                messages = mailbox.messages_from(box, who, mails[0][4] - timedelta(days=1))
+            else:
+                messages = gmail.messages_from(who, mails[0][4] - timedelta(days=1))
         except gmail.GmailNotConfigured as e:
+            if box is not None:
+                continue
             return {**stats, "error": str(e)}
         except Exception as e:  # noqa: BLE001
             log.debug("mail from %s unreadable: %s", who, e)

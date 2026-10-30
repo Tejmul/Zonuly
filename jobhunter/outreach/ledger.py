@@ -1,9 +1,12 @@
-"""The send ledger — 25 a day, spent irreversibly, inside the send.
+"""The send ledger — the day's cap, spent irreversibly, inside the send.
 
 A count "since midnight" can drift: two processes read 24, both send, 26 went out.
 Here the day's row is locked with BEGIN IMMEDIATE, the slot is taken before the
 mail leaves, and a failed send gives it back. Pattern-guessed addresses have their
 own smaller cap: a bounce is what gets a personal Gmail flagged.
+
+2026-10-30: the cap is the sum of the sending inboxes' quotas (Gmail 25 + each domain inbox's
+warm-up ramp), never above outreach.total_daily_cap; each inbox's own cap is kept by the sender.
 """
 
 from __future__ import annotations
@@ -33,10 +36,13 @@ def _conn() -> sqlite3.Connection:
 
 
 def effective_cap(day: str) -> int:
-    """The day's cap: the warm-up quota (outreach.warmup), never above daily_send_cap."""
-    from jobhunter.outreach import warmup
+    """The day's cap: the sum of the sending inboxes' warm-up quotas (outreach/inboxes.py) —
+    the Gmail's is outreach.warmup under daily_send_cap — never above total_daily_cap."""
+    from jobhunter.db import get_session
+    from jobhunter.outreach import inboxes
 
-    return min(DAILY_CAP, warmup.quota(day))
+    with get_session() as session:
+        return inboxes.total_quota(session, day)
 
 
 def _row(c: sqlite3.Connection, candidate_id: int, day: str) -> tuple:
@@ -52,7 +58,9 @@ def _row(c: sqlite3.Connection, candidate_id: int, day: str) -> tuple:
         row = c.execute("select id, cap, used, guessed_cap, guessed_used from sendledger where candidate_id=? and day=?",
                         (candidate_id, day)).fetchone()
     rid, stored, used, gcap, gused = row
-    cap = min(int(stored), cap)
+    if int(stored) != cap:
+        # an inbox became ready (or ran out of ramp) since the row was written: today's cap follows
+        c.execute("update sendledger set cap=? where id=?", (cap, rid))
     return rid, cap, used, min(int(gcap), GUESSED_CAP, cap), gused
 
 

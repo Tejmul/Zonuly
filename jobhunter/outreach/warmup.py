@@ -91,10 +91,10 @@ def schedule(days: int = 10, *, from_day: date | datetime | str | None = None) -
 
 
 def slots(d: date | datetime | str | None, n: int, *, window: tuple[int, int] | None = None,
-          jitter: float | None = None) -> list[datetime]:
+          jitter: float | None = None, seed: str = "") -> list[datetime]:
     """`n` send times on day `d`, spread evenly across the window, each moved by up to
     ±jitter × the gap — deterministic per day (seeded by the date), sorted, inside the
-    window. Local naive datetimes."""
+    window. Local naive datetimes. `seed` gives each sending inbox its own times."""
     if n <= 0:
         return []
     day = _as_date(d)
@@ -104,7 +104,7 @@ def slots(d: date | datetime | str | None, n: int, *, window: tuple[int, int] | 
     end = datetime(day.year, day.month, day.day, int(hi))
     span = (end - begin).total_seconds()
     gap = span / n
-    rng = random.Random(f"zonuly-send-{day.isoformat()}")
+    rng = random.Random(f"zonuly-send-{day.isoformat()}" + (f"-{seed}" if seed and seed != "gmail" else ""))
     out = []
     for i in range(n):
         centre = gap * (i + 0.5)
