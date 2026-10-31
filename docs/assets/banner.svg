@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-label="ZoNuLy — find the company, the person, and the words">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0d12"/><stop offset="1" stop-color="#151a24"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7cf3c4"/><stop offset="1" stop-color="#6aa8ff"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ffffff" stroke-opacity="0.04"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="360" rx="18" fill="url(#bg)"/>
+  <rect width="1200" height="360" rx="18" fill="url(#grid)"/>
+  <g font-family="ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+    <text x="64" y="128" fill="#ffffff" font-size="76" font-weight="800" letter-spacing="-2">ZoNuLy</text>
+    <rect x="66" y="146" width="210" height="5" rx="2.5" fill="url(#accent)"/>
+    <text x="64" y="200" fill="#c9d1e0" font-size="24">Finds underrated companies hiring freshers, scores your odds,</text>
+    <text x="64" y="232" fill="#c9d1e0" font-size="24">finds a real person inside, and writes the referral ask.</text>
+    <text x="64" y="296" fill="#7cf3c4" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">local-first · evidence-bound · never guesses an email</text>
+  </g>
+  <g transform="translate(820 60)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+    <rect width="320" height="240" rx="14" fill="#0f131b" stroke="#2a3242"/>
+    <circle cx="22" cy="20" r="5" fill="#ff5f57"/><circle cx="40" cy="20" r="5" fill="#febc2e"/><circle cx="58" cy="20" r="5" fill="#28c840"/>
+    <text x="20" y="62" fill="#6aa8ff" font-size="14">$ run.py selection top  # e.g.</text>
+    <text x="20" y="92" fill="#e6edf3" font-size="13">91  AI Engineer · Bengaluru</text>
+    <text x="20" y="114" fill="#e6edf3" font-size="13">88  SDE-1 · Hyderabad</text>
+    <text x="20" y="136" fill="#e6edf3" font-size="13">84  ML Intern → FTE · Bengaluru</text>
+    <text x="20" y="170" fill="#6aa8ff" font-size="14">$ run.py kg path contact company</text>
+    <text x="20" y="200" fill="#7cf3c4" font-size="13">✓ proved address · current staff</text>
+    <text x="20" y="222" fill="#8b95a7" font-size="12">every claim carries its source</text>
+  </g>
+</svg>

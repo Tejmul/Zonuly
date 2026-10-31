@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="1200" height="380" role="img" aria-label="ZoNuLy architecture layers">
+  <rect width="1200" height="380" rx="18" fill="#0b0d12"/>
+  <g font-family="ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+    <text x="40" y="46" fill="#ffffff" font-size="20" font-weight="700">Layers — nothing imports upward</text>
+    <g font-size="15">
+      <rect x="40" y="70" width="1120" height="48" rx="10" fill="#121722" stroke="#2a3242"/>
+      <text x="60" y="100" fill="#6aa8ff" font-weight="700">dashboard</text><text x="230" y="100" fill="#c9d1e0">Next.js · 51 pages — Atlas, ★ India, Best bets, Leads, Queue, Outreach, Calendar, Health</text>
+      <rect x="40" y="128" width="1120" height="48" rx="10" fill="#121722" stroke="#2a3242"/>
+      <text x="60" y="158" fill="#6aa8ff" font-weight="700">api</text><text x="230" y="158" fill="#c9d1e0">FastAPI on :8000 · read-only public snapshot mode</text>
+      <rect x="40" y="186" width="1120" height="48" rx="10" fill="#121722" stroke="#2a3242"/>
+      <text x="60" y="216" fill="#6aa8ff" font-weight="700">pipeline · kg</text><text x="230" y="216" fill="#c9d1e0">tick (launchd, 10 min) · decision brain · selection confidence · knowledge graph</text>
+      <rect x="40" y="244" width="1120" height="48" rx="10" fill="#121722" stroke="#2a3242"/>
+      <text x="60" y="274" fill="#6aa8ff" font-weight="700">scrapers · contacts</text><text x="230" y="274" fill="#c9d1e0">ATS boards · careers · funding · People tab (Apify) · GitHub · Reacher checks · outreach</text>
+      <rect x="40" y="302" width="1120" height="48" rx="10" fill="#10251d" stroke="#7cf3c4"/>
+      <text x="60" y="332" fill="#7cf3c4" font-weight="700">db · guardrails</text><text x="230" y="332" fill="#c9d1e0">SQLite (WAL) · one validator per field · proved-addresses-only hook on every write</text>
+    </g>
+  </g>
+</svg>

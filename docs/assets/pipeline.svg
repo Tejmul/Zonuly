@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="The ZoNuLy pipeline">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6aa8ff"/></marker>
+  </defs>
+  <rect width="1200" height="300" rx="18" fill="#0b0d12"/>
+  <g font-family="ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" text-anchor="middle">
+    <text x="600" y="40" fill="#ffffff" font-size="20" font-weight="700">From a funding headline to a referral ask</text>
+    <g stroke="#2a3242" stroke-width="1.5">
+      <rect x="30" y="80" width="150" height="110" rx="12" fill="#121722"/>
+      <rect x="225" y="80" width="150" height="110" rx="12" fill="#121722"/>
+      <rect x="420" y="80" width="150" height="110" rx="12" fill="#121722"/>
+      <rect x="615" y="80" width="150" height="110" rx="12" fill="#121722"/>
+      <rect x="810" y="80" width="150" height="110" rx="12" fill="#121722"/>
+      <rect x="1005" y="80" width="165" height="110" rx="12" fill="#10251d" stroke="#7cf3c4"/>
+    </g>
+    <g stroke="#6aa8ff" stroke-width="2" marker-end="url(#arr)">
+      <line x1="182" y1="135" x2="222" y2="135"/><line x1="377" y1="135" x2="417" y2="135"/>
+      <line x1="572" y1="135" x2="612" y2="135"/><line x1="767" y1="135" x2="807" y2="135"/>
+      <line x1="962" y1="135" x2="1002" y2="135"/>
+    </g>
+    <g fill="#ffffff" font-size="16" font-weight="700">
+      <text x="105" y="118">Discover</text><text x="300" y="118">Guardrails</text><text x="495" y="118">Score</text>
+      <text x="690" y="118">Referrers</text><text x="885" y="118">Prove</text><text x="1087" y="118">Draft + review</text>
+    </g>
+    <g fill="#8b95a7" font-size="12.5">
+      <text x="105" y="142">ATS boards, careers</text><text x="105" y="160">pages, funding news,</text><text x="105" y="178">India directories</text>
+      <text x="300" y="142">not famous, not a</text><text x="300" y="160">body shop, pays ≥ 20</text><text x="300" y="178">LPA, hiring verified</text>
+      <text x="495" y="142">0–100 odds of</text><text x="495" y="160">selection, fresher</text><text x="495" y="178">roles, cited reasons</text>
+      <text x="690" y="142">current staff only,</text><text x="690" y="160">BLR / HYD, with</text><text x="690" y="178">affiliation evidence</text>
+      <text x="885" y="142">SMTP-checked address</text><text x="885" y="160">or nothing — never</text><text x="885" y="178">a guessed pattern</text>
+      <text x="1087" y="142">evidence-bound ask,</text><text x="1087" y="160">rule-based review,</text><text x="1087" y="178">25/day, spread out</text>
+    </g>
+    <text x="600" y="250" fill="#7cf3c4" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">replies are read back in: a "yes" with a time becomes a calendar event, silence gets one follow-up</text>
+  </g>
+</svg>

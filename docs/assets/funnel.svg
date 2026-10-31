@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 470" width="1200" height="470" role="img" aria-label="ZoNuLy by the numbers, 31 October 2026">
+  <rect width="1200" height="470" rx="18" fill="#0b0d12"/>
+  <g font-family="ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+    <text x="40" y="48" fill="#ffffff" font-size="22" font-weight="700">By the numbers</text>
+    <text x="1160" y="48" fill="#8b95a7" font-size="14" text-anchor="end">live database · 31 Oct 2026</text>
+    <!-- bars: width ∝ log scale, labelled with the real count -->
+    <g font-size="15">
+      <rect x="40" y="80" width="1120" height="44" rx="10" fill="#16202e"/><rect x="40" y="80" width="1120" height="44" rx="10" fill="#1d3550"/>
+      <text x="60" y="108" fill="#ffffff" font-weight="700">44,436</text><text x="160" y="108" fill="#c9d1e0">leads — people at target companies, each with where they were found</text>
+
+      <rect x="40" y="134" width="1010" height="44" rx="10" fill="#1d3a52"/>
+      <text x="60" y="162" fill="#ffffff" font-weight="700">20,641</text><text x="160" y="162" fill="#c9d1e0">confirmed current staff (verified- or likely-current, with evidence)</text>
+
+      <rect x="40" y="188" width="900" height="44" rx="10" fill="#1d4254"/>
+      <text x="60" y="216" fill="#ffffff" font-weight="700">10,271</text><text x="160" y="216" fill="#c9d1e0">open roles scraped · 6,678 of them not senior</text>
+
+      <rect x="40" y="242" width="800" height="44" rx="10" fill="#1d4a52"/>
+      <text x="60" y="270" fill="#ffffff" font-weight="700">6,487</text><text x="160" y="270" fill="#c9d1e0">companies · 1,696 Bengaluru · 486 Hyderabad</text>
+
+      <rect x="40" y="296" width="560" height="44" rx="10" fill="#1d5550"/>
+      <text x="60" y="324" fill="#ffffff" font-weight="700">250</text><text x="160" y="324" fill="#c9d1e0">best bets (decision brain shortlist)</text>
+
+      <rect x="40" y="350" width="470" height="44" rx="10" fill="#1f6a55"/>
+      <text x="60" y="378" fill="#ffffff" font-weight="700">246</text><text x="160" y="378" fill="#c9d1e0">SMTP-proved addresses on leads</text>
+    </g>
+    <text x="40" y="432" fill="#7cf3c4" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">knowledge graph: 63,134 nodes · 203,154 edges · 12,450 address checks on record</text>
+  </g>
+</svg>
