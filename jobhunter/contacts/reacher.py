@@ -37,7 +37,6 @@ import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
-from functools import lru_cache
 
 from sqlmodel import col, select
 
@@ -76,22 +75,42 @@ def available() -> bool:
     return BIN.exists()
 
 
-@lru_cache(maxsize=8192)
-def mx_hosts(domain: str) -> tuple[str, ...]:
-    try:
-        import dns.resolver
+_MX: dict[str, tuple[str, ...]] = {}
 
-        answers = dns.resolver.resolve(domain, "MX", lifetime=8)
-        return tuple(str(r.exchange).rstrip(".").lower() for r in sorted(answers, key=lambda r: r.preference))
-    except Exception:  # noqa: BLE001 — NXDOMAIN, no MX, timeouts
-        return ()
+
+def mx_hosts(domain: str) -> tuple[str, ...]:
+    """The domain's mail hosts, best first; () only when DNS says there are none."""
+    if domain in _MX:
+        return _MX[domain]
+    import dns.resolver
+
+    for _ in range(3):
+        try:
+            answers = dns.resolver.resolve(domain, "MX", lifetime=10)
+            _MX[domain] = tuple(str(r.exchange).rstrip(".").lower() for r in sorted(answers, key=lambda r: r.preference))
+            return _MX[domain]
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+            _MX[domain] = ()
+            return ()
+        except Exception:  # noqa: BLE001 — timeout / resolver overload: try again
+            continue
+    # 2026-10-31: 14,699 addresses (google.com, outlook.com …) were marked dead because lookups
+    # timed out under 40 workers. A lookup that never answers is not proof of "no mail server".
+    raise MXUnknown(domain)
+
+
+class MXUnknown(Exception):
+    """DNS did not answer: the domain's mail servers are unknown, not absent."""
 
 
 def checkable_here(domain: str) -> bool:
     """False for Google-hosted domains when no proxy is set: they never answer this IP."""
     if _proxy():
         return True
-    hosts = mx_hosts(domain)
+    try:
+        hosts = mx_hosts(domain)
+    except MXUnknown:
+        return False
     return bool(hosts) and not any(h.endswith(g) for h in hosts[:1] for g in GOOGLE_MX)
 
 
@@ -131,8 +150,11 @@ def probe(address: str) -> tuple[str, bool | None, str]:
     """(verdict, catch_all, detail) straight from the tool, `invalid` re-read. No DB."""
     address = address.strip().lower()
     domain = address.rsplit("@", 1)[-1]
-    if not mx_hosts(domain):
-        return "invalid", None, "domain has no mail server (no MX)"
+    try:
+        if not mx_hosts(domain):
+            return "invalid", None, "domain has no mail server (no MX)"
+    except MXUnknown:
+        return "unknown", None, "DNS did not answer for the domain"
     try:
         d = _run(address)
     except subprocess.TimeoutExpired:
@@ -209,7 +231,31 @@ def promote(session, contact: Contact, address: str, source: str) -> None:
     if contact.email_status not in ("bounced", "opted_out"):
         contact.email_status = "real"
     contact.confidence = "verified"
+    live_mailbox(session, contact)
     session.add(contact)
+
+
+def live_mailbox(session, contact: Contact) -> bool:
+    """A proved address on the person's own company domain places them there now
+    (guardrails.affiliation, `live-mailbox`): an unconfirmed lead becomes likely-current."""
+    from jobhunter import guardrails
+    from jobhunter.db import Company
+
+    if contact.affiliation not in (None, "unconfirmed") or not contact.email:
+        return False
+    company = session.get(Company, contact.company_id) if contact.company_id else None
+    dom = (company.domain or "").lower().removeprefix("www.") if company else ""
+    addr = contact.email.lower()
+    if not dom or not (addr.endswith("@" + dom) or addr.endswith("." + dom)):
+        return False
+    chk = session.get(EmailCheck, addr)
+    if chk is None or chk.verdict != SAFE or chk.catch_all:
+        return False
+    a = guardrails.affiliation(company_name=company.name, domain=dom, email_kind="company", email_addr=addr,
+                               mailbox_live=f"{addr} ({chk.source}, {chk.checked_at:%Y-%m-%d})")
+    contact.affiliation, contact.affiliation_source, contact.affiliation_evidence = a.label, a.source, a.evidence
+    contact.affiliation_checked_at = utcnow()
+    return a.label == "likely-current"
 
 
 def _apply(session, contact: Contact, row: EmailCheck) -> str:
@@ -257,8 +303,6 @@ def check_many(addresses: list[str], *, workers: int | None = None, known: dict 
                 row = k
             elif catch_all:
                 row = record(a, "risky", catch_all=True, detail="domain accepts every address (catch-all)")
-            elif not mx_hosts(domain):
-                row = record(a, "invalid", detail="domain has no mail server (no MX)")
             else:
                 v, ca, why = probe(a)
                 row = record(a, v, catch_all=ca, detail=why)

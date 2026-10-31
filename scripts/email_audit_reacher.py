@@ -44,8 +44,19 @@ def main() -> int:
         known = {k.address: k for k in s.exec(__import__("sqlmodel").select(EmailCheck)).all()}
     todo = [r["email"] for r in rows if r["group"] != "REAL" and r["email"] not in known]
     domains = {a.split("@")[1] for a in todo}
-    with ThreadPoolExecutor(32) as ex:
-        ok = dict(zip(domains, ex.map(lambda d: args.all or reacher.checkable_here(d) or not reacher.mx_hosts(d), domains)))
+
+    def worth_probing(d: str) -> bool:
+        # 2026-10-31: 8 lookups at a time, not 32 (32 overloaded the resolver), and a lookup
+        # that never answers means "skip for now", never "no mail server"
+        if args.all or reacher.checkable_here(d):
+            return True
+        try:
+            return not reacher.mx_hosts(d)      # no MX at all: probe() records it as dead
+        except reacher.MXUnknown:
+            return False
+
+    with ThreadPoolExecutor(8) as ex:
+        ok = dict(zip(domains, ex.map(worth_probing, domains)))
     skipped = sum(1 for a in todo if not ok[a.split("@")[1]])
     todo = list(dict.fromkeys(a for a in todo if ok[a.split("@")[1]]))
     if args.limit:

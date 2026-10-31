@@ -1,3 +1,10 @@
+# 2026-10-31, Tejmul: "currently our focus is on Bangalore and Hyderabad … get the best bets; after
+# that we will do the sending part" — while set, the people step, Apify and every fill queue work only
+# on (or first on) companies in these cities, and the YC directory (mostly US) is not admitted.
+# Remote comes back when this is emptied (planned: after Bengaluru + Hyderabad are complete, end of Nov).
+focus:
+  cities: [Bengaluru, Hyderabad]
+
 openrouter:
   enabled: true
   base_url: https://openrouter.ai/api/v1
@@ -1344,7 +1351,9 @@ actors:
     # it evenly over ~31 days. Was 0.15 on the free plan.
     daily_usd: 1.00        # a ceiling only: the real cap is the credit left ÷ days left in the cycle (apify_source.daily_cap)
                            # 2026-10-25: was 5.00 — $9.50 of $19 went in two days ("keep limit … I used all in 1 day")
-    monthly_stop_usd: 18.5 # never past this of the $19 Starter credit (read from Apify's own usage before each buy)
+    monthly_stop_usd: 15.0 # never past this of the $19 Starter credit (read from Apify's own usage before each buy)
+                           # 2026-10-31, Tejmul: "make the Apify cap to $15 … till 15 scrape best companies and
+                           # leads which are verified" — was 18.5
     cache_hours: 24
     mode: email            # short $4/1k (name, location) · full $8/1k (+ titles, positions) · email $12/1k
                            # 2026-10-24: email — 58 of the first 67 shortlist companies had people but no real address

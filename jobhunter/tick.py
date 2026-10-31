@@ -379,8 +379,11 @@ def _company_steps() -> list[tuple[str, object]]:
     steps.append(("verify", lambda: {"checked": len(hiring_verify.verify_pending(
         limit=L["verify"], tiers=("tier1", "tier2", "prospect", "unknown"),
         budget_s=max(120, int(BUDGET_S * SHARE_COMPANIES) // 3)))}))
-    steps.append(("yc", lambda: {"yc": _as(harvest.admit_yc()), "probe": harvest.probe_ats(),
-                                 "roles": harvest.scrape_roles()}))
+    from jobhunter.db import FOCUS_CITIES
+
+    if not FOCUS_CITIES:   # 2026-10-31: the YC directory is mostly US companies — not while BLR/HYD is the focus
+        steps.append(("yc", lambda: {"yc": _as(harvest.admit_yc()), "probe": harvest.probe_ats(),
+                                     "roles": harvest.scrape_roles()}))
     if L["india"]:
         def _india():
             from jobhunter import india

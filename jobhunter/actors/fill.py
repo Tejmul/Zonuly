@@ -72,6 +72,11 @@ def fill_company(company_id: int, *, sources: list[str] | None = None, max_verif
            "headline": p["headline"] or p["title"], "email": p.get("email"), "email_status": p.get("email_status")}
           for p in fresh if p["linkedin_url"] and (p["status"] == "verified-current"
                                                     or (p["status"] == "likely-current" and strong & set(p["sources"])))]
+    # 2026-10-31: someone already on file whom the People tab returned WITH an address — the address
+    # was paid for; _save attaches it to the person we hold (it skipped them as "known" before)
+    li += [{"name": p["name"], "url": p["linkedin_url"], "role": p["title"] or p["headline"] or "",
+            "headline": p["headline"] or p["title"], "email": p.get("email"), "email_status": p.get("email_status")}
+           for p in people if "known" in p["sources"] and "apify" in p["sources"] and p.get("email") and p["name"]]
     team = [{"name": p["name"], "title": p["title"] or "", "url": next(
                 (e["url"] for e in p["evidence"] if e["source"] == "team"), None)}
             for p in fresh if "team" in p["sources"] and not p["linkedin_url"]]

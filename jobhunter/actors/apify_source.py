@@ -66,12 +66,23 @@ def spent_today(label: str | None = None) -> float:
 
 MONTHLY_STOP_USD = float(_CONF.get("monthly_stop_usd", 18.5))
 _USAGE: dict = {"at": 0.0, "used": None, "max": None, "end": None}
+# 2026-10-31, Tejmul: "till 15 you can scrape best companies and leads which are verified … in 2 days".
+# A sprint (scripts/verified_sprint.py) may spend everything up to monthly_stop_usd today instead of
+# the paced daily share, and re-reads Apify's real usage before every buy. Set only inside that
+# process (sprint()), so the launchd jobs keep their pace.
+_SPRINT = {"on": False}
+
+
+def sprint(on: bool = True) -> None:
+    """Spend up to the monthly stop today, with Apify's real usage re-read before every call."""
+    _SPRINT["on"] = on
+    _USAGE["at"] = 0.0
 
 
 def monthly_usage() -> tuple[float | None, float | None]:
     """(used, max) this billing cycle, from Apify itself, cached 10 minutes. (None, None) when it
     cannot be read — the daily cap still applies then."""
-    if time.time() - _USAGE["at"] < 600 and _USAGE["used"] is not None:
+    if not _SPRINT["on"] and time.time() - _USAGE["at"] < 600 and _USAGE["used"] is not None:
         return _USAGE["used"], _USAGE["max"]
     try:
         d = httpx.get("https://api.apify.com/v2/users/me/limits", params={"token": token()}, timeout=20).json()["data"]
@@ -90,8 +101,10 @@ def daily_cap() -> float:
     used, cap = monthly_usage()
     end = _USAGE.get("end")
     if used is None or not end:
-        return DAILY_USD
+        return 0.0 if _SPRINT["on"] else DAILY_USD   # a sprint never buys blind
     stop = min(MONTHLY_STOP_USD, (cap or MONTHLY_STOP_USD) - 0.25)
+    if _SPRINT["on"]:
+        return round(max(0.0, stop - used + spent_today()), 4)
     today = datetime.now().date()
     days_left = max(1, (datetime.strptime(end, "%Y-%m-%d").date() - today).days + 1)
     # today's own spend is already inside `used`, so add it back before splitting
@@ -104,7 +117,7 @@ def _monthly_refusal(estimate: float) -> str | None:
     high, and this is what stops it: the account's real usage, short of its monthly credit."""
     used, cap = monthly_usage()
     if used is None:
-        return None
+        return "apify usage could not be read — a sprint never buys blind" if _SPRINT["on"] else None
     stop = min(MONTHLY_STOP_USD, (cap or MONTHLY_STOP_USD) - 0.25)
     if used + estimate > stop:
         return f"apify monthly credit: ${used:.2f} used + ${estimate} estimated > ${stop:.2f} (of ${cap:g})"
@@ -117,11 +130,13 @@ def status() -> dict:
 
 
 def best_email(item: dict) -> tuple[str | None, str | None]:
-    """(address, "verified" | "risky") from the actor's `emails` list — [{email, status,
-    deliverable, catchAllDomain, foundInLinkedInProfile, qualityScore}]. 2026-10-24: this
+    """(address, "verified" | "published" | "risky") from the actor's `emails` list — [{email,
+    status, deliverable, catchAllDomain, foundInLinkedInProfile, qualityScore}]. 2026-10-24: this
     list was read as if it were a string, so every address email mode paid for was dropped.
-    Verified = the vendor's SMTP check says deliverable on a domain that is not catch-all, or
-    the address is on the person's own LinkedIn profile; risky = a catch-all domain."""
+    Verified = the vendor's SMTP check says valid and deliverable on a domain that is not
+    catch-all — the only status that proves an address (CLAUDE.md, verified addresses only);
+    published = on the person's own LinkedIn profile but not SMTP-proved (2026-10-31: was
+    counted as verified); risky = a catch-all domain."""
     rows = item.get("emails")
     if isinstance(rows, str):
         return rows, None
@@ -134,9 +149,10 @@ def best_email(item: dict) -> tuple[str | None, str | None]:
             continue
         if not isinstance(r, dict) or not r.get("email") or r.get("status") == "invalid":
             continue
-        verified = (r.get("deliverable") and not r.get("catchAllDomain") and r.get("status") == "valid") \
-            or bool(r.get("foundInLinkedInProfile"))
-        good.append((0 if verified else 1, -(r.get("qualityScore") or 0), r["email"], "verified" if verified else "risky"))
+        verified = bool(r.get("deliverable") and not r.get("catchAllDomain") and r.get("status") == "valid")
+        published = bool(r.get("foundInLinkedInProfile"))
+        status = "verified" if verified else "published" if published else "risky"
+        good.append((0 if verified else 1 if published else 2, -(r.get("qualityScore") or 0), r["email"], status))
     if not good:
         return None, None
     _, _, addr, status = min(good)
@@ -211,7 +227,8 @@ def company_employees(company_url: str, *, max_items: int = 50, mode: str = "sho
 
 
 def run_actor(actor_id: str, inp: dict, *, per_item: float, start_fee: float, max_items: int,
-              label: str | None = None, cap_usd: float | None = None, timeout_s: int = 280) -> dict:
+              label: str | None = None, cap_usd: float | None = None, timeout_s: int = 280,
+              max_charge_usd: float | None = None) -> dict:
     """Any pinned Apify actor under the same guards as company_employees — {items, cost_usd, cached}
     or {error}. Never raises. The estimate (max_items × per_item + start_fee) is checked BEFORE the
     run against today's cap (and `cap_usd`, a caller's own share of it, when given); the actual cost
@@ -231,8 +248,11 @@ def run_actor(actor_id: str, inp: dict, *, per_item: float, start_fee: float, ma
     if cap_usd is not None and spent_today(label) + estimate > cap_usd:
         return {"error": f"{label} cap: ${spent_today(label)} spent + ${estimate} estimated > ${cap_usd}"}
     try:
+        params = {"token": token(), "timeout": timeout_s}
+        if max_charge_usd is not None:   # Apify's own hard ceiling on a pay-per-event run
+            params["maxTotalChargeUsd"] = max_charge_usd
         r = httpx.post(f"https://api.apify.com/v2/acts/{actor_id}/run-sync-get-dataset-items",
-                       params={"token": token(), "timeout": timeout_s}, json=inp, timeout=timeout_s + 20)
+                       params=params, json=inp, timeout=timeout_s + 20)
     except httpx.HTTPError as e:
         return {"error": f"apify request failed: {e}"}
     if r.status_code >= 400:

@@ -723,6 +723,18 @@ def get_session() -> Session:
 _INDIA_FILL_FIRST_DAYS = int((((CONFIG.get("targeting") or {}).get("india") or {}).get("discovery") or {})
                              .get("fill_first_days", 30))
 
+_FOCUS_ALIASES = {"bangalore": "bengaluru", "bengaluru": "bengaluru", "hyderabad": "hyderabad"}
+FOCUS_CITIES = {_FOCUS_ALIASES.get(str(c).lower(), str(c).lower()) for c in ((CONFIG.get("focus") or {}).get("cities") or [])}
+
+
+def in_focus(company: "Company") -> bool:
+    """Is this company in the cities we work on right now (config `focus.cities`)? Everything is
+    in focus when the list is empty. 2026-10-31: Bengaluru + Hyderabad only — remote waits."""
+    if not FOCUS_CITIES:
+        return True
+    city = (company.city or "").strip().lower()
+    return _FOCUS_ALIASES.get(city, city) in FOCUS_CITIES
+
 
 def fill_order(company: Company) -> tuple:
     """The one order every fill-in queue reads (2026-10-07: "the ★ India list first, then
@@ -738,7 +750,9 @@ def fill_order(company: Company) -> tuple:
     found = company.india_found_at
     fresh_india = (not listed and found is not None
                    and (utcnow() - found).days < _INDIA_FILL_FIRST_DAYS)
-    return (0 if listed else 1 if fresh_india else 2, (company.list_rank or 9999) if listed else 0,
+    # out of focus (config focus.cities) goes after everything in focus, whatever its priority
+    first = (0 if listed else 1 if fresh_india else 2) + (0 if in_focus(company) else 10)
+    return (first, (company.list_rank or 9999) if listed else 0,
             0 if company.scrape_first else 1, -(prio // 20), done, -prio)
 
 

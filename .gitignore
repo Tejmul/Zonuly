@@ -39,3 +39,6 @@ reports/
 # email audit output holds people's addresses; the Reacher binary is downloaded (tools/reacher, v0.11.9)
 data/audit/
 tools/reacher/
+
+# mail-merge CSVs Tejmul actually sent (people's addresses; read by scripts/export_referrals_csv.py)
+data/merge_sent/

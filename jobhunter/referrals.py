@@ -347,8 +347,10 @@ def apify_queue() -> list[int]:
         # company is bought only while it lacks two engineers WITH A REAL ADDRESS — names alone
         # cannot be cold-mailed
         shortlist_only = bool(((CONFIG.get("actors") or {}).get("apify") or {}).get("shortlist_only", True))
+        from jobhunter.db import in_focus
+
         rows = [c for c in rows
-                if not c.overrated and c.tier != "reject" and not c.do_not_contact
+                if in_focus(c) and not c.overrated and c.tier != "reject" and not c.do_not_contact
                 and (c.id in slot or (not shortlist_only and (c.list_key or any(x in (c.city or "").lower()
                                                                                 for x in _HUNTER_CITIES))))
                 and backoff.due(c, "apify")]
@@ -492,8 +494,12 @@ def people_queue(limit: int | None = None, *, list_key: str | None = None, top: 
         rows = session.exec(stmt).all()
         counts = guardrails.ready_counts(session)
         best = best_bets(session)
+    from jobhunter.db import in_focus
+
     pending = []
     for c in rows:
+        if not in_focus(c):
+            continue      # 2026-10-31: Bengaluru + Hyderabad only while config focus.cities is set
         r, e = counts.get(c.id, (0, 0))
         if r >= TARGET and e >= 1:
             continue

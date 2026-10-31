@@ -318,13 +318,21 @@ def _repos_for(contact: Contact, brief: dict, research: bool) -> list[dict]:
     return work.get("repos") or []
 
 
-def gather(contact_id: int, job_id: int | None = None, *, research: bool = True) -> dict:
+def gather(contact_id: int, job_id: int | None = None, *, research: bool = True,
+           allow_unproved: bool = False) -> dict:
     """Everything one email may use, read from the DB (and the person's public repos).
-    {"error": ...} when no email may go to this person at all."""
+    {"error": ...} when no email may go to this person at all.
+
+    allow_unproved: also draft for a lead whose address is kept but not proved
+    (contact.email_unverified) — only for Tejmul's own labelled CSV export
+    (scripts/export_referrals_csv.py --with-unproved); the sender still refuses to mail it."""
     init_db()
     with get_session() as session:
         contact = session.get(Contact, contact_id)
-        if contact is None or not contact.email:
+        address = contact.email if contact is not None else None
+        if contact is not None and not address and allow_unproved:
+            address = contact.email_unverified
+        if contact is None or not address:
             return {"error": "contact not found or has no email"}
         if not guardrails.is_ready(contact):
             return {"error": f"not a confirmed-current referrer ({contact.affiliation or 'unchecked'}: "
@@ -363,7 +371,7 @@ def gather(contact_id: int, job_id: int | None = None, *, research: bool = True)
         person = {"id": contact.id, "name": contact.name, "role": contact.role, "role_class": contact.role_class,
                   "role_evidence": contact.role_evidence, "affiliation_evidence": contact.affiliation_evidence,
                   "x_handle": contact.x_handle, "github": contact.github, "linkedin": contact.linkedin,
-                  "repos": repos, "email": contact.email, "confidence": contact.confidence,
+                  "repos": repos, "email": address, "confidence": contact.confidence,
                   "affiliation": contact.affiliation, "role_source": contact.linkedin or contact.github}
         comp = {"id": company.id if company else None, "name": company.name if company else None,
                 "website": company.website if company else None, "description": company.description if company else None,

@@ -51,7 +51,21 @@ for the visual.
   write; anything unproved is kept in `contact.email_unverified`, never mailed, never shown. Pattern
   filling (`addresses.py`, `contacts/__init__` step 5, `linkedin_public`) is switched off — do not
   switch it back on. Real/fake is internal (`contact.email_status` real | fake:<why>); the dashboard
-  shows only real addresses and no "fake" label. No Apify for verification (cost).
+  shows only real addresses and no "fake" label. No Apify for verification (cost). An Apify email
+  search address counts as proved only when the vendor's SMTP check says valid + deliverable + not
+  catch-all (`best_email` "verified"); one that is only on the person's profile is "published" and
+  stays unproved (`linkedin_public._prove` writes the proof before the contact is saved).
+- **Focus: Bengaluru + Hyderabad only** (2026-10-31, `focus.cities` in config.yaml). The people step,
+  Apify and every fill queue skip or sink everything else; the YC directory is not admitted. Remote
+  waits until Bengaluru + Hyderabad are complete (planned end of November) — then empty the list.
+- **When Tejmul asks for a CSV** (his mail-merge sheet): `python scripts/export_referrals_csv.py`, in his
+  format `company,email,subject,message,name,role,address`. Verified addresses only — a pure list of
+  people — unless he asks for unverified (`--with-unproved`, labelled). The verified-sprint batch
+  (2026-10-31, `scripts/verified_sprint.py`, Bengaluru + Hyderabad best bets first, held for him) comes
+  first; then the other verified Bengaluru / Hyderabad leads by best bets and pay power. Never an address
+  already mailed: the Email table or any CSV in `data/merge_sent/` (what he sent from his own sheet —
+  save each CSV he sends there). Test rows to tejmulmovin9@gmail.com at the sheet rows he names
+  (`--test-at`). Sending stays off until he says the sending part starts.
 - Layering: `db/llm/normalize` ← `scrapers/contacts/outreach` ← `pipeline/matcher/kg` ← `api` ← `dashboard`.
   Nothing imports upward.
 - The machine has 8 GB RAM and no model runtime. Until step 1 of v3 lands, `llm.py` still contains the old

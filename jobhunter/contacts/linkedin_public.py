@@ -211,6 +211,25 @@ def search_role(company_id: int, kind: str, *, max_people: int = MAX_PER_COMPANY
     return {"company": name, "kind": kind, "found": len(people), "added": added, "via": via}
 
 
+def _prove(session, address: str | None, status: str | None) -> None:
+    """A vendor SMTP check (Apify email search: valid, deliverable, not catch-all) is the proof
+    the address may go on the lead — recorded in email_check and flushed BEFORE the contact is
+    written, or db._only_verified_addresses demotes it (2026-10-31: every paid-for verified
+    address would have been dropped). A Reacher "no such user" is never overruled."""
+    from jobhunter.db import EmailCheck
+
+    if not address or status != "verified":
+        return
+    row = session.get(EmailCheck, address)
+    if row is not None and row.verdict in ("safe", "invalid"):
+        return
+    row = row or EmailCheck(address=address, verdict="safe")
+    row.verdict, row.source, row.catch_all = "safe", "apify", False
+    row.detail, row.checked_at = "Apify email search: SMTP valid + deliverable, not catch-all", utcnow()
+    session.add(row)
+    session.flush()
+
+
 def _save(company_id: int, people: list[dict], via: str) -> int:
     """Store found profiles as contacts, resolving each address from the company's
     pattern when it is known — MX-checked, labelled guessed, never verified."""
@@ -235,6 +254,7 @@ def _save(company_id: int, people: list[dict], via: str) -> int:
                 # 2026-10-24: a person already on file gets the address a paid lookup found for them
                 k = by_name.get(p["name"].lower())
                 if k is not None and own and (not k.email or k.confidence == "pattern-guessed") and own not in taken:
+                    _prove(session, own, p.get("email_status"))
                     g = guardrails.vet_contact(session, company=c, name=k.name, email_addr=own, source="linkedin-public",
                                                channel=f"linkedin:{via}", url=p["url"], name_source="linkedin",
                                                linkedin_headline=p.get("headline") or p["role"], smtp=own_conf)
@@ -251,6 +271,7 @@ def _save(company_id: int, people: list[dict], via: str) -> int:
             if own and own not in taken:
                 email, confidence = own, own_conf
                 taken.add(own)
+                _prove(session, own, p.get("email_status"))
             elif False:   # 2026-10-30: no pattern guesses — only an address the person or a check proved
                 cands = patterns.candidates(p["name"], domain, pattern)
                 if cands:

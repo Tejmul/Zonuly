@@ -681,7 +681,8 @@ def affiliation(*, company_name: str, domain: str | None = None, email_kind: str
                 employer_claim: str | None = None, last_commit_at: datetime | None = None,
                 commit_repo: str | None = None, team_page: str | None = None,
                 linkedin_headline: str | None = None, published_at: str | None = None,
-                public_mention: str | None = None, now: datetime | None = None) -> Affiliation:
+                public_mention: str | None = None, mailbox_live: str | None = None,
+                now: datetime | None = None) -> Affiliation:
     """Does the evidence place this person at this company NOW?
 
     verified-current  public member of their GitHub org; their own profile names the
@@ -690,7 +691,9 @@ def affiliation(*, company_name: str, domain: str | None = None, email_kind: str
     likely-current    a commit to the company's own repo inside 12 months; a public
                       LinkedIn headline naming the company; a company address published
                       on the web; a dated public page inside 12 months naming them at the
-                      company (a talk, a byline, a podcast — contacts/public_mentions.py)
+                      company (a talk, a byline, a podcast — contacts/public_mentions.py);
+                      a company mailbox proved deliverable (check-if-email-exists, not
+                      catch-all) — companies close a leaver's mailbox
     unconfirmed       anything else — an old commit, a fork, an address at another company
     generic           a shared inbox (info@, careers@) — a company contact, never a referrer
     """
@@ -718,6 +721,8 @@ def affiliation(*, company_name: str, domain: str | None = None, email_kind: str
         return Affiliation("likely-current", "company-address", f"company address published at {published_at[:160]}")
     if public_mention and names_company(public_mention, company_name, domain) and not _EX.search(public_mention):
         return Affiliation("likely-current", "public-mention", public_mention[:300])
+    if email_kind == "company" and mailbox_live:
+        return Affiliation("likely-current", "live-mailbox", f"company mailbox proved deliverable: {mailbox_live[:120]}")
     why = []
     if employer_claim:
         why.append(f"profile says '{employer_claim[:60]}'")
