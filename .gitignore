@@ -50,4 +50,4 @@ data/paperclip.json
 .paperclip/
 
 # the virtualenv (linked into each Paperclip worktree by the workspace setupCommand)
-.venv/
+.venv
