@@ -1257,9 +1257,11 @@ def _can_refer_classes() -> list[str]:
 
 def referrer_counts(session) -> dict[int, tuple[int, int]]:
     """company_id -> (confirmed-current referrers, of them with an address)."""
-    from sqlmodel import col, select
+    from sqlmodel import col, func, select
 
-    rows = session.exec(select(Contact.company_id, Contact.email).where(
+    # 2026-10-30: an address set aside unproved (email_unverified) still counts for the Atlas —
+    # the company has a reachable person; only the sender demands a proved address
+    rows = session.exec(select(Contact.company_id, func.coalesce(Contact.email, Contact.email_unverified)).where(
         col(Contact.affiliation).in_(READY), col(Contact.role_class).in_(_can_refer_classes()),
         (col(Contact.email_kind).is_(None)) | (Contact.email_kind != "generic"))).all()
     out: dict[int, list[int]] = {}
@@ -1340,7 +1342,7 @@ def ready_counts(session) -> dict[int, tuple[int, int]]:
             continue
         e = out.setdefault(p.company_id, [0, 0])
         e[0] += 1
-        e[1] += 1 if p.email else 0
+        e[1] += 1 if (p.email or p.email_unverified) else 0   # see referrer_counts
     return {k: (v[0], v[1]) for k, v in out.items()}
 
 

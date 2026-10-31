@@ -518,6 +518,11 @@ def run_free(budget_s: int | None = None) -> dict:
         except (TypeError, ValueError, AttributeError):
             touched = []
         _step(s, "addresses", _addresses_step, touched)
+        # 2026-10-31: every address a scraper found is kept unproved until check-if-email-exists
+        # says safe; this proves the newest few each tick (Google-hosted skipped without a proxy)
+        from jobhunter.contacts import reacher
+
+        _step(s, "prove_addresses", reacher.verify_pending, limit=L.get("prove", 30))
         # 2026-10-19: the month's Hunter lookups, two a tick, on the companies one lookup can finish
         _step(s, "hunter", referrals.hunter_step, limit=L["hunter"])
         # …and the People tab from Apify, inside the free-credit cap, for companies short of referrers

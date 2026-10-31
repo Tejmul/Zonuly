@@ -428,7 +428,7 @@ def company_detail(company_id: int) -> dict:
             {
                 "id": p.id, "name": p.name, "role": _clean_role(p.role), "role_class": p.role_class,
                 "label": roleclass.LABELS.get(p.role_class or "", p.role_class),
-                "rank": p.referral_rank, "email": p.email, "confidence": p.confidence,
+                "rank": p.referral_rank, "email": p.email or p.email_unverified, "confidence": p.confidence,
                 "affiliation": p.affiliation, "affiliation_evidence": p.affiliation_evidence,
                 "email_kind": p.email_kind,
                 "github": p.github, "linkedin": p.linkedin, "x_handle": p.x_handle,
@@ -587,7 +587,7 @@ def company_list(*, include_rejects: bool = False, include_overrated: bool = Fal
                 "best": {
                     "name": best.name, "role_class": best.role_class,
                     "label": roleclass.LABELS.get(best.role_class or "", best.role_class),
-                    "email": best.email, "confidence": best.confidence, "affiliation": best.affiliation,
+                    "email": best.email or best.email_unverified, "confidence": best.confidence, "affiliation": best.affiliation,
                 } if best else None,
             },
             "ready": bool(referrers) and c.hiring_status in ("verified", "role_missing"),
@@ -714,20 +714,23 @@ def _reachable(c: Company, people: list[Contact]) -> list[Contact]:
     that vouched for them. `kg audit` reports the same contradiction; this is where it bites.
     """
     domain = (c.domain or "").lower()
-    gh = [p for p in people if p.source == "github" and p.email]
-    corp = [p for p in gh if p.email.split("@")[-1].lower() not in _FREEMAIL]
-    foreign = [p for p in corp if domain and not p.email.split("@")[-1].lower().endswith(domain)]
+    # what the pages show (2026-10-30): a proved address or one set aside unproved — the sender
+    # still mails only contact.email, which holds proved addresses alone
+    addr = lambda p: p.email or p.email_unverified  # noqa: E731
+    gh = [p for p in people if p.source == "github" and addr(p)]
+    corp = [p for p in gh if addr(p).split("@")[-1].lower() not in _FREEMAIL]
+    foreign = [p for p in corp if domain and not addr(p).split("@")[-1].lower().endswith(domain)]
     forked_org = len(corp) >= 3 and len(foreign) / len(corp) >= 0.3
     stem = "".join(ch for ch in (c.name or "").lower() if ch.isalnum())[:8]
     out = []
     for p in people:
-        if not p.email or (p.referral_rank or 9) > 6:
+        if not addr(p) or (p.referral_rank or 9) > 6:
             continue
         # only someone the evidence places there NOW (guardrails.affiliation) is a lead;
         # a commit in someone's fork, an old address or an inbox is not
         if not guardrails.is_ready(p):
             continue
-        dom = p.email.split("@")[-1].lower()
+        dom = addr(p).split("@")[-1].lower()
         on_domain = bool(domain) and dom == domain
         # their own profile naming the company is evidence commit history is not
         says_so = bool(stem) and stem in "".join(ch for ch in (p.employer_claim or "").lower() if ch.isalnum())
