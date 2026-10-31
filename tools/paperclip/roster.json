@@ -17,7 +17,9 @@
       "sourceType": "local_path",
       "defaultRef": "main",
       "isPrimary": true,
-      "setupCommand": "ln -sfn /Users/tejmul/Desktop/ZoNuLy/.venv .venv"
+      "setupCommand": "ln -sfn /Users/tejmul/Desktop/ZoNuLy/.venv .venv",
+      "repoRef": "main",
+      "note": "repoRef must be the LOCAL branch: Paperclip defaults to origin/<defaultRef>, which is whatever was last pushed — worktrees were born 6 commits stale on 2026-11-01."
     },
     "executionWorkspacePolicy": {
       "enabled": true,
