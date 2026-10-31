@@ -16,7 +16,14 @@ AI roles there instead of naming an opening (OPEN_ASK); a remote company needs a
 
 Plus --tests rows (default 3) to Tejmul's own Gmail at random places: "it is working".
 
+Numbered batches (2026-11-01, his hand-off process). `--batch` writes the next
+data/csv/CSV<n>.csv with proved-real addresses only, none that went out in an earlier batch,
+and records it (outreach/handoff.py). When he has mailed it, `--done CSV<n>` marks those
+leads mailed by him forever, so no later batch offers them again.
+
 Usage: python scripts/export_referrals_csv.py [--target 1000] [--out path] [--tests 3]
+       python scripts/export_referrals_csv.py --batch [--target 1000] [--test-at 250,480]
+       python scripts/export_referrals_csv.py --done CSV3
 """
 
 from __future__ import annotations
@@ -35,8 +42,8 @@ sys.path.insert(0, str(ROOT))
 from sqlmodel import col, select  # noqa: E402
 
 from jobhunter import referrals  # noqa: E402
-from jobhunter.db import Company, Contact, Email, EmailCheck, Job, get_session  # noqa: E402
-from jobhunter.outreach import drafter, gmail, suppress  # noqa: E402
+from jobhunter.db import Company, Contact, Email, EmailCheck, Job, get_session, init_db  # noqa: E402
+from jobhunter.outreach import drafter, gmail, handoff, suppress  # noqa: E402
 
 PER_CO = 5
 TEST = {"company": "TEST", "email": "tejmulmovin9@gmail.com", "subject": "Test", "message": "it is working",
@@ -107,16 +114,44 @@ def main() -> int:
                          "labelled 'unverified' — never a guessed, dead, shared or nameless address")
     ap.add_argument("--all-cities", action="store_true",
                     help="ignore config focus.cities (default: only Bengaluru / Hyderabad companies while it is set)")
+    ap.add_argument("--batch", action="store_true",
+                    help="write the next numbered batch, data/csv/CSV<n>.csv: proved-real addresses only, "
+                         "none that went out in an earlier batch, recorded in csv_batch")
+    ap.add_argument("--done", default="", metavar="CSVn",
+                    help="Tejmul mailed that batch: stamp it done and mark its leads mailed by him forever")
     args = ap.parse_args()
     from jobhunter import guardrails
     from jobhunter.db import get_setting, in_focus
 
+    if args.batch or args.done:
+        init_db()     # the batch tables / mailed_by_tejmul_at column, if this file predates them
+    if args.done:
+        with get_session() as s:
+            try:
+                res = handoff.mark_done(s, args.done)
+            except ValueError as e:
+                print(e)
+                return 2
+        print(f"CSV{res['n']}: done · {res['leads']} leads · {res['marked']} newly marked mailed by Tejmul "
+              f"· done_at {res['done_at']}")
+        return 0
+    if args.batch and args.with_unproved:
+        print("--batch carries proved addresses only: drop --with-unproved")
+        return 2
+
     rows, per_co, why, tiers = [], Counter(), Counter(), Counter()
     with get_session() as s:
+        batch_n = handoff.next_number(s) if args.batch else None
+        spent = handoff.spent_contact_ids(s) if args.batch else set()
+        if args.batch:
+            args.out = str(handoff.path(batch_n))
         safe = {a for a in s.exec(select(EmailCheck.address).where(EmailCheck.verdict == "safe")).all()}
         went = s.exec(select(Email.contact_id, Email.to_email).where(col(Email.status).in_(
             ["sent", "replied", "failed", "sending"]))).all()
         mailed = {cid for cid, _ in went}
+        # the people Tejmul mailed himself from a numbered batch (--done CSVn): mailed forever,
+        # so they are offered in no CSV again, batch or not
+        mailed |= set(s.exec(select(Contact.id).where(col(Contact.mailed_by_tejmul_at).is_not(None))).all())
         mailed_addr = {(a or "").strip().lower() for _, a in went}
         # mail sent from Tejmul's own merge sheet never reaches the Email table: every CSV he
         # sent is kept in data/merge_sent/, and its addresses are never offered again
@@ -142,6 +177,15 @@ def main() -> int:
             if not proved and not args.with_unproved:
                 why["address not proved"] += 1
                 continue
+            if args.batch:
+                # a batch is his sending list: only an address proved real, and never one
+                # that already went out on a sheet of his (handoff.spent_contact_ids)
+                if not handoff.proved_real(p):
+                    why[f"not a real address ({p.email_status or 'no status'})"] += 1
+                    continue
+                if p.id in spent:
+                    why["in an earlier batch / mailed by Tejmul"] += 1
+                    continue
             if not proved:
                 # found, not proved — never one we made up, one that bounced or died, a shared
                 # inbox, or an address with nobody behind it
@@ -228,12 +272,24 @@ def main() -> int:
                     if ROLE_TOKEN in body or ROLE_TOKEN in subject:
                         why["open ask: template not recognised"] += 1
                         continue
-                rows.append({"_held": p.id in held, "company": c.name, "email": meta[p.id][0], "subject": subject,
+                rows.append({"_held": p.id in held, "_contact_id": p.id,
+                             "company": c.name, "email": meta[p.id][0], "subject": subject,
                              "message": body, "name": p.name or "",
                              "role": role or "SDE / AI roles (no opening posted)",
                              "address": "verified" if meta[p.id][1] else "unverified"})
                 per_co[c.name] += 1
                 tiers[("best bets", "BLR/HYD pays 24+", "BLR/HYD other", "remote")[t]] += 1
+
+    lead_ids = [r["_contact_id"] for r in rows if r.get("_contact_id")]
+    if args.batch and any(r["address"] != "verified" for r in rows if r.get("_contact_id")):
+        # cannot happen through the filter above; if it ever does, no file is written
+        print("refusing to write a batch: a row's address is not proved")
+        return 2
+    if args.batch and not lead_ids:
+        # nothing new to mail: no file, no batch number spent
+        print(f"CSV{batch_n}: nothing to write — no new real addresses")
+        print("left out:", dict(why))
+        return 0
 
     # a few rows to Tejmul's own Gmail, at random places, so he can see the merge is going out
     import random
@@ -244,11 +300,16 @@ def main() -> int:
     else:
         for _ in range(args.tests):
             rows.insert(random.randint(1, max(1, len(rows))), dict(TEST))
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     with open(args.out, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["company", "email", "subject", "message", "name", "role", "address"],
                            extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
+    if args.batch:
+        with get_session() as s:
+            handoff.record(s, batch_n, lead_ids)
+        print(f"CSV{batch_n}: {len(lead_ids)} leads")
     print(f"rows {len(rows)} · companies {len(per_co)} · {dict(tiers)} · "
           f"verified {sum(r['address'] == 'verified' for r in rows)} · unverified {sum(r['address'] == 'unverified' for r in rows)}")
     print("held-batch rows:", sum(1 for r in rows if r.get("_held")))

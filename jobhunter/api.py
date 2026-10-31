@@ -240,6 +240,9 @@ def _contact_dict(c: Contact, company_name: str | None = None) -> dict:
         "email_kind": c.email_kind,
         "handle": c.handle,
         "is_recruiter": c.is_recruiter,
+        # Tejmul mailed them himself from a numbered hand-off CSV (outreach/handoff.py) —
+        # read-only here, and no later batch offers them again
+        "mailed_by_tejmul": bool(c.mailed_by_tejmul_at),
         "research": notes,
         "researched_at": c.researched_at.isoformat() if c.researched_at else None,
         "created_at": c.created_at.isoformat() if c.created_at else None,
@@ -1341,9 +1344,12 @@ def list_leads(
     """The People page: referrers with where they came from (LinkedIn / GitHub / team page /
     talks & posts), the company's city (Bengaluru first), the affiliation label and its
     evidence, the public profile URL, the address and its confidence label, and when they
-    were found. Counts on top are for the city (and company) scope, before the source
-    filter. Addresses are masked on the public instance (access.redact_contact)."""
+    were found, and the hand-off CSV they went out in with whether Tejmul has mailed it
+    (csv_batch / mailed_by_tejmul — read-only; only `--done CSVn` sets it). Counts on top are
+    for the city (and company) scope, before the source filter. Addresses are masked on the
+    public instance (access.redact_contact)."""
     from jobhunter import guardrails, referrals
+    from jobhunter.outreach import handoff
 
     source, city, who = source.lower(), city.lower(), who.lower()
     if source != "all" and source not in _LEAD_SOURCES:
@@ -1373,14 +1379,18 @@ def list_leads(
     # Bengaluru first, then Hyderabad, India, remote; the newest first inside a city
     picked.sort(key=lambda x: (9 if x[1] is None else x[1], aff.get(x[0].affiliation or "", 4),
                                -(x[0].created_at.timestamp() if x[0].created_at else 0), x[0].id or 0))
-    items = []
-    for p, b, ch in picked[offset:offset + limit]:
+    items, page = [], picked[offset:offset + limit]
+    with get_session() as session:
+        batches = handoff.batch_of(session, [p.id for p, _, _ in page])
+    for p, b, ch in page:
         c = companies[p.company_id]
         d = _contact_dict(p, c.name)
         linkedin = p.linkedin if p.linkedin and "linkedin.com/in/" in p.linkedin else None
         d.update({"channel": ch, "linkedin": linkedin, "city": c.city,
                   "bucket": referrals.BUCKETS[b] if b is not None else None,
-                  "company_star": c.list_key == referrals.STAR, "found_at": d.get("created_at")})
+                  "company_star": c.list_key == referrals.STAR, "found_at": d.get("created_at"),
+                  # which hand-off CSV they went out in, if any (read-only)
+                  "csv_batch": (batches.get(p.id) or {}).get("batch")})
         d.pop("research", None)
         items.append(d)
     return {"items": items, "total": len(picked), "offset": offset, "limit": limit, "counts": counts,
