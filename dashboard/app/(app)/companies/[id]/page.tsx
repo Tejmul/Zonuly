@@ -17,6 +17,7 @@ import { AffiliationBadge } from "@/components/signals";
 import { fundingOf, money, roundWhen } from "@/lib/funding";
 import { SimilarCompanies, WarmPaths } from "@/components/kg-warm";
 import { Dossier } from "@/components/dossier";
+import { InterviewPrep } from "@/components/interview-prep";
 
 /* One page per company, in the order you read it: who they are → the hiring post →
    the roles → the people to ask → the money. Every number sits next to the sentence
@@ -265,6 +266,9 @@ export default function CompanyPage() {
 
       {/* ---------------------------------------------------------- the research dossier, when one exists */}
       <Dossier companyId={data.id} />
+
+      {/* ---------------------------------------------------------- interview prep */}
+      <InterviewPrep companyId={data.id} />
 
       {/* ---------------------------------------------------------- the best bet here */}
       <Section title="Best bet here" sub="The role with the best odds of selecting you (India and Remote first), and why.">

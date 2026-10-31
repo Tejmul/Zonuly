@@ -1,6 +1,6 @@
 # ZoNuLy — context brief
 
-> Generated 2026-10-30T23:21 from the knowledge graph (60378 nodes, 194637 edges). Do not edit — run `python scripts/run.py kg brief`.
+> Generated 2026-10-31T17:15 from the knowledge graph (63008 nodes, 202779 edges). Do not edit — run `python scripts/run.py kg brief`.
 > To query: `kg search <text>` · `kg show <id>` · `kg path <a> <b>` · `kg compose "<problem>"` · to remember: `kg note "<what changed>" --about <id>`.
 
 ## The problem
@@ -19,10 +19,10 @@ An engineer on site in the US/UK/Germany costs ₹1.5–2 crore a year; the same
 
 ## Where the pipeline is right now (live)
 
-- **10096** jobs from 19 sources (careers 2658, ashby 2512, greenhouse 1802, wellfound 1405, linkedin-jobs 302, hn 287, workable 262, freehire 215, wwr 201, instahyre 120, lever 115, darwinbox 48, remoteok 42, yc 37, smartrecruiters 27, breezy 23, jobfound 21, recruitee 14, bamboohr 5)
-- **453** scored · status: high_match 38, new 9643, scored 415
-- **6454** companies · **41917** contacts (pattern-guessed 670, scraped 36864, verified 4383)
-- emails: approved 16, draft 11, failed 19, rejected 273, replied 1, sent 44 · replies: closed 1, negative 1, neutral 1
+- **10271** jobs from 19 sources (careers 2680, ashby 2527, greenhouse 1832, wellfound 1416, linkedin-jobs 327, workable 302, hn 287, freehire 226, wwr 205, instahyre 129, lever 119, darwinbox 50, remoteok 44, yc 37, smartrecruiters 27, breezy 23, jobfound 21, recruitee 14, bamboohr 5)
+- **453** scored · status: high_match 38, new 9818, scored 415
+- **6487** companies · **44312** contacts (pattern-guessed 670, scraped 39013, verified 4629)
+- emails: approved 26, draft 1, failed 19, rejected 284, replied 2, sent 43 · replies: closed 1, negative 1, neutral 3, positive 1
 - top matches: [85] Backend Engineer — Intern (4 months, in-office) @ ethereal labs (job:3707); [85] Junior AI Engineer @ Silstone Health (job:3902); [85] Data Science Engineer Intern @ Eshal AI (job:3998); [78] Founding Software Engineer @ *Strello Health (job:1219); [78] Founding Full-Stack Engineer @ Arusto (job:3043); [78] Junior AI Engineer @ Planso (job:3085); [78] AI Engineer @ Frequency.cx (job:3129); [78] Founding Engineer for AI Consumer App @ Scalio (job:3592)
 
 ## Constraints and guarantees (never cut)
@@ -561,6 +561,8 @@ Calendar page in the dashboard. Replies can also be recorded by hand (record-rep
 
 ## Session log (newest first)
 
+- **2026-10-31** 2026-10-31: interview prep on the company page — interview_note table, jobhunter/interviews.py (Apify Google → Glassdoor id → scrapifier glassdoor interviews + Reddit; ~$0.19), /api/companies/{id}/interviews (+ /scrape), dashboard/components/interview-prep.tsx. CynLr loaded: 30 Glassdoor, 8 Reddit, Medium, GitHub guide, own LinkedIn post, 8 prep points with evidence (scripts/interviews_cynlr.py). _(about: company:5637)_
+- **2026-10-31** 2026-10-31: free tick gains prove_addresses (reacher.verify_pending, 30/tick) so scraped addresses are proved before they reach a lead; full Reacher audit restarted under caffeinate (died 10-30 21:23 at 1211/26326). Checked: 0 unproved emails on leads; 2436 of 2586 new leads since the gate hold an address only as unproved. _(about: Only proved addresses, never a guess)_
 - **2026-10-30** Zoho on tejmul.in live (2026-10-30): Workplace Standard monthly, 3 users (tejmul@, movin@, tejmul.movin@). DNS via GoDaddy Domain Connect: MX/SPF/DKIM ok; DMARC edited to p=none. Paid org uses smtppro.zoho.in/imappro.zoho.in (config updated). movin@ app password in .env: SMTP+IMAP sign-in ok; test to own Gmail landed in INBOX (Important), SPF/DKIM/DMARC pass. Zoho IMAP ignores HEADER searches -> mailbox.thread_messages now matches In-Reply-To/References client-side over SINCE results; reply found. tests/conftest.py pins the inbox pool to Gmail. Sending still paused. _(about: 25 emails a day, each irreversible)_
 - **2026-10-30** Sending resumed 2026-10-30 12:45 with Gmail + movin@tejmul.in (first sends ok from both). Gmail now verified-only (outreach.gmail_verified_only). New per-inbox brake: one bounce/refusal rests that inbox 48h (inboxes.brake); Gmail rests until Sat 31 Oct ~11:50 for the 3 scraped-address bounces of 10-29, so resumes Mon. Pushed 3729b1a, 612ef23 and the brake commit. _(about: 25 emails a day, each irreversible)_
 - **2026-10-30** Sending inbox pool built (2026-10-30, for 100-300/day): outreach/inboxes.py (per-inbox cap, warm-up ramp from first send, own slots and gap; domain inboxes verified-only), outreach/mailbox.py (plain SMTP/IMAP for Zoho: send, retry check, replies by In-Reply-To/References, bounces), outreach/verify_address.py (free MX check + MillionVerifier when MILLIONVERIFIER_API_KEY set, cached on contact.email_status check:*). Email.sender_inbox; follow-ups leave from the first mail's inbox; tracker reads each inbox. Ledger cap = sum of inbox quotas <= outreach.total_daily_cap 300. config: 3 Zoho inboxes waiting on ZOHO_PASS_* in .env. Sending still paused. Not committed. _(about: 25 emails a day, each irreversible)_
@@ -584,5 +586,3 @@ Calendar page in the dashboard. Replies can also be recorded by hand (record-rep
 - **2026-10-25** FreeHire (freehire.me) added as a job source: junior + intern tech roles, BLR/HYD and remote-global, 14 days (jobhunter/scrapers/freehire.py, sources.freehire). First run: 111 roles at 98 companies, 85 new. Pay rule revised by Tejmul 2026-10-26: PPO floor 20 LPA (tier2 20-30, india.min_lpa 20, region india 20); stipend bar 30k and only when no PPO is known. Any tech role counts; pay power is the first filter. _(about: D23 — the ₹50k/month stipend is a hard bar because it predicts the PPO, D24 — tier1 ≥ ₹30 LPA, tier2 ₹20–30 LPA (was 24 until 2026-10-26), reject below)_
 - **2026-10-24** Two reasons almost nothing was drafted: scrapers used the whole ~50/day free OpenRouter tier (openrouter.outreach_reserve now keeps the last 20 for drafting), and shortlist.one drafts only on its visit, so Apify referrers bought afterwards never got a draft (shortlist.catch_up, 2 per run; drafts_per_day 10→15). 95 shortlisted companies were waiting. _(about: GAP-1 — Send budget should be a ledger, not a count)_
 - **2026-10-24** Next-day send plan: sender.plan() (/api/outreach/plan, Queue → plan tab) previews which approved mail goes when; shortlist tops sendable drafts up to fill it; 20:00 Mac notification (tick.plan_notice). drafts_per_day 25. do_not_contact.people supports 'Name @ Company' (Rachit Kumar @ Sarvam AI). _(about: GAP-1 — Send budget should be a ledger, not a count)_
-- **2026-10-24** Apify daily cap is now paced: credit left (stop 18.5 of 19) ÷ days left in the cycle (ends 21 Nov), ceiling daily_usd 1.00; per_company 15→10. $9.50 went in two days at a flat $5/day. _(about: GAP-1 — Send budget should be a ledger, not a count)_
-- **2026-10-24** 2026-10-25 review: approved 13 fresher-framed drafts (11 verified send Mon 10:59–14:57; PGAGI/Runable scraped wait for the brake); rejected non-fresher roles (Arize 3+y, Fieldguide mid+, Neoware senior, Clera 3+y, Mercari, Nuchange, OrbitAID) and CEO/garbled ones (Skit/CynLr/WisdomAI/Safe Security/PGAGI old). Targeting restated: fresher only — intern→FTE, SDE-1, AI Engineer I. _(about: GAP-1 — Send budget should be a ledger, not a count)_

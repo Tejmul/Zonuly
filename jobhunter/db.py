@@ -566,6 +566,30 @@ class UpskillItem(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class InterviewNote(SQLModel, table=True):
+    """What a company's interviews are like (interviews.py, 2026-10-31): one candidate's report
+    (Glassdoor, Reddit, a blog), the company's own word on its process, or a prep point drawn
+    from those reports. Every row carries the page it came from; nothing is invented."""
+
+    __tablename__ = "interview_note"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
+    kind: str = Field(index=True)            # report | official | prep
+    source: str                               # glassdoor | reddit | medium | linkedin | github | summary
+    source_id: Optional[str] = Field(default=None, index=True)  # the source's own id, so a re-scrape updates
+    url: Optional[str] = None
+    role: Optional[str] = None
+    outcome: Optional[str] = None             # offer | no offer | declined | unknown
+    difficulty: Optional[str] = None
+    experience: Optional[str] = None          # positive | neutral | negative
+    title: Optional[str] = None               # a prep point's heading
+    body: str = ""                            # the process as written, or the prep point
+    questions: Optional[str] = None           # JSON list, the questions as the candidate wrote them
+    evidence: Optional[str] = None            # prep: which reports back it
+    reported_at: Optional[datetime] = None
+    fetched_at: datetime = Field(default_factory=utcnow)
+
+
 class ShortlistFill(SQLModel, table=True):
     """One pass of shortlist.py over one shortlisted company (2026-10-23): what was missing
     before, what is still missing after and why, and what it cost."""

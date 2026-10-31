@@ -228,7 +228,7 @@ def _contact_dict(c: Contact, company_name: str | None = None) -> dict:
         "company_name": company_name,
         "name": c.name,
         "role": c.role,
-        "email": c.email,
+        "email": c.email or c.email_unverified,   # shown as before; only a proved one is mailed
         "github": c.github,
         "linkedin": c.linkedin,
         "x_handle": c.x_handle,
@@ -492,7 +492,7 @@ def overview() -> dict:
         }
         # leads are people (MOTIV: the referrer, not the company): who they are, how we
         # found them, and how many companies now have someone to ask
-        has_email = col(Contact.email).is_not(None) & (col(Contact.email) != "")
+        has_email = (col(Contact.email).is_not(None) & (col(Contact.email) != "")) | col(Contact.email_unverified).is_not(None)
         leads = {
             "with_email": session.exec(select(func.count()).select_from(Contact).where(has_email)).one(),
             "companies_with_lead": session.exec(
@@ -1219,6 +1219,23 @@ def company_detail(company_id: int) -> dict:
     return out
 
 
+@app.get("/api/companies/{company_id}/interviews")
+def company_interviews(company_id: int) -> dict:
+    """What their interviews are like: prep points, their own word on the process, and every
+    candidate report (Glassdoor, Reddit, blogs) with its link (interviews.py)."""
+    from jobhunter import interviews
+
+    return interviews.for_company(company_id)
+
+
+@app.post("/api/companies/{company_id}/interviews/scrape")
+def company_interviews_scrape(company_id: int) -> dict:
+    """Glassdoor reports and Reddit threads through Apify, inside the daily Apify cap."""
+    from jobhunter import interviews
+
+    return {"task_id": _run_task(f"interviews:{company_id}", interviews.scrape, company_id)}
+
+
 def _company_outreach(company_id: int) -> dict:
     """Cold mail to this company at a glance — the page's "waiting for reply" corner (2026-10-26):
     how many went, when the last one did, how many were answered, and the send day it is a
@@ -1349,9 +1366,9 @@ def list_leads(
             continue
         scoped.append((p, b, referrals.lead_channel(p.source, p.affiliation_source)))
     counts = {"total": len(scoped), "linkedin": sum(1 for _, _, ch in scoped if ch == "linkedin"),
-              "with_email": sum(1 for p, _, _ in scoped if p.email),
+              "with_email": sum(1 for p, _, _ in scoped if p.email or p.email_unverified),
               "by_source": {k: sum(1 for _, _, ch in scoped if ch == k) for k in _LEAD_SOURCES}}
-    picked = [x for x in scoped if (source == "all" or x[2] == source) and (not with_email or x[0].email)]
+    picked = [x for x in scoped if (source == "all" or x[2] == source) and (not with_email or x[0].email or x[0].email_unverified)]
     aff = {"verified-current": 0, "likely-current": 1, "unconfirmed": 2, "generic": 3}
     # Bengaluru first, then Hyderabad, India, remote; the newest first inside a city
     picked.sort(key=lambda x: (9 if x[1] is None else x[1], aff.get(x[0].affiliation or "", 4),
