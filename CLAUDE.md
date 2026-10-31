@@ -66,6 +66,11 @@ for the visual.
   already mailed: the Email table or any CSV in `data/merge_sent/` (what he sent from his own sheet —
   save each CSV he sends there). Test rows to tejmulmovin9@gmail.com at the sheet rows he names
   (`--test-at`). Sending stays off until he says the sending part starts.
+- **The hand-off is numbered** (2026-11-01, `jobhunter/outreach/handoff.py`): `--batch` writes the next
+  `data/csv/CSV<n>.csv` — proved-real addresses only (`contact.email_status == "real"`), never a lead
+  from an earlier batch — and records it (`csv_batch`, `csv_batch_contact`). When he has mailed it,
+  `--done CSV<n>` stamps the batch and marks its people `contact.mailed_by_tejmul_at`: mailed forever,
+  offered in no later CSV. The leads page shows the batch and that state, read-only.
 - Layering: `db/llm/normalize` ← `scrapers/contacts/outreach` ← `pipeline/matcher/kg` ← `api` ← `dashboard`.
   Nothing imports upward.
 - The machine has 8 GB RAM and no model runtime. Until step 1 of v3 lands, `llm.py` still contains the old

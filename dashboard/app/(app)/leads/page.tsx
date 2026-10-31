@@ -7,6 +7,8 @@
  *  company's city (Bengaluru first), the affiliation label and the evidence behind it, the
  *  public profile URL, the address with its confidence label, and when they were found.
  *  The LinkedIn link only opens in a new tab: nothing here ever fetches a profile.
+ *  The CSV badge (2026-11-01) is the hand-off batch the lead went out in and whether Tejmul
+ *  has mailed it — read-only; only `export_referrals_csv.py --done CSVn` sets it.
  */
 
 import Link from "next/link";
@@ -202,6 +204,8 @@ export default function LeadsPage() {
         <span className="text-ink-2">On the address:</span> verified came from a commit, a public profile or a provider
         that confirmed it; guessed was built from the company&apos;s own address format (two agreeing examples) and an MX
         check, and at most five guessed addresses are sent a day.{" "}
+        <span className="text-ink-2">CSV1, CSV2, …</span> is the hand-off batch the lead went out in, and whether Tejmul
+        has mailed that batch yet. It is a record, not a control: nothing on this page changes it.{" "}
         <Link href="/health" className="underline underline-offset-2 hover:text-ink">
           Referrals this hour
         </Link>
@@ -241,6 +245,12 @@ function LeadRow({ lead, onDraft }: { lead: Lead; onDraft: (id: number) => void 
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <span className="tnum truncate text-xs text-ink-2">{lead.email}</span>
             <ConfidenceBadge confidence={lead.confidence} />
+            {lead.csv_batch ? (
+              <Badge>
+                CSV{lead.csv_batch}
+                {lead.mailed_by_tejmul ? " · mailed" : " · not sent yet"}
+              </Badge>
+            ) : null}
           </div>
         ) : (
           <div className="mt-1.5 text-xs text-ink-3">No address yet</div>

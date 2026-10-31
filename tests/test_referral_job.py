@@ -214,6 +214,25 @@ def test_leads_api_filters_by_source_and_city_and_paginates(engine):
     assert client.get("/api/leads", params={"city": "pune"}).status_code == 422
 
 
+def test_leads_api_shows_the_hand_off_batch_and_whether_he_mailed_it(engine):
+    """The lead view's read-only record (2026-11-01): which CSV the lead went out in, and
+    whether Tejmul has mailed that batch. Nothing on the page can set either."""
+    from sqlmodel import select
+
+    from jobhunter.outreach import handoff
+
+    ids = _world(engine)
+    with Session(engine) as s:
+        people = s.exec(select(Contact).where(Contact.company_id == ids["blr"]).order_by(Contact.id)).all()
+        handoff.record(s, 1, [people[0].id])
+        people[0].mailed_by_tejmul_at = utcnow()
+        s.commit()
+        sent, waiting = people[0].id, people[1].id
+    items = {i["id"]: i for i in TestClient(api.app).get("/api/leads", params={"company_id": ids["blr"]}).json()["items"]}
+    assert items[sent]["csv_batch"] == 1 and items[sent]["mailed_by_tejmul"] is True
+    assert items[waiting]["csv_batch"] is None and items[waiting]["mailed_by_tejmul"] is False
+
+
 def test_leads_api_masks_addresses_on_the_public_instance(engine, monkeypatch):
     _world(engine)
     monkeypatch.setattr(access, "PUBLIC", True)

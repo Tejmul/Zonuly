@@ -68,6 +68,8 @@ export type Contact = {
   email_kind?: string | null;
   handle?: string | null;
   is_recruiter: boolean;
+  /** Tejmul mailed them from a numbered hand-off CSV (`--done CSVn`). Read-only. */
+  mailed_by_tejmul?: boolean;
   research: { hook?: string; shared_ground?: string; notes?: string; repos?: unknown[] } | null;
   researched_at: string | null;
   created_at: string | null;
@@ -83,6 +85,8 @@ export type Lead = Contact & {
   bucket: string | null;
   company_star: boolean;
   found_at: string | null;
+  /** The hand-off CSV they went out in — CSV1, CSV2, … — or null if none yet. Read-only. */
+  csv_batch?: number | null;
 };
 export type LeadsPayload = {
   items: Lead[];

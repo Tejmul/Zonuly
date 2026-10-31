@@ -275,6 +275,10 @@ class Contact(SQLModel, table=True):
     # kept, never erased: the person is still a lead, the address only a hint until proved.
     email_unverified: Optional[str] = Field(default=None, index=True)
     email_verified_by: Optional[str] = None   # reacher | apify | delivered — who proved `email`
+    # ---- the hand-off CSVs (2026-11-01). Tejmul mails a numbered batch from his own merge
+    # sheet, then says `--done CSVn`: set here, the person is mailed forever and no later
+    # batch offers them again (outreach/handoff.py). Nothing in the pipeline sends to them.
+    mailed_by_tejmul_at: Optional[datetime] = Field(default=None, index=True)
 
 
 class ExtractionReject(SQLModel, table=True):
@@ -471,6 +475,28 @@ class EmailCheck(SQLModel, table=True):
     catch_all: Optional[bool] = None
     detail: Optional[str] = None
     checked_at: datetime = Field(default_factory=utcnow)
+
+
+class CsvBatch(SQLModel, table=True):
+    """One numbered hand-off CSV — data/csv/CSV<n>.csv (2026-11-01, outreach/handoff.py).
+
+    Tejmul asks for a batch, mails it from his own merge sheet, then says `--done CSVn`:
+    done_at is stamped and every lead in it is mailed forever (contact.mailed_by_tejmul_at).
+    A lead that is in a batch — done or not — is never offered in a later one."""
+
+    __tablename__ = "csv_batch"
+    n: Optional[int] = Field(default=None, primary_key=True)
+    created_at: datetime = Field(default_factory=utcnow, index=True)
+    done_at: Optional[datetime] = Field(default=None, index=True)
+    count: int = 0                              # leads written (test rows are not leads)
+
+
+class CsvBatchContact(SQLModel, table=True):
+    """Which leads went out in which batch."""
+
+    __tablename__ = "csv_batch_contact"
+    batch_n: int = Field(foreign_key="csv_batch.n", primary_key=True)
+    contact_id: int = Field(foreign_key="contact.id", primary_key=True)
 
 
 class Reply(SQLModel, table=True):
