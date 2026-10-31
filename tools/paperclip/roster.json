@@ -1,7 +1,7 @@
 {
   "company": {
     "name": "ZoNuLy",
-    "description": "Referral pipeline for Tejmul \u2014 Bengaluru + Hyderabad fresher roles, proved addresses only, sending gated.",
+    "description": "Referral pipeline for Tejmul — Bengaluru + Hyderabad fresher roles, proved addresses only, sending gated.",
     "budgetMonthlyCents": 15000
   },
   "experimental": {
@@ -36,7 +36,7 @@
       "key": "ceo",
       "name": "CEO",
       "role": "ceo",
-      "title": "Owns the motive; sets \u22643 weekly goals; briefs Tejmul",
+      "title": "Owns the motive; sets ≤3 weekly goals; briefs Tejmul",
       "instructions": "CEO.md",
       "model": "claude-opus-5-5",
       "permissionMode": "default",
@@ -57,7 +57,7 @@
       "budgetMonthlyCents": 3000,
       "maxTurnsPerRun": 80,
       "timeoutSec": 1800,
-      "capabilities": "Reads autoreview / tick / reacher logs; files \u22644 TECH issues per run with acceptance tests for the Manager; answers ?CTO questions. No code."
+      "capabilities": "Reads autoreview / tick / reacher logs; files ≤4 TECH issues per run with acceptance tests for the Manager; answers ?CTO questions. No code."
     },
     {
       "key": "manager",
@@ -77,10 +77,10 @@
       "key": "eng_scrape",
       "name": "Scraper engineer",
       "role": "engineer",
-      "title": "scrapers/, tick.py, sources \u2014 the stall problem",
+      "title": "scrapers/, tick.py, sources — the stall problem",
       "instructions": "ENGINEER-SCRAPE.md",
       "reportsTo": "manager",
-      "model": "claude-fable-5-1",
+      "model": "claude-opus-5",
       "permissionMode": "acceptEdits",
       "budgetMonthlyCents": 4000,
       "maxTurnsPerRun": 150,
@@ -91,10 +91,10 @@
       "key": "eng_leads",
       "name": "Leads engineer",
       "role": "engineer",
-      "title": "contacts/, proving, segregation \u2014 proved addresses only",
+      "title": "contacts/, proving, segregation — proved addresses only",
       "instructions": "ENGINEER-LEADS.md",
       "reportsTo": "manager",
-      "model": "claude-fable-5-1",
+      "model": "claude-opus-5",
       "permissionMode": "acceptEdits",
       "budgetMonthlyCents": 4000,
       "maxTurnsPerRun": 150,
@@ -133,10 +133,10 @@
   "routines": [
     {
       "key": "ceo_weekly",
-      "title": "CEO \u2014 weekly goals and brief",
+      "title": "CEO — weekly goals and brief",
       "assignee": "ceo",
       "priority": "high",
-      "description": "Weekly: read BRIEF.md and the numbers, set \u22643 measurable GOAL issues for the CTO, comment on last week's goals, write the CEO brief for Tejmul. See CEO.md.",
+      "description": "Weekly: read BRIEF.md and the numbers, set ≤3 measurable GOAL issues for the CTO, comment on last week's goals, write the CEO brief for Tejmul. See CEO.md.",
       "trigger": {
         "kind": "schedule",
         "cronExpression": "0 8 * * 1",
@@ -146,10 +146,10 @@
     },
     {
       "key": "cto_daily",
-      "title": "CTO \u2014 read the loop, file TECH issues",
+      "title": "CTO — read the loop, file TECH issues",
       "assignee": "cto",
       "priority": "high",
-      "description": "Daily: autoreview.log rejections by cause, tick-free.log stall signatures, reacher-audit.log rate; \u22644 TECH issues with acceptance tests, assigned to the Manager. See CTO.md.",
+      "description": "Daily: autoreview.log rejections by cause, tick-free.log stall signatures, reacher-audit.log rate; ≤4 TECH issues with acceptance tests, assigned to the Manager. See CTO.md.",
       "trigger": {
         "kind": "schedule",
         "cronExpression": "30 7 * * *",
@@ -159,7 +159,7 @@
     },
     {
       "key": "manager_2h",
-      "title": "Manager \u2014 assign, chase, gate",
+      "title": "Manager — assign, chase, gate",
       "assignee": "manager",
       "priority": "medium",
       "description": "Every 2 hours in the day: route open TECH/OPS issues to engineers (one in progress each), chase stale work with --resume, send finished work to the Reviewer, mark READY FOR TEJMUL. See MANAGER.md.",
@@ -167,12 +167,12 @@
         "kind": "schedule",
         "cronExpression": "0 8-22/2 * * *",
         "timezone": "Asia/Kolkata",
-        "label": "08\u201322 IST every 2h"
+        "label": "08–22 IST every 2h"
       }
     },
     {
       "key": "devops_3h",
-      "title": "DevOps \u2014 is the pipeline running and moving",
+      "title": "DevOps — is the pipeline running and moving",
       "assignee": "devops",
       "priority": "medium",
       "description": "Every 3 hours: launchctl list, tick-free.log freshness and stall counts, stale locks, reacher rate. OPS issues with evidence to the Manager; kickstart tick.free only if loaded but dead. See DEVOPS.md.",
