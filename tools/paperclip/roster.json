@@ -1,0 +1,187 @@
+{
+  "company": {
+    "name": "ZoNuLy",
+    "description": "Referral pipeline for Tejmul \u2014 Bengaluru + Hyderabad fresher roles, proved addresses only, sending gated.",
+    "budgetMonthlyCents": 15000
+  },
+  "experimental": {
+    "enableIsolatedWorkspaces": true,
+    "enableIsolatedWorkspacesByDefault": true
+  },
+  "project": {
+    "name": "ZoNuLy pipeline",
+    "description": "The jobhunter/ pipeline and dashboard/. Engineers work in isolated git worktrees branched from main; Tejmul merges.",
+    "status": "in_progress",
+    "workspace": {
+      "name": "main checkout",
+      "sourceType": "local_path",
+      "defaultRef": "main",
+      "isPrimary": true,
+      "setupCommand": "ln -sfn /Users/tejmul/Desktop/ZoNuLy/.venv .venv"
+    },
+    "executionWorkspacePolicy": {
+      "enabled": true,
+      "defaultMode": "isolated_workspace",
+      "sharedWorkspaceConcurrency": "serialize",
+      "allowIssueOverride": true,
+      "workspaceStrategy": {
+        "type": "git_worktree",
+        "baseRef": "main"
+      }
+    }
+  },
+  "permissions_note": "No --dangerously-skip-permissions anywhere. `default` = read + allowlisted Bash only (headless Claude Code refuses edits); `acceptEdits` = may also edit inside its cwd (the worktree). Bash runs only if .claude/settings.json allows it.",
+  "agents": [
+    {
+      "key": "ceo",
+      "name": "CEO",
+      "role": "ceo",
+      "title": "Owns the motive; sets \u22643 weekly goals; briefs Tejmul",
+      "instructions": "CEO.md",
+      "model": "claude-opus-5-5",
+      "permissionMode": "default",
+      "budgetMonthlyCents": 2500,
+      "maxTurnsPerRun": 60,
+      "timeoutSec": 1500,
+      "capabilities": "Reads BRIEF and the numbers; files GOAL issues for the CTO; writes the CEO brief. No code, no merges, no spending."
+    },
+    {
+      "key": "cto",
+      "name": "CTO",
+      "role": "cto",
+      "title": "Technical architecture; turns evidence into TECH issues",
+      "instructions": "CTO.md",
+      "reportsTo": "ceo",
+      "model": "claude-fable-5-1",
+      "permissionMode": "default",
+      "budgetMonthlyCents": 3000,
+      "maxTurnsPerRun": 80,
+      "timeoutSec": 1800,
+      "capabilities": "Reads autoreview / tick / reacher logs; files \u22644 TECH issues per run with acceptance tests for the Manager; answers ?CTO questions. No code."
+    },
+    {
+      "key": "manager",
+      "name": "Manager",
+      "role": "pm",
+      "title": "Assigns, chases, gates to the Reviewer",
+      "instructions": "MANAGER.md",
+      "reportsTo": "cto",
+      "model": "claude-sonnet-5-5",
+      "permissionMode": "default",
+      "budgetMonthlyCents": 2000,
+      "maxTurnsPerRun": 50,
+      "timeoutSec": 900,
+      "capabilities": "Routes TECH/OPS issues to the right engineer, one in progress each; chases stale work; sends done work to the Reviewer; marks READY FOR TEJMUL. No code."
+    },
+    {
+      "key": "eng_scrape",
+      "name": "Scraper engineer",
+      "role": "engineer",
+      "title": "scrapers/, tick.py, sources \u2014 the stall problem",
+      "instructions": "ENGINEER-SCRAPE.md",
+      "reportsTo": "manager",
+      "model": "claude-fable-5-1",
+      "permissionMode": "acceptEdits",
+      "budgetMonthlyCents": 4000,
+      "maxTurnsPerRun": 150,
+      "timeoutSec": 2700,
+      "capabilities": "Fixes one scraping/tick issue per run in an isolated worktree; pytest; commits on a branch; never pushes or merges."
+    },
+    {
+      "key": "eng_leads",
+      "name": "Leads engineer",
+      "role": "engineer",
+      "title": "contacts/, proving, segregation \u2014 proved addresses only",
+      "instructions": "ENGINEER-LEADS.md",
+      "reportsTo": "manager",
+      "model": "claude-fable-5-1",
+      "permissionMode": "acceptEdits",
+      "budgetMonthlyCents": 4000,
+      "maxTurnsPerRun": 150,
+      "timeoutSec": 2700,
+      "capabilities": "Fixes one contacts/proving/leak issue per run in an isolated worktree; pytest + tsc; commits on a branch; never pushes or merges."
+    },
+    {
+      "key": "reviewer",
+      "name": "Reviewer",
+      "role": "qa",
+      "title": "Rules, then honesty, then correctness",
+      "instructions": "REVIEWER.md",
+      "reportsTo": "cto",
+      "model": "claude-opus-5-5",
+      "permissionMode": "default",
+      "budgetMonthlyCents": 2500,
+      "maxTurnsPerRun": 60,
+      "timeoutSec": 1200,
+      "capabilities": "Reviews an engineer branch: hard rules first, then the honesty of the report, then correctness. APPROVE / CHANGES / REJECT. Never merges."
+    },
+    {
+      "key": "devops",
+      "name": "DevOps",
+      "role": "devops",
+      "title": "Watches launchd, the tick log, locks, proving rate",
+      "instructions": "DEVOPS.md",
+      "reportsTo": "cto",
+      "model": "claude-opus-5-5",
+      "permissionMode": "default",
+      "budgetMonthlyCents": 2000,
+      "maxTurnsPerRun": 40,
+      "timeoutSec": 600,
+      "capabilities": "Every 3h: launchctl list, tail tick-free.log, locks, reacher rate; files OPS issues with evidence; may kickstart com.zonuly.tick.free only. Never runs stages, never touches the DB."
+    }
+  ],
+  "routines": [
+    {
+      "key": "ceo_weekly",
+      "title": "CEO \u2014 weekly goals and brief",
+      "assignee": "ceo",
+      "priority": "high",
+      "description": "Weekly: read BRIEF.md and the numbers, set \u22643 measurable GOAL issues for the CTO, comment on last week's goals, write the CEO brief for Tejmul. See CEO.md.",
+      "trigger": {
+        "kind": "schedule",
+        "cronExpression": "0 8 * * 1",
+        "timezone": "Asia/Kolkata",
+        "label": "Mon 08:00 IST"
+      }
+    },
+    {
+      "key": "cto_daily",
+      "title": "CTO \u2014 read the loop, file TECH issues",
+      "assignee": "cto",
+      "priority": "high",
+      "description": "Daily: autoreview.log rejections by cause, tick-free.log stall signatures, reacher-audit.log rate; \u22644 TECH issues with acceptance tests, assigned to the Manager. See CTO.md.",
+      "trigger": {
+        "kind": "schedule",
+        "cronExpression": "30 7 * * *",
+        "timezone": "Asia/Kolkata",
+        "label": "07:30 IST daily"
+      }
+    },
+    {
+      "key": "manager_2h",
+      "title": "Manager \u2014 assign, chase, gate",
+      "assignee": "manager",
+      "priority": "medium",
+      "description": "Every 2 hours in the day: route open TECH/OPS issues to engineers (one in progress each), chase stale work with --resume, send finished work to the Reviewer, mark READY FOR TEJMUL. See MANAGER.md.",
+      "trigger": {
+        "kind": "schedule",
+        "cronExpression": "0 8-22/2 * * *",
+        "timezone": "Asia/Kolkata",
+        "label": "08\u201322 IST every 2h"
+      }
+    },
+    {
+      "key": "devops_3h",
+      "title": "DevOps \u2014 is the pipeline running and moving",
+      "assignee": "devops",
+      "priority": "medium",
+      "description": "Every 3 hours: launchctl list, tick-free.log freshness and stall counts, stale locks, reacher rate. OPS issues with evidence to the Manager; kickstart tick.free only if loaded but dead. See DEVOPS.md.",
+      "trigger": {
+        "kind": "schedule",
+        "cronExpression": "15 */3 * * *",
+        "timezone": "Asia/Kolkata",
+        "label": "every 3h"
+      }
+    }
+  ]
+}

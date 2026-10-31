@@ -107,3 +107,20 @@ endpoint behind a careers page or a board's bundle before writing a scraper, to 
 or to inspect a *copy* of the database. It is a developer tool: nothing in `jobhunter` imports it,
 and it never attaches to a browser signed in to a personal account. Setup, workflow and limits:
 [system docs/REA-INTEGRATION.md](system%20docs/REA-INTEGRATION.md).
+
+## Orchestrating agents (Paperclip)
+
+[Paperclip](https://github.com/paperclipai/paperclip) runs the *developer* agents that work on this
+repo — a Lead that reads `logs/autoreview.log` and files issues, a Builder that fixes one issue per run
+in an isolated git worktree, a Reviewer that checks the rules before correctness. It is a standalone
+app (Node + embedded Postgres, loopback :3100, all state in `~/.paperclip`); nothing in `jobhunter`
+imports it, and it does **not** replace the deterministic pipeline conductor (D4 — the orchestrator of
+the pipeline is code, not a model). Agents run without the permission bypass: edits inside their
+worktree only, Bash limited to the allowlist in `.claude/settings.json`, never push, never merge,
+never mail. Setup, roster and the rules they carry: [system docs/PAPERCLIP-INTEGRATION.md](system%20docs/PAPERCLIP-INTEGRATION.md).
+
+```
+tools/paperclip/paperclip.sh start | stop | status   # the server; UI at http://127.0.0.1:3100
+tools/paperclip/paperclip.sh bootstrap               # company, agents, project, routine (idempotent)
+tools/paperclip/paperclip.sh cli issue create -C <company> --title "..." --assignee-agent-id <builder>
+```

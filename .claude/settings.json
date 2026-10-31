@@ -11,7 +11,24 @@
       "mcp__chrome-devtools",
       "Bash(.venv/bin/python scripts/run.py research x-search:*)",
       "mcp__rea",
-      "Bash(npx -y rea-agents@*)"
+      "Bash(npx -y rea-agents@*)",
+      "Bash(npx -y paperclipai@*)",
+      "Bash(tools/paperclip/paperclip.sh:*)",
+      "Bash(pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx eslint:*)",
+      "Bash(launchctl list:*)",
+      "Bash(launchctl kickstart -k gui/501/com.zonuly.*)",
+      "Bash(tail:*)",
+      "Bash(ls:*)",
+      "Bash(pmset -g:*)",
+      "Bash(pwd)"
     ]
   }
 }

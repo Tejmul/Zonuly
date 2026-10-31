@@ -42,3 +42,9 @@ tools/reacher/
 
 # mail-merge CSVs Tejmul actually sent (people's addresses; read by scripts/export_referrals_csv.py)
 data/merge_sent/
+
+# Paperclip ids for this machine (company/project/agent uuids) — written by tools/paperclip/bootstrap.py
+data/paperclip.json
+
+# Paperclip provisions engineer worktrees here (branch per issue); never committed
+.paperclip/

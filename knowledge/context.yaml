@@ -528,6 +528,7 @@ tools:
   - {id: tool:exa-mcporter, label: "Exa semantic search via mcporter (free tier 1000/mo; EXA_API_KEY HTTP fallback)", tier: 1, cost: free tier, status: built, used_by: [feature:agent-reach-research-layer]}
   - {id: tool:jina-reader, label: "Jina Reader (r.jina.ai) — URL to clean text", tier: 1, cost: free, keyless: true, status: built, used_by: [feature:agent-reach-research-layer]}
   - {id: tool:rea, label: "REA (Reverse Engineer Anything) MCP — finds the JSON API behind a careers page or board bundle, reads HAR captures and DB snapshots; dev tool, local-scope registration, nothing imports it", tier: 1, cost: free, keyless: true, status: built, used_by: [feature:ats-json-scrapers, feature:wellfound-source, feature:aggregator-scrapers], related: [tool:exa-mcporter, constraint:no-linkedin-automation]}
+  - {id: tool:paperclip, label: "Paperclip — orchestrator for the developer agents (Lead / Builder / Reviewer as Claude Code processes); standalone Node + embedded Postgres in ~/.paperclip, loopback :3100; nothing imports it; not the pipeline conductor", tier: 0, cost: "free (subscription tokens)", status: built, used_by: [feature:paperclip-dev-orchestration], related: [decision:d4-deterministic-orchestrator, tool:rea]}
   - {id: tool:linkedin-login-automation, label: "Logged-in LinkedIn automation (Phantombuster, Dripify, cookie actors)", tier: 4, cost: "your account", status: forbidden, related: [constraint:no-linkedin-automation]}
   - {id: tool:paid-email-finders, label: "Findymail / Anymailfinder / MillionVerifier / Apollo / Clay", tier: 2, cost: "₹3–5k/month", status: dropped, used_by: [feature:paid-email-finders-verification]}
   - {id: tool:saas-infra, label: "Neo4j / Kùzu / Postgres / Temporal / LiteLLM / Nango / Trigger.dev / Slack / Brave", tier: 0, cost: various, status: dropped, related: [decision:d4-deterministic-orchestrator, decision:d9-no-sqlite-vec, decision:d10-kg-in-sqlite]}
@@ -1932,6 +1933,14 @@ features:
     serves: [constraint:approval-first, constraint:no-local-model]
     replaces: [feature:layering-lint]
 
+  - id: feature:paperclip-dev-orchestration
+    label: Paperclip runs Tejmul's org of developer agents — CEO (goals, brief) → CTO (TECH issues from logs) → Manager (assigns, chases, gates) → Scraper + Leads engineers (isolated git worktrees); Reviewer and DevOps report to the CTO
+    summary: tools/paperclip/ (launcher, roster.json, bootstrap.py, agents/*.md). Designed by Tejmul 2026-11-01 around two problems — the tick stalls / scrapes too little; unproved addresses leaked and Gmail blocked — agents fix code only, launchd runs the pipeline (D4), DevOps watches and may kickstart tick.free, CEO plans and reports and Tejmul merges. Models (his) — CEO/Reviewer/DevOps Opus 5.5, CTO + engineers Fable 5.1, Manager Sonnet 5.5. No permission bypass; Bash from .claude/settings.json only. See system docs/PAPERCLIP-INTEGRATION.md.
+    status: built
+    stage: stage:platform
+    proposed_by: [arch:plan-v3]
+    serves: [guarantee:no-fabrication, constraint:send-cap-25]
+    related: [tool:paperclip, decision:d4-deterministic-orchestrator]
   - id: feature:agent-reach-research-layer
     label: Agent-Reach research layer — web search (Exa via mcporter), Jina Reader, GitHub, Reddit, YouTube; ordered health-checked backends; evidence_quote on every extracted field
     summary: jobhunter/research/, /api/research/*, `research` CLI. Standalone by design — returns records, no DB writes, no drafting. Agent Reach itself is an installer/doctor, not vendored; only its backend-contract idea is kept. See system docs/AGENT-REACH-INTEGRATION.md.
