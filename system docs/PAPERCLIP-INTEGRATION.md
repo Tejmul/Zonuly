@@ -72,9 +72,12 @@ Tejmul (approves, merges, sends)
         └── DevOps             devops    claude-opus-5      read-only  every 3h             OPS issues; kickstart tick.free
 ```
 
-Budgets per month: CEO $25, CTO $30, Manager $20, engineers $40 each, Reviewer $25, DevOps $20
-(company cap $150). Heartbeat-on-interval is off for all; `maxConcurrentRuns = 1` each. Models
-were chosen by Tejmul; change them in `roster.json`.
+Budgets: **no cap on Claude usage** (Tejmul, 2026-11-01). Runs bill as `subscription_included`; the `$`
+Paperclip shows is a list-price equivalent, so every budget policy is *track only* — `hardStopEnabled:
+false`, `unpricedUsagePolicy: allow` at company and agent scope (the default *blocked* unpriced usage and
+paused the whole company on its first evening). The caps that matter are real money: Apify $0.50/day in
+`config.yaml`. Heartbeat-on-interval is off for all; `maxConcurrentRuns = 1` each. Models are Tejmul's;
+change them in `roster.json`.
 
 What agents do and do not do (his answers, 2026-11-01): agents **fix code only**; the pipeline is
 run by `tick.py` under launchd (D4), and DevOps watches it and may `launchctl kickstart` the free

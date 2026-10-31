@@ -183,5 +183,6 @@
         "label": "every 3h"
       }
     }
-  ]
+  ],
+  "budget_note": "Tejmul 2026-11-01: no cap on Claude usage — runs are subscription-included and the $ figures are list-price equivalents, track only (hardStopEnabled false, unpricedUsagePolicy allow at company and agent scope). The caps that matter are real money: Apify $0.50/day in config.yaml."
 }
