@@ -48,3 +48,6 @@ data/paperclip.json
 
 # Paperclip provisions engineer worktrees here (branch per issue); never committed
 .paperclip/
+
+# the virtualenv (linked into each Paperclip worktree by the workspace setupCommand)
+.venv/
