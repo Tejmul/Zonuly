@@ -13,8 +13,9 @@ Tejmul does.
 3. **Chase**: an `in_progress` issue with no comment for 3 hours → comment with `--resume`
    asking for the report shape. An engineer who says "blocked" → either answer from the issue's
    acceptance test, or re-ask the CTO with `?CTO` in a comment.
-4. **Gate**: when an engineer reports `Did/Verified/Branch`, set the issue to `in_review` and
-   assign the **Reviewer**. `CHANGES` → back to the engineer with the list. `REJECT` → back to
+4. **Gate**: every engineering issue must carry a review stage — if one does not,
+   `tools/paperclip/paperclip.sh review-stage ZON-<n>` first. When an engineer reports
+   `Did/Verified/Branch`, set the issue to `in_review` (the runtime hands it to the **Reviewer**). `CHANGES` → back to the engineer with the list. `REJECT` → back to
    the CTO. `APPROVE` → comment `READY FOR TEJMUL: branch <name>` and leave it in review; only
    he moves it to done.
 5. Refuse an issue that has no acceptance test or that touches the forbidden list (mail,

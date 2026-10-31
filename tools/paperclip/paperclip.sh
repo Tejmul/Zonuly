@@ -6,6 +6,7 @@
 #   tools/paperclip/paperclip.sh status       # health + the ZoNuLy agents and their state
 #   tools/paperclip/paperclip.sh bootstrap    # company, project, agents, routine (idempotent)
 #   tools/paperclip/paperclip.sh cli <args>   # any paperclipai command at the pinned version
+#   tools/paperclip/paperclip.sh review-stage ZON-7   # the Reviewer reviews this issue before it can be done
 #
 # All of Paperclip's state lives in ~/.paperclip (config, Postgres, logs, secrets) — nothing
 # in this repository. The repo keeps only this launcher, the roster, and the agents' rules.
@@ -49,6 +50,27 @@ case "${1:-}" in
     python3 "$REPO/tools/paperclip/bootstrap.py" "$@" ;;
   cli)
     shift; pc "$@" ;;
+  review-stage)
+    # Put the Reviewer on an issue as its review stage: when the engineer marks it done the runtime
+    # routes it to the Reviewer by itself (no Manager click). Agents cannot reach the API with curl
+    # (not allowlisted) — this subcommand is the one allowed route. Reads ids from data/paperclip.json.
+    shift; python3 - "$REPO" "$API" "$@" <<'PY'
+import json, sys, urllib.request
+repo, api, idents = sys.argv[1], sys.argv[2], sys.argv[3:]
+ids = json.load(open(f"{repo}/data/paperclip.json")); rev = ids["agents"]["reviewer"]; cid = ids["company"]
+issues = {i["identifier"]: i for i in json.load(urllib.request.urlopen(f"{api}/companies/{cid}/issues", timeout=10))}
+policy = {"mode": "normal", "commentRequired": True, "maxReviewRounds": 3,
+          "stages": [{"type": "review", "approvalsNeeded": 1, "participants": [{"type": "agent", "agentId": rev}]}]}
+for ident in idents:
+    i = issues.get(ident.upper())
+    if not i: print(f"{ident}: no such issue"); continue
+    req = urllib.request.Request(f"{api}/issues/{i['id']}", data=json.dumps({"executionPolicy": policy}).encode(),
+                                 method="PATCH", headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        st = [s["type"] for s in (json.load(r).get("executionPolicy") or {}).get("stages", [])]
+    print(f"{ident}: review stage → Reviewer {st}")
+PY
+    ;;
   *)
     sed -n '2,10p' "$0"; exit 2 ;;
 esac

@@ -18,6 +18,8 @@ by `tick.py` under launchd, not by agents.
    the evidence lines, the stage + file that produced them, the acceptance test as a sentence a
    test can encode ("a tick with web_emails cooling down admits ≥ N jobs in ≤ 10 min"), the
    suggested design in 3–6 lines, and what must not change. Title `TECH: <stage>: <problem>`.
+   Then `tools/paperclip/paperclip.sh review-stage ZON-<n>` so the Reviewer reviews it before it
+   can be done — every TECH issue carries a review stage; one without it is not filed.
 4. Answer any `?CTO` comment on an issue with a decision and a reason. If the decision is
    Tejmul's (money, rules, focus, sending), say so and stop.
 
