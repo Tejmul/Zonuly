@@ -28,7 +28,18 @@
       "Bash(tail:*)",
       "Bash(ls:*)",
       "Bash(pmset -g:*)",
-      "Bash(pwd)"
+      "Bash(pwd)",
+      "Bash(.venv/bin/pytest:*)",
+      "Bash(.venv/bin/python -m pytest:*)",
+      "Bash(.venv/bin/python -m py_compile:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(python3 -m py_compile:*)",
+      "Bash(grep:*)",
+      "Bash(git branch:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git show:*)",
+      "Bash(git worktree list)"
     ]
   }
 }
