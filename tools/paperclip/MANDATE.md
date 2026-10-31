@@ -15,6 +15,12 @@ In his words, lightly ordered. This is what the company is for until he changes 
   for SMTP checks "not yet". Free tiers, free tools, the laptop.
 - **Sending is his**, from his own setup. The pipeline never mails. Our 25/day cap is untouched
   because we do not send at all.
+- **A CSV is a 1,000-address batch** (clarified when ZON-4 merged): leads accumulate in the database
+  until there are enough; nothing is written until he asks. "Whenever I need a CSV, I'll take it,
+  tell you, and mark it as sent."
+- **A verified address stays verified.** Once Reacher proved it `real`, do not re-check it, re-label
+  it or present it as unverified again — "it's not like you are again adding them and still feel
+  like 'this is not verified'". Re-verification loops (`reverify_per_tick`) must not touch `real`.
 - **Leads stay in the database.** When he asks for a CSV he gets **only `real` (Reacher-proved)
   addresses**, as a numbered batch: `CSV1`, `CSV2`, `CSV3`… Each batch is recorded. When he says
   "CSV*n* is done", every lead in it is marked *mailed by Tejmul* and is never exported again.
