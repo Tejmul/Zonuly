@@ -9,7 +9,8 @@ are accepted (`--permission-mode acceptEdits`), and a Bash command runs only if 
 .claude/settings.json allows it. A command that is not allowed does not run — it is reported.
 
     python tools/paperclip/bootstrap.py            # create what is missing, print the ids
-    python tools/paperclip/bootstrap.py --status   # agents, routines, open issues
+    python tools/paperclip/bootstrap.py --status          # agents, routines, open issues
+    python tools/paperclip/bootstrap.py --instructions    # push agents/*.md to every agent in place
 """
 from __future__ import annotations
 
@@ -146,6 +147,25 @@ def bootstrap() -> dict:
     return ids
 
 
+def push_instructions() -> None:
+    """Re-upload COMMON.md + <ROLE>.md as every agent's AGENTS.md, in place (no recreate).
+    The API wants the current revision id as the base, so each file is read first."""
+    ids = json.loads(IDS.read_text())
+    for a in ROSTER["agents"]:
+        aid = ids["agents"][a["key"]]
+        cur = get(f"/agents/{aid}/instructions-bundle/file?path=AGENTS.md")
+        if cur.get("content") == instructions(a["instructions"]):
+            print(f"{a['name']:<18} unchanged")
+            continue
+        body = json.dumps({"path": "AGENTS.md", "content": instructions(a["instructions"]),
+                           "baseRevisionId": (cur.get("revision") or {}).get("id")}).encode()
+        req = urllib.request.Request(f"{API}/agents/{aid}/instructions-bundle/file", data=body, method="PUT",
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=15):
+            pass
+        print(f"{a['name']:<18} updated")
+
+
 def status() -> None:
     if not IDS.exists():
         sys.exit("not bootstrapped — run tools/paperclip/paperclip.sh bootstrap")
@@ -164,4 +184,9 @@ def status() -> None:
 
 
 if __name__ == "__main__":
-    status() if "--status" in sys.argv else bootstrap()
+    if "--status" in sys.argv:
+        status()
+    elif "--instructions" in sys.argv:
+        push_instructions()
+    else:
+        bootstrap()

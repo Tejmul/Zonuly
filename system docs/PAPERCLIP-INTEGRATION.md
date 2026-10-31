@@ -66,10 +66,10 @@ Tejmul (approves, merges, sends)
 └── CEO            ceo       claude-opus-5-5     read-only   Mon 08:00 IST       GOAL issues → CTO; CEO brief
     └── CTO        cto       claude-fable-5-1    read-only   07:30 IST daily     TECH issues → Manager; answers ?CTO
         ├── Manager            pm        claude-sonnet-5-5  read-only  08–22 IST every 2h   assigns, chases, gates
-        │   ├── Scraper engineer  engineer  claude-fable-5-1  acceptEdits  on assignment  worktree, pytest, branch
-        │   └── Leads engineer    engineer  claude-fable-5-1  acceptEdits  on assignment  worktree, pytest+tsc, branch
-        ├── Reviewer           qa        claude-opus-5-5    read-only  on review request    APPROVE / CHANGES / REJECT
-        └── DevOps             devops    claude-opus-5-5    read-only  every 3h             OPS issues; kickstart tick.free
+        │   ├── Scraper engineer  engineer  claude-opus-5     acceptEdits  on assignment  worktree, pytest, branch
+        │   └── Leads engineer    engineer  claude-opus-5     acceptEdits  on assignment  worktree, pytest+tsc, branch
+        ├── Reviewer           qa        claude-fable-5-1   read-only  on review request    APPROVE / CHANGES / REJECT
+        └── DevOps             devops    claude-opus-5      read-only  every 3h             OPS issues; kickstart tick.free
 ```
 
 Budgets per month: CEO $25, CTO $30, Manager $20, engineers $40 each, Reviewer $25, DevOps $20
