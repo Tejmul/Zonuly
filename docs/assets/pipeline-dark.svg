@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 362" width="1200" height="362" role="img" aria-label="The pipeline: discover, admit, score, find referrers, prove the address, draft, review, send; three gates drop what fails, with the reason logged" font-family='"Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1.5L9 5L1 8.5z" fill="#a1a1aa"/></marker></defs>
+  <text x="40" y="34" font-size="11" font-weight="400" fill="#8b8b94" text-anchor="start" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace' letter-spacing="1">PIPELINE</text>
+  <text x="1160" y="34" font-size="12" font-weight="400" fill="#8b8b94" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>tick every 10 min · launchd</text>
+  <line x1="82" y1="150" x2="207" y2="150" stroke="#a1a1aa" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#arrow)"/>
+  <text x="145.5" y="174" font-size="12" font-weight="400" fill="#a1a1aa" text-anchor="middle" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>company</text>
+  <line x1="233" y1="150" x2="359" y2="150" stroke="#a1a1aa" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#arrow)"/>
+  <text x="297.0" y="174" font-size="12" font-weight="400" fill="#a1a1aa" text-anchor="middle" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>company + roles</text>
+  <line x1="385" y1="150" x2="510" y2="150" stroke="#a1a1aa" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#arrow)"/>
+  <text x="448.5" y="174" font-size="12" font-weight="400" fill="#a1a1aa" text-anchor="middle" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>role · odds</text>
+  <line x1="536" y1="150" x2="662" y2="150" stroke="#a1a1aa" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#arrow)"/>
+  <text x="600.0" y="174" font-size="12" font-weight="400" fill="#a1a1aa" text-anchor="middle" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>person + evidence</text>
+  <line x1="688" y1="150" x2="813" y2="150" stroke="#a1a1aa" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#arrow)"/>
+  <text x="751.5" y="174" font-size="12" font-weight="400" fill="#a1a1aa" text-anchor="middle" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>proved address</text>
+  <line x1="839" y1="150" x2="965" y2="150" stroke="#a1a1aa" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#arrow)"/>
+  <text x="903.0" y="174" font-size="12" font-weight="400" fill="#a1a1aa" text-anchor="middle" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>draft</text>
+  <line x1="991" y1="150" x2="1116" y2="150" stroke="#a1a1aa" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#arrow)"/>
+  <text x="1054.5" y="174" font-size="12" font-weight="400" fill="#a1a1aa" text-anchor="middle" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>approved</text>
+  <rect x="60" y="140" width="20" height="20" rx="0" fill="#0d1117" stroke="#fafafa" stroke-width="1.5"/>
+  <text x="70" y="94" font-size="16" font-weight="700" fill="#fafafa" text-anchor="middle" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>Discover</text>
+  <text x="70" y="114" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">ATS boards, careers</text>
+  <text x="70" y="129" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">pages, funding news</text>
+  <path d="M221 138L233 150L221 162L209 150Z" fill="#fafafa" stroke="#fafafa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="221" y="94" font-size="16" font-weight="700" fill="#fafafa" text-anchor="middle" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>Admit</text>
+  <text x="221" y="114" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">one gate for</text>
+  <text x="221" y="129" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">every company</text>
+  <rect x="363" y="140" width="20" height="20" rx="0" fill="#0d1117" stroke="#fafafa" stroke-width="1.5"/>
+  <text x="373" y="94" font-size="16" font-weight="700" fill="#fafafa" text-anchor="middle" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>Score</text>
+  <text x="373" y="114" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">selection odds,</text>
+  <text x="373" y="129" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">0–100, itemised</text>
+  <rect x="514" y="140" width="20" height="20" rx="0" fill="#0d1117" stroke="#fafafa" stroke-width="1.5"/>
+  <text x="524" y="94" font-size="16" font-weight="700" fill="#fafafa" text-anchor="middle" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>Referrers</text>
+  <text x="524" y="114" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">people who</text>
+  <text x="524" y="129" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">work there now</text>
+  <path d="M676 138L688 150L676 162L664 150Z" fill="#fafafa" stroke="#fafafa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="676" y="94" font-size="16" font-weight="700" fill="#fafafa" text-anchor="middle" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>Prove</text>
+  <text x="676" y="114" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">SMTP check on</text>
+  <text x="676" y="129" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">every address</text>
+  <rect x="817" y="140" width="20" height="20" rx="0" fill="#0d1117" stroke="#fafafa" stroke-width="1.5"/>
+  <text x="827" y="94" font-size="16" font-weight="700" fill="#fafafa" text-anchor="middle" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>Draft</text>
+  <text x="827" y="114" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">needs brief → the</text>
+  <text x="827" y="129" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">ask, in your voice</text>
+  <path d="M979 138L991 150L979 162L967 150Z" fill="#fafafa" stroke="#fafafa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="979" y="94" font-size="16" font-weight="700" fill="#fafafa" text-anchor="middle" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>Review</text>
+  <text x="979" y="114" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">rules approve or</text>
+  <text x="979" y="129" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">reject, with reason</text>
+  <rect x="1120" y="140" width="20" height="20" rx="0" fill="#0d1117" stroke="#fafafa" stroke-width="1.5"/>
+  <text x="1130" y="94" font-size="16" font-weight="700" fill="#fafafa" text-anchor="middle" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>Send</text>
+  <text x="1130" y="114" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">25 a day, spread</text>
+  <text x="1130" y="129" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">out, one per company</text>
+  <line x1="221" y1="164" x2="221" y2="224" stroke="#a1a1aa" stroke-width="1.5" stroke-linecap="butt" stroke-dasharray="3 3" marker-end="url(#arrow)"/>
+  <text x="221" y="246" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">refused: famous, body shop, &lt; ₹20 LPA, wrong city</text>
+  <line x1="676" y1="164" x2="676" y2="224" stroke="#a1a1aa" stroke-width="1.5" stroke-linecap="butt" stroke-dasharray="3 3" marker-end="url(#arrow)"/>
+  <text x="676" y="246" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">unproved: kept, never shown, never mailed</text>
+  <line x1="979" y1="164" x2="979" y2="224" stroke="#a1a1aa" stroke-width="1.5" stroke-linecap="butt" stroke-dasharray="3 3" marker-end="url(#arrow)"/>
+  <text x="979" y="246" font-size="12.5" font-weight="400" fill="#a1a1aa" text-anchor="middle">rejected: the reason goes to autoreview.log</text>
+  <path d="M1130 164V276H827V166" fill="none" stroke="#8b8b94" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="4 3"/>
+  <text x="978.5" y="296" font-size="12" font-weight="400" fill="#8b8b94" text-anchor="middle">replies read back in: sentiment, a calendar event, one follow-up after silence</text>
+  <line x1="40" y1="322" x2="1160" y2="322" stroke="#2a2a30" stroke-width="1" stroke-linecap="butt"/>
+  <text x="40" y="346" font-size="12.5" font-weight="400" fill="#8b8b94" text-anchor="start">Every write passes a validator for its field; a refused value is logged with its reason. The orchestrator is code, not a model.</text>
+</svg>

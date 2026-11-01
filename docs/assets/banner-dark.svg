@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 260" width="1200" height="260" role="img" aria-label="ZoNuLy: from a funded company to a person who works there, with the address proved on the way" font-family='"Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
+  <rect x="0.5" y="0.5" width="1199" height="259" rx="6" fill="none" stroke="#51515c" stroke-width="1"/>
+  <g transform="translate(48 56) scale(1.875)"><mask id="mark"><rect width="32" height="32" fill="#fff"/><path d="M8.5 9.5H22.5L9.5 22.5H19" fill="none" stroke="#000" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="23.2" cy="22.5" r="4" fill="#000"/><circle cx="23.2" cy="22.5" r="1.7" fill="#fff"/></mask><rect width="32" height="32" rx="9" fill="#fafafa" mask="url(#mark)"/></g>
+  <text x="126" y="106" font-size="62" font-weight="800" fill="#fafafa" text-anchor="start" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif' letter-spacing="-2.5">ZoNuLy</text>
+  <text x="50" y="160" font-size="20" font-weight="400" fill="#a1a1aa" text-anchor="start">Finds underrated companies hiring freshers, scores your odds,</text>
+  <text x="50" y="188" font-size="20" font-weight="400" fill="#a1a1aa" text-anchor="start">finds a real person inside, and writes the referral ask.</text>
+  <text x="50" y="226" font-size="13" font-weight="400" fill="#8b8b94" text-anchor="start" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>local-first  ·  evidence-bound  ·  never guesses an email address</text>
+  <path d="M700 78H1112L748 182H1082" fill="none" stroke="#fafafa" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1112" cy="182" r="15" fill="#fafafa" stroke="none" stroke-width="0"/>
+  <circle cx="1112" cy="182" r="6" fill="#0d1117" stroke="none" stroke-width="0"/>
+  <circle cx="700" cy="78" r="7" fill="#fafafa" stroke="none" stroke-width="0"/>
+  <circle cx="700" cy="78" r="3" fill="#0d1117" stroke="none" stroke-width="0"/>
+  <circle cx="1112" cy="78" r="7" fill="#fafafa" stroke="none" stroke-width="0"/>
+  <circle cx="1112" cy="78" r="3" fill="#0d1117" stroke="none" stroke-width="0"/>
+  <circle cx="748" cy="182" r="7" fill="#fafafa" stroke="none" stroke-width="0"/>
+  <circle cx="748" cy="182" r="3" fill="#0d1117" stroke="none" stroke-width="0"/>
+  <text x="700" y="36" font-size="11" font-weight="400" fill="#8b8b94" text-anchor="start" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>01  COMPANY</text>
+  <text x="700" y="53" font-size="13" font-weight="400" fill="#a1a1aa" text-anchor="start">funded, not famous,</text>
+  <text x="700" y="69" font-size="13" font-weight="400" fill="#a1a1aa" text-anchor="start">pays a fresher ≥ ₹20 LPA</text>
+  <text x="1112" y="36" font-size="11" font-weight="400" fill="#8b8b94" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>02  ROLE</text>
+  <text x="1112" y="53" font-size="13" font-weight="400" fill="#a1a1aa" text-anchor="end">0–100 odds of selection,</text>
+  <text x="1112" y="69" font-size="13" font-weight="400" fill="#a1a1aa" text-anchor="end">with the sources</text>
+  <text x="736" y="206" font-size="11" font-weight="400" fill="#8b8b94" text-anchor="start" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>03  PROOF</text>
+  <text x="736" y="223" font-size="13" font-weight="400" fill="#a1a1aa" text-anchor="start">proved by SMTP, or nothing</text>
+  <text x="1128" y="206" font-size="11" font-weight="400" fill="#8b8b94" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>04  PERSON</text>
+  <text x="1128" y="223" font-size="13" font-weight="400" fill="#a1a1aa" text-anchor="end">works there now — the ask</text>
+</svg>

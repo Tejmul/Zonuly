@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="ZoNuLy — finds underrated companies hiring freshers, scores your odds, finds a real person inside, and writes the referral ask" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
+    <img src="docs/assets/banner.svg" alt="ZoNuLy — from a funded company to a person who works there, with the address proved on the way" width="100%">
+  </picture>
 </p>
 
 <p align="center">
@@ -41,23 +44,27 @@
 ## By the numbers
 
 <p align="center">
-  <img src="docs/assets/funnel.svg" alt="44,436 leads, 20,641 confirmed current staff, 10,271 roles, 6,487 companies, 250 best bets, 246 proved addresses" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/numbers-dark.svg">
+    <img src="docs/assets/numbers.svg" alt="Of 45,867 people found, 248 have a proved address; 31,369 found addresses are kept unverified and never mailed" width="100%">
+  </picture>
 </p>
 
 | | Count | What it means |
 |---|---:|---|
-| **Leads** | **44,436** | People at target companies, each stored with where and how they were found |
-| Confirmed current staff | 20,641 | Verified- or likely-current, with the evidence (profile, team page, org membership, live mailbox) |
-| Companies | 6,487 | 1,696 in **Bengaluru** · 486 in **Hyderabad** · the rest remote / abroad |
-| Open roles | 10,271 | 6,678 of them not senior — the fresher roles are what ZoNuLy hunts |
+| **Leads** | **45,867** | People at target companies, each stored with where and how they were found |
+| Confirmed current staff | 21,545 | Verified- or likely-current, with the evidence (profile, team page, org membership, live mailbox) |
+| Companies | 6,512 | 1,760 in **Bengaluru** · 545 in **Hyderabad** · the rest remote / abroad |
+| Open roles | 10,354 | 6,737 of them not senior — the fresher roles are what ZoNuLy hunts |
 | Best bets | 250 | The decision brain's shortlist: Bengaluru first, then Hyderabad |
-| **Proved addresses** | **246** | SMTP-proved, delivered-to, or vendor SMTP-verified — the only addresses a mail may go to |
-| Address checks on record | 12,450 | Every verdict from [check-if-email-exists](https://github.com/reacherhq/check-if-email-exists), cached |
-| Knowledge graph | 63,134 nodes · 203,154 edges | Every table mirrored, plus the project's decisions and history |
+| **Proved addresses** | **248** | SMTP-proved, delivered-to, or vendor SMTP-verified — the only addresses a mail may go to |
+| Addresses found, unproved | 31,369 | Seen on a page, a commit or a profile — kept as evidence, never shown, never mailed |
+| Address checks on record | 18,269 | Every verdict from [check-if-email-exists](https://github.com/reacherhq/check-if-email-exists), cached |
+| Knowledge graph | 63,982 nodes · 205,776 edges | Every table mirrored, plus the project's decisions and history |
 | Interview reports | 49 | Glassdoor, Reddit and blog write-ups turned into prep on the company page |
-| Codebase | ~51k lines of Python · 51 dashboard pages · 29 test files | |
+| Codebase | ~51k lines of Python · 51 dashboard pages · 27 test files | |
 
-> Counts are read from the live database on 31 Oct 2026. The gap between *leads* and *proved addresses* is deliberate:
+> Counts are read from the live database on 1 Nov 2026. The gap between *leads* and *proved addresses* is deliberate:
 > an address is only used once something proves it works — see [what makes it different](#what-makes-it-different).
 
 ---
@@ -65,7 +72,10 @@
 ## How it works
 
 <p align="center">
-  <img src="docs/assets/pipeline.svg" alt="Discover → Guardrails → Score → Referrers → Prove → Draft and review" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/pipeline-dark.svg">
+    <img src="docs/assets/pipeline.svg" alt="Discover, admit, score, referrers, prove, draft, review, send — three gates drop what fails, with the reason logged" width="100%">
+  </picture>
 </p>
 
 | Stage | What happens |
@@ -138,7 +148,10 @@ A black-and-white Next.js dashboard (light and dark) over the FastAPI backend:
 ## Architecture
 
 <p align="center">
-  <img src="docs/assets/architecture.svg" alt="Layers: dashboard → api → pipeline and kg → scrapers and contacts → db and guardrails" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.svg">
+    <img src="docs/assets/architecture.svg" alt="Five layers, imports only point downward: dashboard, api, pipeline and kg, scrapers and contacts, db and guardrails" width="100%">
+  </picture>
 </p>
 
 - **Backend:** Python 3.12, FastAPI, SQLModel on SQLite (WAL), httpx
@@ -229,7 +242,7 @@ jobhunter/
 dashboard/       Next.js dashboard
 scripts/         CLI (run.py), sprint, CSV export, audits, snapshot builder, smoke test
 knowledge/       knowledge graph context and the generated brief
-docs/assets/     the pictures in this README
+docs/assets/     the pictures in this README — drawn by make.py, light and dark
 tests/           pytest
 ```
 

@@ -1,33 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-label="ZoNuLy — find the company, the person, and the words">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b0d12"/><stop offset="1" stop-color="#151a24"/>
-    </linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#7cf3c4"/><stop offset="1" stop-color="#6aa8ff"/>
-    </linearGradient>
-    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
-      <path d="M32 0H0V32" fill="none" stroke="#ffffff" stroke-opacity="0.04"/>
-    </pattern>
-  </defs>
-  <rect width="1200" height="360" rx="18" fill="url(#bg)"/>
-  <rect width="1200" height="360" rx="18" fill="url(#grid)"/>
-  <g font-family="ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
-    <text x="64" y="128" fill="#ffffff" font-size="76" font-weight="800" letter-spacing="-2">ZoNuLy</text>
-    <rect x="66" y="146" width="210" height="5" rx="2.5" fill="url(#accent)"/>
-    <text x="64" y="200" fill="#c9d1e0" font-size="24">Finds underrated companies hiring freshers, scores your odds,</text>
-    <text x="64" y="232" fill="#c9d1e0" font-size="24">finds a real person inside, and writes the referral ask.</text>
-    <text x="64" y="296" fill="#7cf3c4" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">local-first · evidence-bound · never guesses an email</text>
-  </g>
-  <g transform="translate(820 60)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
-    <rect width="320" height="240" rx="14" fill="#0f131b" stroke="#2a3242"/>
-    <circle cx="22" cy="20" r="5" fill="#ff5f57"/><circle cx="40" cy="20" r="5" fill="#febc2e"/><circle cx="58" cy="20" r="5" fill="#28c840"/>
-    <text x="20" y="62" fill="#6aa8ff" font-size="14">$ run.py selection top  # e.g.</text>
-    <text x="20" y="92" fill="#e6edf3" font-size="13">91  AI Engineer · Bengaluru</text>
-    <text x="20" y="114" fill="#e6edf3" font-size="13">88  SDE-1 · Hyderabad</text>
-    <text x="20" y="136" fill="#e6edf3" font-size="13">84  ML Intern → FTE · Bengaluru</text>
-    <text x="20" y="170" fill="#6aa8ff" font-size="14">$ run.py kg path contact company</text>
-    <text x="20" y="200" fill="#7cf3c4" font-size="13">✓ proved address · current staff</text>
-    <text x="20" y="222" fill="#8b95a7" font-size="12">every claim carries its source</text>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 260" width="1200" height="260" role="img" aria-label="ZoNuLy: from a funded company to a person who works there, with the address proved on the way" font-family='"Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
+  <rect x="0.5" y="0.5" width="1199" height="259" rx="6" fill="none" stroke="#a6a6af" stroke-width="1"/>
+  <g transform="translate(48 56) scale(1.875)"><mask id="mark"><rect width="32" height="32" fill="#fff"/><path d="M8.5 9.5H22.5L9.5 22.5H19" fill="none" stroke="#000" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="23.2" cy="22.5" r="4" fill="#000"/><circle cx="23.2" cy="22.5" r="1.7" fill="#fff"/></mask><rect width="32" height="32" rx="9" fill="#09090b" mask="url(#mark)"/></g>
+  <text x="126" y="106" font-size="62" font-weight="800" fill="#09090b" text-anchor="start" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif' letter-spacing="-2.5">ZoNuLy</text>
+  <text x="50" y="160" font-size="20" font-weight="400" fill="#52525b" text-anchor="start">Finds underrated companies hiring freshers, scores your odds,</text>
+  <text x="50" y="188" font-size="20" font-weight="400" fill="#52525b" text-anchor="start">finds a real person inside, and writes the referral ask.</text>
+  <text x="50" y="226" font-size="13" font-weight="400" fill="#8e8e97" text-anchor="start" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>local-first  ·  evidence-bound  ·  never guesses an email address</text>
+  <path d="M700 78H1112L748 182H1082" fill="none" stroke="#09090b" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1112" cy="182" r="15" fill="#09090b" stroke="none" stroke-width="0"/>
+  <circle cx="1112" cy="182" r="6" fill="#ffffff" stroke="none" stroke-width="0"/>
+  <circle cx="700" cy="78" r="7" fill="#09090b" stroke="none" stroke-width="0"/>
+  <circle cx="700" cy="78" r="3" fill="#ffffff" stroke="none" stroke-width="0"/>
+  <circle cx="1112" cy="78" r="7" fill="#09090b" stroke="none" stroke-width="0"/>
+  <circle cx="1112" cy="78" r="3" fill="#ffffff" stroke="none" stroke-width="0"/>
+  <circle cx="748" cy="182" r="7" fill="#09090b" stroke="none" stroke-width="0"/>
+  <circle cx="748" cy="182" r="3" fill="#ffffff" stroke="none" stroke-width="0"/>
+  <text x="700" y="36" font-size="11" font-weight="400" fill="#8e8e97" text-anchor="start" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>01  COMPANY</text>
+  <text x="700" y="53" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">funded, not famous,</text>
+  <text x="700" y="69" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">pays a fresher ≥ ₹20 LPA</text>
+  <text x="1112" y="36" font-size="11" font-weight="400" fill="#8e8e97" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>02  ROLE</text>
+  <text x="1112" y="53" font-size="13" font-weight="400" fill="#52525b" text-anchor="end">0–100 odds of selection,</text>
+  <text x="1112" y="69" font-size="13" font-weight="400" fill="#52525b" text-anchor="end">with the sources</text>
+  <text x="736" y="206" font-size="11" font-weight="400" fill="#8e8e97" text-anchor="start" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>03  PROOF</text>
+  <text x="736" y="223" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">proved by SMTP, or nothing</text>
+  <text x="1128" y="206" font-size="11" font-weight="400" fill="#8e8e97" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>04  PERSON</text>
+  <text x="1128" y="223" font-size="13" font-weight="400" fill="#52525b" text-anchor="end">works there now — the ask</text>
 </svg>

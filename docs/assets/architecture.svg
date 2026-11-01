@@ -1,18 +1,49 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="1200" height="380" role="img" aria-label="ZoNuLy architecture layers">
-  <rect width="1200" height="380" rx="18" fill="#0b0d12"/>
-  <g font-family="ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
-    <text x="40" y="46" fill="#ffffff" font-size="20" font-weight="700">Layers — nothing imports upward</text>
-    <g font-size="15">
-      <rect x="40" y="70" width="1120" height="48" rx="10" fill="#121722" stroke="#2a3242"/>
-      <text x="60" y="100" fill="#6aa8ff" font-weight="700">dashboard</text><text x="230" y="100" fill="#c9d1e0">Next.js · 51 pages — Atlas, ★ India, Best bets, Leads, Queue, Outreach, Calendar, Health</text>
-      <rect x="40" y="128" width="1120" height="48" rx="10" fill="#121722" stroke="#2a3242"/>
-      <text x="60" y="158" fill="#6aa8ff" font-weight="700">api</text><text x="230" y="158" fill="#c9d1e0">FastAPI on :8000 · read-only public snapshot mode</text>
-      <rect x="40" y="186" width="1120" height="48" rx="10" fill="#121722" stroke="#2a3242"/>
-      <text x="60" y="216" fill="#6aa8ff" font-weight="700">pipeline · kg</text><text x="230" y="216" fill="#c9d1e0">tick (launchd, 10 min) · decision brain · selection confidence · knowledge graph</text>
-      <rect x="40" y="244" width="1120" height="48" rx="10" fill="#121722" stroke="#2a3242"/>
-      <text x="60" y="274" fill="#6aa8ff" font-weight="700">scrapers · contacts</text><text x="230" y="274" fill="#c9d1e0">ATS boards · careers · funding · People tab (Apify) · GitHub · Reacher checks · outreach</text>
-      <rect x="40" y="302" width="1120" height="48" rx="10" fill="#10251d" stroke="#7cf3c4"/>
-      <text x="60" y="332" fill="#7cf3c4" font-weight="700">db · guardrails</text><text x="230" y="332" fill="#c9d1e0">SQLite (WAL) · one validator per field · proved-addresses-only hook on every write</text>
-    </g>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" role="img" aria-label="Five layers, imports only point downward: dashboard, api, pipeline and knowledge graph, scrapers and contacts, database with guardrails; launchd drives the pipeline, the public instance serves a read-only snapshot" font-family='"Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1.5L9 5L1 8.5z" fill="#52525b"/></marker></defs>
+  <text x="40" y="34" font-size="11" font-weight="400" fill="#8e8e97" text-anchor="start" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace' letter-spacing="1">LAYERS — NOTHING IMPORTS UPWARD</text>
+  <rect x="40.5" y="56.5" width="719" height="47" rx="0" fill="#ffffff" stroke="#a6a6af" stroke-width="1"/>
+  <text x="56" y="86" font-size="16" font-weight="700" fill="#09090b" text-anchor="start" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>dashboard</text>
+  <text x="336" y="86" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">Next.js · 51 pages · monochrome, light and dark</text>
+  <text x="746" y="86" font-size="12" font-weight="400" fill="#52525b" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>:3000</text>
+  <line x1="100" y1="104" x2="100" y2="122" stroke="#52525b" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#arrow)"/>
+  <text x="110" y="118" font-size="10.5" font-weight="400" fill="#8e8e97" text-anchor="start" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>imports</text>
+  <rect x="40.5" y="124.5" width="719" height="47" rx="0" fill="#ffffff" stroke="#a6a6af" stroke-width="1"/>
+  <text x="56" y="154" font-size="16" font-weight="700" fill="#09090b" text-anchor="start" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>api</text>
+  <text x="336" y="154" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">FastAPI · read-only in public snapshot mode</text>
+  <text x="746" y="154" font-size="12" font-weight="400" fill="#52525b" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>:8000</text>
+  <line x1="100" y1="172" x2="100" y2="190" stroke="#52525b" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#arrow)"/>
+  <rect x="40.5" y="192.5" width="719" height="47" rx="0" fill="#ffffff" stroke="#a6a6af" stroke-width="1"/>
+  <text x="56" y="222" font-size="16" font-weight="700" fill="#09090b" text-anchor="start" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>pipeline · matcher · kg</text>
+  <text x="336" y="222" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">the tick · decision brain · selection odds · the graph</text>
+  <text x="746" y="222" font-size="12" font-weight="400" fill="#52525b" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>tick.py</text>
+  <line x1="100" y1="240" x2="100" y2="258" stroke="#52525b" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#arrow)"/>
+  <rect x="40.5" y="260.5" width="719" height="47" rx="0" fill="#ffffff" stroke="#a6a6af" stroke-width="1"/>
+  <text x="56" y="290" font-size="16" font-weight="700" fill="#09090b" text-anchor="start" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>scrapers · contacts · outreach</text>
+  <text x="336" y="290" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">sources · referrers with evidence · address proof · drafts · review</text>
+  <line x1="100" y1="308" x2="100" y2="326" stroke="#52525b" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#arrow)"/>
+  <rect x="40.5" y="328.5" width="719" height="47" rx="0" fill="#09090b" stroke="#09090b" stroke-width="1"/>
+  <text x="56" y="358" font-size="16" font-weight="700" fill="#ffffff" text-anchor="start" font-family='"Bricolage Grotesque", "Inter Tight", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>db · llm · normalize</text>
+  <text x="336" y="358" font-size="13" font-weight="400" fill="#ffffff" text-anchor="start">SQLite (WAL) · validators · proved-only write hook</text>
+  <text x="746" y="358" font-size="12" font-weight="400" fill="#ffffff" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>jobhunter.db</text>
+  <text x="820" y="34" font-size="11" font-weight="400" fill="#8e8e97" text-anchor="start" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace' letter-spacing="1">OUTSIDE</text>
+  <line x1="760" y1="80.0" x2="810" y2="80.0" stroke="#52525b" stroke-width="1.2" stroke-linecap="butt" stroke-dasharray="3 3"/>
+  <text x="808" y="74.0" font-size="10.5" font-weight="400" fill="#8e8e97" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'></text>
+  <text x="820" y="85.0" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">the browser</text>
+  <line x1="760" y1="148.0" x2="810" y2="148.0" stroke="#52525b" stroke-width="1.2" stroke-linecap="butt" stroke-dasharray="3 3"/>
+  <text x="808" y="142.0" font-size="10.5" font-weight="400" fill="#8e8e97" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>public</text>
+  <text x="820" y="145.0" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">Vercel proxies to it · Catalyst serves demo.db,</text>
+  <text x="820" y="161.0" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">a stamped snapshot with the private tables emptied</text>
+  <line x1="760" y1="216.0" x2="810" y2="216.0" stroke="#52525b" stroke-width="1.2" stroke-linecap="butt" stroke-dasharray="3 3"/>
+  <text x="808" y="210.0" font-size="10.5" font-weight="400" fill="#8e8e97" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>schedule</text>
+  <text x="820" y="213.0" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">launchd: tick every 10 min, paced send agent,</text>
+  <text x="820" y="229.0" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">hourly audit — the orchestrator is code (D4)</text>
+  <line x1="760" y1="284.0" x2="810" y2="284.0" stroke="#52525b" stroke-width="1.2" stroke-linecap="butt" stroke-dasharray="3 3"/>
+  <text x="808" y="278.0" font-size="10.5" font-weight="400" fill="#8e8e97" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>sources</text>
+  <text x="820" y="273.0" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">ATS boards · careers pages · funding feeds · GitHub</text>
+  <text x="820" y="289.0" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">Apify behind a ledger and a daily cap</text>
+  <text x="820" y="305.0" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">Reacher (check-if-email-exists) for address proof</text>
+  <line x1="760" y1="352.0" x2="810" y2="352.0" stroke="#52525b" stroke-width="1.2" stroke-linecap="butt" stroke-dasharray="3 3"/>
+  <text x="808" y="346.0" font-size="10.5" font-weight="400" fill="#8e8e97" text-anchor="end" font-family='"Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'>models</text>
+  <text x="820" y="349.0" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">OpenRouter aliases behind a spend ledger —</text>
+  <text x="820" y="365.0" font-size="13" font-weight="400" fill="#52525b" text-anchor="start">no local model runtime</text>
 </svg>
