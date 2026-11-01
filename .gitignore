@@ -17,6 +17,7 @@ jobhunter.db-*
 
 # The snapshot is committed gzipped (demo.db.gz); the unpacked file is a local by-product.
 demo.db
+demo.db-*
 
 # run-time locks of the tick and the send agent
 data/*.lock
