@@ -221,7 +221,9 @@ def rows(key: str) -> dict:
         ).all()
         # 2026-10-19 (Tejmul): a list with `include_cities` also shows every company in
         # those cities that clears the guardrails — active (or under the pay bar, shown
-        # collapsed as before), not a reject, not overrated, not do-not-contact. The
+        # collapsed as before), not a reject, not overrated, not do-not-contact.
+        # 2026-11-02: "pay_unproved" (no pay figure at all) shows here too, collapsed the
+        # same way — he still sees everything scraped; it is outreach and CSV that hold it. The
         # list's own rows keep their rank and come first.
         cities = [x.lower() for x in spec.get("include_cities") or []]
         if cities:
@@ -288,6 +290,14 @@ def rows(key: str) -> dict:
             "ready": bool(reachable),
             "pay_bar": india.pay_label(c),
             "below_bar_reason": c.status_reason if c.status == "below_pay_bar" else None,
+            # 2026-11-02, Tejmul: "in the UI separate the comapnies of India which are paying less
+            # than 20". Three groups, so the page can show them apart instead of mixed:
+            #   pays20   proof of ₹20 LPA+ early-career pay — the only ones a CSV may draw on
+            #   unproved no pay figure found yet — still chased, still scraped, not mailable
+            #   below    proof of pay UNDER the floor
+            "pay_group": ("below" if c.status == "below_pay_bar"
+                          else "pays20" if india.pay_proved(c)[0] else "unproved"),
+            "pay_why": india.pay_proved(c)[1],
             # the complete bar (guardrails.complete_bar): the page lists complete rows first
             # and the rest under "Still being filled" — no hand-picked row disappears
             "complete": bool(c.complete),
@@ -312,6 +322,8 @@ def rows(key: str) -> dict:
             "hiring_proven": sum(1 for r in out if r["hiring_status"] == "verified"),
             "by_city": _count(r["city"] for r in out if r["city"]),
             "below_bar": len(below),
+            "pays20": sum(1 for r in out if r["pay_group"] == "pays20"),
+            "pay_unproved": sum(1 for r in out if r["pay_group"] == "unproved"),
             "complete": sum(1 for r in out if r["complete"]),
             "being_filled": sum(1 for r in out if not r["complete"]),
         },

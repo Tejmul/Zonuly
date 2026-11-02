@@ -614,6 +614,13 @@ targeting:
     # 2026-10-15: raised to 25 ("scrap the Indian companies where cap is 25 lpa and +").
     # 2026-10-26: back to 20 — "at least the cap is 20" (PPO / full-time on conversion).
     min_lpa: 20
+    # SOFTWARE TECH ONLY (2026-11-02, Tejmul: "scrap underated companies in India which gonna pay
+    # you above 20 lpa from sde ai devops and tech roles not robotic aerospace or any other
+    # companies dont go out of the domain of software tech"). india.hardware_domain() refuses a
+    # company whose description reads aerospace / robotics / chips / EV / battery / bio / defence,
+    # unless a strong software signal (SaaS, developer tools, LLM platform) outweighs it.
+    # OrbitAID Aerospace and CynLr are the two that got through before this existed.
+    software_only: true
     # a stated full-time figure below this is a misparse (a monthly number read as
     # annual), not evidence — it is ignored rather than allowed to hide a company
     implausible_below_lpa: 3
@@ -1278,6 +1285,10 @@ decide:
     dsa_level: 0.35          # 0..1, your interview-DSA ability today. Raise it as you practise:
                              # parked DSA-heavy companies come back on their own at the next run.
   dsa:
+    park: false              # 2026-11-02, Tejmul: "remove the cap of dsa we are in need of companies
+                             # now" — a DSA-heavy loop no longer parks a company (verdict after_dsa).
+                             # It still lowers the `loop` probability, so those companies rank lower.
+                             # Set true to bring parking back.
     heavy: 0.60              # DSA intensity at or above this = a LeetCode-style loop
     park_always_above: 0.80  # parked even when the pay is unknown
     margin: 0.15             # parked only while their loop is more than this above your dsa_level
@@ -1310,7 +1321,8 @@ mixer:
   per_run: 2                 # companies bought per run
   refresh_days: 14           # a company is not bought again inside this
   pay_bands: [pays, deep_pockets, funded]   # layer 1: pay power that passes (or stated pay ≥ the India floor)
-  max_dsa: 0.5               # layer 4 (India only): DSA intensity at or above this is dropped
+  max_dsa: 1.0               # 2026-11-02, Tejmul "remove the cap of dsa we are in need of companies":
+                             # >= 1 switches the layer off and nothing is dropped for DSA. 0.5 was the old cap.
   culture_min: 3.0           # AmbitionBox rating under this on ≥ culture_min_reviews reviews → the brain skips it (India)
   culture_min_reviews: 10
   linkedin: {actor: "valig~linkedin-jobs-scraper", per_item: 0.0004, start_fee: 0.001, limit: 15}

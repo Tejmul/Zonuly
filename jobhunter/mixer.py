@@ -93,7 +93,10 @@ def plan(limit: int = PER_RUN) -> dict:
 
     layer("pay power", _pay_ok)
     layer("location", lambda c, d: (d.pool in ("Bengaluru", "Hyderabad", "Remote"), d.pool or "no pool"))
-    layer("no DSA (India)", lambda c, d: (d.pool == "Remote" or d.dsa < MAX_DSA, f"DSA {d.dsa:.2f}"))
+    # 2026-11-02 ("remove the cap of dsa we are in need of companies now"): mixer.max_dsa >= 1
+    # turns this layer into a no-op; it stays in the funnel so the report still shows the column.
+    layer("no DSA (India)", lambda c, d: (MAX_DSA >= 1 or d.pool == "Remote" or d.dsa < MAX_DSA,
+                                          f"DSA {d.dsa:.2f}"))
     layer("the brain", lambda c, d: (d.verdict in ("target", "fill_first"), f"{d.verdict}: {json.loads(d.why or '{}').get('reason', '')}"[:120]))
     layer(f"not bought in {REFRESH_DAYS} days", lambda c, d: (c.id not in bought, "bought recently"))
 

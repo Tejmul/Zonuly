@@ -34,6 +34,7 @@ import json
 import re
 import sys
 from collections import Counter
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -42,7 +43,9 @@ sys.path.insert(0, str(ROOT))
 from sqlmodel import col, select  # noqa: E402
 
 from jobhunter import referrals  # noqa: E402
-from jobhunter.db import Company, Contact, Email, EmailCheck, Job, get_session, init_db  # noqa: E402
+from jobhunter import india as pay  # noqa: E402  (`india` is a local flag below)
+from jobhunter.db import (Company, Contact, Email, EmailCheck, Job, get_session, init_db,  # noqa: E402
+                          utcnow)
 from jobhunter.outreach import drafter, gmail, handoff, suppress  # noqa: E402
 
 PER_CO = 5
@@ -102,6 +105,107 @@ def tier(c: Company, job: Job | None, bets: dict[int, int]) -> int:
     return 3
 
 
+def addresses_in(path: Path) -> list[str]:
+    """Every e-mail address in a CSV, whatever the sheet's column names. Reads the `email`
+    column when there is one, otherwise any cell that looks like an address — so a sheet
+    from his automation does not have to match our format."""
+    out: list[str] = []
+    with open(path, encoding="utf-8", errors="replace", newline="") as fh:
+        for row in csv.DictReader(fh):
+            cells = [v for v in row.values() if v]
+            named = next((row[k] for k in row if (k or "").strip().lower() in ("email", "e-mail", "address",
+                                                                              "email address", "to")), None)
+            for cell in ([named] if named else cells):
+                for m in re.findall(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", cell or ""):
+                    out.append(m.strip().lower())
+    return out
+
+
+def mark_sent(session, path: Path) -> dict:
+    """File a sheet of people already written to, and mark them mailed forever.
+
+    2026-11-02, Tejmul: "i will give csvs of contacts which dms are already sent to — when i
+    ask for csv again do not give me again the same contacts." Two locks, because either one
+    alone leaks: every matching contact gets `mailed_by_tejmul_at` (the DB lock, survives a
+    re-scrape and a changed address), and the sheet is copied into data/merge_sent/ (the
+    address lock, catches addresses we have no contact row for). Both are already read by
+    every CSV this script writes, batch or not."""
+    addrs = set(addresses_in(path))
+    out = {"addresses": len(addrs), "marked": 0, "unknown": 0}
+    if not addrs:
+        return out
+    found: set[str] = set()
+    rows = session.exec(select(Contact).where(
+        col(Contact.email).is_not(None) | col(Contact.email_unverified).is_not(None))).all()
+    for c in rows:
+        for a in ((c.email or "").strip().lower(), (c.email_unverified or "").strip().lower()):
+            if a and a in addrs:
+                found.add(a)
+                if c.mailed_by_tejmul_at is None:
+                    c.mailed_by_tejmul_at = utcnow()
+                    session.add(c)
+                    out["marked"] += 1
+    out["unknown"] = len(addrs - found)
+    dest = ROOT / "data" / "merge_sent"
+    dest.mkdir(parents=True, exist_ok=True)
+    if path.resolve().parent != dest.resolve():      # re-importing a filed sheet copies nothing
+        keep = dest / f"{date.today().isoformat()}-{path.name}"
+        keep.write_text(path.read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
+    return out
+
+
+def print_segregation(session) -> dict:
+    """THE SEGREGATION (2026-11-02, Tejmul: "segregate them and whenever i ask for a new verified
+    list of csv dont send me this emails again which were sent").
+
+    Two sets, kept apart and never mixed:
+      SENT       an address written to — by the pipeline (an Email row) or by Tejmul himself from
+                 one of his sheets (contact.mailed_by_tejmul_at, set by --sent). Once here, an
+                 address is out of every future CSV, forever.
+      AVAILABLE  a proved-real address nobody has written to yet. This is what a new CSV draws on.
+
+    Writes the register of the SENT set to data/merge_sent/_sent_register.csv so the separation is
+    a file he can open, not a claim. Returns the counts."""
+    sent_rows: dict[str, tuple[str, str]] = {}          # address -> (how, when)
+    for cid, addr, at in session.exec(select(Email.contact_id, Email.to_email, Email.sent_at).where(
+            col(Email.status).in_(["sent", "replied", "failed", "sending"]))).all():
+        a = (addr or "").strip().lower()
+        if a:
+            sent_rows[a] = ("the system", str(at or "")[:19])
+    for c in session.exec(select(Contact).where(col(Contact.mailed_by_tejmul_at).is_not(None))).all():
+        a = (c.email or c.email_unverified or "").strip().lower()
+        if a and a not in sent_rows:
+            sent_rows[a] = ("Tejmul's own sheet", str(c.mailed_by_tejmul_at or "")[:19])
+
+    proved = session.exec(select(Contact).where(
+        col(Contact.email).is_not(None), Contact.email_status == "real")).all()
+    names = dict(session.exec(select(Company.id, Company.name)).all())
+    available = [c for c in proved if (c.email or "").strip().lower() not in sent_rows]
+
+    reg = ROOT / "data" / "merge_sent" / "_sent_register.csv"
+    reg.parent.mkdir(parents=True, exist_ok=True)
+    by_addr = {(c.email or c.email_unverified or "").strip().lower(): c for c in session.exec(
+        select(Contact).where(col(Contact.email).is_not(None)
+                              | col(Contact.email_unverified).is_not(None))).all()}
+    with open(reg, "w", encoding="utf-8", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["email", "name", "company", "sent_by", "sent_at"])
+        for a in sorted(sent_rows):
+            c = by_addr.get(a)
+            w.writerow([a, (c.name if c else "") or "", names.get(c.company_id, "") if c else "",
+                        sent_rows[a][0], sent_rows[a][1]])
+
+    out = {"sent": len(sent_rows), "by_system": sum(1 for v in sent_rows.values() if v[0] == "the system"),
+           "by_tejmul": sum(1 for v in sent_rows.values() if v[0] != "the system"),
+           "proved": len(proved), "available": len(available), "register": str(reg)}
+    print(f"SENT (never offered again)   {out['sent']:>5}   "
+          f"· {out['by_system']} by the system, {out['by_tejmul']} from your own sheets")
+    print(f"AVAILABLE (a new CSV draws on these)  {out['available']:>5}   "
+          f"of {out['proved']} proved-real addresses in all")
+    print(f"register: {reg}")
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", type=int, default=1000)
@@ -119,12 +223,46 @@ def main() -> int:
                          "none that went out in an earlier batch, recorded in csv_batch")
     ap.add_argument("--done", default="", metavar="CSVn",
                     help="Tejmul mailed that batch: stamp it done and mark its leads mailed by him forever")
+    ap.add_argument("--sent", action="append", default=[], metavar="FILE.csv",
+                    help="a CSV of people already DM'd / mailed (any sheet of his, any automation's "
+                         "output). Its addresses are marked mailed forever and it is filed in "
+                         "data/merge_sent/, so no later CSV offers them again. Repeatable.")
+    ap.add_argument("--any-pay", action="store_true",
+                    help="override the ₹%g LPA proof bar and include companies whose pay is not proved "
+                         "(default: a company reaches a CSV only with proof of ₹%g LPA+ early-career pay)"
+                         % (pay.MIN_LPA, pay.MIN_LPA))
+    ap.add_argument("--sent-list", action="store_true",
+                    help="print the segregation (sent vs still available) and write the register of every "
+                         "address already written to, data/merge_sent/_sent_register.csv")
     args = ap.parse_args()
     from jobhunter import guardrails
     from jobhunter.db import get_setting, in_focus
 
-    if args.batch or args.done:
+    if args.sent_list:
+        with get_session() as s_:
+            print_segregation(s_)
+        return 0
+
+    if args.batch or args.done or args.sent:
         init_db()     # the batch tables / mailed_by_tejmul_at column, if this file predates them
+    if args.sent:
+        # 2026-11-02, Tejmul: "i am also automating stuff so i will give csvs of contacts which
+        # dms are already sent to — when i ask for csv again do not give me again the same
+        # contacts". Marking them in the DB (mailed_by_tejmul_at) is what makes it permanent;
+        # filing the sheet in data/merge_sent/ catches addresses with no contact row.
+        total = {"files": 0, "addresses": 0, "marked": 0, "unknown": 0}
+        with get_session() as s_:
+            for f in args.sent:
+                res = mark_sent(s_, Path(f))
+                print(f"{f}: {res['addresses']} addresses · {res['marked']} leads newly marked mailed "
+                      f"· {res['unknown']} not in the database (still blocked by address)")
+                for k in ("addresses", "marked", "unknown"):
+                    total[k] += res[k]
+                total["files"] += 1
+            s_.commit()
+        print(f"{total['files']} file(s) · {total['addresses']} addresses will never be offered again")
+        if not (args.batch or args.target):
+            return 0
     if args.done:
         with get_session() as s:
             try:
@@ -227,6 +365,15 @@ def main() -> int:
             if not args.all_cities and not in_focus(c):
                 why["outside the focus cities"] += len(leads)
                 continue
+            # 2026-11-02, Tejmul: "i was sending cold dms now i see the companies are not even
+            # paying that much" — OrbitAID Aerospace and CynLr had no pay figure at all. A
+            # company reaches a CSV only with PROOF of ₹20 LPA+ early-career pay. The company
+            # itself stays visible and scraped; it is only the mailing list that is gated.
+            if not args.any_pay:
+                ok_pay, pay_why = pay.pay_proved(c)
+                if not ok_pay:
+                    why[f"pay not proved ≥ ₹{pay.MIN_LPA:g} LPA"] += len(leads)
+                    continue
             job = jobs[0] if jobs else None
             role = job.title if job else page_role(c)
             india = (c.city or "").lower() in INDIA

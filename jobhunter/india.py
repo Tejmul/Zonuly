@@ -10,10 +10,14 @@ PAY FLOOR (targeting.india.min_lpa, ₹20 LPA)
     The evidence, highest wins: company.ppo_lpa, its non-senior postings' stated full-time
     band (salary_max, else salary_min) and stated PPO, and the hand-picked list's ctc upper
     bound. ANY evidence at or above the floor keeps it. Internship stipends are not
-    full-time pay. Unknown pay is not below the bar ("pay unknown"). A figure under
-    implausible_below_lpa is a misparse, not evidence.
+    full-time pay. A figure under implausible_below_lpa is a misparse, not evidence.
     Below the bar = company.status "below_pay_bar" with a status_reason quoting the
     evidence — hidden, never deleted, re-checked every tick (new evidence brings it back).
+    2026-11-02 (Tejmul: OrbitAID Aerospace and CynLr were cold-mailed with no pay figure on
+    record at all): unknown pay still keeps the company — it stays visible and scraped, "we
+    are in need of companies now" — but it is NO LONGER MAILABLE. A company reaches a CSV
+    only with proof of ₹20 LPA+ early-career pay: see pay_proved() below, which is the one
+    gate scripts/export_referrals_csv.py and outreach/handoff.py ask.
 
 DISCOVERY (tick.india_discovery_per_tick new companies a tick)
     Keyless sources, every candidate through admission.admit (name cleanup, dedup,
@@ -65,6 +69,13 @@ IMPLAUSIBLE_LPA = float(_I.get("implausible_below_lpa", 3))
 _D = _I.get("discovery") or {}
 FRESH_MONTHS = int(_D.get("fresh_months", 24))
 BELOW = "below_pay_bar"
+#: 2026-11-02, Tejmul: "do not make it hidden just keep it just dont give me when i ask for
+#: csv" / "you can show the companies in the UI". A company with NO pay figure stays active,
+#: visible and scraped exactly as before — the ₹20 LPA proof bar is enforced at the CSV only
+#: (jobhunter/india.py:pay_proved, used by scripts/export_referrals_csv.py and outreach/handoff.py).
+UNPROVED = "pay_unproved"   # retired 2026-11-02; kept so old rows can be restored
+HELD = (BELOW, UNPROVED)
+PROOF_REQUIRED = False
 LIST_KEY = "india-star"
 
 
@@ -162,7 +173,8 @@ def pay_evidence(*, company_ppo: float | None, company_ppo_evidence: str | None,
 
 def pay_verdict(evidence: list[PayEvidence], *, floor: float = MIN_LPA) -> tuple[str, PayEvidence | None, str]:
     """('ok' | 'below' | 'unknown', the deciding evidence, the sentence). Any evidence at or
-    above the floor keeps the company; with none at all the pay is unknown, which keeps it."""
+    above the floor keeps the company. With none at all the pay is unknown, and since
+    2026-11-02 unknown does NOT keep it — see UNPROVED."""
     if not evidence:
         return "unknown", None, "pay unknown — no stated full-time figure"
     best = max(evidence, key=lambda e: e.lpa)
@@ -199,8 +211,8 @@ def apply_pay_floor(*, dry_run: bool = False) -> dict:
                  "hidden_now": 0, "restored": 0, "hidden_list": [], "restored_list": [], "sample_hidden": []}
     with get_session() as session:
         rows = session.exec(select(Company).where(
-            col(Company.status).is_(None) | (Company.status == BELOW))).all()
-        rows = [c for c in rows if in_scope(c) or c.status == BELOW]
+            col(Company.status).is_(None) | col(Company.status).in_(HELD))).all()
+        rows = [c for c in rows if in_scope(c) or c.status in HELD]
         ids = [c.id for c in rows]
         jobs_by: dict[int, list[Job]] = {}
         for i in range(0, len(ids), 500):
@@ -208,24 +220,30 @@ def apply_pay_floor(*, dry_run: bool = False) -> dict:
                 jobs_by.setdefault(j.company_id, []).append(j)
         for c in rows:
             if not in_scope(c):
-                state, best, why = "unknown", None, "no longer an India company"
+                # the floor does not apply — never hold a company for pay it was never asked for
+                state, best, why, want = "unknown", None, "no longer an India company", None
             else:
                 out["in_scope"] += 1
                 ev = pay_evidence(company_ppo=c.ppo_lpa, company_ppo_evidence=c.ppo_evidence,
                                   jobs=jobs_by.get(c.id, []), list_ctc=_list_ctc(c))
                 state, best, why = pay_verdict(ev)
                 out[state] += 1
+                # 2026-11-02: only proof admits. below → below_pay_bar, unknown → pay_unproved.
+                want = (BELOW if state == "below"
+                        else UNPROVED if (state == "unknown" and PROOF_REQUIRED)
+                        else None)
             prev = guardrails.meta_of(c, "pay_floor").get("value")
             changed = False
-            if state == "below" and c.status != BELOW:
+            if want and c.status != want:
                 out["hidden_now"] += 1
+                out["held_" + want] = out.get("held_" + want, 0) + 1
                 (out["hidden_list"] if c.list_key else out["sample_hidden"]).append(f"{c.name} — {why}")
-                c.status, c.status_reason = BELOW, why[:300]
+                c.status, c.status_reason = want, why[:300]
                 changed = True
-            elif state == "below" and c.status_reason != why[:300]:
+            elif want and c.status_reason != why[:300]:
                 c.status_reason = why[:300]
                 changed = True
-            elif state != "below" and c.status == BELOW:
+            elif not want and c.status in HELD:
                 out["restored"] += 1
                 out["restored_list"].append(f"{c.name} — {why}")
                 c.status, c.status_reason = None, None
@@ -244,6 +262,28 @@ def apply_pay_floor(*, dry_run: bool = False) -> dict:
     return out
 
 
+def pay_proved(c: Company) -> tuple[bool, str]:
+    """THE CSV GATE (2026-11-02, Tejmul: "i was sending cold dms now i see the companies are
+    not even paying that much" — OrbitAID Aerospace and CynLr had no pay figure at all).
+
+    (may this company go in a mail-merge CSV, why not). True only with PROOF of ₹20 LPA+
+    early-career pay: the pay-floor verdict recorded by apply_pay_floor each tick ("ok"), or
+    a stored company PPO at or above the floor. No figure at all is NOT proof — the company
+    stays visible, scraped and on the ★ page, it simply is not offered for mailing.
+
+    Nothing else in the pipeline asks this. Hiding is deliberately not used: he keeps the
+    companies ("do not make it hidden just keep it just dont give me when i ask for csv")."""
+    if c.status == BELOW:
+        return False, f"pays under ₹{MIN_LPA:g} LPA: {(c.status_reason or '')[:120]}"
+    if c.status:
+        return False, f"company is {c.status}"
+    if (guardrails.meta_of(c, "pay_floor").get("value") or "") == "ok":
+        return True, "pay proved ≥ ₹%g LPA" % MIN_LPA
+    if c.ppo_lpa is not None and float(c.ppo_lpa) >= MIN_LPA:
+        return True, f"₹{c.ppo_lpa:g} LPA on record"
+    return False, f"no proof of ₹{MIN_LPA:g} LPA early-career pay"
+
+
 def pay_label(c: Company) -> dict:
     """What the dashboard shows beside an India company: ok / below / unknown + the quote."""
     m = guardrails.meta_of(c, "pay_floor")
@@ -251,7 +291,8 @@ def pay_label(c: Company) -> dict:
         return {"state": None}
     return {"state": m.get("value"), "evidence": m.get("evidence"),
             "label": {"ok": f"pays ≥ ₹{MIN_LPA:g}L", "below": f"below the ₹{MIN_LPA:g}L bar",
-                      "unknown": "pay unknown"}.get(m.get("value") or "", None)}
+                      "unknown": "pay not proved — held out of outreach"
+                      if PROOF_REQUIRED else "pay unknown"}.get(m.get("value") or "", None)}
 
 
 # ================================================================== discovery: shared parsing
@@ -284,10 +325,45 @@ _NON_TECH = re.compile(
     r"direct-to-consumer|wellness brand|consumer goods|kitchen|cookware|eyewear|toys?|lab-grown|watch(?:es)?|"
     r"luxury|handbags?|perfumes?|clinics?|salons?|gyms?|coaching cent(?:er|re)s?)\b", re.I)
 _TECH = re.compile(r"\b(ai|artificial intelligence|software|saas|platform|app|apps|technology|tech|data|cloud|"
-                   r"api|developer|machine learning|ml|llm|agentic|automation|analytics|cyber\w*|robot\w*|"
-                   r"fintech|internet|information technology|digital|infrastructure|semiconductor|chip|"
-                   r"satellite|space|drone|quantum|ev|electric|battery|deeptech|healthtech|edtech|"
-                   r"logistics tech|marketplace|b2b)\b", re.I)
+                   r"api|developer|machine learning|ml|llm|agentic|automation|analytics|cyber\w*|"
+                   r"fintech|internet|information technology|digital|infrastructure|"
+                   r"deeptech|healthtech|edtech|logistics tech|marketplace|b2b)\b", re.I)
+
+#: 2026-11-02, Tejmul: "not robotic aerospace or any other companies dont go out of the domain of
+#: software tech". A hardware, robotics, space, chip, energy, bio or defence employer hires
+#: mechanical, electronics and optics people — SDE / AI / DevOps is a side door there, and the pay
+#: for a fresher is not the software market's. OrbitAID Aerospace (electro-optics) and CynLr
+#: (robot vision, lab electronics) are the two that got through and were cold-mailed.
+_HARDWARE = re.compile(
+    r"\b(aerospace|aeronautic\w*|avionics?|space\s?tech|spacecraft|satellites?|launch vehicles?|rockets?|"
+    r"orbital|propulsion|electro[- ]?optics?|optics|photonics?|lidar|radar|"
+    r"robotics?|robots?|cobots?|humanoids?|drones?|uavs?|autonomous vehicles?|"
+    r"semiconductors?|chipsets?|fabless|vlsi|asic|fpga|embedded hardware|pcb|"
+    r"electric vehicles?|\bev\b|batteries|battery|cells?\s+manufactur\w*|solar|wind energy|energy storage|"
+    r"biotech\w*|biopharma|pharmaceutical\w*|genomics?|medical devices?|diagnostics lab|"
+    r"defen[cs]e|missiles?|ammunition|nuclear|mining|foundry|manufacturing plant|"
+    r"quantum (?:computing|hardware)|agritech hardware|machinery|industrial automation)\b", re.I)
+#: the words that say the job is still software even at a hardware-sounding company
+_SOFTWARE_STRONG = re.compile(
+    r"\b(saas|software platform|developer tools?|devtools?|api platform|cloud platform|web app|mobile app|"
+    r"fintech|payments?|banking software|insurtech|martech|hrtech|crm|erp|observability|"
+    r"data platform|data infrastructure|llm|generative ai|ai agents?|machine learning platform)\b", re.I)
+SOFTWARE_ONLY = bool(_I.get("software_only", True))
+
+
+def hardware_domain(text: str | None) -> str | None:
+    """The hardware / deep-tech word that puts a company outside software, or None.
+
+    2026-11-02: SDE, AI, DevOps and other software roles only. A clear software signal
+    (a SaaS or developer-tools description) outweighs one hardware word, because plenty of
+    software companies mention the industry they sell into."""
+    t = text or ""
+    if not SOFTWARE_ONLY:
+        return None
+    m = _HARDWARE.search(t)
+    if not m or _SOFTWARE_STRONG.search(t):
+        return None
+    return m.group(0).lower()
 
 
 def non_tech(text: str | None) -> bool:
@@ -460,9 +536,14 @@ def _admit(session, run: Run, c: Cand) -> Company | None:
         run.skip(c.kind, "already handled this run")
         return None
     run.done.add(key)
-    blob = f"{c.text} {c.description or ''}"
+    blob = f"{c.text} {c.description or ''} {c.headline or ''}"
     if non_tech(blob):
         run.skip(c.kind, "consumer brand, not an engineering employer")
+        return None
+    hw = hardware_domain(blob)
+    if hw:
+        # 2026-11-02: software tech only — no robotics, aerospace, chips, EV, bio or defence
+        run.skip(c.kind, f"outside software: {hw}")
         return None
     stage = c.stage or stage_of(c.text)
     if _SKIP_STAGE.search(c.text or "") and stage not in ("Pre-seed", "Seed", "Series A", "Series B", "Series C"):
@@ -860,17 +941,27 @@ def from_yc(session, run: Run, *, force: bool = False) -> None:
 
 # ================================================================== source: Indian careers / ATS boards
 
-_ATS_QUERIES = ["{city} startup careers keka.com software engineer",
-                "{city} startup jobs darwinbox careers engineer",
-                "{city} startup careers zohorecruit software developer",
-                "cutshort.io company {city} startup hiring engineers",
-                "instahyre jobs-at {city} startup software engineer",
-                "wellfound company {city} startup hiring software engineer"]
+# 2026-11-02, Tejmul: "today only your work is to scrap companies … atleast 500+ in Bengaluru and
+# Hyderabad". The feeds, the YC directory, Cutshort, GitHub, the portfolio pages and the funding
+# searches had all walked to the end of their cursors — every run returned companies already in the
+# database. The headroom left is here: the board hosts the funded product startups actually use
+# (greenhouse, lever, ashby) were NOT in _ATS_HOSTS, so their boards were seen and dropped. Hosts
+# added, and the pool widened from 6 queries to host × role × city, which is a few hundred distinct
+# searches the cursor walks a slice of each run.
+_ATS_BOARD_HOSTS = ["boards.greenhouse.io", "job-boards.greenhouse.io", "jobs.lever.co",
+                    "jobs.ashbyhq.com", "apply.workable.com", "careers.smartrecruiters.com",
+                    "keka.com", "darwinbox", "zohorecruit", "cutshort.io", "instahyre", "wellfound"]
+#: software roles only (2026-11-02) — no robotics / aerospace / hardware titles
+_ATS_ROLES = ["software engineer", "SDE", "backend engineer", "frontend engineer", "full stack engineer",
+              "AI engineer", "machine learning engineer", "data engineer", "devops engineer",
+              "platform engineer", "site reliability engineer", "software engineer intern"]
+_ATS_QUERIES = [f"{{city}} {h} {r}" for h in _ATS_BOARD_HOSTS for r in _ATS_ROLES]
 _ATS_CURSOR = "india:ats_cursor"
 # IT-services / staffing shops are not the underrated product startups this is for
 _IT_SERVICES = re.compile(r"(?i)\b(services|solutions|consult\w*|infotech|technologies pvt|staffing|outsourc\w*|"
                           r"systems pvt|software pvt|pvt\.? ltd|private limited)\b")
-_ATS_HOSTS = ("keka", "darwinbox", "zohorecruit", "cutshort", "instahyre", "wellfound")
+_ATS_HOSTS = ("greenhouse", "lever", "ashby", "workable", "smartrecruiters", "recruitee",
+              "keka", "darwinbox", "zohorecruit", "cutshort", "instahyre", "wellfound")
 _ATS_TITLE_NOISE = re.compile(r"(?i)\b(careers?|jobs?|openings|hiring|work with us|join us|current|opportunities|"
                               r"at|in|keka|darwinbox|zoho recruit|cutshort|instahyre|wellfound|page)\b|[|:–—\-]")
 

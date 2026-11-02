@@ -1,0 +1,163 @@
+{
+  "name": "Tejmul Movin",
+  "email": "tejmulmovin9@gmail.com",
+  "phone": "+919390296953",
+  "links": [
+    "https://www.linkedin.com/in/tejmulmovin-softwareengineer/",
+    "https://github.com/Tejmul",
+    "https://codeforces.com/",
+    "https://leetcode.com/u/tejmulmovin/",
+    "https://spylook.vercel.app/",
+    "https://github.com/Tejmul/Assuredgig_node",
+    "https://frontend-assuredgig.vercel.app/"
+  ],
+  "headline": "Software Lead and AI/ML Engineer with 1+ year of US startup experience building production AI systems",
+  "summary": "Software Lead and AI/ML Engineer with 1+ year of US startup experience building production AI systems. Fine-tuned LLMs, engineered serverless pipelines, and shipped scalable full-stack AI products. Solved problems via Freelancing with a passion for building AI solutions.",
+  "years_experience": 1,
+  "education": [
+    {
+      "degree": "Bachelor of Technology (Computer Science and AI)",
+      "institution": "Newton School of Technology, Rishihood University",
+      "years": "2023 - 2027",
+      "grade": "7.0/10.0"
+    },
+    {
+      "degree": "Intermediate (Class XII)",
+      "institution": "Nano junior college",
+      "years": "2022 - 2023",
+      "grade": "77.5%"
+    },
+    {
+      "degree": "Matriculation (Class X)",
+      "institution": "SRI CHAITANYA TECHNO SCHOOL",
+      "years": "2016 - 2021",
+      "grade": "99.98%"
+    }
+  ],
+  "experience": [
+    {
+      "title": "AI Product Engineer",
+      "company": "eWealth Tech LLC",
+      "dates": "May 2026 - Present",
+      "highlights": [
+        "Managed DNS configurations for 8 company websites, led infrastructure troubleshooting, mentored interns, and conducted technical interviews as Software Lead.",
+        "Redesigned PostgreSQL schema and system architecture from scratch for metaboliqos.com , reducing infrastructure and deployment costs by 95% through an AWS Lambda serverless migration.",
+        "Fine-tuned Mistral 7B (REV A) using LoRA/QLoRA on 2,000+ curated Q&A pairs with system prompt injection, improving response accuracy from 20% to 92%; deployed on RunPod Serverless with Qdrant for per-user vector memory.",
+        "Reduced end-to-end AI response latency by 88% by implementing Server-Sent Events (SSE) streaming and optimizing a Vercel - AWS Lambda - Railway - RunPod production pipeline."
+      ]
+    },
+    {
+      "title": "Software Engineer",
+      "company": "Maverick Secure LLC",
+      "dates": "January 2026 - March 2026",
+      "highlights": [
+        "As part of the founding team at Maverick, Deployed serverless microservices on AWS (Lambda, Cognito, DynamoDB), led the GCP - AWS migration, and established CI/CD pipelines to support infrastructure scaling.",
+        "Annotated 800+ images and trained a semantic segmentation model achieving 96% accuracy using Roboflow.",
+        "Researched and solved an NP-hard 2D-to-3D room measurement problem, engineering a computer vision pipeline that improved YOLOv11 detection accuracy from 20% to 88%."
+      ]
+    },
+    {
+      "title": "AIML Engineer",
+      "company": "TheSmartBridge",
+      "dates": "December 2024 - June 2026",
+      "highlights": [
+        "Built an end-to-end Random Forest pipeline for student performance prediction, achieving 90% model accuracy.",
+        "Engineered data pipelines using Python, Pandas, AWS (S3, Lambda), reducing manual processing time by 70%.",
+        "Built a RAG-powered chatbot using vector embeddings, FAISS, and LoRA fine-tuning, reducing support queries by 50%.",
+        "Delivered hands-on AWS training to 70+ learners, mentored 100+ students in AI/ML, and earned a 5-Star Trainer recognition."
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "Assuredgig",
+      "description": "Founded and engineered a scalable freelance marketplace featuring escrow payments, milestone-based contracts, and OTP authentication; architected the system and grew the community to 1,000+ Discord members and 10+ paying clients.",
+      "tech": [
+        "JavaScript",
+        "Python",
+        "SQL",
+        "TypeScript",
+        "PostgreSQL",
+        "Docker",
+        "AWS EC2",
+        "Amazon S3",
+        "Zod",
+        "JWT",
+        "bcrypt",
+        "Prisma ORM",
+        "Vercel",
+        "GitHub Actions",
+        "Winston",
+        "Morgan"
+      ],
+      "url": "https://frontend-assuredgig.vercel.app/"
+    }
+  ],
+  "skills": {
+    "languages": [
+      "JavaScript",
+      "Python",
+      "SQL",
+      "TypeScript"
+    ],
+    "ai_ml": [
+      "GenAI",
+      "Generative AI",
+      "Hugging Face",
+      "LangChain",
+      "LangGraph",
+      "LangSmith",
+      "LLM",
+      "TensorFlow",
+      "RAG",
+      "FAISS",
+      "LoRA"
+    ],
+    "backend": [
+      "Express JS",
+      "Node.js",
+      "FastAPI",
+      "Pandas",
+      "OpenCV",
+      "Prisma ORM",
+      "AWS Lambda",
+      "DynamoDB",
+      "Cognito"
+    ],
+    "cloud_devops": [
+      "AWS",
+      "Docker",
+      "GitHub",
+      "GitHub Actions",
+      "Nginx"
+    ],
+    "databases": [
+      "MySQL",
+      "PostgreSQL"
+    ],
+    "other": [
+      "Distributed Systems",
+      "SEO/SEM marketing",
+      "Computer Networks",
+      "DBMS",
+      "Machine Learning",
+      "Deep Learning (DL)",
+      "DevOps"
+    ]
+  },
+  "strengths": [
+    "AI/ML engineering",
+    "Serverless infrastructure",
+    "Full-stack product development",
+    "Mentorship and training",
+    "Cross-border collaboration"
+  ],
+  "target_titles": [
+    "AI/ML Engineer",
+    "Software Engineer",
+    "Product Engineer",
+    "Technical Lead"
+  ],
+  "_resume_text": "Tejmul Movin\nPhone: +919390296953\nEmail: sansar.t23csai@nst.rishihood.edu.in\nLinkedIn • Github • Codeforces • Leetcode • Personal Portfolio\nPROFESSIONAL SUMMAR Y\nSoftware Lead and AI/ML Engineer with 1+ year of US startup experience building production AI systems. Fine-tuned LLMs, engineered\nserverless pipelines, and shipped scalable full-stack AI products. Solved problems via Freelancing with a passion for building AI solutions.\nEDUCA TION\nBachelor of T echnology(Computer Science and AI) 2023 - 2027\nNewton School of Technology, Rishihood University Grade: 7.0/10.0\nIntermediate (Class XII) 2022 - 2023\nNano junior college Grade: 77.5%\nMatriculation (Class X) 2016 - 2021\nSRI CHAITANYA TECHNO SCHOOL Grade: 99.98%\nINTERNSHIPS\nAI Product Engineer May 2026 - Present\neWealth Tech LLC Sheridan, Wyoming, United States· Remote\n Managed DNS configurations for 8 company websites, led infrastructure troubleshooting, mentored interns, and conducted\ntechnical interviews as Software Lead.\n Redesigned PostgreSQL schema and system architecture from scratch for metaboliqos.com , reducing infrastructure and\ndeployment costs by 95% through an A WS Lambda serverless migration.\n Fine-tuned Mistral 7B (REV A)using LoRA/QLoRA on 2,000+ curated Q&A pairs with system prompt injection, improving\nresponse accuracy from 20% \u0019 92%; deployed on RunPod Serverless with Qdrant for per-user vector memory.\n Reduced end-to-end AI response latency by 88% by implementing Server-Sent Events (SSE) streaming and optimizing a\nVercel \u0019 A WS Lambda\u0019 Railway \u0019 RunPod production pipeline.\nSoftware Engineer January 2026 - March 2026\nMaverick Secure LLC Loxahatchee Groves, FL, USA· Remote\n As part of the founding team at Maverick , Deployed serverless microservices on A WS (Lambda, Cognito, DynamoDB), led\nthe GCP \u0019 A WS migration, and established CI/CD pipelines to support infrastructure scaling.\n Annotated 800+ images and trained a semantic segmentation model achieving 96% accuracy using Roboflow.\n Researched and solved an NP-hard 2D-to-3D room measurement problem , engineering a computer vision pipeline that\nimproved YOLOv11 detection accuracy from 20% \u0019 88%.\nAIML Engineer December 2024 - June 2026\nTheSmartBridge Hyderabad, Telangana\n Built an end-to-end Random F orest pipelinefor student performance prediction, achieving 90% model accuracy .\n Engineered data pipelines using Python, Pandas, A WS (S3, Lambda), reducing manual processing time by 70%.\n Built a RAG-powered chatbot using vector embeddings, F AISS, and LoRA fine-tuning, reducing support queries by 50%.\n Delivered hands-on A WStraining to 70+ learners, mentored 100+ students in AI/ML, and earned a 5-Star T rainerrecognition.\nPROJECTS\nAssuredgig ( Github) ( Demo) May 2024\n Founded and engineered a scalable freelance marketplace featuring escrow payments, milestone-based contracts, and OTP\nauthentication; architected the system and grew the community to 1,000+ Discord members and 10+ paying clients.\n Built REST APIs with JWT, bcrypt, and Zod , implemented real-time W ebSocket chat, a CRUD portfolio system, and\nCI/CD pipelines on V ercelusing GitHub Actions.\n Designed the PostgreSQL database with Prisma ORM, containerized development using Docker Compose, and deployed the\nbackend on A WS EC2 with Amazon S3 for storage; strengthened backend security and observability with rate limiting,\nCORS, and structured logging (Winston, Morgan) .\nSKILLS\nCourses: Data Structures and Algorithms, Computer Networks, DBMS, Machine Learning, Deep Learning (DL), DevOps\nComputer Language: JavaScript, Python, SQL, TypeScript\nDatabases & Data T ools: MySQL, PostgreSQL\nAI / ML: GenAI, Generative AI, Hugging Face, LangChain, LangGraph, LangSmith, LLM, TensorFlow, RAG\nAPIs & T esting: Distributed Systems\nCloud & DevOps: A WS, Docker, Git and Github, GitHub Actions, Nginx\nDomain & Business Skills: SEO/SEM marketing\nF rameworks & Libraries: Express JS, Node.js, NumPy, OpenCV, React, Pandas, Prisma ORM, FastAPI, Next.js, CSS, HTML, NoSQL\nEXTRA-CURRICULAR ACTIVITIES\n F ounder, AssuredGig: Launched a freelance marketplace + global developer community , enabling cross-border\ncollaboration and talent discovery.\n F reelancing:Executed 10+ production-grade projects in web development and AI/ML for diverse clients.\n Content & Growth: Built a 75K+ Views on Instagram , creating tech/productivity content and scaling reach via a “build in\npublic” strategy.\n Open Source & DSA: Contributed 50+ public repositories and completed 100 Days of Code , demonstrating consistency and\nproblem-solving skills.\n Leadership & Sports: 2 Ö national-level football athlete and former U-14 state team captain , showcasing leadership and\ndiscipline.\nLINKS FOUND IN DOCUMENT:\nhttps://www.linkedin.com/in/tejmulmovin-softwareengineer/\nhttps://github.com/Tejmul\nhttps://codeforces.com/\nhttps://leetcode.com/u/tejmulmovin/\nhttps://spylook.vercel.app/\nhttps://github.com/Tejmul/Assuredgig_node\nhttps://frontend-assuredgig.vercel.app/",
+  "_source": "profile/resume.pdf"
+}

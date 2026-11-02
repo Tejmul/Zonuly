@@ -66,11 +66,58 @@ for the visual.
   already mailed: the Email table or any CSV in `data/merge_sent/` (what he sent from his own sheet —
   save each CSV he sends there). Test rows to tejmulmovin9@gmail.com at the sheet rows he names
   (`--test-at`). Sending stays off until he says the sending part starts.
+- **A CSV carries only companies with PROVED ₹20 LPA+ pay** (2026-11-02, after he cold-mailed OrbitAID
+  Aerospace and CynLr and found they pay far less: *"i was sending cold dms now i see the companies are
+  not even paying that much"*). The gate is `jobhunter/india.pay_proved(company)` — the pay-floor verdict
+  "ok", or `company.ppo_lpa >= 20`. **No pay figure at all is not proof.** Of 2,064 Bengaluru/Hyderabad
+  companies only 209 clear it, and that is the point. `--any-pay` overrides, and he must ask for it.
+  The companies themselves are **not hidden**: *"do not make it hidden just keep it just dont give me
+  when i ask for csv"*, *"you can show the companies in the UI"* — they stay active, scraped, and on the
+  ★ India page. Only the mailing list is gated. Proving pay for a held company (a posting with a stated
+  band, a levels.fyi figure) is the way to bring it back, and that is the work.
+- **A sheet he has already DM'd is never offered again** (2026-11-02: *"i am also automating stuff so i
+  will give csvs of contacts which dms are already sent to"*). Feed it in:
+  `python scripts/export_referrals_csv.py --sent <file.csv>` — repeatable, reads any column layout,
+  stamps every matching lead `contact.mailed_by_tejmul_at` (the lock that survives a re-scrape) and
+  files the sheet in `data/merge_sent/` (the lock for addresses with no lead row). Run it the moment he
+  sends a sheet, before writing him a new CSV.
+- **Sent and available are segregated, and `--sent-list` shows it.** SENT = an address written to, by
+  the pipeline (an `Email` row) or by him (`contact.mailed_by_tejmul_at`); it leaves every future CSV
+  forever. AVAILABLE = a proved-real address nobody has written to. `--sent-list` prints both counts and
+  writes the register `data/merge_sent/_sent_register.csv` (address, name, company, sent by, when).
+  **`data/merge_sent/` means SENT, nothing else** — a CSV that was generated but never mailed belongs in
+  `data/csv_generated/`. 2026-11-02: he had sent only 177 (63 by the system, 114 from his sheet of
+  2026-11-02); two generated sheets had been mis-filed as sent and 2,399 leads were wrongly marked, then
+  cleared. **Never assume a sheet was sent because he pasted it — ask, or check the Email table.**
 - **The hand-off is numbered** (2026-11-01, `jobhunter/outreach/handoff.py`): `--batch` writes the next
   `data/csv/CSV<n>.csv` — proved-real addresses only (`contact.email_status == "real"`), never a lead
   from an earlier batch — and records it (`csv_batch`, `csv_batch_contact`). When he has mailed it,
   `--done CSV<n>` stamps the batch and marks its people `contact.mailed_by_tejmul_at`: mailed forever,
   offered in no later CSV. The leads page shows the batch and that state, read-only.
+- **Software tech only, India** (2026-11-02: *"from sde ai devops and tech roles not robotic
+  aerospace or any other companies dont go out of the domain of software tech"*). `targeting.india.
+  software_only` + `india.hardware_domain()` refuse a company whose words read aerospace, robotics,
+  optics, chips, EV, battery, bio or defence, unless a strong software signal (SaaS, developer tools,
+  LLM platform) outweighs it. OrbitAID Aerospace and CynLr are the two that got through before it.
+- **Company discovery is `jobhunter/india_boards.py`** (2026-11-02). Every older India channel had
+  walked to the end of its cursor — 281 companies seen, 0 new. This one searches the public board
+  hosts (`site:boards.greenhouse.io Bengaluru …`, 816 queries) and then reads the board's **own
+  public API**, which proves the city (a posting located there), the domain (the titles) and often
+  the pay (a stated band). `python -c "from jobhunter import india_boards as ib; ib.run()"`.
+  The real company name comes from the board metadata, never the slug — a slug is an account handle,
+  and slug names created five duplicates of companies we already had on the first pass.
+- **NO GUESSED ADDRESS ENTERS THE DATABASE** (2026-11-02: *"i dont need guessed mails i only need
+  verified mails okk very very strict guardrial … no fake emails entering my database"*).
+  `db.looks_guessed()` + `db._no_guessed_addresses()` run in the `before_flush` hook: an address
+  whose provenance says it was constructed (`source=pattern`, confidence `pattern-guessed`, a
+  research note saying "email by pattern") is refused outright — not on `contact.email`, **not even
+  on `email_unverified`** — the contact is marked `email_status="rejected:guessed"` and the refusal
+  is written to `extraction_reject`. An address genuinely *found* (a commit, a profile, a page) is
+  still kept in `email_unverified` for Reacher to prove; that is the input verification needs.
+- **No DSA cap** (2026-11-02: *"remove the cap of dsa we are in need of companies now"*). A DSA-heavy
+  interview loop no longer parks a company (`decide.dsa.park: false`) and no longer drops it from the
+  mixer (`mixer.max_dsa: 1.0`). DSA still lowers the `loop` probability, so those companies rank lower —
+  they are simply never taken off the board. Pay is the bar; DSA is not.
 - Layering: `db/llm/normalize` ← `scrapers/contacts/outreach` ← `pipeline/matcher/kg` ← `api` ← `dashboard`.
   Nothing imports upward.
 - The machine has 8 GB RAM and no model runtime. Until step 1 of v3 lands, `llm.py` still contains the old

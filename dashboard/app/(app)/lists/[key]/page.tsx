@@ -36,6 +36,10 @@ type Row = {
     total: number; reachable: number; verified: number; by_source: Record<string, number>;
     best: { id: number; name: string | null; email: string | null; confidence: string | null; label: string | null } | null;
   };
+  // 2026-11-02: which side of the ₹20 LPA bar this company is on. "pays20" is proved,
+  // "unproved" means no pay figure found yet, "below" is proved under the bar.
+  pay_group?: "pays20" | "unproved" | "below";
+  pay_why?: string | null;
   searched_at: string | null;
   ready: boolean;
   // the India ₹20L pay floor (jobhunter/india.py): ok / below / unknown + the quote
@@ -84,6 +88,7 @@ export default function ListPage() {
   const { tasks, watch, dismiss } = useTaskWatcher();
   const [q, setQ] = useState("");
   const [city, setCity] = useState<City | "all">("all");
+  const [pay, setPay] = useState<"all" | "pays20" | "unproved">("all");
   const [open, setOpen] = useState<number | null>(null);
   const [busy, setBusy] = useState<Set<number | "all">>(new Set());
 
@@ -93,10 +98,21 @@ export default function ListPage() {
     const needle = q.trim().toLowerCase();
     return data.companies.filter((c) => {
       if (!inCity(c.city, city)) return false;
+      if (pay !== "all" && (c.pay_group ?? "unproved") !== pay) return false;
       if (needle && !`${c.name} ${c.what ?? ""}`.toLowerCase().includes(needle)) return false;
       return true;
     });
-  }, [data, q, city]);
+  }, [data, q, city, pay]);
+
+  // the two sides of the ₹20 LPA bar, counted over the whole list, not the current filter
+  const payCounts = useMemo(() => {
+    const all = data?.companies ?? [];
+    return {
+      all: all.length,
+      pays20: all.filter((c) => c.pay_group === "pays20").length,
+      unproved: all.filter((c) => (c.pay_group ?? "unproved") === "unproved").length,
+    };
+  }, [data]);
 
   useGSAP(() => { if (data) rise("[data-row]", { stagger: 0.012, y: 6 }); },
     { scope: root, dependencies: [!!data] });
@@ -334,6 +350,7 @@ export default function ListPage() {
       {/* ------------------------------------------------------------ controls */}
       <div className="flex flex-wrap items-center gap-2">
         <CityFilter value={city} onChange={setCity} counts={counts} />
+        <PayFilter value={pay} onChange={setPay} counts={payCounts} />
         <label className="relative min-w-0 flex-1 sm:max-w-xs">
           <Search size={13} className="absolute top-1/2 left-2.5 -translate-y-1/2 text-ink-3" />
           <input
@@ -385,6 +402,42 @@ export default function ListPage() {
       </p>
 
       <TaskStrip tasks={tasks} onDismiss={dismiss} />
+    </div>
+  );
+}
+
+/** The ₹20 LPA bar, as a filter (2026-11-02, Tejmul: "in the UI separate the comapnies of India
+ *  which are paying less than 20"). Three buttons, because the honest answer has three parts:
+ *  a company is proved to pay ₹20L+, or no figure has been found yet, or it is proved under.
+ *  Only the proved ones may reach a CSV; the rest stay listed and keep being chased. */
+function PayFilter({
+  value, onChange, counts,
+}: {
+  value: "all" | "pays20" | "unproved";
+  onChange: (v: "all" | "pays20" | "unproved") => void;
+  counts: { all: number; pays20: number; unproved: number };
+}) {
+  const opts: { k: "all" | "pays20" | "unproved"; label: string; n: number; hint: string }[] = [
+    { k: "all", label: "All pay", n: counts.all, hint: "every company on this list" },
+    { k: "pays20", label: "Pays ₹20L+", n: counts.pays20, hint: "proved — the only ones a CSV draws on" },
+    { k: "unproved", label: "Pay not proved", n: counts.unproved, hint: "no figure found yet — still chased, never mailed" },
+  ];
+  return (
+    <div className="flex items-center gap-1 rounded-md border border-line bg-surface p-0.5">
+      {opts.map((o) => (
+        <button
+          key={o.k}
+          type="button"
+          title={o.hint}
+          onClick={() => onChange(o.k)}
+          className={`flex items-center gap-1.5 rounded px-2 py-1 text-[12px] transition-colors ${
+            value === o.k ? "bg-plate text-ink" : "text-ink-2 hover:text-ink"
+          }`}
+        >
+          {o.label}
+          <span className="tnum text-[11px] text-ink-3">{o.n}</span>
+        </button>
+      ))}
     </div>
   );
 }

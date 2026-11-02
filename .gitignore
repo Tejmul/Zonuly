@@ -47,6 +47,13 @@ data/merge_sent/
 # the numbered hand-off batches (CSV1, CSV2, … — people's addresses) — never committed
 data/csv/
 
+# CSVs that were generated but never sent (2026-11-02) — same real addresses, same rule as
+# data/merge_sent/; this repo is PUBLIC, so no file of people's addresses is ever committed
+data/csv_generated/
+
+# outreach working material: referral packs and draft replies — named people, profiles, his phone
+data/outreach/
+
 # Paperclip ids for this machine (company/project/agent uuids) — written by tools/paperclip/bootstrap.py
 data/paperclip.json
 

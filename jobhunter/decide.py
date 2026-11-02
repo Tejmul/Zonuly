@@ -77,6 +77,8 @@ REMOTE = "Remote"
 CITY_POOLS = tuple(p for p in POOLS if p != REMOTE)
 DSA_LEVEL = float((_D.get("me") or {}).get("dsa_level", 0.35))
 _DSA = _D.get("dsa") or {}
+#: 2026-11-02: parking a company for a DSA-heavy loop is off — "we are in need of companies now"
+DSA_PARK = bool(_DSA.get("park", False))
 DSA_HEAVY = float(_DSA.get("heavy", 0.6))
 DSA_PARK_ALWAYS = float(_DSA.get("park_always_above", 0.8))
 DSA_MARGIN = float(_DSA.get("margin", 0.15))
@@ -376,7 +378,14 @@ def sample(qs: dict[str, dict], seed: int) -> dict:
 
 def parked_for_dsa(dsa: float, high_pay: bool, level: float | None = None) -> bool:
     """India: a DSA-heavy loop that is also well above your level — so raising `me.dsa_level`
-    really does bring these back (the loop must stay more than `dsa.margin` above you)."""
+    really does bring these back (the loop must stay more than `dsa.margin` above you).
+
+    2026-11-02, Tejmul: "remove the cap of dsa we are in need of companies now." Parking is
+    OFF (decide.dsa.park: false). A DSA-heavy loop still lowers the `loop` probability, so
+    these companies rank lower — they are simply no longer taken off the board. Set
+    decide.dsa.park back to true in config.yaml to park them again."""
+    if not DSA_PARK:
+        return False
     level = DSA_LEVEL if level is None else level
     return dsa >= DSA_HEAVY and dsa > level + DSA_MARGIN and (high_pay or dsa >= DSA_PARK_ALWAYS)
 

@@ -37,17 +37,24 @@ def _fixture(engine):
     with Session(engine) as s:
         # the proofs first: db._only_verified_addresses only lets an address stay on
         # contact.email when its email_check row already says safe
-        for addr in ("real2@zeta.in", "real1@acme.in", "safe-not-real@acme.in", "mailed@acme.in"):
+        for addr in ("real2@zeta.in", "real1@acme.in", "real3@pico.in", "safe-not-real@acme.in",
+                     "mailed@acme.in"):
             s.add(EmailCheck(address=addr, verdict="safe", source="reacher"))
+        # 2026-11-02: a company reaches a CSV only with PROOF of ₹20 LPA+ (india.pay_proved).
+        # Both of these carry a figure; Pico below carries none and must be left out.
         s.add(Company(id=1, name="Acme", city="Bengaluru", website="https://acme.in", domain="acme.in",
-                      pay_power=90))
+                      pay_power=90, ppo_lpa=28, ppo_evidence="posting states ₹28 LPA for SDE-1"))
         s.add(Company(id=2, name="Zeta", city="Hyderabad", website="https://zeta.in", domain="zeta.in",
-                      pay_power=40))
+                      pay_power=40, ppo_lpa=22, ppo_evidence="posting states ₹22 LPA for AI Engineer I"))
+        s.add(Company(id=3, name="Pico", city="Bengaluru", website="https://pico.in", domain="pico.in",
+                      pay_power=30))          # no pay figure at all — OrbitAID / CynLr's case
         s.commit()
         s.add(Job(id=1, company_id=1, company_name="Acme", title="SDE Intern", url="https://acme.in/j/1",
                   source="careers", location="Bengaluru", match_score=80))
         s.add(Job(id=2, company_id=2, company_name="Zeta", title="AI Engineer I", url="https://zeta.in/j/2",
                   source="careers", location="Hyderabad", match_score=70))
+        s.add(Job(id=3, company_id=3, company_name="Pico", title="SDE I", url="https://pico.in/j/3",
+                  source="careers", location="Bengaluru", match_score=75))
         s.add(Contact(id=1, company_id=1, name="Asha Rao", source="github", email="real1@acme.in",
                       email_status="real", referral_rank=1))
         s.add(Contact(id=2, company_id=2, name="Ravi Kumar", source="github", email="real2@zeta.in",
@@ -61,6 +68,8 @@ def _fixture(engine):
         s.add(Contact(id=5, company_id=1, name="Mira Iyer", source="github", email="mailed@acme.in",
                       email_status="real", referral_rank=1))
         s.commit()
+        s.add(Contact(id=6, company_id=3, name="Kiran Das", source="github", email="real3@pico.in",
+                      email_status="real", referral_rank=1))
         s.add(Email(contact_id=5, company_id=1, to_email="mailed@acme.in", subject="x", body="y",
                     status="sent", sent_at=utcnow()))
         s.commit()
@@ -222,3 +231,23 @@ def test_spent_ids_hold_both_a_batch_in_his_hands_and_one_he_has_mailed(monkeypa
         s.commit()
         assert handoff.spent_contact_ids(s) == {1, 3}
         assert handoff.batch_of(s, [1, 2, 3]) == {1: {"batch": 1, "mailed_by_tejmul": False}}
+
+
+def test_a_company_with_no_proved_pay_never_reaches_a_csv(monkeypatch, tmp_path, capsys):
+    """2026-11-02, after he cold-mailed OrbitAID Aerospace and CynLr: "i was sending cold dms
+    now i see the companies are not even paying that much". Pico's address is proved real and
+    its role is a fresher SDE role — the only thing missing is a pay figure, and that alone
+    keeps it out. --any-pay is the way back in, and he has to ask for it."""
+    gated, loose = tmp_path / "gated", tmp_path / "loose"   # one database each
+    gated.mkdir()
+    loose.mkdir()
+    _, _, code = _run(monkeypatch, gated, "--batch", "--tests", "0")
+    assert code == 0
+    rows = _rows(gated / "csv" / "CSV1.csv")
+    assert "real3@pico.in" not in [r["email"] for r in rows]
+    assert "Pico" not in [r["company"] for r in rows]
+    assert "pay not proved" in capsys.readouterr().out
+
+    _, _, code = _run(monkeypatch, loose, "--batch", "--tests", "0", "--any-pay")
+    assert code == 0
+    assert "real3@pico.in" in [r["email"] for r in _rows(loose / "csv" / "CSV1.csv")]

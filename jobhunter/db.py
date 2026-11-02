@@ -713,16 +713,68 @@ def ensure_columns() -> list[str]:
 _KEEP_STATUS = ("bounced", "opted_out")
 
 
+#: 2026-11-02, Tejmul: "i dont need guessed mails i only need verified mails okk very very strict
+#: guardrail … no fake emails entering my database". A guessed address is one nobody published and
+#: nobody proved — first.last@domain invented from a name and a company domain. Before today it was
+#: merely never mailed; now it never enters the database at all, in either column.
+_GUESS_MARKERS = ("pattern-guessed", "guessed", "email by pattern", "pattern-filled")
+
+
+def looks_guessed(contact: "Contact") -> str | None:
+    """The provenance word that says this address was constructed, not found. None if it was
+    genuinely seen somewhere (a commit, a profile, a page) or proved."""
+    if (contact.email_verified_by or "") or (contact.email_status or "") == "real":
+        return None                      # proved beats provenance
+    src = (contact.source or "").strip().lower()
+    conf = (contact.confidence or "").strip().lower()
+    notes = (contact.research_notes or "").lower()
+    if src in ("pattern", "patterns", "addresses"):
+        return f"source={src}"
+    for m in _GUESS_MARKERS:
+        if m in conf or m in notes:
+            return m
+    return None
+
+
+def _no_guessed_addresses(session, obj) -> bool:
+    """True when the address was refused. Nothing is kept: not on `email`, not on
+    `email_unverified`. The refusal is recorded so it is visible, never silent."""
+    why = looks_guessed(obj)
+    if not why:
+        return False
+    bad = (obj.email or obj.email_unverified or "").strip().lower()
+    obj.email = obj.email_unverified = obj.email_verified_by = None
+    obj.email_status = "rejected:guessed"
+    try:
+        session.add(ExtractionReject(
+            company_id=obj.company_id, contact_id=obj.id, field="contact.email", value=bad,
+            reason=f"guessed address refused ({why}) — 2026-11-02: verified addresses only",
+            source=obj.source, channel="address-guard"))
+    except Exception:                    # noqa: BLE001 — the refusal matters, the audit row does not
+        pass
+    return True
+
+
 @event.listens_for(Session, "before_flush")
 def _only_verified_addresses(session, _flush_context, _instances) -> None:
     """No writer puts an unproved address on contact.email (2026-10-30: guessed addresses at
     sarvam.ai and kapture.cx bounced and got the Gmail blocked). A new or changed address
     without a `safe` email_check row is moved to email_unverified — kept as a hint, never
-    mailed — and contacts/reacher.verify_pending proves or replaces it later."""
+    mailed — and contacts/reacher.verify_pending proves or replaces it later.
+
+    2026-11-02: a GUESSED address is now refused outright (`_no_guessed_addresses`) — it is not
+    kept as a hint either, because a hint nobody can prove is just a bounce waiting to happen."""
     from sqlalchemy import inspect as sa_inspect
 
     for obj in list(session.new) + list(session.dirty):
-        if not isinstance(obj, Contact) or not obj.email:
+        if not isinstance(obj, Contact):
+            continue
+        if obj.email or obj.email_unverified:
+            if obj in session.new or sa_inspect(obj).attrs.email.history.has_changes() \
+                    or sa_inspect(obj).attrs.email_unverified.history.has_changes():
+                if _no_guessed_addresses(session, obj):
+                    continue
+        if not obj.email:
             continue
         if obj not in session.new and not sa_inspect(obj).attrs.email.history.has_changes():
             continue
