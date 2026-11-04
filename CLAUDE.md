@@ -114,6 +114,14 @@ for the visual.
   on `email_unverified`** — the contact is marked `email_status="rejected:guessed"` and the refusal
   is written to `extraction_reject`. An address genuinely *found* (a commit, a profile, a page) is
   still kept in `email_unverified` for Reacher to prove; that is the input verification needs.
+- **Communities are found publicly, never read from inside** (2026-11-03: *"there are hell lot of
+  oppurtunities i see in slack channels and communities scrap them too"*). `jobhunter/communities.py`
+  walks the public directories (The Hive Index) and fills the `community` table — platform, topic,
+  members, job-channel flag, join link, and a score that prefers small and specific over large and
+  famous. Messages **inside** a Slack workspace are private: reading them needs a joined account, and
+  automating one breaks Slack's terms and the no-personal-accounts rule. The module finds the rooms;
+  Tejmul joins them by hand. A channel with a **public** job feed is then scrapeable like any other
+  source, in `jobhunter/scrapers/`, not here.
 - **No DSA cap** (2026-11-02: *"remove the cap of dsa we are in need of companies now"*). A DSA-heavy
   interview loop no longer parks a company (`decide.dsa.park: false`) and no longer drops it from the
   mixer (`mixer.max_dsa: 1.0`). DSA still lowers the `loop` probability, so those companies rank lower —
