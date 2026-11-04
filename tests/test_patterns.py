@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from jobhunter import proposals
-from jobhunter.db import Company, Contact, Email, EmailPattern, EmailProposal, Job
+from jobhunter.db import EmailCheck, Company, Contact, Email, EmailPattern, EmailProposal, Job
 from jobhunter.outreach import compose, drafter, patterns, sender
 
 MISTRAL = ("Fine-tuned Mistral 7B (REV A) using LoRA/QLoRA on 2,000+ curated Q&A pairs with system prompt injection, "
@@ -51,6 +51,13 @@ def db(tmp_path, monkeypatch):
 
 def _person(engine, *, company: str, name: str, repo: str) -> tuple[int, int]:
     slug = company.split()[0].lower()
+    addr = f"{name.split()[0].lower()}@{slug}.ai"
+    with Session(engine) as s:
+        # db._only_verified_addresses moves an address off contact.email unless a `safe`
+        # email_check row already proves it (2026-10-30, after guessed addresses bounced).
+        # Without this the fixture's person has no mailable address and nothing drafts.
+        s.add(EmailCheck(address=addr, verdict="safe", source="reacher"))
+        s.commit()
     with Session(engine) as s:
         co = Company(name=company, domain=f"{slug}.ai", website=f"https://{slug}.ai", team_size=120,
                      description=f"{company} builds voice agents used by banks and hospitals.")
@@ -59,7 +66,7 @@ def _person(engine, *, company: str, name: str, repo: str) -> tuple[int, int]:
         s.refresh(co)
         job = Job(title="Backend Engineer", company_id=co.id, company_name=company, url=f"https://{slug}.ai/jobs/1",
                   source="ashby", needs_brief=json.dumps(_brief(slug)))
-        p = Contact(company_id=co.id, name=name, email=f"{name.split()[0].lower()}@{slug}.ai", source="github",
+        p = Contact(company_id=co.id, name=name, email=addr, source="github",
                     confidence="verified", affiliation="verified-current", affiliation_source="org-member",
                     email_kind="company", role=f"Senior Software Engineer at {company}", role_class="engineer",
                     referral_rank=1, affiliation_evidence=f"company address, committed to {slug}/{repo} on 2026-09-01")

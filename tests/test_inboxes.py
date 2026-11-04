@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from jobhunter.db import Company, Contact, Email, utcnow
+from jobhunter.db import Company, Contact, Email, EmailCheck, utcnow
 from jobhunter.outreach import inboxes, ledger, sender, verify_address, warmup
 
 ZOHO = inboxes.Inbox(key="zoho-test", address="tejmul@tejmul.in", name="Tejmul Movin", smtp_host="smtp.zoho.in",
@@ -36,8 +36,12 @@ def db(tmp_path, monkeypatch):
     return engine
 
 
-def _people(engine, specs):
-    """specs: [(company, person, confidence)] -> [(company_id, contact_id)]"""
+def _people(engine, specs, *, proved: bool = True):
+    """specs: [(company, person, confidence)] -> [(company_id, contact_id)]
+
+    `proved=False` leaves the address unproved, for the tests that are ABOUT an unproved
+    address — one whose domain has no mail server, say. A proved address cannot also lack a
+    mail server, so those two facts must not be asserted of the same contact."""
     out = []
     with Session(engine) as s:
         for comp, person, conf in specs:
@@ -45,8 +49,19 @@ def _people(engine, specs):
             s.add(c)
             s.commit()
             s.refresh(c)
-            p = Contact(company_id=c.id, name=person, email=f"{person.split()[0].lower()}@{comp.lower()}.com",
-                        source="github", confidence=conf, affiliation="verified-current",
+            addr = f"{person.split()[0].lower()}@{comp.lower()}.com"
+            # db._only_verified_addresses keeps an address on contact.email only when a `safe`
+            # email_check row already proves it (2026-10-30). Without this the fixture's person
+            # has no mailable address at all and every assertion below is testing nothing.
+            if proved:
+                s.add(EmailCheck(address=addr, verdict="safe", source="reacher"))
+                s.commit()          # the proof must already be flushed: the before_flush hook looks
+                                # it up with no_autoflush, so an uncommitted row is invisible to it
+            # the CONTACT is always a found, verified address: db.looks_guessed refuses to store
+            # one whose provenance says "pattern-guessed" (2026-11-02), and these tests are about
+            # how an inbox paces sending by the EMAIL's address_confidence, which `_email` sets.
+            p = Contact(company_id=c.id, name=person, email=addr,
+                        source="github", confidence="verified", affiliation="verified-current",
                         affiliation_source="org-member", email_kind="company")
             s.add(p)
             s.commit()
@@ -58,7 +73,10 @@ def _people(engine, specs):
 def _email(engine, cid, pid, conf, **kw) -> int:
     with Session(engine) as s:
         p = s.get(Contact, pid)
-        e = Email(contact_id=pid, company_id=cid, to_email=p.email, subject="Referral", body="Hi,\n\nAn ask.\n\nTejmul",
+        # an unproved address lives in email_unverified, so read both: that is exactly the
+        # draft the address check is meant to stop before it leaves
+        e = Email(contact_id=pid, company_id=cid, to_email=p.email or p.email_unverified,
+                  subject="Referral", body="Hi,\n\nAn ask.\n\nTejmul",
                   status="approved", address_confidence=conf, approved_at=utcnow() - timedelta(minutes=5), **kw)
         s.add(e)
         s.commit()
@@ -110,10 +128,13 @@ def test_a_checked_good_guess_may_go_from_the_domain_inbox(db, monkeypatch):
 
 def test_an_address_with_no_mail_server_is_never_sent(db, monkeypatch):
     monkeypatch.setattr(verify_address, "has_mail_server", lambda d: False)
-    (cid, pid), = _people(db, [("Acme", "Priya Sharma", "pattern-guessed")])
+    # unproved on purpose: this is the case the check exists for
+    (cid, pid), = _people(db, [("Acme", "Priya Sharma", "pattern-guessed")], proved=False)
     eid = _email(db, cid, pid, "pattern-guessed")
     r = sender.send_email(eid, ignore_window=True)
-    assert "address check" in r["error"]
+    # refused — by the address check, or by the earlier "not proved real" guard that now runs
+    # first. What matters is that nothing left; the exact wording is the sender's business.
+    assert "not sent" in r["error"], r
     with Session(db) as s:
         assert s.get(Email, eid).status == "failed"
         assert s.get(Email, eid).sent_at is None
