@@ -10,7 +10,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from jobhunter import resume
-from jobhunter.db import Company, Contact, Email, Job, Reply, utcnow
+from jobhunter.db import Company, Contact, Email, EmailCheck, Job, Reply, utcnow
 from jobhunter.outreach import compose, drafter, gates, learn, sender, suppress, tracker
 
 MISTRAL = ("Fine-tuned Mistral 7B (REV A) using LoRA/QLoRA on 2,000+ curated Q&A pairs with system prompt injection, "
@@ -386,6 +386,7 @@ def _world(engine, *, name="Priya Sharma", brief=True):
         s.refresh(co)
         job = Job(title="Backend Engineer", company_id=co.id, company_name="Acme AI", url="https://acme.ai/jobs/1",
                   source="ashby", needs_brief=json.dumps(_brief()) if brief else None)
+        s.add(EmailCheck(address="priya@acme.ai", verdict="safe", source="reacher")); s.commit()
         p = Contact(company_id=co.id, name=name, email="priya@acme.ai", source="github", confidence="verified",
                     affiliation="verified-current", affiliation_source="org-member", email_kind="company",
                     role="Senior Software Engineer at Acme", role_class="engineer", referral_rank=1,

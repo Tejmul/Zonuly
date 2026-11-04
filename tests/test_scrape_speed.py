@@ -12,7 +12,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from jobhunter import referrals, tick
-from jobhunter.db import Company, CompanyDecision, get_setting, set_setting
+from jobhunter.db import Company, CompanyDecision, EmailCheck, get_setting, set_setting
 from jobhunter.research import web
 
 
@@ -140,6 +140,7 @@ def test_catch_up_does_not_redraft_a_company_whose_draft_was_rejected(engine, mo
             s.commit()
             s.refresh(c)
             ids.append(c.id)
+            s.add(EmailCheck(address=f"asha@{name.lower()}.com", verdict="safe", source="reacher")); s.commit()
             s.add(Contact(company_id=c.id, name="Asha Rao", email=f"asha@{name.lower()}.com", role_class="engineer",
                           confidence="verified", source="github"))
             s.add(_decision(c.id, "Bengaluru", len(ids)))

@@ -10,7 +10,7 @@ from email.utils import format_datetime
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from jobhunter.db import Company, Contact, Email, Job, Reply, utcnow
+from jobhunter.db import Company, Contact, Email, EmailCheck, Job, Reply, utcnow
 from jobhunter.outreach import autoreview, gmail, ledger, sender, suppress, tracker
 
 RESUME = "https://drive.google.com/file/d/RESUME/view"
@@ -43,7 +43,13 @@ def _company(engine, name="Acme", domain="acme.com", people=("Priya Sharma", "Ra
         s.refresh(c)
         ids = []
         for nm in people:
-            p = Contact(company_id=c.id, name=nm, email=f"{nm.split()[0].lower()}@{domain}", source="github",
+            addr = f"{nm.split()[0].lower()}@{domain}"
+            # the proof first, and committed: db._only_verified_addresses moves an address off
+            # contact.email without a `safe` email_check row, and the hook reads it with
+            # no_autoflush, so an uncommitted row is invisible to it
+            s.add(EmailCheck(address=addr, verdict="safe", source="reacher"))
+            s.commit()
+            p = Contact(company_id=c.id, name=nm, email=addr, source="github",
                         confidence="verified", affiliation="verified-current", affiliation_source="org-member",
                         email_kind="company", role_class="engineer", referral_rank=3)
             s.add(p)
@@ -123,6 +129,8 @@ def test_machine_mail_and_mail_from_before_the_ask_are_not_replies(db, mailbox):
 def test_a_personal_address_is_searched_by_itself_not_by_gmail_com(db, mailbox):
     cid, _ = _company(db, people=())
     with Session(db) as s:
+        s.add(EmailCheck(address="vinod@gmail.com", verdict="safe", source="reacher"))
+        s.commit()
         p = Contact(company_id=cid, name="Vinod B", email="vinod@gmail.com", source="github", confidence="verified",
                     affiliation="verified-current", role_class="engineer")
         s.add(p)

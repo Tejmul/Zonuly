@@ -11,7 +11,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from jobhunter import guardrails
-from jobhunter.db import Company, Contact, Email, Reply, utcnow
+from jobhunter.db import Company, Contact, Email, EmailCheck, Reply, utcnow
 from jobhunter.outreach import followup, ledger, sender, suppress, tracker, warmup
 
 
@@ -38,7 +38,11 @@ def _world(engine, *, n_people: int = 2, confidence: str = "verified"):
         s.refresh(c)
         ids = []
         for i, nm in enumerate(["Priya Sharma", "Rahul Verma", "Meena Iyer"][:n_people]):
-            p = Contact(company_id=c.id, name=nm, email=f"{nm.split()[0].lower()}@acme.com", source="github",
+            addr = f"{nm.split()[0].lower()}@acme.com"
+            # proof first, committed: db._only_verified_addresses moves an address off
+            # contact.email without a `safe` email_check row, and reads it with no_autoflush
+            s.add(EmailCheck(address=addr, verdict="safe", source="reacher")); s.commit()
+            p = Contact(company_id=c.id, name=nm, email=addr, source="github",
                         confidence=confidence, affiliation="verified-current", affiliation_source="org-member",
                         email_kind="company", role_class="engineer", referral_rank=3)
             s.add(p)
@@ -103,6 +107,7 @@ def test_send_due_sends_only_what_the_slots_say_is_due(db, monkeypatch):
         s.add(c2)
         s.commit()
         s.refresh(c2)
+        s.add(EmailCheck(address="kiran@beta.com", verdict="safe", source="reacher")); s.commit()
         q = Contact(company_id=c2.id, name="Kiran Das", email="kiran@beta.com", source="github", confidence="verified",
                     affiliation="verified-current", affiliation_source="org-member", email_kind="company")
         s.add(q)
