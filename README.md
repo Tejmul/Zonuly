@@ -52,20 +52,25 @@
 
 | | Count | What it means |
 |---|---:|---|
-| **Leads** | **45,867** | People at target companies, each stored with where and how they were found |
-| Confirmed current staff | 21,545 | Verified- or likely-current, with the evidence (profile, team page, org membership, live mailbox) |
-| Companies | 6,512 | 1,760 in **Bengaluru** · 545 in **Hyderabad** · the rest remote / abroad |
-| Open roles | 10,354 | 6,737 of them not senior — the fresher roles are what ZoNuLy hunts |
-| Best bets | 250 | The decision brain's shortlist: Bengaluru first, then Hyderabad |
+| **Leads** | **50,204** | People at target companies, each stored with where and how they were found |
+| Confirmed current staff | 24,119 | Verified- or likely-current, with the evidence (profile, team page, org membership, live mailbox) |
+| Companies | 6,823 | 1,837 in **Bengaluru** · 575 in **Hyderabad** · the rest remote / abroad |
+| Open roles | 11,230 | 7,330 of them not senior — the fresher roles are what ZoNuLy hunts |
+| Communities | 107 | Slack and Discord rooms that post jobs, 39 with a job channel, found from public directories |
 | **Proved addresses** | **248** | SMTP-proved, delivered-to, or vendor SMTP-verified — the only addresses a mail may go to |
-| Addresses found, unproved | 31,369 | Seen on a page, a commit or a profile — kept as evidence, never shown, never mailed |
-| Address checks on record | 18,269 | Every verdict from [check-if-email-exists](https://github.com/reacherhq/check-if-email-exists), cached |
-| Knowledge graph | 63,982 nodes · 205,776 edges | Every table mirrored, plus the project's decisions and history |
+| Addresses found, unproved | 34,136 | Seen on a page, a commit or a profile — kept as evidence, never shown, never mailed |
+| Address checks on record | 18,724 | Every verdict from [check-if-email-exists](https://github.com/reacherhq/check-if-email-exists), cached |
 | Interview reports | 49 | Glassdoor, Reddit and blog write-ups turned into prep on the company page |
-| Codebase | ~51k lines of Python · 51 dashboard pages · 27 test files | |
 
-> Counts are read from the live database on 1 Nov 2026. The gap between *leads* and *proved addresses* is deliberate:
+> Counts are read from the live database on 5 Nov 2026. The gap between *leads* and *proved addresses* is deliberate:
 > an address is only used once something proves it works — see [what makes it different](#what-makes-it-different).
+
+**That gap is also the project's hardest open problem.** 34,136 addresses are on file and 248 are
+usable, because outbound port 25 is blocked on the machine that runs this, so the local SMTP prover
+answers `unknown` to almost everything. The addresses are not the bottleneck; the prover is.
+`scripts/try_verify.py` tests whether a given network can verify at all and refuses to run when it
+cannot, and `scripts/verify_queue.py` exports the best addresses for any bulk verifier's free tier
+and reads the result back in. Nothing is ever marked verified because it would be convenient.
 
 ---
 
@@ -237,6 +242,9 @@ jobhunter/
   admission.py   the one gate every company passes
   guardrails.py  one validator per field, called by every write path
   interviews.py  interview reports and prep for the company page
+  india_boards.py   company discovery from public ATS board APIs (city, domain and pay proved by the board)
+  remote_boards.py  remote fresher and intern roles open to someone in India
+  communities.py    Slack and Discord rooms that post jobs, from public directories
   tick.py        the scheduled run: leads first, companies after
   api.py         FastAPI
 dashboard/       Next.js dashboard
