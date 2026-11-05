@@ -16,18 +16,57 @@
 </p>
 
 <p align="center">
-  <b>Applying through a careers page puts you in a pile of thousands. A referral from someone who works there skips the pile.</b><br>
-  ZoNuLy automates everything up to that conversation — which companies are worth your time, which roles you can actually get,
-  who to ask, and what to say — with every claim traceable to a source.
+  <b>A careers page puts you in a pile of ten thousand. One person inside the company skips the pile entirely.</b><br>
+  ZoNuLy finds that person.
 </p>
+
+<p align="center">
+  <sub>Built by one final-year student who got tired of applying into the void.</sub>
+</p>
+
+---
+
+<table align="center">
+<tr>
+<td align="center" width="33%"><h3>50,204</h3><sub>people found who could refer you</sub></td>
+<td align="center" width="33%"><h3>6,823</h3><sub>companies worth asking</sub></td>
+<td align="center" width="33%"><h3>248</h3><sub>addresses it will actually use</sub></td>
+</tr>
+</table>
+
+<p align="center">
+  <b>That last number is not a bug. It is the entire point.</b><br>
+  <sub>Most outreach tools would mail all 50,204. This one refuses to send a single message it cannot prove will arrive.</sub>
+</p>
+
+---
+
+## Why it exists
+
+Four internships in, and the pattern was always the same: the applications that went into a careers
+page disappeared, and the ones that came through a human got answered within a day.
+
+So the problem was never *writing applications*. It was finding the humans — the right engineer, at
+the right company, who is still there, whose address actually works — a few thousand times over,
+without lying to any of them.
+
+That is a data problem wearing a motivation problem's clothes. This is the data system.
+
+<table>
+<tr><td><b>Nov 2026</b></td><td>50,204 people found · 248 proved reachable · 177 asked · and the author is still looking</td></tr>
+</table>
+
+> The honesty of the third number is the reason the first two are worth anything.
 
 ---
 
 ## Contents
 
+- [Why it exists](#why-it-exists)
 - [By the numbers](#by-the-numbers)
 - [How it works](#how-it-works)
 - [What makes it different](#what-makes-it-different)
+- [The hard parts](#the-hard-parts)
 - [Guarantees that are never traded away](#guarantees-that-are-never-traded-away)
 - [The dashboard](#the-dashboard)
 - [Architecture](#architecture)
@@ -100,8 +139,9 @@ and reads the result back in. Nothing is ever marked verified because it would b
 
 ## What makes it different
 
-**It never guesses an email address.** Most outreach tools fill `first.last@company.com` and hope. Guessed addresses
-bounce, and bounces get the sender's inbox blocked — this project learned that the hard way. So:
+**It never guesses an email address.** Most outreach tools fill `first.last@company.com` and hope.
+This one learned why that is a mistake on 30 October 2026, when guessed addresses were mailed, they
+bounced, and Google blocked the inbox. One afternoon's convenience cost the sending identity. So:
 
 - Pattern filling is switched off everywhere.
 - A database hook (`db._only_verified_addresses`) refuses to put any address on a lead unless a proof row says it is safe.
@@ -116,6 +156,39 @@ the reason a person is believed to work there, the reason a role scored 84.
 
 **Budget-aware.** Paid sources (Apify) run behind a ledger, a 24-hour cache, a daily pace and a hard monthly stop read from
 the provider's own usage before every purchase.
+
+---
+
+## The hard parts
+
+Not the scraping. Scraping is the easy half. These are the problems that took the real work.
+
+**Proving a stranger still works somewhere.** A LinkedIn headline is a claim, a GitHub commit is a
+timestamp, a team page is a cache. None of them is proof on its own. Affiliation is a verdict with a
+source attached — `verified-current`, `likely-current`, `unconfirmed` — and a company mailbox that
+accepts mail outranks a profile that merely asserts.
+
+**Proving an address without sending anything to it.** Every address carries a verdict from an SMTP
+conversation that never delivers a message. The failure modes are where the subtlety lives: a
+catch-all domain accepts everything and proves nothing, a DNS timeout is *unknown* and not *dead*,
+and a blocked port makes every answer meaningless — which is why the prover tests the network before
+it trusts its own results.
+
+**Knowing what a company pays when nobody publishes it.** Of 90 live postings sampled on Indian
+boards, **zero** stated a salary. So pay is assembled from stated bands on non-senior postings,
+aggregator figures treated as weaker evidence, and funding-derived pay power — and a company with no
+figure at all is held out of every outreach list rather than guessed at.
+
+**Reading "remote" correctly.** "Remote, Worldwide" is remote. "Remote - US only" is not. Neither is
+"Remote in VA, MD, PA", nor "Anywhere in France", nor "CA Remote", nor a San Francisco office whose
+description happens to contain the word *remote-friendly*. Each of those was a real posting that got
+through an earlier version, and each one is now a named test case.
+
+**Refusing to grow the number.** Every gate in this system makes the output smaller. The temptation
+to loosen one — to mail the unproved address, to count the unpriced company, to label a guess
+*verified* — is constant, and giving in once costs the sending domain. The guard that refuses a
+guessed address lives in the database write path, not in a policy document, because a rule you can
+forget is not a rule.
 
 ---
 
