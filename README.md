@@ -28,15 +28,15 @@
 
 <table align="center">
 <tr>
-<td align="center" width="33%"><h3>50,204</h3><sub>people found who could refer you</sub></td>
-<td align="center" width="33%"><h3>6,823</h3><sub>companies worth asking</sub></td>
+<td align="center" width="33%"><h3>52,556</h3><sub>people found who could refer you</sub></td>
+<td align="center" width="33%"><h3>7,008</h3><sub>companies worth asking</sub></td>
 <td align="center" width="33%"><h3>248</h3><sub>addresses it will actually use</sub></td>
 </tr>
 </table>
 
 <p align="center">
   <b>That last number is not a bug. It is the entire point.</b><br>
-  <sub>Most outreach tools would mail all 50,204. This one refuses to send a single message it cannot prove will arrive.</sub>
+  <sub>Most outreach tools would mail all 52,556. This one refuses to send a single message it cannot prove will arrive.</sub>
 </p>
 
 ---
@@ -53,7 +53,7 @@ without lying to any of them.
 That is a data problem wearing a motivation problem's clothes. This is the data system.
 
 <table>
-<tr><td><b>Nov 2026</b></td><td>50,204 people found · 248 proved reachable · 177 asked · and the author is still looking</td></tr>
+<tr><td><b>7 Nov 2026</b></td><td>52,556 people found · 248 proved reachable · 185 asked · and the author is still looking</td></tr>
 </table>
 
 > The honesty of the third number is the reason the first two are worth anything.
@@ -91,22 +91,26 @@ That is a data problem wearing a motivation problem's clothes. This is the data 
 
 | | Count | What it means |
 |---|---:|---|
-| **Leads** | **50,204** | People at target companies, each stored with where and how they were found |
-| Confirmed current staff | 24,119 | Verified- or likely-current, with the evidence (profile, team page, org membership, live mailbox) |
-| Companies | 6,823 | 1,837 in **Bengaluru** · 575 in **Hyderabad** · the rest remote / abroad |
-| Open roles | 11,230 | 7,330 of them not senior — the fresher roles are what ZoNuLy hunts |
+| **Leads** | **52,556** | People at target companies, each stored with where and how they were found |
+| Confirmed current staff | 25,378 | Verified- or likely-current, with the evidence (profile, team page, org membership, live mailbox) |
+| Companies | 7,008 | 1,894 in **Bengaluru** · 611 in **Hyderabad** · the rest remote / abroad |
+| Open roles | 11,842 | 7,686 of them not senior — the fresher roles are what ZoNuLy hunts |
+| Remote roles | 6,713 | 531 of them open to someone working from India, the rest fenced to one country |
 | Communities | 107 | Slack and Discord rooms that post jobs, 39 with a job channel, found from public directories |
 | **Proved addresses** | **248** | SMTP-proved, delivered-to, or vendor SMTP-verified — the only addresses a mail may go to |
-| Addresses found, unproved | 34,136 | Seen on a page, a commit or a profile — kept as evidence, never shown, never mailed |
-| Address checks on record | 18,724 | Every verdict from [check-if-email-exists](https://github.com/reacherhq/check-if-email-exists), cached |
+| Addresses found, unproved | 35,746 | Seen on a page, a commit or a profile — kept as evidence, never shown, never mailed |
+| Address checks on record | 18,859 | Every verdict from [check-if-email-exists](https://github.com/reacherhq/check-if-email-exists), cached |
 | Interview reports | 49 | Glassdoor, Reddit and blog write-ups turned into prep on the company page |
 
-> Counts are read from the live database on 5 Nov 2026. The gap between *leads* and *proved addresses* is deliberate:
+> Counts are read from the live database on 7 Nov 2026. The gap between *leads* and *proved addresses* is deliberate:
 > an address is only used once something proves it works — see [what makes it different](#what-makes-it-different).
 
-**That gap is also the project's hardest open problem.** 34,136 addresses are on file and 248 are
+**That gap is also the project's hardest open problem.** 35,746 addresses are on file and 248 are
 usable, because outbound port 25 is blocked on the machine that runs this, so the local SMTP prover
-answers `unknown` to almost everything. The addresses are not the bottleneck; the prover is.
+answers `unknown` to almost everything. On 5 Nov this was measured rather than assumed: of **879**
+addresses checked, **0** came back verified, 2 invalid and 877 unknown. The two invalid results are
+the useful ones — they prove the checker works, and that the other 877 never reached a mail server
+at all. The addresses are not the bottleneck; the prover is.
 `scripts/try_verify.py` tests whether a given network can verify at all and refuses to run when it
 cannot, and `scripts/verify_queue.py` exports the best addresses for any bulk verifier's free tier
 and reads the result back in. Nothing is ever marked verified because it would be convenient.
