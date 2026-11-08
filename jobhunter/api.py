@@ -1143,6 +1143,63 @@ def companies_grouped(include_rejects: bool = False, include_overrated: bool = F
                                 include_incomplete=include_incomplete)
 
 
+@app.post("/api/companies/{company_id}/channels")
+def company_channels_collect(company_id: int, read_site: bool = True) -> dict:
+    """Find every public way into this company — Slack, Discord, repos, docs, forum."""
+    from jobhunter import ways_in
+
+    try:
+        return {"task_id": _run_task(f"ways-in:{company_id}", ways_in.collect, company_id,
+                                     read_site=read_site)}
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+
+
+# ---------------------------------------------------------------- communities
+
+@app.get("/api/communities")
+def communities_index(
+    platform: str | None = None,
+    topic: str | None = None,
+    with_jobs: bool | None = None,
+    joined: bool | None = None,
+    q: str | None = None,
+    limit: int = Query(500, ge=1, le=2000),
+) -> dict:
+    """Every Slack / Discord room found in the public directories, best first.
+
+    Nothing is hidden by default: a room with no job channel is a column, not a filter. Messages
+    inside a workspace are private, so this is the whole of what the pipeline can know — he joins
+    by hand with `join_url` (jobhunter/communities.py says why at length)."""
+    from jobhunter import communities
+
+    return communities.listing(platform=platform, topic=topic, with_jobs=with_jobs,
+                               joined=joined, q=q, limit=limit)
+
+
+@app.post("/api/communities/{community_id}/joined")
+def community_joined(community_id: int, joined: bool = True) -> dict:
+    """Mark a room joined, by hand. Code never joins a workspace."""
+    from jobhunter import communities
+
+    try:
+        return communities.set_joined(community_id, joined)
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+
+
+@app.post("/api/communities/harvest")
+def communities_harvest(pages: int = Query(8, ge=1, le=40), enrich: bool = True) -> dict:
+    """Walk more directory pages, then read each new room's own page for its join link."""
+    from jobhunter import communities
+
+    def _work() -> dict:
+        found = communities.harvest(pages=pages)
+        return {"harvest": found, "enrich": communities.enrich(limit=40) if enrich else None}
+
+    return {"task_id": _run_task("communities-harvest", _work)}
+
+
 # ---------------------------------------------------------------- hand-picked lists
 
 @app.get("/api/lists")

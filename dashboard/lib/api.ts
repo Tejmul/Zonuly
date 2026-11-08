@@ -566,6 +566,45 @@ export type GmailSetup = {
   quota: Quota;
 };
 
+/* Communities — the public Slack/Discord directories (jobhunter/communities.py). Messages inside
+   a workspace are private, so `join_url` is where a human takes over; `joined` is set by hand. */
+export type Community = {
+  id: number;
+  name: string;
+  key: string;
+  platform: string | null;
+  topic: string | null;
+  members: number | null;
+  has_jobs: boolean;
+  joined: boolean;
+  score: number;
+  why: string | null;
+  description: string | null;
+  url: string | null;
+  join_url: string | null;
+  source: string | null;
+  evidence: string | null;
+  first_seen: string;
+  last_seen: string;
+};
+
+export type CommunityPayload = {
+  rows: Community[];
+  matched: number;
+  stats: {
+    total: number;
+    with_jobs: number;
+    joined: number;
+    slack: number;
+    discord: number;
+    with_join_link: number;
+    under_5k: number;
+    topics: number;
+  };
+  platforms: string[];
+  all_topics: string[];
+};
+
 export type Task = {
   id: string;
   name: string;

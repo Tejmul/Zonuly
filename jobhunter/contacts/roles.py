@@ -53,11 +53,16 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         r"\b(technical recruiter|tech recruiter|engineering recruiter|technical sourcer|"
         r"technical talent|talent partner[- ]engineering|university recruit|campus recruit|"
         r"technical hr|tech hr)\b", re.I)),
+    # 2026-11-08: "Senior Agent Researcher" and "Member of the Technical Staff" both fell to
+    # "other" (rank 9) and so were never asked. At an AI lab those ARE the engineers — MTS is
+    # the standard title at OpenAI, Anthropic, Mistral and most agent startups, and a research
+    # title there sits in the same room as the one hiring. Both now rank with their seniority.
     ("senior_engineer", re.compile(
         r"\b((?:senior|sr\.?|staff|principal|lead|distinguished|founding)\s+"
-        r"(?:software |backend |frontend |full[- ]?stack |platform |infrastructure |data |ml |ai |research |devops |site reliability )?"
-        r"(?:engineer|developer|scientist|sde|swe)"
-        r"|sde\s*(?:3|iii|4|iv)\b|l[5-9]\b|architect)\b", re.I)),
+        r"(?:software |backend |frontend |full[- ]?stack |platform |infrastructure |data |ml |ai |agent |applied |research |devops |site reliability )*"
+        r"(?:engineer|developer|scientist|researcher|sde|swe)"
+        r"|sde\s*(?:3|iii|4|iv)\b|l[5-9]\b|architect"
+        r"|(?:senior|staff|principal|lead|founding)\s+member of (?:the )?technical staff)\b", re.I)),
     ("engineer", re.compile(
         r"\b(software engineer|software developer|sde\s*[12]?\b|sde\b|swe\b|"
         r"backend engineer|back[- ]end engineer|frontend engineer|front[- ]end engineer|"
@@ -66,6 +71,10 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         r"ml engineer|machine learning engineer|ai engineer|llm engineer|genai engineer|"
         r"applied (?:ai|ml|scientist)|research engineer|research scientist|data engineer|"
         r"data scientist|mobile engineer|android engineer|ios engineer|"
+        # "Member of Technical Staff" / MTS — the standard engineer title at agent labs
+        r"member of (?:the )?technical staff|\bmts\b|"
+        # a researcher at an AI lab ships the code; "agent researcher", "applied researcher"
+        r"(?:agent|applied|ai|ml|research) researcher|researcher|"
         r"engineer|developer|programmer)\b", re.I)),
     ("recruiter", re.compile(
         r"\b(recruiter|recruiting|talent acquisition|talent|people ops|people operations|"

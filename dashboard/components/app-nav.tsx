@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import {
-  Activity, BookOpen, Building2, Calendar, Crosshair, Globe, GraduationCap, Inbox, LayoutGrid, Mail, MessageSquare, Network, PanelLeft, Send, Settings, Star, Users, Workflow,
+  Activity, BookOpen, Building2, Calendar, Crosshair, Globe, GraduationCap, Inbox, LayoutGrid, Mail, MessageSquare, MessagesSquare, Network, PanelLeft, Send, Settings, Star, Users, Workflow,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme";
 import { SearchBox } from "@/components/search-box";
@@ -27,6 +27,9 @@ const LINKS = [
   // the knowledge graph as a map: what is complete, what is still being filled (graphmap.py)
   { href: "/graph", label: "Graph", icon: Network },
   { href: "/leads", label: "Leads", icon: Users },
+  // the Slack/Discord rooms where a role is posted before it is listed (communities.py).
+  // Found publicly and ranked; joining is his, by hand — the page says so.
+  { href: "/communities", label: "Communities", icon: MessagesSquare },
   { href: "/queue", label: "Queue", icon: Inbox },
   // The send pipeline end to end — counts are public, so it is offered everywhere
   { href: "/outreach", label: "Outreach", icon: Workflow },

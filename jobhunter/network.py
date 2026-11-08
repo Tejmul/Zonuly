@@ -307,6 +307,41 @@ def _clean_role(role: str | None) -> str | None:
     return t[:160] + ("…" if len(t) > 160 else "")
 
 
+def _as_list(raw: str | None) -> list[str]:
+    """A JSON list column, read defensively.
+
+    2026-11-08: a plain sentence written into `funding_investors` by hand made
+    `/api/companies/{id}/detail` return 500 — the whole company page gone because one field was
+    prose. A field we cannot parse is worth showing as a single line, never worth an error page.
+    """
+    if not raw:
+        return []
+    try:
+        val = json.loads(raw)
+    except (ValueError, TypeError):
+        return [p.strip() for p in str(raw).split(";") if p.strip()]
+    if isinstance(val, list):
+        return [str(x) for x in val]
+    return [str(val)]
+
+
+def _channels(company_id: int | None) -> list[dict]:
+    """The ways in (jobhunter/ways_in.py). Never fails a company page: a missing table or a
+    first run before the stage has ever run returns an empty list, not a 500."""
+    if not company_id:
+        return []
+    try:
+        from jobhunter import ways_in
+
+        return [
+            {**row, "last_seen": row["last_seen"].isoformat() if row.get("last_seen") else None}
+            for row in ways_in.for_company(company_id)
+        ]
+    except Exception as e:  # noqa: BLE001 — a side panel is never worth an error page
+        log.warning("channels for company %s: %s", company_id, e)
+        return []
+
+
 def company_detail(company_id: int) -> dict:
     """Everything known about one company, for the detail page."""
     init_db()
@@ -397,7 +432,7 @@ def company_detail(company_id: int) -> dict:
             "total_usd_m": c.funding_total_usd_m,
             "valuation_usd_m": c.valuation_usd_m,
             "announced": c.funding_announced,
-            "investors": json.loads(c.funding_investors) if c.funding_investors else [],
+            "investors": _as_list(c.funding_investors),
             "evidence": c.funding_evidence,
         },
         "hiring": {
@@ -407,6 +442,9 @@ def company_detail(company_id: int) -> dict:
             "roles_on_their_page": json.loads(c.hiring_roles) if c.hiring_roles else [],
             "checked_at": c.hiring_checked_at.isoformat() if c.hiring_checked_at else None,
         },
+        # Every public way in (ways_in.py). It matters most exactly when `hiring.status` says nobody is
+        # posting: a Slack and a good-first-issue are doors that do not need an address.
+        "channels": _channels(c.id),
         "culture": {
             "collected": False,
             "why": "No reviews source is wired up yet, so nothing about work culture is "

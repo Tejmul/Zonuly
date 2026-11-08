@@ -374,5 +374,70 @@ def best(limit: int = 40, *, platform: str | None = None, with_jobs: bool = True
             for c in rows[:limit]]
 
 
-__all__ = ["Community", "harvest", "enrich", "best", "score", "parse_hive", "slug_of",
-           "members_from", "join_link"]
+def _row(c: Community) -> dict:
+    """One room as the UI shows it. `evidence` is the directory's own sentence, kept so a
+    member count can be argued with rather than trusted."""
+    return {"id": c.id, "name": c.name, "key": c.key, "platform": c.platform, "topic": c.topic,
+            "members": c.members, "has_jobs": c.has_jobs, "joined": c.joined,
+            "score": round(c.score or 0), "why": c.score_why, "description": c.description,
+            "url": c.url, "join_url": c.join_url, "source": c.source, "evidence": c.evidence,
+            "first_seen": c.first_seen, "last_seen": c.last_seen}
+
+
+def listing(*, platform: str | None = None, topic: str | None = None,
+            with_jobs: bool | None = None, joined: bool | None = None,
+            q: str | None = None, limit: int = 500) -> dict:
+    """Every room on file, best first, with the counts the page needs to describe itself.
+
+    Unlike `best()` this hides nothing by default (2026-10: "everything scraped shows in the UI").
+    A room with no job channel is still worth seeing — the flag is a column, not a filter.
+    """
+    init_db()
+    with get_session() as s:
+        rows = s.exec(select(Community).order_by(col(Community.score).desc().nulls_last())).all()
+        out = [_row(c) for c in rows]
+    stats = {
+        "total": len(out),
+        "with_jobs": sum(1 for r in out if r["has_jobs"]),
+        "joined": sum(1 for r in out if r["joined"]),
+        "slack": sum(1 for r in out if r["platform"] == "slack"),
+        "discord": sum(1 for r in out if r["platform"] == "discord"),
+        "with_join_link": sum(1 for r in out if r["join_url"]),
+        "under_5k": sum(1 for r in out if (r["members"] or 0) and r["members"] < 5000),
+        "topics": len({r["topic"] for r in out if r["topic"]}),
+    }
+    sel = out
+    if platform:
+        sel = [r for r in sel if (r["platform"] or "") == platform]
+    if topic:
+        sel = [r for r in sel if (r["topic"] or "") == topic]
+    if with_jobs is not None:
+        sel = [r for r in sel if r["has_jobs"] is with_jobs]
+    if joined is not None:
+        sel = [r for r in sel if r["joined"] is joined]
+    if q:
+        n = q.strip().lower()
+        sel = [r for r in sel if n in (r["name"] or "").lower()
+               or n in (r["topic"] or "").lower() or n in (r["description"] or "").lower()]
+    return {"rows": sel[:limit], "matched": len(sel), "stats": stats,
+            "platforms": sorted({r["platform"] for r in out if r["platform"]}),
+            "all_topics": sorted({r["topic"] for r in out if r["topic"]})}
+
+
+def set_joined(community_id: int, joined: bool) -> dict:
+    """Mark a room joined, or not. Only ever set by hand — code never joins anything."""
+    init_db()
+    with get_session() as s:
+        c = s.get(Community, community_id)
+        if c is None:
+            raise KeyError(f"no community {community_id}")
+        c.joined = bool(joined)
+        c.last_seen = utcnow()
+        s.add(c)
+        s.commit()
+        s.refresh(c)
+        return _row(c)
+
+
+__all__ = ["Community", "harvest", "enrich", "best", "listing", "set_joined", "score",
+           "parse_hive", "slug_of", "members_from", "join_link"]
