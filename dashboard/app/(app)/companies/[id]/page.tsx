@@ -54,6 +54,8 @@ type Detail = {
   funding_round_label?: string | null; overrated?: boolean | null; city?: string | null;
   priority_score?: number | null; priority_why?: string | null;
   hiring: { status: string | null; evidence: string | null; careers_url: string | null; roles_on_their_page: string[]; checked_at: string | null };
+  // every public way in (jobhunter/channels.py) — the Slack, the repos, the docs
+  channels?: { kind: string; label: string | null; url: string; detail: string | null; evidence: string | null }[];
   best_role?: RoleRow | null;
   jobs: Job[];
   people: Person[];
@@ -87,6 +89,13 @@ const PAY_BASIS_LABEL: Record<string, string> = {
   "funding-weak": "Doubtful — the funding we found is small, old or in rupees. Needs a stated figure.",
   none: "Unknown — no pay stated and no funding found. Needs research before we spend an email on it.",
 };
+/* A door you can walk through without an address. Ordered the way the backend ranks them. */
+const CHANNEL_LABEL: Record<string, string> = {
+  slack: "Slack", discord: "Discord", repo: "Repository", good_first_issue: "Good first issues",
+  discussions: "Discussions", forum: "Forum", docs: "Docs", blog: "Blog", youtube: "YouTube",
+  x: "X", linkedin: "LinkedIn",
+};
+
 const MISSING_LABEL: Record<string, string> = {
   hiring: "hiring not yet proven on their own site", fresher: "no fresher role scraped",
   location: "no remote-from-anywhere role (and not in India)", lead: "no lead with a usable email",
@@ -232,6 +241,40 @@ export default function CompanyPage() {
           )}
         </section>
       )}
+
+      {/* ------------------------------------------------- ways in: rooms, repos, docs */}
+      {data.channels?.length ? (
+        <Section
+          title="Ways in"
+          sub={
+            data.hiring.status === "no_open_roles"
+              ? "They are not posting roles right now, so these are the doors that are still open — and none of them needs an email address."
+              : "Public rooms, repositories and pages belonging to them. Every link was read off a page, never guessed."
+          }
+          action={
+            <ActionButton busy={busy === "channels"} onClick={() => run("channels", `/api/companies/${data.id}/channels`)}>
+              Look again
+            </ActionButton>
+          }
+        >
+          <ul className="space-y-2">
+            {data.channels.map((ch) => (
+              <li key={`${ch.kind}:${ch.url}`} className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                <span className="marginal w-28 shrink-0">{CHANNEL_LABEL[ch.kind] ?? ch.kind}</span>
+                <a
+                  href={ch.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 break-all text-[13px] font-medium underline decoration-line underline-offset-2 hover:decoration-ink"
+                >
+                  {ch.label && ch.label !== CHANNEL_LABEL[ch.kind] ? ch.label : ch.url.replace(/^https?:\/\//, "")}
+                </a>
+                {ch.detail ? <span className="tnum text-[12px] text-ink-3">{ch.detail}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
 
       {/* ---------------------------------------------------------- 2. the hiring post */}
       <Section title="The hiring post" sub="Where we saw that they are hiring — the thing to show if anyone asks">
