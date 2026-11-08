@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  :root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px) }
+  body { margin: 0; font: 14px system-ui, -apple-system, sans-serif }
+  img { max-width: 100% }
+  [hidden] { display: none !important }
+</style>
+<title>Open Source Runway</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* Layout: a decision at the top, then a dated spine — the calendar is the argument. */
+:root {
+  --paper: #f2f4f6;
+  --card: #ffffff;
+  --ink: #141a1f;
+  --ink-2: #41505c;
+  --ink-3: #74848f;
+  --rule: #d8dee4;
+  --rule-strong: #b7c1c9;
+  --accent: #9a5b14;        /* deadline ochre */
+  --accent-soft: #f6e9d6;
+  --open: #1d6b4f;          /* a window you can still walk through */
+  --open-soft: #dcefe6;
+  --shut: #8d3b3b;          /* a window that has closed */
+  --shut-soft: #f2e0e0;
+
+  --display: "Bricolage Grotesque", "Trebuchet MS", sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #10161a;
+    --card: #182026;
+    --ink: #e8eef2;
+    --ink-2: #a9b8c2;
+    --ink-3: #788691;
+    --rule: #2a353d;
+    --rule-strong: #3d4a53;
+    --accent: #e0a35c;
+    --accent-soft: #33261a;
+    --open: #5fc99b;
+    --open-soft: #16302a;
+    --shut: #e08787;
+    --shut-soft: #331e1e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #10161a;
+  --card: #182026;
+  --ink: #e8eef2;
+  --ink-2: #a9b8c2;
+  --ink-3: #788691;
+  --rule: #2a353d;
+  --rule-strong: #3d4a53;
+  --accent: #e0a35c;
+  --accent-soft: #33261a;
+  --open: #5fc99b;
+  --open-soft: #16302a;
+  --shut: #e08787;
+  --shut-soft: #331e1e;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16.5px;
+  line-height: 1.6;
+  margin: 0;
+}
+.wrap {
+  max-width: 54rem;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 2.6rem 4rem;
+}
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2rem, 6vw, 3.1rem); font-weight: 800; line-height: 1.02; letter-spacing: -0.02em; }
+h2 { font-size: clamp(1.3rem, 3.4vw, 1.7rem); font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 1.05rem; font-weight: 700; }
+p { margin: 0; }
+a { color: inherit; text-decoration-color: var(--rule-strong); text-underline-offset: 2px; }
+a:hover { text-decoration-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.lede { font-size: 1.12rem; color: var(--ink-2); max-width: 40rem; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+header.top { display: flex; flex-direction: column; gap: 0.9rem; }
+.stamp {
+  display: flex; flex-wrap: wrap; gap: 0.5rem 1.1rem; align-items: baseline;
+  border-bottom: 2px solid var(--ink); padding-bottom: 0.8rem;
+}
+
+section { margin-top: 3.2rem; }
+.sec-head { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1.3rem; }
+
+/* The verdict block — the one place that gets weight */
+.verdict {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--accent);
+  padding: 1.4rem 1.5rem;
+  display: flex; flex-direction: column; gap: 1rem;
+  margin-top: 2rem;
+}
+.verdict p { max-width: 42rem; }
+.verdict strong { font-weight: 600; }
+
+/* The spine */
+.spine { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--rule); }
+.slot {
+  display: grid;
+  grid-template-columns: 8.5rem 1fr;
+  gap: 0.2rem 1.4rem;
+  padding-block: 1.15rem;
+  border-bottom: 1px solid var(--rule);
+  align-items: start;
+}
+.slot-when { font-family: var(--mono); font-size: 0.8rem; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; padding-top: 0.15rem; }
+.slot-body { min-width: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.slot-title { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
+.slot-note { color: var(--ink-2); font-size: 0.95rem; }
+.slot.is-shut .slot-when, .slot.is-shut .slot-title { color: var(--ink-3); }
+
+.pill {
+  font-family: var(--mono); font-size: 0.64rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.09em;
+  padding: 0.18rem 0.5rem; border-radius: 2px; white-space: nowrap;
+}
+.pill.open { background: var(--open-soft); color: var(--open); }
+.pill.shut { background: var(--shut-soft); color: var(--shut); }
+.pill.soon { background: var(--accent-soft); color: var(--accent); }
+
+/* Programs */
+.progs { display: flex; flex-direction: column; gap: 1rem; }
+.prog {
+  background: var(--card); border: 1px solid var(--rule);
+  padding: 1.1rem 1.2rem; display: flex; flex-direction: column; gap: 0.7rem;
+}
+.prog-head { display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; align-items: baseline; }
+.prog-head h3 { margin-right: auto; }
+.prog-facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.75rem 1.2rem; border-top: 1px solid var(--rule); padding-top: 0.75rem;
+}
+.fact { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.fact dt { font-family: var(--mono); font-size: 0.63rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-3); }
+.fact dd { margin: 0; font-family: var(--mono); font-size: 0.92rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.prog p { color: var(--ink-2); font-size: 0.97rem; max-width: 42rem; }
+
+/* The two bets */
+.bets { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
+.bet { background: var(--card); border: 1px solid var(--rule); padding: 1.2rem; display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; }
+.bet.pick { border-color: var(--accent); border-width: 1px 1px 1px 4px; }
+.bet ul { margin: 0; padding-left: 1.1rem; color: var(--ink-2); font-size: 0.95rem; display: flex; flex-direction: column; gap: 0.3rem; }
+
+/* Steps */
+ol.steps { margin: 0; padding-left: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 0.9rem; }
+ol.steps li {
+  counter-increment: s; display: grid; grid-template-columns: 1.9rem 1fr; gap: 0.9rem; align-items: baseline;
+}
+ol.steps li::before {
+  content: counter(s, decimal-leading-zero);
+  font-family: var(--mono); font-size: 0.74rem; font-weight: 600; color: var(--accent);
+}
+ol.steps p { color: var(--ink-2); font-size: 0.96rem; margin-top: 0.15rem; }
+
+.foot { margin-top: 3.4rem; border-top: 1px solid var(--rule); padding-top: 1.1rem; color: var(--ink-3); font-size: 0.86rem; max-width: 42rem; }
+
+@media (max-width: 540px) {
+  .slot { grid-template-columns: 1fr; gap: 0.3rem; }
+  .slot-when { padding-top: 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="stamp">
+    <span class="eyebrow">Prepared 8 November 2026</span>
+    <span class="eyebrow">For Tejmul Movin</span>
+  </div>
+  <h1>Open source cannot save this placement season.</h1>
+  <p class="lede">It can do something else, and that thing is worth doing — but the calendar has to be said out loud first, because every program you named has already closed for 2026.</p>
+</header>
+
+<div class="verdict">
+  <span class="eyebrow">The short answer</span>
+  <p><strong>Do not slow the placement push.</strong> That is the thing with a real deadline. Every open-source stipend on this page pays out between May and September 2027, and the earliest application window opens in mid-January.</p>
+  <p><strong>Start contributing anyway, in the evenings, to exactly one project.</strong> Not for the stipend. For the thing that cost you the OpenHands referral: a maintainer wrote back to say he doesn't know you. One merged pull request in a 92,948-star repository fixes that, and it is two weeks of evenings, not three months.</p>
+  <p><strong>A merged PR is a resume line in this placement season</strong> — not in 2027. That is the near-term payoff, and it is the reason to start now rather than in January.</p>
+</div>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Section one</span>
+    <h2>The calendar, honestly</h2>
+    <p class="lede">What is shut, what opens when. Dates marked <span class="mono">projected</span> follow each programme's own pattern from this year and are not yet published.</p>
+  </div>
+
+  <div class="spine">
+
+    <div class="slot is-shut">
+      <div class="slot-when">Mar–Sep 2026</div>
+      <div class="slot-body">
+        <div class="slot-title"><h3>Google Summer of Code 2026</h3><span class="pill shut">finished</span></div>
+        <p class="slot-note">Applications ran 16–31 March, 18:00 UTC. 185 organisations took part. Coding ended 23 August; results 1 September. Nothing about it is reachable now.</p>
+      </div>
+    </div>
+
+    <div class="slot is-shut">
+      <div class="slot-when">Apr–Sep 2026</div>
+      <div class="slot-body">
+        <div class="slot-title"><h3>European Summer of Code 2026</h3><span class="pill shut">finished</span></div>
+        <p class="slot-note">This is the ESoC you were thinking of — real, paid, open to applicants worldwide even though the hubs are European. Batch 1 opened 18 February, batch 2 on 1 April, and the last projects closed 30 April at 18:00 UTC.</p>
+      </div>
+    </div>
+
+    <div class="slot is-shut">
+      <div class="slot-when">Aug 2026</div>
+      <div class="slot-body">
+        <div class="slot-title"><h3>Outreachy — December 2026 round</h3><span class="pill shut">finished</span></div>
+        <p class="slot-note">Applications were taken in early-to-mid August for internships beginning next month.</p>
+      </div>
+    </div>
+
+    <div class="slot">
+      <div class="slot-when">Nov 2026<br>now</div>
+      <div class="slot-body">
+        <div class="slot-title"><h3>Nothing is open</h3><span class="pill soon">the gap</span></div>
+        <p class="slot-note">There is no mentorship programme accepting applications this month. This gap is not wasted time — it is the window in which the contributions that win a January application get made.</p>
+      </div>
+    </div>
+
+    <div class="slot">
+      <div class="slot-when">mid-Jan 2027</div>
+      <div class="slot-body">
+        <div class="slot-title"><h3>LFX Mentorship, Spring term</h3><span class="pill open">first window</span></div>
+        <p class="slot-note">Projects are listed mid-January and applications stay open about four weeks. Term runs 1 March – 31 May. This is the earliest door, and the only programme that runs three times a year rather than once.</p>
+      </div>
+    </div>
+
+    <div class="slot">
+      <div class="slot-when">Feb 2027<br><span class="mono">projected</span></div>
+      <div class="slot-body">
+        <div class="slot-title"><h3>Outreachy — May 2027 round</h3></div>
+        <p class="slot-note">The May 2026 round took initial applications 6–13 February, a one-week window. Check eligibility before planning around it (see below).</p>
+      </div>
+    </div>
+
+    <div class="slot">
+      <div class="slot-when">Feb–Mar 2027<br><span class="mono">projected</span></div>
+      <div class="slot-body">
+        <div class="slot-title"><h3>GSoC 2027 and ESoC 2027</h3></div>
+        <p class="slot-note">GSoC announces its organisations in mid-February and takes contributor applications for about two weeks in mid-to-late March. ESoC opened its first batch on 18 February this year. Both pay out in September.</p>
+      </div>
+    </div>
+
+    <div class="slot">
+      <div class="slot-when">Apr–May 2027<br><span class="mono">projected</span></div>
+      <div class="slot-body">
+        <div class="slot-title"><h3>C4GT Dedicated Mentoring Program</h3></div>
+        <p class="slot-note">India's own, on Digital Public Goods. Historically results in late May and coding from June to September, at 20 hours a week.</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Section two</span>
+    <h2>What each one actually pays</h2>
+    <p class="lede">Ranked by what they are worth to you specifically — a final-year student in India who needs a role, not a hobby.</p>
+  </div>
+
+  <div class="progs">
+
+    <article class="prog">
+      <div class="prog-head">
+        <h3>LFX Mentorship</h3>
+        <span class="pill soon">apply first</span>
+      </div>
+      <p>The Linux Foundation and CNCF projects. Three terms a year means three attempts instead of one, which matters more than the headline stipend. Kubernetes, Envoy, Prometheus and a hundred others.</p>
+      <dl class="prog-facts">
+        <div class="fact"><dt>Stipend</dt><dd>$1,000–6,600</dd></div>
+        <div class="fact"><dt>India, roughly</dt><dd>~$1,300</dd></div>
+        <div class="fact"><dt>Length</dt><dd>12 weeks</dd></div>
+        <div class="fact"><dt>Next window</dt><dd>mid-Jan</dd></div>
+      </dl>
+      <p>The base is $6,000, adjusted down by your country's purchasing-power index. Verify the India figure on the portal before you count on it.</p>
+    </article>
+
+    <article class="prog">
+      <div class="prog-head">
+        <h3>Google Summer of Code</h3>
+      </div>
+      <p>The one with the name recognition, and the one your friend's GSoC selection came from. One shot a year, in March. Selection depends almost entirely on contributions you made <em>before</em> you applied — which is the whole argument for starting now.</p>
+      <dl class="prog-facts">
+        <div class="fact"><dt>Stipend</dt><dd>paid, varies</dd></div>
+        <div class="fact"><dt>Orgs in 2026</dt><dd>185</dd></div>
+        <div class="fact"><dt>Length</dt><dd>12 weeks</dd></div>
+        <div class="fact"><dt>Next window</dt><dd>Mar 2027</dd></div>
+      </dl>
+      <p>For AI and ML, the umbrella organisations are where the volume is: ML4SCI and HumanAI each run many projects, and ML4SCI listed agentic-AI work this year. Kubeflow, OpenVINO and Kornia also took part.</p>
+    </article>
+
+    <article class="prog">
+      <div class="prog-head">
+        <h3>Outreachy</h3>
+      </div>
+      <p>The highest flat stipend on this page, and the one with a condition attached. It is for people who face under-representation, systemic bias or discrimination in tech <em>where they live</em>. There is no list of eligible groups — you answer in your own words and they decide.</p>
+      <dl class="prog-facts">
+        <div class="fact"><dt>Stipend</dt><dd>$7,000</dd></div>
+        <div class="fact"><dt>Length</dt><dd>13 weeks</dd></div>
+        <div class="fact"><dt>Rounds</dt><dd>2 a year</dd></div>
+        <div class="fact"><dt>Next window</dt><dd>Feb 2027</dd></div>
+      </dl>
+      <p>Read the eligibility page yourself before you build a plan on it. Do not assume either way.</p>
+    </article>
+
+    <article class="prog">
+      <div class="prog-head">
+        <h3>C4GT — Code for GovTech</h3>
+      </div>
+      <p>Indian, on government digital infrastructure. Less international signal than GSoC, but the least competitive of the four and a genuine credential here.</p>
+      <dl class="prog-facts">
+        <div class="fact"><dt>Stipend</dt><dd>₹1,00,000</dd></div>
+        <div class="fact"><dt>Commitment</dt><dd>20 hrs/week</dd></div>
+        <div class="fact"><dt>Length</dt><dd>~3 months</dd></div>
+        <div class="fact"><dt>Next window</dt><dd>Apr 2027</dd></div>
+      </dl>
+    </article>
+
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Section three</span>
+    <h2>One project. Which one.</h2>
+    <p class="lede">You asked to stop spreading across fifty communities and pick one thing. Agreed — but there are two different bets hiding inside "contribute to open source", and they do not pay the same way.</p>
+  </div>
+
+  <div class="bets">
+
+    <article class="bet pick">
+      <div class="prog-head">
+        <h3>OpenHands</h3>
+        <span class="pill soon">the pick</span>
+      </div>
+      <p style="color: var(--ink-2); font-size: 0.95rem;">Job-shaped. No stipend, but the shortest path to someone deciding you are worth hiring.</p>
+      <ul>
+        <li>A maintainer has already replied to you. That is the hardest part, and it is done.</li>
+        <li>AI coding agents — your actual domain, not a detour into something you'd have to learn first.</li>
+        <li>21 open good-first-issues right now, in a repo with 92,948 stars.</li>
+        <li>Funded: $23.8M raised, and their last posted engineering role stated $170K–$275K.</li>
+        <li>A merged PR here is usable in your cold emails <em>next month</em>, not next September.</li>
+      </ul>
+    </article>
+
+    <article class="bet">
+      <h3>A CNCF or GSoC organisation</h3>
+      <p style="color: var(--ink-2); font-size: 0.95rem;">Stipend-shaped. Real money, but a cold start and a long wait.</p>
+      <ul>
+        <li>Nobody there knows you. You would be starting the Engel conversation again from zero.</li>
+        <li>Contributions compound into an LFX or GSoC application — OpenHands contributions do not, because it is a company and takes part in neither.</li>
+        <li>First payout is May 2027 at the earliest.</li>
+        <li>Worth doing <em>after</em> you are placed, or in January if placements have resolved by then.</li>
+      </ul>
+    </article>
+
+  </div>
+
+  <p style="margin-top: 1.2rem; color: var(--ink-2); max-width: 42rem;">If placements are still unresolved in January, switch the evening hours to an LFX project and apply. The two bets are sequential, not simultaneous — picking both at once is how the fifty-communities problem comes back.</p>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Section four</span>
+    <h2>This week</h2>
+  </div>
+
+  <ol class="steps">
+    <li>
+      <div>
+        <h3>Send Engel the reply.</h3>
+        <p>Name a specific issue in it. The whole value of that thread is that a maintainer already knows your name.</p>
+      </div>
+    </li>
+    <li>
+      <div>
+        <h3>Read the issue properly before you touch code.</h3>
+        <p><a href="https://github.com/OpenHands/OpenHands/issues/15532" target="_blank" rel="noreferrer">#15532</a>, consolidating the duplicated <span class="mono">src/context/</span> and <span class="mono">src/contexts/</span> directories, is mechanical and hard to get wrong. <a href="https://github.com/OpenHands/OpenHands/issues/15567" target="_blank" rel="noreferrer">#15567</a> is the backup.</p>
+      </div>
+    </li>
+    <li>
+      <div>
+        <h3>Run the project locally and make it work before you change anything.</h3>
+        <p>Most first-time contributors fail here, not at the code. Budget an evening for setup alone.</p>
+      </div>
+    </li>
+    <li>
+      <div>
+        <h3>One PR. Small, complete, with the issue number in the description.</h3>
+        <p>A tidy small PR that merges beats an ambitious one that stalls in review. The goal this month is <em>merged</em>, not impressive.</p>
+      </div>
+    </li>
+    <li>
+      <div>
+        <h3>Keep applying, at full speed, the entire time.</h3>
+        <p>This is the part that is easy to let slip once open source starts feeling like progress. It is the part with the deadline.</p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<p class="foot">
+  Sources: the GSoC 2026 timeline and organisation announcement, the ESoC 2026 project repository, the Outreachy rounds page, the Linux Foundation LFX mentorship timeline and stipend documentation, and past C4GT programme listings. Dates marked projected are inferred from each programme's 2026 cycle and must be confirmed on the official page before you plan around them. Stipend figures change year to year; treat every number here as a reason to check, not as a quote.
+</p>
+
+</div>
+
+</body>
+</html>
