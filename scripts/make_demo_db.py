@@ -88,74 +88,32 @@ MAX_MB = 235
 _JSON_COLUMNS = (("job", "selection_why"), ("kg_node", "props"), ("company", "field_meta"))
 
 
-#: 2026-11-09: the snapshot outgrew the deployed disk. With every company in it builds to
-#: 271 MB against a 235 MB ceiling (AppSail unpacks onto 256 MB and never comes up), and
-#: no further trim reached the cap without gutting something a visitor came to see — the
-#: knowledge graph alone is 146 MB of it. So the public exhibit is cut to the two cities
-#: the pipeline actually works (focus.cities in config.yaml). Kept regardless: every
-#: company on a hand-picked list, because _FINISH re-attaches those by name and refuses to
-#: write a snapshot whose list came up short. The working database is untouched — this
-#: runs on the copy, and the local dashboard still shows everything.
-FOCUS_CITY_LIKE = ("%bengal%", "%bangal%", "%blr%", "%hyder%")
-
-#: table -> the column naming the company it belongs to. Rows whose company goes also go,
-#: or the API serves jobs and leads pointing at a company that is no longer there.
-_BY_COMPANY = ("job", "contact", "email", "event", "email_proposal", "companydecision",
-               "decisionoutcome", "dailypick", "mixerscrape", "shortlistfill",
-               "interview_note", "company_channel", "extraction_reject", "extraction_write")
+#: 2026-11-09: the snapshot outgrew the deployed disk — 271 MB against the 235 MB ceiling
+#: that exists because AppSail unpacks it onto a 256 MB disk and otherwise never comes up.
+#: The companies are NOT what is heavy. Measured on that build: the knowledge graph is
+#: 146 MB of the 271 — kg_node 56, kg_edge 26, its search index 38, its indexes 26 — and
+#: 67,000 of its 76,000 nodes are one-per-row mirrors of contacts and roles that the
+#: snapshot already carries as real tables. So the graph's row-level mirror goes and every
+#: company stays. What survives: the context layer (the project's own nodes) and the
+#: company nodes, which is what "similar companies" walks. Warm paths through a named
+#: contact are the price; they are a panel, and a company that is missing is the product.
+_GRAPH_MIRRORS = ("contact", "job", "email")
 
 
-def focus_only(con: sqlite3.Connection, existing: set[str]) -> dict:
-    """Keep the focus-city companies and everything hanging off them; drop the rest."""
-    if "company" not in existing:
+def slim_graph(con: sqlite3.Connection, existing: set[str]) -> dict:
+    """Drop the graph's per-row mirror of tables the snapshot already carries in full."""
+    if "kg_node" not in existing:
         return {}
-    where = " or ".join(["lower(coalesce(city,'')) like ?"] * len(FOCUS_CITY_LIKE))
-    before = con.execute("select count(*) from company").fetchone()[0]
-    con.execute("create temp table keep_company (id integer primary key)")
-    con.execute(f"insert into keep_company(id) select id from company "
-                f"where list_key is not null or ({where})", FOCUS_CITY_LIKE)
-    kept = con.execute("select count(*) from keep_company").fetchone()[0]
-    out = {"companies_before": before, "companies_kept": kept, "companies_dropped": before - kept}
-
-    for table in _BY_COMPANY:
-        if table not in existing:
-            continue
-        cols = {r[1] for r in con.execute(f'pragma table_info("{table}")')}
-        if "company_id" not in cols:
-            continue
-        cur = con.execute(f'delete from "{table}" where company_id is not null '
-                          f'and company_id not in (select id from keep_company)')
-        if cur.rowcount:
-            out[f"{table}_dropped"] = cur.rowcount
-    con.execute("delete from company where id not in (select id from keep_company)")
-
-    # Rows keyed on a contact that has gone (csv_batch_contact, and anything like it).
-    if "contact" in existing:
-        for table in existing:
-            if table in ("contact",) or table.startswith("kg_"):
-                continue
-            cols = {r[1] for r in con.execute(f'pragma table_info("{table}")')}
-            if "contact_id" not in cols:
-                continue
-            con.execute(f'delete from "{table}" where contact_id is not null '
-                        f'and contact_id not in (select id from contact)')
-
-    # The graph's data layer mirrors those same rows; its context layer is about the
-    # project, not a company, so it stays whole.
-    if "kg_node" in existing:
-        for ref_table in ("company", "job", "contact"):
-            if ref_table not in existing:
-                continue
-            con.execute(f"delete from kg_node where ref_table = ? and ref_id is not null "
-                        f"and ref_id not in (select id from \"{ref_table}\")", (ref_table,))
-        if "kg_edge" in existing:
-            cur = con.execute("delete from kg_edge where src not in (select id from kg_node) "
-                              "or dst not in (select id from kg_node)")
-            out["kg_edges_dropped"] = cur.rowcount
-        out["kg_nodes_left"] = con.execute("select count(*) from kg_node").fetchone()[0]
+    out = {"kg_nodes_before": con.execute("select count(*) from kg_node").fetchone()[0]}
+    for ref_table in _GRAPH_MIRRORS:
+        con.execute("delete from kg_node where ref_table = ?", (ref_table,))
+    if "kg_edge" in existing:
+        cur = con.execute("delete from kg_edge where src not in (select id from kg_node) "
+                          "or dst not in (select id from kg_node)")
+        out["kg_edges_dropped"] = cur.rowcount
     if "kg_fts" in existing:
         con.execute("delete from kg_fts where id not in (select id from kg_node)")
-    con.execute("drop table keep_company")
+    out["kg_nodes_left"] = con.execute("select count(*) from kg_node").fetchone()[0]
     con.commit()
     return out
 
@@ -212,7 +170,7 @@ def build(src: Path, out: Path) -> dict:
             con.execute(f'delete from "{table}"')
             cleared[table] = before
         con.commit()
-        focused = focus_only(con, existing)
+        focused = slim_graph(con, existing)
         masked = mask_addresses(con)
         slimmed = slim(con, existing)
         # VACUUM outside a transaction; without it the pages are freed but the file is not.
