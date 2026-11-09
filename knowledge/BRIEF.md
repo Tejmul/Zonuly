@@ -1,6 +1,6 @@
 # ZoNuLy — context brief
 
-> Generated 2026-11-09T02:18 from the knowledge graph (75313 nodes, 241911 edges). Do not edit — run `python scripts/run.py kg brief`.
+> Generated 2026-11-09T21:34 from the knowledge graph (76395 nodes, 245214 edges). Do not edit — run `python scripts/run.py kg brief`.
 > To query: `kg search <text>` · `kg show <id>` · `kg path <a> <b>` · `kg compose "<problem>"` · to remember: `kg note "<what changed>" --about <id>`.
 
 ## The problem
@@ -19,9 +19,9 @@ An engineer on site in the US/UK/Germany costs ₹1.5–2 crore a year; the same
 
 ## Where the pipeline is right now (live)
 
-- **12138** jobs from 19 sources (careers 3193, ashby 2761, greenhouse 2322, wellfound 1515, linkedin-jobs 466, freehire 321, hn 320, workable 306, lever 259, wwr 221, instahyre 185, darwinbox 50, remoteok 50, jobfound 43, smartrecruiters 38, yc 38, breezy 29, recruitee 14, bamboohr 7)
-- **453** scored · status: high_match 38, new 11685, scored 415
-- **7048** companies · **54043** contacts (pattern-guessed 670, published 18, scraped 48086, verified 5269)
+- **12199** jobs from 19 sources (careers 3223, ashby 2766, greenhouse 2325, wellfound 1515, linkedin-jobs 470, freehire 321, hn 320, workable 319, lever 261, wwr 221, instahyre 188, darwinbox 50, remoteok 50, jobfound 43, smartrecruiters 38, yc 38, breezy 29, recruitee 15, bamboohr 7)
+- **453** scored · status: high_match 38, new 11746, scored 415
+- **7078** companies · **55003** contacts (pattern-guessed 670, published 18, scraped 48898, verified 5417)
 - emails: approved 44, draft 1, failed 19, rejected 333, replied 2, sent 43 · replies: closed 1, negative 2, neutral 3, positive 1
 - top matches: [85] Backend Engineer — Intern (4 months, in-office) @ ethereal labs (job:3707); [85] Junior AI Engineer @ Silstone Health (job:3902); [85] Data Science Engineer Intern @ Eshal AI (job:3998); [78] Founding Software Engineer @ *Strello Health (job:1219); [78] Founding Full-Stack Engineer @ Arusto (job:3043); [78] Junior AI Engineer @ Planso (job:3085); [78] AI Engineer @ Frequency.cx (job:3129); [78] Founding Engineer for AI Consumer App @ Scalio (job:3592)
 
