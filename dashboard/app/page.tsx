@@ -387,6 +387,8 @@ function SiteHeader() {
   const [solid, setSolid] = useState(false);
   const { data: me } = useMe();
   const signedIn = Boolean(me?.user);
+  // Shown once a way to sign in actually works, so the live page never offers a dead button.
+  const canSignIn = Boolean(me && (me.methods.email || me.methods.google));
 
   useEffect(() => {
     const onScroll = () => setSolid(window.scrollY > 24);
@@ -418,7 +420,7 @@ function SiteHeader() {
             >
               Open dashboard
             </Link>
-          ) : (
+          ) : canSignIn ? (
             <>
               <Link
                 href="/login"
@@ -433,7 +435,7 @@ function SiteHeader() {
                 Sign up
               </Link>
             </>
-          )}
+          ) : null}
           <ThemeToggle />
         </div>
       </div>
