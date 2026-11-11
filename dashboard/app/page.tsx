@@ -15,6 +15,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
 import { ArrowRight, CircleSlash, Network, ShieldCheck } from "lucide-react";
 import { useApi } from "@/lib/api";
+import { useMe } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme";
 import { Logo } from "@/components/logo";
 import { Rights } from "@/components/rights";
@@ -384,6 +385,8 @@ export default function Landing() {
 
 function SiteHeader() {
   const [solid, setSolid] = useState(false);
+  const { data: me } = useMe();
+  const signedIn = Boolean(me?.user);
 
   useEffect(() => {
     const onScroll = () => setSolid(window.scrollY > 24);
@@ -408,6 +411,29 @@ function SiteHeader() {
           >
             Where it looks
           </Link>
+          {signedIn ? (
+            <Link
+              href="/dashboard"
+              className="ml-1 inline-flex h-9 cursor-pointer items-center rounded-md border border-current/30 px-3.5 text-[13px] font-medium transition-opacity hover:opacity-80"
+            >
+              Open dashboard
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="inline-flex h-9 cursor-pointer items-center rounded-md px-3 text-[13px] font-medium opacity-80 transition-opacity hover:opacity-100"
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/login?mode=signup"
+                className="ml-1 inline-flex h-9 cursor-pointer items-center rounded-md border border-current/30 px-3.5 text-[13px] font-medium transition-opacity hover:opacity-80"
+              >
+                Sign up
+              </Link>
+            </>
+          )}
           <ThemeToggle />
         </div>
       </div>

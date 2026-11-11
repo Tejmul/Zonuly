@@ -44,9 +44,38 @@ python3 -c "import gzip,shutil; shutil.copyfileobj(gzip.open('demo.db.gz','rb'),
 rm -f demo.db.gz 2>/dev/null || true
 export ZONULY_DB_PATH=/tmp/zonuly.db
 export ZONULY_PUBLIC=1
+# accounts live in the Catalyst Data Store: this file system is replaced on every deploy
+export ZONULY_ACCOUNTS=catalyst
 export PYTHONPATH="$PWD/vendor:$PWD"
 exec python3 -m uvicorn jobhunter.api:app --host 0.0.0.0 --port "${X_ZOHO_CATALYST_LISTEN_PORT:-9000}"
 """
+
+
+#: What sign-in needs on the deployed instance (jobhunter/accounts). Copied from the
+#: environment into app-config.json by the deploy workflow, from GitHub Actions secrets —
+#: only in CI, so a local build can never write a secret into a file that is committed.
+#: ZONULY_AUTH=1 is the switch that puts the data behind the login; until it is set, the
+#: site behaves as before even with everything else configured.
+AUTH_ENV = (
+    "ZONULY_AUTH", "ZONULY_SESSION_SECRET", "ZONULY_PUBLIC_URL", "ZONULY_MAIL_FROM",
+    "ZONULY_GOOGLE_CLIENT_ID", "ZONULY_GOOGLE_CLIENT_SECRET",
+    "ZONULY_SMTP_HOST", "ZONULY_SMTP_PORT", "ZONULY_SMTP_USER", "ZONULY_SMTP_PASSWORD",
+    "ZONULY_TURNSTILE_SITE_KEY", "ZONULY_TURNSTILE_SECRET", "ZONULY_USERS_TABLE",
+)
+
+
+def _inject_env() -> list[str]:
+    import json
+    import os
+
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return []
+    cfg_path = APPSAIL / "app-config.json"
+    cfg = json.loads(cfg_path.read_text())
+    env = {k: os.environ[k].strip() for k in AUTH_ENV if os.environ.get(k, "").strip()}
+    cfg["env_variables"] = {**(cfg.get("env_variables") or {}), **env}
+    cfg_path.write_text(json.dumps(cfg, indent=2) + "\n")
+    return sorted(env)
 
 
 def _requirements() -> list[str]:
@@ -98,6 +127,10 @@ def main() -> None:
     for bad in (".env", "secrets", "jobhunter.db", "profile"):
         if (BUILD / bad).exists():
             sys.exit(f"refusing: {bad} ended up in the build")
+
+    injected = _inject_env()
+    if injected:
+        print("deploy env:", ", ".join(injected))  # names only, never values
 
     size = sum(p.stat().st_size for p in BUILD.rglob("*") if p.is_file())
     print(f"{BUILD}  {size / 1_048_576:.0f} MB  ({len(reqs)} packages, excluded: {', '.join(sorted(EXCLUDE))})")

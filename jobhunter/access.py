@@ -35,6 +35,21 @@ from jobhunter import secret
 PUBLIC = os.environ.get("ZONULY_PUBLIC", "").strip().lower() in {"1", "true", "yes", "on"}
 _KEY = secret("ZONULY_API_KEY")
 
+#: 2026-11-12: the deployed instance shows its landing page to everyone and its data only
+#: to someone signed in (jobhunter/accounts). Off unless ZONULY_AUTH is set, so the gate is
+#: switched on deliberately once sign-in works, not by the first deploy that carries it.
+AUTH_REQUIRED = PUBLIC and os.environ.get("ZONULY_AUTH", "").strip().lower() in {"1", "true", "yes", "on"}
+
+#: The cookie a signed-in browser carries. Signed and checked on every request
+#: (accounts/tokens.py) — no lookup, so browsing never waits on the account store.
+SESSION_COOKIE = "zonuly_session"
+
+#: Signing in, out, and "who am I" must be reachable by someone who is not signed in yet.
+_AUTH_PREFIX = "/api/auth/"
+
+#: What a visitor who has not signed in may still read: the landing page's counters.
+_OPEN_WHEN_GATED = ("/api/overview",)
+
 #: Methods a visitor may use. Everything else mutates something.
 _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
@@ -95,12 +110,42 @@ def is_operator(headers) -> bool:
     return bool(offered) and hmac.compare_digest(offered, _KEY)
 
 
+def session_user(headers) -> dict | None:
+    """The signed-in visitor, from the session cookie — or None. Verified, not trusted."""
+    raw = headers.get("cookie") or ""
+    if SESSION_COOKIE not in raw:
+        return None
+    from http.cookies import CookieError, SimpleCookie
+
+    from jobhunter.accounts import tokens
+
+    jar = SimpleCookie()
+    try:
+        jar.load(raw)
+    except CookieError:
+        return None
+    morsel = jar.get(SESSION_COOKIE)
+    return tokens.read_session(morsel.value) if morsel else None
+
+
+def is_open_when_gated(method: str, path: str) -> bool:
+    """Readable without signing in, even with the gate up."""
+    return path in _ALWAYS or path.startswith(_AUTH_PREFIX) or (
+        method in _READ_METHODS and path in _OPEN_WHEN_GATED
+    )
+
+
 def refusal(method: str, path: str, headers) -> tuple[int, str] | None:
     """`(status, detail)` if this request must be refused, else None."""
     if not PUBLIC or is_operator(headers):
         return None
     if path in _ALWAYS:
         return None
+    # Signing in is a POST, and must get past the read-only rule below.
+    if path.startswith(_AUTH_PREFIX):
+        return None
+    if AUTH_REQUIRED and not is_open_when_gated(method, path) and session_user(headers) is None:
+        return 401, "Sign in to see this."
     if method not in _READ_METHODS:
         return (
             403,
@@ -148,4 +193,5 @@ def redact_email(row: dict) -> dict:
 
 def status() -> dict:
     """Reported by /api/health so the dashboard can say so on screen."""
-    return {"public": PUBLIC, "read_only": PUBLIC, "operator_key_set": bool(_KEY)}
+    return {"public": PUBLIC, "read_only": PUBLIC, "operator_key_set": bool(_KEY),
+            "auth_required": AUTH_REQUIRED}

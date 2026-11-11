@@ -36,7 +36,15 @@ def _client(url: str | None, db: Path | None):
         return TestClient(app)
     import httpx
 
-    return httpx.Client(base_url=url.rstrip("/"), timeout=60, follow_redirects=True)
+    # Behind the login gate, sign in as the API itself (jobhunter/accounts/tokens.py);
+    # without the secret the checks run as a visitor, as they always have.
+    cookies = {}
+    if os.environ.get("ZONULY_SESSION_SECRET"):
+        from jobhunter import access
+        from jobhunter.accounts import tokens
+
+        cookies = {access.SESSION_COOKIE: tokens.internal_session()}
+    return httpx.Client(base_url=url.rstrip("/"), timeout=60, follow_redirects=True, cookies=cookies)
 
 
 def run(url: str | None, db: Path | None, dashboard: str | None) -> list[str]:

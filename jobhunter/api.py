@@ -112,6 +112,8 @@ app.add_middleware(
 # to a few hundred KB. Outermost, so every response — refusals included — is compressed.
 app.add_middleware(GZipMiddleware, minimum_size=2048)
 
+# Accounts: sign in with an emailed code or Google -> /api/auth/* (jobhunter/accounts)
+app.include_router(__import__("jobhunter.accounts.routes", fromlist=["router"]).router)
 # Web research / data acquisition (Agent Reach backends) -> /api/research/*
 app.include_router(research_router)
 # Campaign start -> n8n webhook (the email automation lives there) -> /api/campaigns/*
