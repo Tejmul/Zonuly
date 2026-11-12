@@ -20,7 +20,7 @@ export default function Architecture() {
           ["Storage", "SQLite (WAL) via SQLModel", "One file, no server, survives a laptop (D9). Columns are added in place by ensure_columns — no migration tool."],
           ["API", "FastAPI + uvicorn, ~100 routes", "Long work runs on background threads and is polled as a task."],
           ["Scheduling", "macOS launchd agents + in-process APScheduler", "launchd survives sleep and restarts; the API’s scheduler handles the daily scrape and reply checks."],
-          ["Public copy", "Vercel (dashboard) · Catalyst AppSail (API) · demo.db.gz", "A read-only window onto a masked snapshot — see Deployment."],
+          ["Public copy", "Vercel (dashboard) · Catalyst AppSail (API) · demo.db.gz", "zonuly.tejmul.in: a read-only copy over a masked snapshot, behind a sign-in — see Deployment and Sign in & accounts."],
           ["Models", "OpenRouter (aliases cheap / judge / writer)", "No local model on an 8 GB machine (D18). Every call is budget-checked and costed."],
           ["Graph", "SQLite tables + FTS5 + NetworkX", "The project’s memory in the same file as the data (D10)."],
           ["Dashboard", "Next.js 16 · React 19 · Tailwind 4 · GSAP · d3-force", "A fast, dense, black-and-white instrument over the API."],
@@ -74,7 +74,7 @@ export default function Architecture() {
         mono={[0]}
         rows={[
           ["scrapers/", "One module per source, each exposing fetch(http, companies) → RawJob list: Greenhouse, Lever, Ashby, HN, RemoteOK, WWR, YC, Wellfound, careers pages, funding RSS, India boards."],
-          ["contacts/", "The people and address waterfall: GitHub commits, team pages, public LinkedIn, public mentions, address patterns, MX checks, Hunter, role classes, affiliation."],
+          ["contacts/", "The people and address waterfall: GitHub commits, team pages, public LinkedIn, public mentions, address proving (check-if-email-exists; pattern filling is off), Hunter, role classes, affiliation."],
           ["outreach/", "Research → compose → gates → review → ledger → send → track replies → follow up → schedule → learn."],
           ["research/", "Data acquisition only (search, page read, GitHub, Reddit, YouTube), routed across ordered backends with a 24 h cache. Never writes pipeline tables."],
           ["actors/", "“Our own Apify”: LinkedIn guest-page actors with a run ledger, datasets, a page cache and a per-host circuit breaker; plus the Apify People-tab source."],
@@ -91,7 +91,7 @@ export default function Architecture() {
           ["Exa", "Company discovery, funding facts, one people search per company", "100 searches a day"],
           ["GitHub API", "Commit emails, org members, recent committers", "5,000 / hour with a token, reserves kept"],
           ["Apify", "A company’s LinkedIn People tab; the mixer’s LinkedIn and Naukri job ads", "$0.60 / day — the $19 Starter credit over a month; the mixer may use $0.05 of it"],
-          ["Hunter.io", "Learning address patterns", "25 lookups / month (currently off: no key)"],
+          ["Hunter.io", "Address lookups (pattern filling is off since 30 Oct 2026)", "25 lookups / month (currently off: no key)"],
           ["scrape.do", "levels.fyi pay pages", "120 / day · 1,000 / month"],
           ["Gmail", "Sending and reading replies", "25 / day by our own cap"],
         ]}

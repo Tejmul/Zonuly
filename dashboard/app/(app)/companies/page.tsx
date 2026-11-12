@@ -112,10 +112,11 @@ function Companies() {
   );
   const [open, setOpen] = useState<number | null>(null);
   const [city, setCity] = useState<City | "all">("all");
-  // Complete companies are the page; the rest are "being filled", listed with what each
-  // one still lacks. Fetched only when the tab is opened.
-  const [tab, setTab] = useState<"complete" | "filling">(wanted === "filling" ? "filling" : "complete");
-  const filling = useApi<FillingPayload>(tab === "filling" ? "/api/companies/filling" : null);
+  // 2026-11-12: the page opens on every company we track — complete ones first, then the ones
+  // still being filled with what each lacks — so a visitor sees the whole registry, not 1k of it.
+  type Tab = "all" | "complete" | "filling";
+  const [tab, setTab] = useState<Tab>(wanted === "filling" ? "filling" : wanted === "complete" ? "complete" : "all");
+  const filling = useApi<FillingPayload>(tab === "complete" ? null : "/api/companies/filling?limit=10000");
 
   const counts = useMemo(() => {
     const cs = data?.companies ?? [];
@@ -155,6 +156,9 @@ function Companies() {
   if (error && !data) return <div className="plate"><ErrorNote message={error} onRetry={reload} /></div>;
   if (!data) return <div className="plate"><Loading label="Reading the registry" rows={10} /></div>;
   const meaning = VIEWS.find((v) => v.key === view)!.meaning;
+  const complete = data.stats?.shown_complete ?? data.companies.length;
+  const beingFilled = data.stats?.being_filled ?? filling.data?.total ?? 0;
+  const tracked = complete + beingFilled;
 
   return (
     <div ref={root} className="space-y-5">
@@ -162,8 +166,12 @@ function Companies() {
         <div>
           <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-[-0.02em]">Companies</h1>
           <p className="mt-1 max-w-[62ch] text-[12.5px] leading-relaxed text-ink-2">
-            {(data.stats?.companies ?? data.companies.length).toLocaleString()} companies, one row each. Pick a view; the line under it says what
-            the view means.
+            <span className="tnum font-medium text-ink">{tracked.toLocaleString()}</span> companies tracked —{" "}
+            <span className="tnum">{complete.toLocaleString()}</span> complete,{" "}
+            <span className="tnum">{beingFilled.toLocaleString()}</span> still being filled.
+            {data.stats?.scraped_all ? (
+              <> {data.stats.scraped_all.toLocaleString()} scraped in all; the rest are duplicates, junk names or below the ₹20 LPA pay bar.</>
+            ) : null}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -181,10 +189,11 @@ function Companies() {
       </header>
 
       {/* ------------------------------------------------------------ complete | being filled */}
-      <div className="flex items-center gap-1 border-b border-line" role="tablist" aria-label="Complete or being filled">
+      <div className="flex items-center gap-1 border-b border-line" role="tablist" aria-label="All, complete or being filled">
         {([
-          ["complete", "Complete", data.stats?.shown_complete ?? data.companies.length],
-          ["filling", "Being filled", data.stats?.being_filled ?? filling.data?.total ?? null],
+          ["all", "All companies", tracked],
+          ["complete", "Complete", complete],
+          ["filling", "Being filled", beingFilled],
         ] as const).map(([key, label, n]) => (
           <button
             key={key}
@@ -200,15 +209,18 @@ function Companies() {
           </button>
         ))}
         <span className="marginal ml-auto pb-1.5">
-          {tab === "complete"
-            ? "Website, a description that passes, hiring proof and a ready referrer with an address."
-            : "Not shown yet — each row says what is missing. The tick fills referrers first."}
+          {tab === "all"
+            ? "Complete companies first, then the ones still being filled."
+            : tab === "complete"
+              ? "Website, a description that passes, hiring proof and a ready referrer with an address."
+              : "Each row says what is still missing. The tick fills referrers first."}
         </span>
       </div>
 
       {tab === "filling" ? (
         <BeingFilled payload={filling.data} error={filling.error} onRetry={filling.reload} q={q} setQ={setQ} />
       ) : (<>
+      {tab === "all" && <h2 className="marginal">Complete · {complete.toLocaleString()}</h2>}
       {/* ------------------------------------------------------------ the views */}
       <div>
         <div className="flex flex-wrap items-center gap-2">
@@ -385,6 +397,12 @@ function Companies() {
         </div>
       </div>
 
+      {tab === "all" && (
+        <section className="space-y-3 pt-2">
+          <h2 className="marginal">Being filled · {beingFilled.toLocaleString()}</h2>
+          <BeingFilled payload={filling.data} error={filling.error} onRetry={filling.reload} q={q} setQ={setQ} searchable={false} />
+        </section>
+      )}
       </>)}
 
       <p className="max-w-[80ch] text-[11.5px] leading-relaxed text-ink-3">
@@ -398,9 +416,11 @@ function Companies() {
 
 /* ------------------------------------------------------------------ being filled */
 
-function BeingFilled({ payload, error, onRetry, q, setQ }: {
+function BeingFilled({ payload, error, onRetry, q, setQ, searchable = true }: {
   payload: FillingPayload | null; error: string | null; onRetry: () => void;
   q: string; setQ: (v: string) => void;
+  /** false under the complete table, whose search box already filters both lists */
+  searchable?: boolean;
 }) {
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -414,15 +434,17 @@ function BeingFilled({ payload, error, onRetry, q, setQ }: {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <label className="relative min-w-0 flex-1 sm:max-w-xs">
-          <Search size={13} className="absolute top-1/2 left-2.5 -translate-y-1/2 text-ink-3" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Find a company"
-            className="h-8 w-full rounded-md border border-line bg-surface pr-2 pl-7 text-[12px] placeholder:text-ink-3 focus:border-line-strong focus:outline-none"
-          />
-        </label>
+        {searchable && (
+          <label className="relative min-w-0 flex-1 sm:max-w-xs">
+            <Search size={13} className="absolute top-1/2 left-2.5 -translate-y-1/2 text-ink-3" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Find a company"
+              className="h-8 w-full rounded-md border border-line bg-surface pr-2 pl-7 text-[12px] placeholder:text-ink-3 focus:border-line-strong focus:outline-none"
+            />
+          </label>
+        )}
         {Object.entries(payload.missing_counts).map(([k, n]) => (
           <span key={k} className="chip tnum">{MISSING_LABEL[k] ?? k} · {n.toLocaleString()}</span>
         ))}

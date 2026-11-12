@@ -19,6 +19,7 @@ export const DOCS: DocSection[] = [
       { slug: "", title: "Overview", blurb: "What ZoNuLy is, what it does every day, and how the pieces fit.", keywords: "intro home about" },
       { slug: "why", title: "Why ZoNuLy exists", blurb: "The problem, the bet behind it, and the rules it never breaks.", keywords: "motivation problem referral fresher" },
       { slug: "quickstart", title: "Quickstart", blurb: "Install, run the API and the dashboard, and turn on the schedule.", keywords: "install setup run serve npm uv launchd" },
+      { slug: "accounts", title: "Sign in & accounts", blurb: "The deployed site behind a sign-in: an emailed code, a signed session, only your address stored.", keywords: "login sign in sign up account code otp email session cookie zonuly_auth catalyst data store zonulyusers google operator pages" },
     ],
   },
   {
@@ -50,8 +51,8 @@ export const DOCS: DocSection[] = [
       { slug: "decide", title: "The decision brain", blurb: "Which companies to spend the days on: P(offer), the shortlists, one company a day.", keywords: "decide p(offer) odds chance offer probability shortlist bengaluru hyderabad remote today pick verdict target fill first after dsa skip calibrate outcome brier laya" },
       { slug: "mixer", title: "The mixer", blurb: "Decide first, then buy: free layers narrow the field, Apify fills only what is missing.", keywords: "mixer apify linkedin naukri ads ambitionbox culture budget reserve layers paid" },
       { slug: "people", title: "People & referrers", blurb: "Finding the humans who could refer you — without your accounts.", keywords: "leads referrers github linkedin apify actors city" },
-      { slug: "email-addresses", title: "Email addresses", blurb: "Real addresses first, confirmed patterns second, never invented.", keywords: "pattern hunter mx verify guessed last resort real address" },
-      { slug: "outreach", title: "Drafting & the review gate", blurb: "How each ask is written, and why nothing leaves without your approval.", keywords: "draft email template review approve queue flags near-duplicate deliverability tech team" },
+      { slug: "email-addresses", title: "Email addresses", blurb: "An address goes on a lead only when it is proved. Nothing guessed, ever.", keywords: "proved verified safe reacher apify delivered port 25 guessed refused pattern off real address email_status" },
+      { slug: "outreach", title: "Drafting & the review gate", blurb: "How each ask is written, and the review gate every draft must pass before it can leave.", keywords: "draft email template review approve autoreview rules queue flags near-duplicate deliverability tech team" },
       { slug: "sending", title: "Sending & deliverability", blurb: "Gmail, the daily cap, pacing like a person, and the bounce brake.", keywords: "send gmail cap pacing warmup bounce spam per domain 48 hours 21 days block" },
       { slug: "replies", title: "Replies & follow-ups", blurb: "Reading what comes back, classifying it, and following up once.", keywords: "reply poll bounce follow-up calendar" },
     ],
@@ -59,7 +60,7 @@ export const DOCS: DocSection[] = [
   {
     title: "Using the dashboard",
     pages: [
-      { slug: "dashboard", title: "Dashboard tour", blurb: "Every page in the app, what it shows, and what you can do there.", keywords: "ui pages companies leads queue graph atlas best bets upskill dossier settings" },
+      { slug: "dashboard", title: "Dashboard tour", blurb: "Every page in the app, what it shows, and what you can do there.", keywords: "ui pages companies leads queue graph atlas best bets upskill communities dossier settings public site operator" },
       { slug: "upskill", title: "Upskill", blurb: "What is missing from your profile, ranked by the offers it is worth — added only with proof.", keywords: "learn skills gaps resume profile proof dsa practice expected offers" },
     ],
   },
@@ -76,7 +77,7 @@ export const DOCS: DocSection[] = [
     pages: [
       { slug: "runbook", title: "Runbook", blurb: "Day-to-day operation: logs, restarts, pausing, backups.", keywords: "ops logs restart pause backup" },
       { slug: "troubleshooting", title: "Troubleshooting", blurb: "Known failure modes and exactly what to do about each.", keywords: "error locked gmail 5.4.5 5.7.1 999 sleep blocked spam cap reserve" },
-      { slug: "deployment", title: "Deployment", blurb: "The public, read-only copy: Vercel in front, Catalyst AppSail behind, a masked snapshot.", keywords: "deploy vercel catalyst appsail snapshot demo.db public read-only zapi proxy cold start masked" },
+      { slug: "deployment", title: "Deployment", blurb: "zonuly.tejmul.in: Vercel in front, Catalyst AppSail behind, a masked snapshot, a sign-in in front of the data.", keywords: "deploy vercel catalyst appsail snapshot demo.db public read-only zapi proxy cold start masked sign in zonuly_auth secrets github workflow operator pages" },
     ],
   },
 ];

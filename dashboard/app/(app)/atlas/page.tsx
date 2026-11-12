@@ -28,9 +28,10 @@ import { useApi } from "@/lib/api";
 import { AtlasNet, MotionList } from "@/components/atlas-net";
 import { FundingCell } from "@/components/funding";
 import { ErrorNote, Loading } from "@/components/ui/primitives";
+import { useAccess } from "@/components/access";
 import {
   DEFAULT_WEIGHTS, DIM_LABEL, FIELDS, MUSTS, STAGES, TERMS, WHERE, WITHIN,
-  factsOf, filterAndCount, rank, resumeSignals, segmentHeat, suggestedFields,
+  choiceSignals, factsOf, filterAndCount, rank, resumeSignals, segmentHeat, suggestedFields,
   type Company, type FieldKey, type Filters, type Must, type Profile, type Stage,
   type TermKey, type Weights, type Where, type Within,
 } from "@/lib/atlas-model";
@@ -116,7 +117,10 @@ function place(c: Company): string {
 function AtlasView() {
   const params = useSearchParams();
   const net = useApi<Atlas>("/api/network");
-  const prof = useApi<Profile>("/api/profile");
+  // the public site has no resume (the API refuses /api/profile there): "You" is then read
+  // from what the visitor picks on this page instead
+  const { publicInstance } = useAccess();
+  const prof = useApi<Profile>(publicInstance ? null : "/api/profile");
 
   // The URL is read once, on arrival; after that the page owns the state and only
   // writes it back. Reading it on every render would race our own writes.
@@ -156,7 +160,10 @@ function AtlasView() {
   const counts = useMemo(() => filterAndCount(facts, filters), [facts, filters]);
   const ranked = useMemo(() => rank(counts.matched, chosen, wd), [counts.matched, chosen, wd]);
   const heat = useMemo(() => segmentHeat(ranked), [ranked]);
-  const inputs = useMemo(() => resumeSignals(prof.data ?? null), [prof.data]);
+  const inputs = useMemo(() => {
+    const fromResume = resumeSignals(prof.data ?? null);
+    return fromResume.length ? fromResume : choiceSignals({ fields: chosen, where, stages, must });
+  }, [prof.data, chosen, where, stages, must]);
 
   const shown = ranked.slice(0, limit);
   const order = shown.map((r) => r.company.id).join("|");

@@ -69,6 +69,10 @@ def _brief(job: Job, company: Company | None) -> dict:
             return json.loads(job.needs_brief)
         except json.JSONDecodeError:
             pass
+    # 2026-11-12: the public server never carries the resume (profile/ is not shipped), and
+    # building a brief reads it — the page answered 500. There, the stored briefs are the page.
+    if not PROFILE.exists():
+        return {}
     return needs.build_brief(job, company, context=None, synth=False)
 
 

@@ -93,7 +93,11 @@ def run(url: str | None, db: Path | None, dashboard: str | None) -> list[str]:
     companies = get("/api/companies?limit=5")
     if companies is not None and not companies:
         fails.append("/api/companies returned nothing")
-    get("/api/outreach/pipeline")
+    # 2026-11-12: the outreach pipeline is operator-only now; upskill is the page that broke on
+    # the public server (it read the resume, which is never shipped) — check it answers
+    upskill = get("/api/upskill")
+    if upskill is not None and not upskill.get("skills"):
+        fails.append("/api/upskill returned no skills")
 
     if dashboard:
         import httpx

@@ -24,6 +24,7 @@ import { ArrowRight, Briefcase, Building2, Download, Flag, Filter, MoreHorizonta
 import { API_BASE, useApi } from "@/lib/api";
 import { rise } from "@/components/anim";
 import { ErrorNote, Loading } from "@/components/ui/primitives";
+import { OperatorOnly } from "@/components/access";
 import { Delta, Gauge, Ribbon, Stack, Trend, type Row } from "@/components/charts";
 
 type Net = {
@@ -317,7 +318,10 @@ export default function Dashboard() {
         </Card>
       </section>
 
-      {/* ---------------------------------------------------- outreach */}
+      {/* ---------------------------------------------------- outreach
+          2026-11-12, after launch: the operator's own outbox (his sender, his sends today), so
+          it stays on his machine and leaves the public site. */}
+      <OperatorOnly>
       <Card>
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -352,6 +356,7 @@ export default function Dashboard() {
           </Link>
         </div>
       </Card>
+      </OperatorOnly>
 
       {/* ------------------------------------------------------- table */}
       <Card>

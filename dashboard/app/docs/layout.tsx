@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme";
-import { DocsMobileNav, DocsSearch, DocsSidebar, DocsToc } from "@/components/docs/shell";
+import { DocsBack, DocsMobileNav, DocsSearch, DocsSidebar, DocsToc } from "@/components/docs/shell";
 
 export const metadata: Metadata = {
   title: { default: "ZoNuLy Docs", template: "%s · ZoNuLy Docs" },
@@ -24,6 +24,16 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       </a>
       <header className="sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-3 px-4 sm:gap-5 sm:px-6">
+          {/* 2026-11-12: "from docs to overview there is no proper back button" — the way back
+              to the app is first in the bar, at every width, and reads as going back */}
+          <Link
+            href="/dashboard"
+            aria-label="Back to the app"
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-line px-2.5 text-[13px] font-medium text-ink-2 transition-colors hover:border-ink hover:text-ink"
+          >
+            <ArrowLeft size={14} />
+            <span className="hidden sm:inline">Back to the app</span>
+          </Link>
           <Link href="/docs" className="flex shrink-0 items-center gap-2.5">
             <Logo href={null} size={18} className="text-[14px]" />
             <span className="chip">DOCS</span>
@@ -31,12 +41,6 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
           <div className="min-w-0 flex-1">
             <DocsSearch />
           </div>
-          <Link
-            href="/dashboard"
-            className="hidden shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-[13px] text-ink-2 transition-colors hover:text-ink sm:inline-flex"
-          >
-            Open the app <ArrowUpRight size={13} />
-          </Link>
           <a
             href="https://github.com/Tejmul/Zonuly"
             target="_blank"
@@ -52,7 +56,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       <div className="mx-auto flex max-w-[1440px]">
         <DocsSidebar />
         <main className="flex min-w-0 flex-1 justify-center gap-12 px-4 sm:px-8 xl:px-12">
-          <article id="content" tabIndex={-1} className="min-w-0 max-w-[780px] flex-1 py-10 outline-none sm:py-14">{children}</article>
+          <article id="content" tabIndex={-1} className="min-w-0 max-w-[780px] flex-1 py-10 outline-none sm:py-14"><DocsBack />{children}</article>
           <DocsToc />
         </main>
       </div>

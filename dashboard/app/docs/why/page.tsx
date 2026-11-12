@@ -56,8 +56,9 @@ export default function Why() {
       <H2>What “done” looks like</H2>
       <P>
         You open the app once a day. Overnight it found companies you had never heard of, with an honest grade and a
-        sentence explaining it; found real people at the good ones with their role labelled; and wrote the emails. You
-        read the queue, fix the lines that don&apos;t sound like you, and approve. That is ten minutes.
+        sentence explaining it; found real people at the good ones with their role labelled; and wrote the emails. Since 26 Oct 2026 the review rules pass or refuse each draft and
+        write down why; you read the refusals, fix the stage that caused them, and look over what passed. That is ten
+        minutes.
       </P>
 
       <H2>The arithmetic</H2>

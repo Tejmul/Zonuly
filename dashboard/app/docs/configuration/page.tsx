@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { C, Callout, Doc, H2, H3, Lead, P, Table } from "@/components/docs/prose";
+import { A, C, Callout, Doc, H2, H3, Lead, P, Table } from "@/components/docs/prose";
 
 export const metadata: Metadata = { title: "Configuration" };
 
@@ -20,11 +20,11 @@ export default function Configuration() {
         rows={[
           ["send_mode", "gmail", "Live sending; the alternative writes .eml files to outbox/ (dry run)"],
           ["daily_send_cap", "25", "Emails per day, all kinds"],
-          ["guessed_daily_cap", "25", "Of those, to pattern-guessed addresses"],
+          ["guessed_daily_cap", "25", "Of those, to pattern-guessed addresses — idle since 2 Nov 2026: no guessed address reaches the database"],
           ["send_window / send_days", "[10, 19] / mon–fri", "Local hours and days mail may leave"],
           ["pacing", "max_per_run 1 · front_load false · jitter 0.35", "One per run, spread across the window"],
           ["warmup", "first 25 · step 5 · every 2", "Quota = min(cap, first + step × (day ÷ every))"],
-          ["bounce_brake", "window_days 7 · max_bounces 6", "Pause guessed addresses after too many bounces"],
+          ["bounce_brake", "window_days 7 · max_bounces 6", "Pause guessed addresses after too many bounces — idle for the same reason"],
           ["per_domain_daily_cap", "3", "Cold emails a day into one recipient domain"],
           ["spam_pause_hours · spam_block_cooldown_days", "48 · 21", "After a spam block: no cold mail at all · none into that domain"],
           ["followup_after_days / max_followups", "5 / 1", "One follow-up after five quiet days"],
@@ -32,7 +32,8 @@ export default function Configuration() {
           ["draft_expiry_days", "7", "Drafts older than this can’t be approved"],
           ["gate", "60–110 words · subject 2–8 words", "Review-flag thresholds"],
           ["compose", "structure direct_intro · 80–170 words", "Your template, its wordings and subjects"],
-          ["pattern_approval", "false", "Every email needs its own approval"],
+          ["pattern_approval", "false", "Approving a kind of email once — off"],
+          ["autoreview", "enabled true · min_quality 75", "The review gate by rules: every cold draft approved or rejected, reasons in logs/autoreview.log"],
           ["do_not_contact", "emails · domains · companies", "Never written to, whatever the pipeline finds"],
         ]}
       />
@@ -125,11 +126,13 @@ export default function Configuration() {
           ["GITHUB_TOKEN", "GitHub API at 5,000 / hour instead of 60"],
           ["EXA_API_KEY", "The metered Exa fallback"],
           ["APIFY_TOKEN", "Buying People tabs (and the mixer’s job ads) from Apify"],
-          ["HUNTER_API_KEY", "Hunter.io pattern lookups"],
+          ["HUNTER_API_KEY", "Hunter.io lookups (not set; pattern learning is off)"],
           ["SCRAPEDO_TOKEN", "scrape.do reads (levels.fyi)"],
           ["X_AUTH_TOKEN · X_CT0", "A throwaway X session — only with x_session_enabled"],
           ["ACTOR_PROXY", "Optional proxy for actor fetches"],
           ["ZONULY_PUBLIC · ZONULY_API_KEY", "Read-only public mode · the operator key that lifts it"],
+          ["ZONULY_AUTH · ZONULY_SESSION_SECRET", <>The sign-in gate on the deployed site and the key that signs sessions — see <A key="ac" href="/docs/accounts">Sign in &amp; accounts</A></>],
+          ["ZONULY_SMTP_* · ZONULY_MAIL_FROM · ZONULY_PUBLIC_URL · ZONULY_GOOGLE_*", "Sending sign-in codes · the site address · Google sign-in (not set)"],
           ["ZONULY_DB_PATH · ZONULY_CORS_ORIGINS · ZONULY_HOST · PORT", "Deployment overrides"],
         ]}
       />

@@ -31,16 +31,17 @@ const LINKS = [
   // the Slack/Discord rooms where a role is posted before it is listed (communities.py).
   // Found publicly and ranked; joining is his, by hand — the page says so.
   { href: "/communities", label: "Communities", icon: MessagesSquare },
-  { href: "/queue", label: "Queue", icon: Inbox },
-  // The send pipeline end to end — counts are public, so it is offered everywhere
-  { href: "/outreach", label: "Outreach", icon: Workflow },
+  { href: "/queue", label: "Queue", icon: Inbox, operatorOnly: true },
+  // The send pipeline end to end. 2026-11-12, after launch: the cold-email pages (queue,
+  // outreach, calendar, tracker) are the operator's own outbox and leave the public site.
+  { href: "/outreach", label: "Outreach", icon: Workflow, operatorOnly: true },
   // how each email would be written, before anything is drafted (outreach/proposal) — names real people
   { href: "/outreach/proposal", label: "Email proposal", icon: Mail, operatorOnly: true },
   // Replies is real inbound mail from real people; the public instance refuses it, so
   // the tab is not offered there rather than leading to a 403.
   { href: "/replies", label: "Replies", icon: MessageSquare, operatorOnly: true },
-  { href: "/calendar", label: "Calendar", icon: Calendar },
-  { href: "/tracker", label: "Tracker", icon: Send },
+  { href: "/calendar", label: "Calendar", icon: Calendar, operatorOnly: true },
+  { href: "/tracker", label: "Tracker", icon: Send, operatorOnly: true },
   // the hourly audit: is the scraping still filling fields, and is every channel answering?
   { href: "/health", label: "Scraping health", icon: Activity },
   // how all of it works — its own frame at /docs, with a sidebar and search
@@ -141,7 +142,8 @@ export function Sidebar() {
             </Link>
           );
         })}
-        <Link
+        {/* Settings is the operator's own setup — Gmail, config, his resume — so not on the public site */}
+        {!publicInstance && <Link
           href="/settings"
           aria-current={onSettings ? "page" : undefined}
           className={`mt-2 flex h-9 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors ${
@@ -150,7 +152,7 @@ export function Sidebar() {
         >
           <Settings size={16} strokeWidth={1.8} className="shrink-0" />
           Settings
-        </Link>
+        </Link>}
       </nav>
 
       {!publicInstance ? (
@@ -179,6 +181,7 @@ export function AppNav() {
   const links = useLinks();
   const review = useReviewCount();
   const { open, toggle } = useSidebar();
+  const { publicInstance } = useAccess();
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-paper/85 backdrop-blur-md">
@@ -199,12 +202,14 @@ export function AppNav() {
             <SearchBox />
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <Link
-              href="/settings"
-              className={`cursor-pointer rounded-md px-2 py-1.5 text-[13px] text-ink-2 transition-colors hover:text-ink sm:px-3 ${open ? "lg:hidden" : ""}`}
-            >
-              Settings
-            </Link>
+            {!publicInstance && (
+              <Link
+                href="/settings"
+                className={`cursor-pointer rounded-md px-2 py-1.5 text-[13px] text-ink-2 transition-colors hover:text-ink sm:px-3 ${open ? "lg:hidden" : ""}`}
+              >
+                Settings
+              </Link>
+            )}
             <AccountMenu />
             <ThemeToggle />
           </div>

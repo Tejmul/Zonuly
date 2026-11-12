@@ -15,10 +15,10 @@ export default function Guarantees() {
       <Table
         head={["Guarantee", "What it means", "How it is enforced"]}
         rows={[
-          ["Nothing sends without a human", "Every email is approved by you, as written, before it can leave.", <>The sender refuses any email that isn&apos;t <C key="a">approved</C>; approval is set only by the approve route; no scheduled job approves.</>],
+          ["Nothing sends without passing the gate", "Every email is approved, as written, before it can leave — since 26 Oct 2026 by written review rules, every verdict and its reason logged.", <>The sender refuses any email that isn&apos;t <C key="a">approved</C>. Approval is set by the review rules (<C key="r">outreach/autoreview.py</C>, reasons in <C key="l">logs/autoreview.log</C>) or by hand in the Queue — nowhere else.</>],
           ["Nothing is invented", "No project, number, title or connection that isn’t in the source material.", <>The composer leaves a slot empty rather than guess — and an empty required slot means <strong key="n">no email</strong>. Review flags mark unsupported claims.</>],
           ["25 a day, spent well", "Each send is irreversible and burns reputation; the daily cap is a budget.", <>A send ledger is checked inside the send itself; the cap is visible on every screen.</>],
-          ["Confidence is always shown", <>Every address is <C key="v">verified</C>, <C key="p">pattern-guessed</C> or <C key="s">scraped</C>.</>, "The label is never defaulted, merged or hidden; guessed addresses have their own daily cap and a bounce brake."],
+          ["Only proved addresses", "An address goes on a lead only when an SMTP check, the vendor’s check or a delivery proved it. Nothing guessed, ever.", <>A database hook (<C key="h">db._only_verified_addresses</C>) runs before every write: an unproved address is kept off the lead, a guessed one is refused outright and the refusal recorded. Where each address was found stays labelled.</>],
           ["One follow-up, at most", "A silent thread gets one polite nudge after five days — never two.", <>A per-thread flag is set when the follow-up is queued, and the follow-up goes back through review.</>],
           ["Data stays local", "Secrets never leave the laptop; every outbound call is logged, priced and capped.", "Keys live in .env (git-ignored). The resume and drafts are sent to OpenRouter models, by design."],
           ["Nothing added to your profile without proof", "Upskill never puts a skill on your profile that you haven’t shown.", "“Done” needs a proof link and a line in your own words; only then can it be added, after a dated backup of the profile."],
@@ -60,12 +60,12 @@ export default function Guarantees() {
         <li>At most one email per run of the send job, so a laptop waking from sleep never fires a backlog.</li>
         <li>Written the way Gmail&apos;s own compose writes: text with a minimal HTML twin, links on words. No tracking pixels, no link shorteners, no templates with styles or images, no attachment.</li>
         <li>At most three cold emails a day into one company&apos;s domain, and a review flag on any near-copy of mail already going there.</li>
-        <li>A bounce brake: past six bounces in seven days, guessed addresses stop; verified ones still go.</li>
+        <li>Only proved addresses are written to, and an address that bounces is never tried again.</li>
         <li>After Gmail refuses any mail as spam: no cold mail for 48 hours, and none into that company for 21 days.</li>
       </UL>
       <Callout kind="warn" title="Learned the hard way">
         On 19 Oct 2026 about thirty near-identical emails went into one company a minute or two apart. Four guessed
-        addresses bounced and Gmail refused all further mail for a day (<C>550 5.4.5</C>). The pacing rules above exist
+        addresses bounced (guessing has since been ended — see <A href="/docs/email-addresses">Email addresses</A>) and Gmail refused all further mail for a day (<C>550 5.4.5</C>). The pacing rules above exist
         because of that day. On 23 Oct a different signal arrived — 9 of 24 asks into one company refused as spam
         (<C>5.7.1</C>) — and the per-domain rules above came from that one. See{" "}
         <A href="/docs/troubleshooting">Troubleshooting</A>.

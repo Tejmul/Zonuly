@@ -201,11 +201,12 @@ export default function LeadsPage() {
         its GitHub org, their own profile or team page naming it, a commit to its repos in the last year, or (likely
         current) a public LinkedIn headline, a talk or a byline naming it. LinkedIn people come from public search
         results only; no account is ever signed in.{" "}
-        <span className="text-ink-2">On the address:</span> verified came from a commit, a public profile or a provider
-        that confirmed it; guessed was built from the company&apos;s own address format (two agreeing examples) and an MX
-        check, and at most five guessed addresses are sent a day.{" "}
-        <span className="text-ink-2">CSV1, CSV2, …</span> is the hand-off batch the lead went out in, and whether Tejmul
-        has mailed that batch yet. It is a record, not a control: nothing on this page changes it.{" "}
+        <span className="text-ink-2">On the address:</span> an address is kept on a lead only once something proves it
+        works — an SMTP check, a delivery, or a provider&apos;s own verification. None is ever guessed.{" "}
+        <OperatorOnly>
+          <span className="text-ink-2">CSV1, CSV2, …</span> is the hand-off batch the lead went out in, and whether it has
+          been mailed yet. It is a record, not a control: nothing on this page changes it.{" "}
+        </OperatorOnly>
         <Link href="/health" className="underline underline-offset-2 hover:text-ink">
           Referrals this hour
         </Link>
@@ -246,10 +247,12 @@ function LeadRow({ lead, onDraft }: { lead: Lead; onDraft: (id: number) => void 
             <span className="tnum truncate text-xs text-ink-2">{lead.email}</span>
             <ConfidenceBadge confidence={lead.confidence} />
             {lead.csv_batch ? (
-              <Badge>
-                CSV{lead.csv_batch}
-                {lead.mailed_by_tejmul ? " · mailed" : " · not sent yet"}
-              </Badge>
+              <OperatorOnly>
+                <Badge>
+                  CSV{lead.csv_batch}
+                  {lead.mailed_by_tejmul ? " · mailed" : " · not sent yet"}
+                </Badge>
+              </OperatorOnly>
             ) : null}
           </div>
         ) : (

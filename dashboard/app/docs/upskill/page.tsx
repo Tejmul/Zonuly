@@ -76,6 +76,15 @@ export default function Upskill() {
         Upskill never writes a skill you have not shown. This is the same rule the emails follow: no claim without evidence.
       </Callout>
 
+      <H2>On the deployed site</H2>
+      <P>
+        The deployed site never carries a resume, so its Upskill page reads the gaps against{" "}
+        <strong>a fresher&apos;s reference resume</strong>, not yours, and says so in its first line. It works only from the
+        needs briefs already stored in the snapshot — a role without one is not rebuilt there. It has{" "}
+        <strong>no progress controls</strong>: nothing to mark learning or done, no proof links, nothing added to a profile,
+        and no note about raising your DSA level. To plan against your own resume, run it on your own machine.
+      </P>
+
       <Code title="terminal">{`
 python scripts/run.py upskill gaps                     # the plan, best payoff first, and what DSA practice is worth
 python scripts/run.py upskill mark Observability learning

@@ -10,7 +10,7 @@ export default function Runbook() {
 
       <H2>The daily routine</H2>
       <UL>
-        <li><strong>Morning:</strong> open <strong>Best bets</strong> for today&apos;s company — fill it or ask its referrer, then mark it. Then the <strong>Queue</strong>: read each draft and its flags, fix lines that don&apos;t sound like you, approve or reject. Ten minutes.</li>
+        <li><strong>Morning:</strong> open <strong>Best bets</strong> for today&apos;s company — fill it or ask its referrer, then mark it. Then <C>logs/autoreview.log</C>: every draft the review rules refused, with its reason — fix the stage that produced it (a wrong role picked, a broken template, an address it should not trust). The <strong>Queue</strong> still lets you edit, approve or reject by hand. Ten minutes.</li>
         <li><strong>10:00–19:00:</strong> keep the laptop open and on power — approved mail leaves one email every ~20 minutes.</li>
         <li><strong>Evening:</strong> glance at <strong>Replies</strong> and <strong>Scraping health</strong>.</li>
       </UL>

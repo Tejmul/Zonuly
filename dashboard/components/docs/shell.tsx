@@ -102,7 +102,7 @@ export function DocsMobileNav() {
             >
               <X size={15} />
             </button>
-            {/* the header's "Open the app" is hidden at phone width — the way back lives here */}
+            {/* the way back, also first in the header bar at every width */}
             <Link
               href="/dashboard"
               onClick={() => setOpen(false)}
@@ -278,5 +278,20 @@ export function DocsToc() {
         ))}
       </ul>
     </aside>
+  );
+}
+
+/* "← Docs overview" above every page but the overview itself (2026-11-12): on a phone the
+   sidebar that lists Overview is folded away, and there was no plain way back to it. */
+export function DocsBack() {
+  const path = usePathname();
+  if (path === "/docs") return null;
+  return (
+    <Link
+      href="/docs"
+      className="mb-6 inline-flex items-center gap-1.5 text-[13px] text-ink-3 transition-colors hover:text-ink"
+    >
+      <ArrowLeft size={13} /> Docs overview
+    </Link>
   );
 }

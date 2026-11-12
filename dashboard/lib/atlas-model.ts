@@ -514,6 +514,22 @@ export function resumeSignals(p: Profile | null): { label: string; detail: strin
   return out;
 }
 
+/** The "You" column without a resume (the public site never has one, 2026-11-12): what the
+ *  visitor has picked on the page, so the column is never empty and its wires still run. */
+export function choiceSignals(f: { fields: FieldKey[]; where: Where; stages: readonly string[]; must: Must[] }):
+  { label: string; detail: string }[] {
+  const out: { label: string; detail: string }[] = [];
+  const fields = FIELDS.filter((x) => f.fields.includes(x.key)).map((x) => x.label);
+  out.push({ label: "Work you picked", detail: fields.length ? fields.join(" · ") : "Any kind of work" });
+  out.push({ label: "Where", detail: WHERE.find((x) => x.key === f.where)?.label ?? "Any" });
+  if (f.stages.length) out.push({ label: "Stage", detail: f.stages.join(" · ") });
+  out.push({
+    label: "Must have",
+    detail: f.must.length ? MUSTS.filter((x) => f.must.includes(x.key)).map((x) => x.label).join(" · ") : "A fresher role, ideally",
+  });
+  return out;
+}
+
 /** The field your resume points at, used as the opening position so the page is
  *  never empty on arrival. You can override it; it is a starting guess, not a verdict. */
 export function suggestedFields(p: Profile | null): FieldKey[] {

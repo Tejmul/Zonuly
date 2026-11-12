@@ -22,8 +22,7 @@ export default function Sending() {
           ["pacing.front_load", "false", "Spread across the window — never a burst at 10:00."],
           ["pacing.max_per_run", "1", "A laptop waking from sleep never fires a backlog."],
           ["pacing.jitter_fraction", "0.35", "Slot times vary, so it doesn’t look automated."],
-          ["guessed_daily_cap", "25", "A separate allowance for pattern-guessed addresses."],
-          ["bounce_brake", "6 in 7 days", "Past this, guessed addresses stop; verified ones still go."],
+          ["guessed_daily_cap · bounce_brake", "25 · 6 in 7 days", "Limits on pattern-guessed addresses, still in config.yaml but idle: since 2 Nov 2026 no guessed address reaches the database, so none is ever sent to."],
           ["contact / company cooldown", "30 days", "Nobody is asked twice in a month."],
           ["per_domain_daily_cap", "3", "At most three cold emails a day into one company’s mail domain; the rest wait for a later day."],
           ["spam_pause_hours", "48", "After Gmail refuses any mail as spam, no cold mail leaves at all for two days."],
@@ -44,7 +43,7 @@ export default function Sending() {
       <H2>What happens to one email</H2>
       <Steps>
         <Step title="Is a slot due?">Every 5 minutes the send job asks how many slots have passed today, minus how many were used, capped at one per run.</Step>
-        <Step title="Pick the next approved email">Follow-ups first, then cold asks. A guessed address is skipped if the guessed cap is spent or the brake is on.</Step>
+        <Step title="Pick the next approved email">Follow-ups first, then cold asks — only ones the review gate approved, to a proved address.</Step>
         <Step title="Re-check the person">Still ready, not suppressed, not cooling down — things can change between approval and sending.</Step>
         <Step title="Check the company’s domain">A cold email waits (it is never rejected) if three have already gone into that domain today, or a spam block is still cooling down.</Step>
         <Step title="Claim and reserve">Atomically move the email from approved to sending, and reserve one unit of today&apos;s cap in the ledger <em>before</em> the mail leaves.</Step>
@@ -53,7 +52,7 @@ export default function Sending() {
 
       <Callout kind="warn" title="What happens if you push it">
         On 19 Oct 2026, with the old settings (cap 60, front-loaded, 40–90 s apart), about thirty near-identical emails went
-        into one company within an hour. Four guessed addresses bounced and Gmail refused all further mail with{" "}
+        into one company within an hour. Four guessed addresses bounced (addresses are no longer guessed) and Gmail refused all further mail with{" "}
         <C>550 5.4.5 Daily user sending limit exceeded</C> after 24 sends. The rules above are the fix. Finish a company over
         more days — never by raising the cap.
       </Callout>

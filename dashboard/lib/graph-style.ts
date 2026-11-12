@@ -91,6 +91,8 @@ export type GraphMap = {
     total: number; complete: number; filling: number; missing: Record<string, number>;
     star_pending: number; india_pending: number; remote_pending: number; never_filled: number;
   };
+  /** every company row scraped (the landing's count); null on the project view */
+  scraped_all?: number | null;
   generated_at: string;
 };
 

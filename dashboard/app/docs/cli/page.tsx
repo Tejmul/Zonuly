@@ -68,7 +68,7 @@ const G: { id: string; title: string; intro: string; rows: Row[] }[] = [
     rows: [
       ["referrals run", "One cycle: Bengaluru (★ first), Hyderabad, other India, remote", "--budget 1200 · --limit · --exclude"],
       ["referrals people", "The people step: GitHub, team pages, web, public LinkedIn", "--limit 50 · --list · --budget 3600"],
-      ["referrals patterns", "Learn each company’s address format (2+ agree)", "--apply (default: dry run)"],
+      ["referrals patterns", "Learn each company’s address format (2+ agree). Filling addresses from it is switched off", "--apply (default: dry run)"],
       ["referrals reverify", "Re-confirm referrers whose evidence is 90+ days old", "--limit 150"],
       ["referrals revalidate", "Re-check companies’ site, description and careers page", "--limit 30"],
       ["referrals measure", "Ready referrers per company, the ★ list, complete companies", "—"],
@@ -137,7 +137,7 @@ const G: { id: string; title: string; intro: string; rows: Row[] }[] = [
       ["lists people", "Boards, roles and referrers for every list company", "[key] · --linkedin-only · --emails-only"],
       ["lists audit", "Re-verify GitHub orgs (a wrong org loses its contacts)", "--dry"],
       ["people classify", "Label contacts by role class", "--all · --model"],
-      ["people emails COMPANY_ID", "Real addresses from the web, then fill by pattern", "—"],
+      ["people emails COMPANY_ID", "Addresses found on the web, kept unproved until a check proves them (pattern filling is off)", "—"],
       ["people queue", "The referral queue", "--company-id · --limit 25"],
     ],
   },
