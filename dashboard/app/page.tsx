@@ -93,9 +93,6 @@ const PRINCIPLES = [
 export default function Landing() {
   const root = useRef<HTMLDivElement>(null);
   const { data: ov } = useApi<Totals>("/api/overview");
-  // Everything gathered, not only the companies whose profile is complete: the row says
-  // how much ground the pipeline has covered. Generic inboxes (hr@, jobs@) are not people.
-  const people = ov ? ov.contacts.total - (ov.contacts.by_affiliation?.generic ?? 0) : undefined;
 
   const [lead, setLead] = useState<{ lead: Lead; n: number }>({ lead: SAMPLE_LEADS[0], n: 1 });
 
@@ -273,7 +270,7 @@ export default function Landing() {
         <div className="relative z-10 border-t border-[var(--ground-line)]">
           <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-y-7 px-6 py-8 sm:grid-cols-4">
             <Stat label="Companies scraped" value={ov?.companies_all} />
-            <Stat label="Referrers found" value={people} />
+            <Stat label="Contacts found" value={ov?.contacts.total} />
             <Stat label="Open roles tracked" value={ov?.jobs.jobs} />
             <Stat label="Emails verified" value={ov?.contacts.verified} />
           </dl>

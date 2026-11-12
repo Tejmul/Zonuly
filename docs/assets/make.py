@@ -18,22 +18,22 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-#: Read from jobhunter.db on 1 Nov 2026. Keep in step with the table in README.md.
+#: The live site's snapshot on 12 Nov 2026 (checks and graph: jobhunter.db). Keep in step with the table in README.md.
 NUMBERS = {
-    "date": "1 Nov 2026",
-    "leads": 45_867,
-    "current": 21_545,        # affiliation verified-current + likely-current
-    "found": 31_369,          # contact.email_unverified set — kept, never shown, never mailed
+    "date": "12 Nov 2026",
+    "leads": 45_857,
+    "current": 26_512,        # affiliation verified-current + likely-current
+    "found": 37_785,          # contact.email_unverified set — kept, never shown, never mailed
     "proved": 248,            # contact.email_status = real
-    "companies": 6_512,
-    "bengaluru": 1_760,
-    "hyderabad": 545,
-    "roles": 10_354,
-    "fresher": 6_737,         # not is_senior
+    "companies": 7_078,
+    "bengaluru": 1_921,
+    "hyderabad": 620,
+    "roles": 12_201,
+    "fresher": 7_935,         # not is_senior
     "best_bets": 250,
-    "checks": 18_269,
-    "nodes": 63_982,
-    "edges": 205_776,
+    "checks": 18_877,
+    "nodes": 79_015,
+    "edges": 253_599,
 }
 
 THEMES = {
@@ -168,7 +168,7 @@ def numbers(t: dict) -> Canvas:
     scale = W / N["leads"]
 
     c.text(L, 34, "PEOPLE", size=11, fill=t["ink3"], family=MONO, spacing="1")
-    c.text(1160, 34, f"live database · {N['date']}", size=12, fill=t["ink3"], family=MONO, anchor="end")
+    c.text(1160, 34, f"live site · {N['date']}", size=12, fill=t["ink3"], family=MONO, anchor="end")
 
     # bar 1: everyone found, and the part with evidence of working there now
     y = 52
@@ -186,7 +186,7 @@ def numbers(t: dict) -> Canvas:
     c.text(L, y - 12, "ADDRESSES", size=11, fill=t["ink3"], family=MONO, spacing="1")
     c.plate(L + 0.5, y + 0.5, W - 1, 30, fill=t["soft"], stroke=t["edge"])
     fw = round(N["found"] * scale)
-    pw = max(4, round(N["proved"] * scale))        # 248 of 45,867 is six pixels wide — that is the picture
+    pw = max(4, round(N["proved"] * scale))        # 248 of 45,857 is six pixels wide — that is the picture
     c.rect(L + 1, y + 1, fw - 1, 29, t["mid"])
     c.rect(L + 1, y + 1, pw, 29, t["ink"])
     c.text(L + pw + 12, y + 21, n(N["proved"]), size=15, weight=700)
