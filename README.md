@@ -28,15 +28,15 @@
 
 <table align="center">
 <tr>
-<td align="center" width="33%"><h3>52,556</h3><sub>people found who could refer you</sub></td>
-<td align="center" width="33%"><h3>7,008</h3><sub>companies worth asking</sub></td>
+<td align="center" width="33%"><h3>55,049</h3><sub>contacts found · 45,857 of them people who could refer you</sub></td>
+<td align="center" width="33%"><h3>7,078</h3><sub>companies worth asking</sub></td>
 <td align="center" width="33%"><h3>248</h3><sub>addresses it will actually use</sub></td>
 </tr>
 </table>
 
 <p align="center">
   <b>That last number is not a bug. It is the entire point.</b><br>
-  <sub>Most outreach tools would mail all 52,556. This one refuses to send a single message it cannot prove will arrive.</sub>
+  <sub>Most outreach tools would mail all 55,049. This one refuses to send a single message it cannot prove will arrive.</sub>
 </p>
 
 ---
@@ -53,7 +53,7 @@ without lying to any of them.
 That is a data problem wearing a motivation problem's clothes. This is the data system.
 
 <table>
-<tr><td><b>7 Nov 2026</b></td><td>52,556 people found · 248 proved reachable · 185 asked · and the author is still looking</td></tr>
+<tr><td><b>12 Nov 2026</b></td><td>55,049 contacts found · 45,857 of them people · 248 proved reachable · 185 asked · and the author is still looking</td></tr>
 </table>
 
 > The honesty of the third number is the reason the first two are worth anything.
@@ -85,27 +85,27 @@ That is a data problem wearing a motivation problem's clothes. This is the data 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/numbers-dark.svg">
-    <img src="docs/assets/numbers.svg" alt="Of 45,867 people found, 248 have a proved address; 31,369 found addresses are kept unverified and never mailed" width="100%">
+    <img src="docs/assets/numbers.svg" alt="Of 45,857 people found, 248 have a proved address; 37,785 found addresses are kept unverified and never mailed" width="100%">
   </picture>
 </p>
 
 | | Count | What it means |
 |---|---:|---|
-| **Leads** | **52,556** | People at target companies, each stored with where and how they were found |
-| Confirmed current staff | 25,378 | Verified- or likely-current, with the evidence (profile, team page, org membership, live mailbox) |
-| Companies | 7,008 | 1,894 in **Bengaluru** · 611 in **Hyderabad** · the rest remote / abroad |
-| Open roles | 11,842 | 7,686 of them not senior — the fresher roles are what ZoNuLy hunts |
-| Remote roles | 6,713 | 531 of them open to someone working from India, the rest fenced to one country |
-| Communities | 107 | Slack and Discord rooms that post jobs, 39 with a job channel, found from public directories |
+| **Contacts** | **55,049** | 45,857 people at target companies, each stored with where and how they were found · 9,192 company inboxes (hr@, jobs@) |
+| Confirmed current staff | 26,512 | Verified- or likely-current, with the evidence (profile, team page, org membership, live mailbox) |
+| Companies | 7,078 | 1,921 in **Bengaluru** · 620 in **Hyderabad** · the rest remote / abroad |
+| Open roles | 12,201 | 7,935 of them not senior — the fresher roles are what ZoNuLy hunts |
+| Remote roles | 6,817 | 589 of them open to someone working from India, the rest fenced to one country |
+| Communities | 108 | Slack and Discord rooms that post jobs, 39 with a job channel, found from public directories |
 | **Proved addresses** | **248** | SMTP-proved, delivered-to, or vendor SMTP-verified — the only addresses a mail may go to |
-| Addresses found, unproved | 35,746 | Seen on a page, a commit or a profile — kept as evidence, never shown, never mailed |
-| Address checks on record | 18,859 | Every verdict from [check-if-email-exists](https://github.com/reacherhq/check-if-email-exists), cached |
+| Addresses found, unproved | 37,785 | Seen on a page, a commit or a profile — kept as evidence, never shown, never mailed |
+| Address checks on record | 18,877 | Every verdict from [check-if-email-exists](https://github.com/reacherhq/check-if-email-exists), cached |
 | Interview reports | 49 | Glassdoor, Reddit and blog write-ups turned into prep on the company page |
 
-> Counts are read from the live database on 7 Nov 2026. The gap between *leads* and *proved addresses* is deliberate:
+> Counts are the ones the live site serves, 12 Nov 2026 (address checks: the local database — the public snapshot carries none). The gap between *leads* and *proved addresses* is deliberate:
 > an address is only used once something proves it works — see [what makes it different](#what-makes-it-different).
 
-**That gap is also the project's hardest open problem.** 35,746 addresses are on file and 248 are
+**That gap is also the project's hardest open problem.** 37,785 addresses are on file and 248 are
 usable, because outbound port 25 is blocked on the machine that runs this, so the local SMTP prover
 answers `unknown` to almost everything. On 5 Nov this was measured rather than assumed: of **879**
 addresses checked, **0** came back verified, 2 invalid and 877 unknown. The two invalid results are
