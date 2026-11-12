@@ -6,6 +6,7 @@ import { ExternalLink } from "lucide-react";
 import { api, useApi, useTaskWatcher, type UpskillPage, type UpskillSkill, type UpskillStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { PageHead } from "@/components/shell";
+import { OperatorOnly, useAccess } from "@/components/access";
 import { Button, Empty, ErrorNote, Input, Loading, Panel, Textarea } from "@/components/ui/primitives";
 
 /* Upskill (jobhunter/upskill.py) as one learning plan: every gap — DSA included — in a single
@@ -32,7 +33,7 @@ function impact(x: number): string {
   return x >= 0.5 ? "Biggest boost" : x >= 0.15 ? "High" : x >= 0.06 ? "Medium" : "Small";
 }
 
-function plan(data: UpskillPage): PlanItem[] {
+function plan(data: UpskillPage, pub: boolean): PlanItem[] {
   const items: PlanItem[] = data.skills.map((s) => ({
     key: s.skill,
     type: "skill",
@@ -42,9 +43,11 @@ function plan(data: UpskillPage): PlanItem[] {
     skill: s,
     line:
       s.kind === "learn"
-        ? `New skill — ${s.companies_n} of your ${data.companies_read} target companies ask for it` +
+        ? `New skill — ${s.companies_n} of the ${data.companies_read} shortlisted companies ask for it` +
           (s.required_mentions ? `, ${s.required_mentions}× as a must-have.` : ".")
-        : `You list it, but no project on your resume shows it — ${s.companies_n} companies ask for it. Build one small project with it.`,
+        : pub
+          ? `Often listed as a word, rarely shown in a project — ${s.companies_n} companies ask for it. One small project with it shows it.`
+          : `You list it, but no project on your resume shows it — ${s.companies_n} companies ask for it. Build one small project with it.`,
   }));
   const next = data.dsa.levels[0];
   if (next) {
@@ -56,7 +59,7 @@ function plan(data: UpskillPage): PlanItem[] {
       status: data.dsa.status,
       dsa: data.dsa,
       line:
-        `Raises your odds of clearing the interview at every company on your list` +
+        `Raises the odds of clearing the interview at every company on the shortlist` +
         (next.companies_back.length ? `, and brings back ${next.companies_back.map((b) => b.name).join(", ")}.` : "."),
     });
   }
@@ -66,29 +69,32 @@ function plan(data: UpskillPage): PlanItem[] {
 export default function UpskillPageView() {
   const { data, error, loading, reload } = useApi<UpskillPage>("/api/upskill");
   const [open, setOpen] = useState<string | null>(null);
+  // 2026-11-12: on the public site the gaps are read against a fresher's reference resume, not
+  // the reader's own, and progress is not kept — so the page says so and offers no controls.
+  const { publicInstance: pub } = useAccess();
 
-  const items = data ? plan(data) : [];
+  const items = data ? plan(data, pub) : [];
   const max = Math.max(...items.map((i) => i.payoff), 1e-6);
 
   return (
     <>
       <PageHead
         title="Upskill"
-        description={`What to learn next, best first — ranked by how much each one raises your chances across the ${
+        description={`What to learn next, best first — ranked by how much each one raises the chances across the ${
           data?.companies_read ?? ""
-        } companies you are targeting.`}
+        } shortlisted companies.`}
       />
       {loading && !data ? (
         <Loading label="Reading what your target companies ask for" />
       ) : error ? (
         <ErrorNote message={error} onRetry={reload} />
       ) : !items.length ? (
-        <Empty title="Nothing to learn" hint="Your resume covers what your target companies ask for — or the brain has not run yet." />
+        <Empty title="Nothing to learn" hint="The resume covers what the shortlisted companies ask for — or the brain has not run yet." />
       ) : (
         <>
           <p className="mb-4 text-xs leading-relaxed text-ink-3">
             Read from {data?.companies_read} shortlisted companies (Bengaluru, Hyderabad, Remote): their best roles&rsquo; needs
-            against your resume. If you worked the whole list today you could expect about{" "}
+            against {pub ? "a fresher’s reference resume" : "your resume"}. If you worked the whole list today you could expect about{" "}
             <span className="tnum text-ink-2">{offers(data?.expected_offers_now ?? 0)}</span> offers; each item below says how much
             learning it adds to that, best first.
           </p>
@@ -127,18 +133,20 @@ function PlanRow({ n, it, width, open, onToggle, onChange }: {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[14px] font-medium text-ink">{it.title}</span>
               <KindChip kind={it.type === "dsa" ? "dsa" : it.skill.kind} />
-              <span className="text-xs text-ink-3">· {STATUS_LABEL[it.status]}{it.type === "skill" && it.skill.in_profile ? " · in your profile" : ""}</span>
+              <OperatorOnly>
+                <span className="text-xs text-ink-3">· {STATUS_LABEL[it.status]}{it.type === "skill" && it.skill.in_profile ? " · in your profile" : ""}</span>
+              </OperatorOnly>
             </div>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-2">{it.line}</p>
             {it.type === "skill" ? (
               <p className="mt-0.5 text-xs text-ink-3">
-                {it.skill.companies_n} companies ({Math.round(it.skill.share * 100)}% of your list)
+                {it.skill.companies_n} companies ({Math.round(it.skill.share * 100)}% of the shortlist)
                 {it.skill.required_mentions ? ` · ${it.skill.required_mentions}× as a must-have` : ""} ·{" "}
                 {Object.entries(it.skill.pools).map(([p, c]) => `${p} ${c}`).join(", ")}
               </p>
             ) : (
               <p className="mt-0.5 text-xs text-ink-3">
-                Your level today {Math.round(it.dsa.level_now * 100)}% ·{" "}
+                Level today {Math.round(it.dsa.level_now * 100)}% ·{" "}
                 {it.dsa.levels.map((l) => `at ${Math.round(l.level * 100)}%: +${offers(l.expected_offers_gained)} offers` +
                   (l.companies_back.length ? ` (${l.companies_back.length} companies back)` : "")).join(" · ")}
               </p>
@@ -177,7 +185,7 @@ function KindChip({ kind }: { kind: keyof typeof KIND_LABEL }) {
 function DsaDetail({ dsa }: { dsa: UpskillPage["dsa"] }) {
   return (
     <div className="border-t border-line px-4 py-3">
-      <p className="mb-2 text-xs text-ink-2">Your DSA level today is {Math.round(dsa.level_now * 100)}%. What each step up is worth:</p>
+      <p className="mb-2 text-xs text-ink-2">The DSA level used today is {Math.round(dsa.level_now * 100)}%. What each step up is worth:</p>
       <ul className="flex flex-col gap-1">
         {dsa.levels.map((l) => (
           <li key={l.level} className="grid grid-cols-[4rem_7rem_minmax(0,1fr)] gap-3 text-xs">
@@ -189,9 +197,11 @@ function DsaDetail({ dsa }: { dsa: UpskillPage["dsa"] }) {
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-xs text-ink-3">
-        When you have practised, raise <code>decide.me.dsa_level</code> in config.yaml; everything re-ranks on the next run.
-      </p>
+      <OperatorOnly>
+        <p className="mt-2 text-xs text-ink-3">
+          When you have practised, raise <code>decide.me.dsa_level</code> in config.yaml; everything re-ranks on the next run.
+        </p>
+      </OperatorOnly>
     </div>
   );
 }
@@ -273,6 +283,7 @@ function SkillDetail({ s, onChange }: { s: UpskillSkill; onChange: () => void })
           </ul>
         </div>
       </div>
+      <OperatorOnly>
       <div className="flex flex-col gap-2">
         <div className="eyebrow">Your progress</div>
         <div className="flex flex-wrap gap-2">
@@ -301,6 +312,7 @@ function SkillDetail({ s, onChange }: { s: UpskillSkill; onChange: () => void })
         </div>
         {msg ? <p className="text-xs leading-relaxed text-ink-2">{msg}</p> : null}
       </div>
+      </OperatorOnly>
     </div>
   );
 }

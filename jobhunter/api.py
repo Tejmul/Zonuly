@@ -1449,7 +1449,7 @@ def list_leads(
                   "bucket": referrals.BUCKETS[b] if b is not None else None,
                   "company_star": c.list_key == referrals.STAR, "found_at": d.get("created_at"),
                   # which hand-off CSV they went out in, if any (read-only)
-                  "csv_batch": (batches.get(p.id) or {}).get("batch")})
+                  "csv_batch": (batches.get(p.id) or {}).get("batch") if access.can_read_private() else None})
         d.pop("research", None)
         items.append(d)
     return {"items": items, "total": len(picked), "offset": offset, "limit": limit, "counts": counts,

@@ -25,9 +25,9 @@ export default function Pipeline() {
           ["Decide", "Every free tick, after the role scores · decide run · the mixer", "Free — arithmetic over fields already held"],
           ["People", "The Apify job (every 30 min): People tabs for the shortlist, tech team only; the free tick’s people step", "Apify inside its daily cap"],
           ["Complete the shortlist", "Shortlist job (every 10 min): one company at a time, Bengaluru first", "Free fill + Exa (Agent Reach); referrals via the Apify job"],
-          ["Addresses", "Right after every people step", "Free (MX lookups); Hunter when enabled"],
-          ["Draft", "On request: Outreach → batch, or the CLI", "Model polish, optional"],
-          ["Review", "You, in the Queue", "Ten minutes"],
+          ["Addresses", "Right after every people step: found addresses held unproved, then checked", "Free; most proofs come from the vendor check and delivery"],
+          ["Draft", "Shortlist job as it completes each company · Outreach → batch · the CLI", "Model polish, optional"],
+          ["Review", "Review rules at the end of each shortlist pass; the Queue by hand", "Free — every verdict in logs/autoreview.log"],
           ["Send", "Send job, every 5 minutes", "One email per run, 25 a day"],
           ["Replies & follow-up", "Free tick and the API’s hourly reply cycle", "Cheap model for classification"],
         ]}

@@ -40,9 +40,10 @@ export default function Overview() {
 
       <H2>The pipeline in one picture</H2>
       <P>
-        Thirteen stages take a company nobody has heard of to a sent referral ask. Twelve are automated. One —
-        deciding that <em>this</em> email goes to <em>this</em> person — is yours, and the system is built so that
-        decision takes seconds because everything before it is already done.
+        Thirteen stages take a company nobody has heard of to a sent referral ask. The one that matters most —
+        deciding that <em>this</em> email may go to <em>this</em> person — is the review gate. Since 26 Oct 2026 it is
+        run by written rules rather than a click: every draft is approved or rejected, the reason written to{" "}
+        <C>logs/autoreview.log</C>, and each rejection is read and its cause fixed in the stage that made it.
       </P>
       <PipelineDiagram stages={STAGES} />
 
@@ -71,13 +72,13 @@ export default function Overview() {
       <H3>It refuses to make things up</H3>
       <P>
         Every description, funding round, address and claim of employment carries its evidence. An email that
-        would need a fact the system doesn&apos;t have is not written. An address is labelled <C>verified</C>,{" "}
-        <C>pattern-guessed</C> or <C>scraped</C>, and the label is never dropped. See{" "}
+        would need a fact the system doesn&apos;t have is not written. An address goes on a lead only once it is
+        proved to reach a real inbox; a guessed one is refused at the database. See{" "}
         <A href="/docs/guarantees">Guarantees &amp; guardrails</A>.
       </P>
 
       <Callout kind="rule" title="The one rule above all others">
-        Nothing is ever sent without a human approving that exact email. No background job can send an unapproved
+        Nothing is ever sent unless that exact email has passed the review gate. No job can send an unapproved
         message, and the daily cap holds even when you ask it to go faster.
       </Callout>
 
@@ -86,13 +87,13 @@ export default function Overview() {
 
       <H2>How these docs are organised</H2>
       <UL>
-        <li><strong>Start here</strong> — what it is, why it exists, and how to run it.</li>
+        <li><strong>Start here</strong> — what it is, why it exists, how to run it, and how signing in works on the deployed site.</li>
         <li><strong>Concepts</strong> — the vocabulary, the targeting rules, the guarantees and the settled decisions.</li>
         <li><strong>Architecture</strong> — the stack, the data model, the background schedule and the knowledge graph.</li>
         <li><strong>The pipeline</strong> — one page per stage, from discovery to the calendar.</li>
         <li><strong>Using the dashboard</strong> — every page in the app, and the Upskill plan.</li>
         <li><strong>Reference</strong> — every CLI command, API endpoint and configuration key.</li>
-        <li><strong>Operations</strong> — the runbook, the known failure modes with fixes, and the public deployment.</li>
+        <li><strong>Operations</strong> — the runbook, the known failure modes with fixes, and the deployment at zonuly.tejmul.in.</li>
       </UL>
       <P>Press <C>⌘K</C> (or <C>/</C>) anywhere in the docs to search every page by its title, summary and topics.</P>
     </Doc>

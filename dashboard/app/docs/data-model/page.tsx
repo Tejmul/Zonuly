@@ -31,7 +31,7 @@ export default function DataModel() {
           ["Targeting", "tier · tier_reason · overrated · priority_score · pay_power · pay_power_band · money_per_head_usd_k"],
           ["Funding", "funding_stage · funding_amount_usd_m · funding_announced · funding_investors · valuation_usd_m · team_size"],
           ["Hiring", "careers_url · hiring_status · hiring_claim(_by/_source/_at) · hiring_roles · hiring_checked_at"],
-          ["Addresses", "email_pattern (only when confirmed) · email_pattern_evidence"],
+          ["Addresses", "email_pattern (only when confirmed; no longer used to fill addresses) · email_pattern_evidence"],
           ["Lifecycle", "status (null = active | quarantined | merged | below_pay_bar) · merged_into · retry_state · do_not_contact"],
           ["Completeness", "complete · complete_missing · completeness · fill_state (why parts are missing) · filled_at"],
           ["Lists", "list_key · list_rank · list_meta (the ★ India hand-picked list)"],
@@ -58,7 +58,7 @@ export default function DataModel() {
         mono={[1]}
         rows={[
           ["Identity", "company_id · name · role · email · github · linkedin · x_handle · handle"],
-          ["Address", "confidence (verified | pattern-guessed | scraped) · email_kind · source"],
+          ["Address", "email (proved only) · email_unverified (found, not yet proved, never mailed) · email_status (real | fake:<why> | rejected:guessed) · email_verified_by · confidence (where it was found) · email_kind · source"],
           ["Role", "role_class · seniority · referral_rank (1 = ask first) · role_evidence"],
           ["Employment", "affiliation (verified-current | likely-current | unconfirmed | generic) · affiliation_evidence · last_commit_at"],
           ["Suppression", "email_status (bounced | opted_out) · dead_email · do_not_contact"],

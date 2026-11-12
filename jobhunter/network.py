@@ -510,6 +510,7 @@ def company_list(*, include_rejects: bool = False, include_overrated: bool = Fal
     init_db()
     with get_session() as session:
         companies = session.exec(select(Company)).all()
+        scraped_all = len(companies)
         # Only the columns the list and _trust read — not the posting text and selection
         # JSON, ~100 MB resident on the 512 MB public instance (see build()).
         jobs = session.exec(select(Job.company_id, Job.title, Job.is_senior, Job.match_score, Job.is_internship,
@@ -667,6 +668,9 @@ def company_list(*, include_rejects: bool = False, include_overrated: bool = Fal
             "on_lists": sum(1 for r in out if r["list_key"]),
             "shown_complete": sum(1 for r in out if r["complete"]),
             "being_filled": being_filled,
+            # every company row ever scraped — duplicates, junk names and the ones below the pay
+            # bar included — so the page can say how the tracked count relates to the landing's
+            "scraped_all": scraped_all,
         },
     }
 

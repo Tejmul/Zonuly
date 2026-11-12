@@ -66,10 +66,12 @@ _OPERATOR_ONLY = (
     "/api/models",    # model choice and, at /costs, what has been spent
     "/api/gmail",     # mailbox status and the OAuth trigger
     "/api/research",  # live outbound research; every call costs money
-    "/api/outreach/preflight",  # the sending address, the do-not-contact list, the launch state
-    "/api/outreach/track",      # every email with its replies' snippets (2026-10-14)
-    "/api/outreach/thread",     # one full conversation, their replies included
-    "/api/outreach/proposals",  # real recipients' names, addresses and evidence
+    # 2026-11-12, after launch: the cold-email pipeline is the operator's own — drafts signed with
+    # his name, his send counts, his calendar. Signed-in users get the data, not his outbox.
+    "/api/outreach",    # review, pipeline, ledger, plan, preflight, track, thread, proposals
+    "/api/emails",      # every draft and sent ask, bodies included
+    "/api/campaigns",   # outreach campaigns
+    "/api/calendar",    # his calendar connection
 )
 
 #: Set by the middleware for the duration of one request. A serialiser deep inside a
@@ -175,6 +177,8 @@ def redact_contact(row: dict) -> dict:
     if _unrestricted():
         return row
     row["email"] = mask_email(row.get("email"))
+    # who the operator has written to is his own outreach record, not product data (2026-11-12)
+    row["mailed_by_tejmul"] = False
     if row.get("affiliation_evidence"):
         import re
 

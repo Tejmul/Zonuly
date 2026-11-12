@@ -53,12 +53,17 @@ export default function Vocabulary() {
       <Callout kind="note">An India company never rises above <strong>thin</strong> without a stated figure — funding alone doesn&apos;t prove Indian salaries.</Callout>
 
       <H2>Confidence of an address</H2>
-      <P>Every email address carries exactly one of three labels. They are never merged and never defaulted.</P>
+      <P>
+        A label says where an address was found; it is never merged and never defaulted. Separately, an address goes on a
+        lead only once it is <strong>proved</strong> — an SMTP check, the vendor&apos;s check, or a delivery (see{" "}
+        <A href="/docs/email-addresses">Email addresses</A>).
+      </P>
       <Defs
         items={[
           [<C key="v">verified</C>, "Seen on the person or company’s own material — a commit, their site, a published address."],
-          [<C key="p">pattern-guessed</C>, "Built from the company’s address format, which at least two real addresses must confirm, then checked for a mail server (MX)."],
-          [<C key="s">scraped</C>, "Found on the open web, not yet confirmed."],
+          [<C key="s">scraped</C>, "Found on the open web."],
+          [<C key="p">pattern-guessed</C>, "Built from the company’s address format. Since 2 Nov 2026 an address with this label is refused at the database and never kept."],
+          [<C key="r">real</C>, "Proved to reach an inbox. Only these are shown and written to."],
         ]}
       />
 

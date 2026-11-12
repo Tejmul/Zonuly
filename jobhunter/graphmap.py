@@ -411,6 +411,11 @@ def signature() -> tuple:
     return (n, done, str(last_fill), str(last_complete), str(ticks)[:60], emails, kg_sig)
 
 
+def _scraped_all() -> int:
+    with get_session() as s:
+        return s.exec(select(func.count(Company.id))).one()
+
+
 def build(view: str = "market") -> dict:
     view = view if view in VIEWS else "market"
     if view == "project":
@@ -425,6 +430,9 @@ def build(view: str = "market") -> dict:
         "parts": PARTS if view != "project" else [{"key": k, "label": v} for k, v in PROJECT_PARTS.items()],
         **body,
         "counts": counts(body["leaves"]),
+        # every company row scraped — the landing's number — so the page can say how the
+        # companies drawn here (active ones only) relate to it (2026-11-12)
+        "scraped_all": _scraped_all() if view != "project" else None,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
 

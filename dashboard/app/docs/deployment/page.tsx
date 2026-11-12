@@ -7,9 +7,11 @@ export default function Deployment() {
   return (
     <Doc slug="deployment">
       <Lead>
-        The real pipeline runs on your laptop. The deployed site is <strong>a read-only window onto a copy</strong> of what
-        it found: the dashboard on Vercel, the API on Zoho Catalyst AppSail, and one snapshot of the database with every
-        email address masked inside the file. Nobody there can send, spend or write anything.
+        The real pipeline runs on your laptop. The deployed site, <C>zonuly.tejmul.in</C> (launched 12 Nov 2026), is{" "}
+        <strong>a read-only copy</strong> of what it found: the dashboard on Vercel, the API on Zoho Catalyst AppSail, and
+        one snapshot of the database with every email address masked inside the file. The landing page is open to
+        everyone; everything else needs a signed-in account (see <A href="/docs/accounts">Sign in &amp; accounts</A>).
+        Nobody there can send, spend or write anything.
       </Lead>
 
       <H2>The pieces</H2>
@@ -18,7 +20,8 @@ export default function Deployment() {
         rows={[
           ["Dashboard (and these docs)", "Vercel", "Every docs page is pre-rendered: it is served as finished HTML and never waits for the API."],
           ["API proxy", <C key="z">/zapi/*</C>, <>Same-origin rewrite on the Vercel domain to the backend (<C key="n">next.config.ts</C>) — no CORS to configure. Reads the backend marks cacheable are kept at the edge for 10 minutes, then served stale while it refreshes.</>],
-          ["API", "Catalyst AppSail · Python 3.12 · 1024 MB", <>The Development environment is the live backend; <C key="p">ZONULY_PUBLIC=1</C> refuses every write and every private read.</>],
+          ["API", "Catalyst AppSail · Python 3.12 · 1024 MB", <>The Development environment is the live backend; <C key="p">ZONULY_PUBLIC=1</C> refuses every write and every private read, and <C key="au">ZONULY_AUTH=1</C> refuses data to anyone not signed in.</>],
+          ["Sign-in", <>Next proxy (<C key="px">proxy.ts</C>) · <C key="aa">/api/auth/*</C></>, <>The proxy sends a signed-out visitor to <C key="lg">/login</C>; the API checks the same signed session cookie on every data call. Codes go out through Zoho Mail SMTP; accounts live in the Catalyst Data Store, never in the snapshot.</>],
           ["Data", <C key="d">demo.db.gz</C>, "A stripped, masked snapshot, committed to the repository and unpacked into /tmp when the API starts."],
         ]}
       />
@@ -58,11 +61,19 @@ git add demo.db.gz && git commit -m "Refresh the snapshot" && git push
           <C>jobhunter.db</C>, <C>profile/</C>, backups — and not Playwright or the Google API client, which a read-only
           instance cannot reach.
         </Step>
+        <Step title="Carry the sign-in settings">
+          In the same step the workflow passes the <C>ZONULY_*</C> repository secrets — <C>ZONULY_AUTH</C>,{" "}
+          <C>ZONULY_SESSION_SECRET</C>, <C>ZONULY_PUBLIC_URL</C>, <C>ZONULY_MAIL_FROM</C>, the <C>ZONULY_SMTP_*</C> four and
+          the Google pair — into the AppSail configuration (<C>app-config.json</C>), the list in{" "}
+          <C>AUTH_ENV</C> of <C>scripts/build_catalyst.py</C>. They exist only on the runner and in AppSail, never in the
+          repository; an unset secret is simply left out, and without <C>ZONULY_AUTH=1</C> the gate stays off.
+        </Step>
         <Step title="Deploy and check">
           The workflow deploys to Catalyst Development with the <C>CATALYST_TOKEN</C> repository secret, waits for{" "}
-          <C>/api/health</C>, and runs the smoke test against the live URL.
+          <C>/api/health</C>, and runs the smoke test against the live URL — signing its own short-lived session with{" "}
+          <C>ZONULY_SESSION_SECRET</C>, so it clears the gate like a signed-in visitor.
         </Step>
-        <Step title="The dashboard">The workflow ships only the backend. The dashboard is deployed to Vercel separately; on Vercel its build sets the API base to the <C>/zapi</C> proxy.</Step>
+        <Step title="The dashboard">The workflow ships only the backend. The dashboard is deployed to Vercel separately; on Vercel its build sets the API base to the <C>/zapi</C> proxy. Its environment carries <C>ZONULY_AUTH=1</C> and <strong>the same</strong> <C>ZONULY_SESSION_SECRET</C> as the backend, so the proxy can check a session the API signed.</Step>
       </Steps>
 
       <H2>A sleeping backend</H2>
@@ -71,6 +82,14 @@ git add demo.db.gz && git commit -m "Refresh the snapshot" && git push
         wakes and unpacks the snapshot — measured at 7.5 s for <C>/api/overview</C> on 23 Oct 2026, and up to half a minute
         right after a deploy. The dashboard retries a read for about 35 seconds before saying it can&apos;t reach the API; the
         docs never wait at all, and the front page&apos;s live figures fill in when they arrive.
+      </P>
+      <H2>Not on the deployed site</H2>
+      <P>
+        The operator&apos;s own cold-email pages — Queue, Outreach, Email proposal, Replies, Calendar and Tracker — are his
+        outbox, used on his own machine. Since 12 Nov 2026 the deployed menu leaves them out, the proxy sends anyone who opens
+        one to <C>/dashboard</C>, and the API refuses <C>/api/outreach</C>, <C>/api/emails</C>, <C>/api/campaigns</C> and{" "}
+        <C>/api/calendar</C> there, alongside the replies, configuration, profile, model spend and research it already
+        refused. The Dashboard&apos;s outreach card, the Dossier and your Upskill progress are left out for the same reason.
       </P>
       <P>
         Where public mode switches things off, see the Public mode note in the{" "}

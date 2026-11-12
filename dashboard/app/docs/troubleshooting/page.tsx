@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { C, Code, Doc, H2, Lead, P } from "@/components/docs/prose";
+import { A, C, Code, Doc, H2, Lead, P } from "@/components/docs/prose";
 
 export const metadata: Metadata = { title: "Troubleshooting" };
 
@@ -31,10 +31,10 @@ export default function Troubleshooting() {
           fix={<>Stop sending (unload <C>com.zonuly.tick.send</C>) and wait about 24 hours. Put refused emails back to approved. Keep <C>front_load: false</C>, <C>max_per_run: 1</C> and the 25 cap — finish a company over several days.</>}
         />
         <Issue
-          title="Guessed addresses bounce"
-          symptom="“Address not found” replies for firstname@company addresses."
-          cause="The company’s pattern doesn’t hold for everyone — newer hires use another format, or an example was a person who left."
-          fix={<>Bounced addresses are retired automatically; the brake stops guessed sends after 6 in 7 days. Approve verified addresses first, and watch the <strong>guessed</strong> flag in the Queue.</>}
+          title="An address bounces"
+          symptom="“Address not found” replies — in Oct 2026 these were firstname@company addresses built from a pattern."
+          cause="The address was never proved. A company’s pattern doesn’t hold for everyone — newer hires use another format, or an example was a person who left."
+          fix={<>Bounced addresses are retired automatically and never tried again. Guessing is over: only a proved address goes on a lead, and a guessed one is refused at the database (see <A href="/docs/email-addresses">Email addresses</A>). A bounce now means a proof was wrong — read which source proved it.</>}
         />
         <Issue
           title="Sends trickle out hours apart"

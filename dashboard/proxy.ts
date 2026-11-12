@@ -16,6 +16,11 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const COOKIE = "zonuly_session";
 const OPEN = new Set(["/", "/login"]);
+/* The operator's own cold-email pages (2026-11-12, after launch): his drafts, signed with his
+   name, his sends, his calendar and his settings. The deployed site is never the operator's, so they are not
+   served there; the API refuses their data too (jobhunter/access.py). */
+const OPERATOR_PAGES = ["/queue", "/outreach", "/replies", "/calendar", "/tracker", "/settings"];
+const isOperatorPage = (p: string) => OPERATOR_PAGES.some((o) => p === o || p.startsWith(`${o}/`));
 
 function validSession(token: string | undefined, secret: string): boolean {
   if (!token || token.split(".").length !== 2) return false;
@@ -46,6 +51,7 @@ export function proxy(request: NextRequest) {
     const dest = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
     return NextResponse.redirect(new URL(dest, request.url));
   }
+  if (signedIn && isOperatorPage(pathname)) return NextResponse.redirect(new URL("/dashboard", request.url));
   if (OPEN.has(pathname) || signedIn) return NextResponse.next();
 
   const login = new URL("/login", request.url);

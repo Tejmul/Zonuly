@@ -210,7 +210,8 @@ function GraphView() {
   const summary = !data
     ? "Reading the graph…"
     : isCompanies
-      ? [`${fmt(counts.total)} ${noun}`, `${fmt(counts.complete)} complete`,
+      ? [`${fmt(counts.total)} ${noun}` + (data.scraped_all && !anyFilter && !q.trim() ? ` tracked of ${fmt(data.scraped_all)} scraped` : ""),
+        `${fmt(counts.complete)} complete`,
         counts.india ? `${fmt(counts.india)} India still filling` : `${fmt(counts.filling)} still filling`,
         counts.star ? `${fmt(counts.star)} ★ still filling` : ""].filter(Boolean).join(" · ")
       : `${fmt(counts.total)} ${noun} · ${fmt(counts.complete)} built or adopted · ${fmt(counts.filling)} still to build`;
