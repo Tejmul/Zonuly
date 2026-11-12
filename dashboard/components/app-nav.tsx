@@ -7,6 +7,7 @@ import {
   Activity, BookOpen, Building2, Calendar, Crosshair, Globe, GraduationCap, Inbox, LayoutGrid, Mail, MessageSquare, MessagesSquare, Network, PanelLeft, Send, Settings, Star, Users, Workflow,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme";
+import { AccountMenu } from "@/components/sign-in-gate";
 import { SearchBox } from "@/components/search-box";
 import { useAccess } from "@/components/access";
 import { useSidebar } from "@/components/frame";
@@ -204,6 +205,7 @@ export function AppNav() {
             >
               Settings
             </Link>
+            <AccountMenu />
             <ThemeToggle />
           </div>
         </div>

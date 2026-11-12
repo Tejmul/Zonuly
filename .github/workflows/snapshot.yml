@@ -36,6 +36,19 @@ jobs:
       - run: npm install -g zcatalyst-cli@1.28.0
       - run: uv sync --frozen --no-dev
       - run: uv run --frozen --no-dev python scripts/build_catalyst.py
+        # Sign-in settings ride into app-config.json from repository secrets (never the repo).
+        # Unset secrets are simply left out; ZONULY_AUTH=1 is what turns the login gate on.
+        env:
+          ZONULY_AUTH: ${{ secrets.ZONULY_AUTH }}
+          ZONULY_SESSION_SECRET: ${{ secrets.ZONULY_SESSION_SECRET }}
+          ZONULY_PUBLIC_URL: ${{ secrets.ZONULY_PUBLIC_URL }}
+          ZONULY_MAIL_FROM: ${{ secrets.ZONULY_MAIL_FROM }}
+          ZONULY_GOOGLE_CLIENT_ID: ${{ secrets.ZONULY_GOOGLE_CLIENT_ID }}
+          ZONULY_GOOGLE_CLIENT_SECRET: ${{ secrets.ZONULY_GOOGLE_CLIENT_SECRET }}
+          ZONULY_SMTP_HOST: ${{ secrets.ZONULY_SMTP_HOST }}
+          ZONULY_SMTP_PORT: ${{ secrets.ZONULY_SMTP_PORT }}
+          ZONULY_SMTP_USER: ${{ secrets.ZONULY_SMTP_USER }}
+          ZONULY_SMTP_PASSWORD: ${{ secrets.ZONULY_SMTP_PASSWORD }}
       - name: Deploy to Catalyst Development
         working-directory: deploy/catalyst
         env:
@@ -49,6 +62,8 @@ jobs:
           # data centre defaults to US — this account (and its token) lives on zoho.in.
           catalyst deploy --only appsail --dc in --project 84632000000013053 --org 60091917121 --token "$CATALYST_TOKEN" -ni
       - name: Wait for it to answer, then smoke-test it
+        env:
+          ZONULY_SESSION_SECRET: ${{ secrets.ZONULY_SESSION_SECRET }}
         run: |
           for i in $(seq 1 30); do
             [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$API/api/health")" = 200 ] && break

@@ -3,9 +3,11 @@ import { AccessProvider, DemoBanner } from "@/components/access";
 import { SidebarState } from "@/components/frame";
 import { Rights } from "@/components/rights";
 import { Logo } from "@/components/logo";
+import { SignInGate } from "@/components/sign-in-gate";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
+    <SignInGate>
     <AccessProvider>
       <SidebarState>
         <div className="flex min-h-dvh">
@@ -24,5 +26,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </SidebarState>
     </AccessProvider>
+    </SignInGate>
   );
 }

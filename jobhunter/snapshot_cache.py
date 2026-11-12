@@ -26,10 +26,22 @@ from jobhunter import access
 log = logging.getLogger(__name__)
 
 #: live probes and per-request state — never answered from memory
-_SKIP = ("/api/health", "/api/tasks", "/api/research")
+_SKIP = ("/api/health", "/api/tasks", "/api/research",
+         "/api/auth")  # per visitor: who is signed in is never one answer for everyone
 
 #: browser keeps it briefly; the CDN keeps it longer and serves stale while it refetches
 CACHE_CONTROL = b"public, max-age=60, s-maxage=600, stale-while-revalidate=604800"
+
+#: Behind the login gate the same answer must never reach the CDN: Vercel's edge keys on
+#: the URL, not the cookie, so a page cached for one signed-in visitor would be handed to
+#: anyone who asked for that URL without signing in. Browser-only, and briefly.
+PRIVATE_CACHE_CONTROL = b"private, max-age=60"
+
+
+def cache_control_for(path: str) -> bytes:
+    if access.AUTH_REQUIRED and not access.is_open_when_gated("GET", path):
+        return PRIVATE_CACHE_CONTROL
+    return CACHE_CONTROL
 
 #: what the dashboard opens first, fetched at start so the first visitor does not pay.
 #: In the order a visitor meets them: the landing page's counters, then /dashboard, then
@@ -101,7 +113,7 @@ class SnapshotCache:
                 if message["status"] == 200:
                     message = {**message, "headers": [
                         *[(k, v) for k, v in message.get("headers", []) if k.lower() != b"cache-control"],
-                        (b"cache-control", CACHE_CONTROL),
+                        (b"cache-control", cache_control_for(scope["path"])),
                     ]}
                 # A copy: the gzip layer outside edits this list in place once it is sent
                 # (content-encoding added, content-length dropped), which would label a
@@ -141,7 +153,14 @@ async def prewarm(app) -> None:
 
     await asyncio.sleep(0.5)  # let startup finish and the first real request get in first
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://prewarm") as client:
+    # Behind the login gate the prewarm signs in as the API itself, or every read would be
+    # refused and the first real visitor would pay for all of them.
+    cookies = {}
+    if access.AUTH_REQUIRED:
+        from jobhunter.accounts import tokens
+
+        cookies = {access.SESSION_COOKIE: tokens.internal_session()}
+    async with httpx.AsyncClient(transport=transport, base_url="http://prewarm", cookies=cookies) as client:
         for path in PREWARM:
             try:
                 await client.get(path, timeout=120)

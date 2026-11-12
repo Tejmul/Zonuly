@@ -694,6 +694,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       /* response wasn't JSON */
     }
+    // The session ended (or never began) while a page was open: send the visitor to sign in
+    // rather than leave them on a page of errors. Not for the sign-in calls themselves.
+    if (res.status === 401 && typeof window !== "undefined" && !path.startsWith("/api/auth/")
+        && window.location.pathname !== "/login") {
+      window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+    }
     throw new ApiError(String(detail), res.status);
   }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
