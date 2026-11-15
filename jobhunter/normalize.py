@@ -126,6 +126,61 @@ def remote_anywhere(location: str | None, description: str | None = None) -> boo
     return bool(description) and bool(_ANYWHERE.search(description[:6000]))
 
 
+# 2026-11-13, Tejmul: "the companies should allow to work remotely" — a role he can take from India.
+# `remote_anywhere` above is a culture signal ("remote-first" in a US-only posting counts), so the
+# remote focus reads this stricter test: the location itself is open to the world / APAC / India, or
+# it says remote with no country and the description says the hire can be anywhere.
+_RF_INDIA = re.compile(r"\b(india|bengaluru|bangalore|hyderabad|chennai|pune|gurugram|gurgaon|noida|mumbai|delhi)\b", re.I)
+_RF_REMOTE = re.compile(r"\bremote\b|\banywhere\b|\bdistributed\b|work from home|\bwfh\b", re.I)
+_RF_OPEN = re.compile(r"\b(anywhere|worldwide|world[- ]wide|global(?:ly)?|international(?:ly)?|"
+                      r"any (?:country|location|time ?zone)|apac|asia|asia[- ]pacific)\b", re.I)
+_RF_CLOSED = re.compile(
+    r"\b(us|usa|u\.s\.?|united states|americas?|amers?|nam|north america|canada|mexico|latam|latin america|brazil|"
+    r"emea|europe|eu|uk|united kingdom|germany|france|spain|poland|portugal|netherlands|ireland|"
+    r"cet|est|pst|cst|et|pt|gmt|australia|new zealand|japan|singapore|philippines|[a-z]+, [A-Z]{2}|"
+    r"belgium|italy|sweden|norway|denmark|finland|switzerland|austria|czech\w*|romania|ukraine|israel|turkey|"
+    r"south africa|nigeria|kenya|egypt|argentina|colombia|chile|peru|uae|dubai|saudi\w*|pakistan|bangladesh|"
+    r"vietnam|indonesia|malaysia|thailand|korea|china|taiwan|hong kong|anywhere in (?!the world)\w+|"
+    r"office|onsite|on-site|in-office|hybrid)\b", re.I)
+#: the same places named in a job TITLE ("Full-Stack Engineer (Remote, US West)", "… | Ireland") — names
+#: only: a title's "Engineer, ML" must not read as "City, ST", and "US" counts only in capitals
+_RF_TITLE_ABBR = re.compile(r"\b(?:US|USA|EU|UK|EMEA|LATAM|AMER)\b")      # case-sensitive: "join us" is not the US
+_RF_TITLE_PLACE = re.compile(
+    r"\b(united states|americas?|north america|canada|mexico|latin america|brazil|europe|united kingdom|germany|"
+    r"france|spain|poland|portugal|netherlands|ireland|belgium|italy|sweden|switzerland|australia|japan|"
+    r"singapore|philippines|israel|us west|us east)\b", re.I)
+
+
+def place_restricted_title(title: str | None) -> bool:
+    """A title that ties the role to a country or region other than India."""
+    return bool(_RF_TITLE_ABBR.search(title or "") or _RF_TITLE_PLACE.search(title or ""))
+_RF_DESC = re.compile(
+    r"(work from anywhere|anywhere in the world|from any country|work from (?:any|your) country|"
+    r"hire (?:from )?anywhere|hiring (?:globally|worldwide|internationally)|"
+    r"remote[^.\n]{0,20}(?:worldwide|globally|anywhere(?! in the (?:us|u\.s|united states|uk|eu)))|open to candidates (?:worldwide|globally|in india|anywhere)|"
+    r"remote[^.\n]{0,15}india)", re.I)
+
+
+def remote_from_india(location: str | None, description: str | None = None) -> bool:
+    """Can this role be done remotely from India? Read from the posting's own words, never assumed."""
+    # a list of regions that names one India is in: "LATAM, Europe, USA, Canada, APAC"
+    items = {re.sub(r"[()\s]+", " ", i).strip().lower() for i in re.split(r"[,;|/]", location or "")}
+    if items & {"apac", "asia", "asia pacific", "asia-pacific", "worldwide", "global", "anywhere",
+                "anywhere in the world", "remote global", "remote worldwide", "remote apac", "remote india"}:
+        return True
+    # each listed location on its own: "US (Remote); Delhi, India; Remote" is not "Remote - India"
+    for loc in (s.strip() for s in re.split(r"[;|/]|\s+or\s+", location or "")):
+        if not loc:
+            continue
+        if _RF_INDIA.search(loc) and _RF_REMOTE.search(loc) and not re.search(r"\b(hybrid|office|onsite|on-site)\b", loc, re.I):
+            return True                                  # "Remote - India", "Bangalore, India - Remote"
+        if _RF_OPEN.search(loc) and not _RF_CLOSED.search(loc):
+            return True                                  # "Anywhere in the World", "Remote, Global", "APAC"
+        if _RF_REMOTE.search(loc) and not _RF_CLOSED.search(loc) and _RF_DESC.search((description or "")[:8000]):
+            return True                                  # "Remote" + "hire from anywhere" in the description
+    return False
+
+
 # Several boards serve UTF-8 bytes that were already decoded once as cp1252,
 # which turns "Kraków" into "KrakÃ³w". These are the tell-tale sequences.
 _MOJIBAKE = re.compile(r"[ÃÂÐÑ][\x80-\xbf-¿–—’“”]|â€|Ã©|Ã¶|Ã¼|Ã¡|Ã³")

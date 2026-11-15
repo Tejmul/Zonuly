@@ -231,6 +231,9 @@ def main() -> int:
                     help="override the ₹%g LPA proof bar and include companies whose pay is not proved "
                          "(default: a company reaches a CSV only with proof of ₹%g LPA+ early-career pay)"
                          % (pay.MIN_LPA, pay.MIN_LPA))
+    ap.add_argument("--remote", action="store_true",
+                    help="2026-11-13, remote first: only remote-from-India targets (jobhunter/remote.py — full-time, "
+                         "non-senior tech, pay ≥ $50k where stated); the mail names their real remote opening")
     ap.add_argument("--sent-list", action="store_true",
                     help="print the segregation (sent vs still available) and write the register of every "
                          "address already written to, data/merge_sent/_sent_register.csv")
@@ -300,6 +303,13 @@ def main() -> int:
         # the held batch (scripts/verified_sprint.py) goes first — Tejmul, 2026-10-31: "next time I
         # ask for csv I should get that emails"
         held = set((json.loads(get_setting(s, "csv:held_batch", "{}") or "{}")).get("contact_ids") or [])
+        remote_t: dict = {}
+        if args.remote:
+            from jobhunter import remote
+
+            # the remote sprint's proved people go first, as the verified sprint's did
+            held = set((json.loads(get_setting(s, "csv:held_remote", "{}") or "{}")).get("contact_ids") or [])
+            remote_t = {t.company_id: (i, t) for i, t in enumerate(remote.targets(s))}
         invalid = {a for a in s.exec(select(EmailCheck.address).where(EmailCheck.verdict == "invalid")).all()}
         q = col(Contact.email).is_not(None)
         if args.with_unproved:
@@ -361,6 +371,16 @@ def main() -> int:
                                       .order_by(col(Job.match_score).desc().nulls_last())).all()
                     if TECH.search(j.title or "") and not NOT_TECH.search(j.title or "")]
             if c is None:
+                continue
+            if args.remote:
+                if cid not in remote_t:
+                    why["not a remote-from-India target"] += len(leads)
+                    continue
+                order, rt = remote_t[cid]
+                job = s.get(Job, rt.job_id)
+                leads.sort(key=lambda p: (p.id not in held, (p.referral_rank or 9), p.name is None))
+                # recent hiring first (remote.targets' order), then people from the held sprint
+                plan.append((not any(p.id in held for p in leads), 3, order, False, 0, 0, c, job, rt.role, leads))
                 continue
             if not args.all_cities and not in_focus(c):
                 why["outside the focus cities"] += len(leads)

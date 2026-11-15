@@ -109,6 +109,31 @@ def targets(session) -> list[dict]:
     return out
 
 
+REMOTE_BATCH_KEY = "csv:held_remote"
+REMOTE_WANTED = int(((CONFIG.get("actors") or {}).get("apify") or {}).get("remote_referrers_wanted", 5))
+
+
+def remote_targets(session) -> list[dict]:
+    """2026-11-13, "remote first": jobhunter/remote.py's targets with a LinkedIn page, recent hiring
+    first, each until it holds REMOTE_WANTED engineers with a proved address."""
+    from jobhunter import remote
+
+    safe = set(session.exec(select(EmailCheck.address).where(EmailCheck.verdict == "safe")).all())
+    out = []
+    for i, t in enumerate(remote.targets(session, need_linkedin=True)):
+        c = session.get(Company, t.company_id)
+        if c is None or not backoff.due(c, "apify"):
+            continue      # bought already — the credit never pays twice for the same People tab
+        refs = session.exec(select(Contact).where(Contact.company_id == c.id, col(Contact.email).is_not(None),
+                                                  col(Contact.affiliation).in_(guardrails.READY))).all()
+        have = sum(1 for p in refs if (p.email or "").lower() in safe or p.email_status == "real")
+        if have >= REMOTE_WANTED:
+            continue
+        out.append({"id": c.id, "name": c.name, "city": "remote", "tier": 0 if t.recent else 1, "bet": None,
+                    "job": t.role, "pay_power": c.pay_power, "verified_refs": have, "key": (i,)})
+    return out
+
+
 def proved_people(cid: int, since: datetime) -> list[int]:
     """Contacts at this company saved since `since` whose address is proved (email set = safe)."""
     with get_session() as s:
@@ -121,6 +146,8 @@ def main() -> int:
     ap.add_argument("--per-company", type=int, default=12, help="People-tab rows bought per company (engineering titles, own city)")
     ap.add_argument("--max-companies", type=int, default=0)
     ap.add_argument("--dry-run", action="store_true", help="list the targets and the spend, buy nothing")
+    ap.add_argument("--remote", action="store_true",
+                    help="2026-11-13: the remote-from-India targets (jobhunter/remote.py) instead, held as csv:held_remote")
     args = ap.parse_args()
     logging.basicConfig(filename=ROOT / "logs" / "verified-sprint.log", level=logging.INFO,
                         format="%(asctime)s %(message)s")
@@ -131,8 +158,11 @@ def main() -> int:
     titles = list(conf.get("tech_titles") or []) or None
     per_item = apify_source.MODES["email"][1]
     est = round(args.per_company * per_item + apify_source.START_FEE, 4)
+    global BATCH_KEY
     with get_session() as s:
-        queue = targets(s)
+        queue = remote_targets(s) if args.remote else targets(s)
+    if args.remote:
+        BATCH_KEY = REMOTE_BATCH_KEY
     if args.max_companies:
         queue = queue[:args.max_companies]
     apify_source.sprint(True)
@@ -144,12 +174,22 @@ def main() -> int:
     log.info("start: %d targets, used %.2f, stop %.2f, %.4f/company", len(queue), used or -1, stop, est)
     if args.dry_run:
         from collections import Counter
-        print("  by tier:", dict(sorted(Counter(TIERS[t["tier"]] for t in queue).items())))
+        print("  by tier:", dict(sorted(Counter((("recent hiring", "older posting")[t["tier"]] if args.remote
+                                                 else TIERS[t["tier"]]) for t in queue).items())))
         for t in queue[:40]:
-            print(f"  {TIERS[t['tier']]:22} {t['city']:9} {t['name'][:30]:30} job={str(t['job'])[:38]:38} "
+            label = ("recent hiring", "older posting")[t["tier"]] if args.remote else TIERS[t["tier"]]
+            print(f"  {label:22} {t['city']:9} {t['name'][:30]:30} job={str(t['job'])[:38]:38} "
                   f"pp={t['pay_power']} refs={t['verified_refs']}")
         return 0
 
+    # the scheduled Apify job (com.zonuly.apify) takes the same lock, so the two never buy one company twice
+    from jobhunter.tick import APIFY_LOCK, _Lock
+
+    with _Lock(APIFY_LOCK, "remote sprint" if args.remote else "verified sprint"):
+        return _buy(args, queue, est, stop, titles, fill_company)
+
+
+def _buy(args, queue, est, stop, titles, fill_company) -> int:
     started = utcnow()
     with get_session() as s:
         held = json.loads(get_setting(s, BATCH_KEY, "{}") or "{}")
@@ -179,7 +219,8 @@ def main() -> int:
         log.info(line)
         with get_session() as s:     # saved after every company: a stop mid-way keeps what was bought
             set_setting(s, BATCH_KEY, json.dumps({
-                "name": "verified sprint 2026-10-31 (Bengaluru + Hyderabad, best bets first)",
+                "name": ("remote sprint 2026-11-13 (remote from India, recent hiring first)" if args.remote
+                         else "verified sprint 2026-10-31 (Bengaluru + Hyderabad, best bets first)"),
                 "created": started.isoformat(timespec="seconds"), "contact_ids": sorted(batch)}))
             s.commit()
         if err and ("cap" in err or "credit" in err or "blind" in err):

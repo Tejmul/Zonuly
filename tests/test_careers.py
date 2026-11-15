@@ -67,7 +67,9 @@ def test_model_roles_are_kept_only_when_literally_on_the_page(monkeypatch):
     assert jobs[0].url.startswith("https://acme.in/careers#")             # the invented link is dropped
 
 
-def test_fill_order_puts_the_list_first_then_scrape_first_then_priority():
+def test_fill_order_puts_the_list_first_then_scrape_first_then_priority(monkeypatch):
+    # these rows are not in any database: the remote-first lookup must not read the live one
+    monkeypatch.setattr("jobhunter.db.remote_company_ids", lambda *a, **k: frozenset())
     rows = [Company(id=1, name="High", priority_score=90), Company(id=2, name="Bare", scrape_first=True),
             Company(id=3, name="Listed 2", list_key="india-star", list_rank=2),
             Company(id=4, name="Listed 1", list_key="india-star", list_rank=1, priority_score=5)]

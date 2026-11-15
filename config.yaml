@@ -4,6 +4,11 @@
 # Remote comes back when this is emptied (planned: after Bengaluru + Hyderabad are complete, end of Nov).
 focus:
   cities: [Bengaluru, Hyderabad]
+  # 2026-11-13, Tejmul: "remote first, India second" — companies with a role he can do remotely from India
+  # (normalize.remote_from_india) come before Bengaluru / Hyderabad in Apify, the people step and every fill queue.
+  remote_first: true
+  remote_min_usd: 50000     # 2026-11-13: "anything above 50 lpa in rs works, in remote it may be around 50k $ a year"; no stated pay is allowed
+  remote_recent_days: 30    # a role posted in this many days counts as "hiring right now" (sorted first)
 
 openrouter:
   enabled: true
@@ -924,7 +929,7 @@ outreach:
   user_name: Tejmul Movin
   user_headline: AI/ML Engineer • B.Tech CS+AI '27, Newton School of Technology
   user_links:
-  - "Resume: https://drive.google.com/file/d/13V0TnHpW842gR7BuOthN51pwUpVOMJgl/view"
+  - "Resume: https://drive.google.com/file/d/1-hKvMBlQYMgky_m260xaIyIYNcZ941Q_/view"
   - github.com/Tejmul
   - https://www.linkedin.com/in/tejmulmovin-softwareengineer/
   - spylook.vercel.app
@@ -1080,6 +1085,7 @@ sources:
   ashby: true
   hn_hiring: true
   remoteok: true
+  himalayas: true     # 2026-11-13: remote roles open to India, full-time, not senior (scrapers/himalayas.py)
   wwr: true
   yc: true
   wellfound: true
@@ -1361,9 +1367,9 @@ actors:
   apify:
     # 2026-10-23: Apify Starter — $19 of credit per cycle (22 Oct → 21 Nov). $0.60/day spends
     # it evenly over ~31 days. Was 0.15 on the free plan.
-    daily_usd: 1.00        # a ceiling only: the real cap is the credit left ÷ days left in the cycle (apify_source.daily_cap)
+    daily_usd: 4.00        # 2026-11-13: was 1.00 — "use its potential, it's not used for 10 days"; pace_days decides the real pace. A ceiling only: the real cap is the credit left ÷ days left in the cycle (apify_source.daily_cap)
                            # 2026-10-25: was 5.00 — $9.50 of $19 went in two days ("keep limit … I used all in 1 day")
-    monthly_stop_usd: 15.0 # never past this of the $19 Starter credit (read from Apify's own usage before each buy)
+    monthly_stop_usd: 19.0 # 2026-11-13, Tejmul: "Full $19 now + new cycle 22 Nov" (was 15; Apify's own cap − $0.25 still applies). Never past this of the $19 Starter credit (read from Apify's own usage before each buy)
                            # 2026-10-31, Tejmul: "make the Apify cap to $15 … till 15 scrape best companies and
                            # leads which are verified" — was 18.5
     cache_hours: 24
@@ -1373,7 +1379,10 @@ actors:
     per_company: 25        # 2026-10-26: 10 → 25 ("25 referrals for a company should be there"); ~$0.30 a company in email mode. 2026-10-25: 15 → 10, so the paced ~$0.30/day buys 2 companies, not 1. People-tab rows bought per company (in the company's own city, engineering titles):
                            # 2–3 good referrers is the goal; Apify bills per row, so 15 caps a company at ~$0.20
     shortlist_only: true   # only the decision brain's shortlist (Bengaluru 100, Hyderabad 50, Remote 100)
+    then_pay_proved: true  # 2026-11-13: after the shortlist, BLR/HYD companies with proved ₹20 LPA+ pay (the CSV gate), software only
     companies_per_run: 6   # companies per run of com.zonuly.apify
+    pace_days: 5           # 2026-11-13: a cycle's credit is spread over its first 5 days, not all 30 (500 remote referrers wanted now)
+    remote_referrers_wanted: 5   # 2026-11-13: a remote target is bought until it holds this many engineers with a proved address (the CSV takes ≤5 a company)
     linkedin_backfill_per_run: 30   # homepages read per run for the company's LinkedIn page (free; the People tab needs it)
     # 2026-10-23, "Apify for referrals, to its full potential": the People tab is searched for the
     # tech team — Apify bills per profile, so every profile bought is someone who can refer an engineer

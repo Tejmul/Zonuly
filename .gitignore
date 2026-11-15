@@ -62,3 +62,6 @@ data/paperclip.json
 
 # the virtualenv (linked into each Paperclip worktree by the workspace setupCommand)
 .venv
+
+# private interview notes, never pushed
+/interview-prep/

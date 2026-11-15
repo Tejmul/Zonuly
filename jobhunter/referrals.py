@@ -346,13 +346,36 @@ def apify_queue() -> list[int]:
         # worth it … I am still a student": the shortlist only (actors.apify.shortlist_only), and a
         # company is bought only while it lacks two engineers WITH A REAL ADDRESS — names alone
         # cannot be cold-mailed
-        shortlist_only = bool(((CONFIG.get("actors") or {}).get("apify") or {}).get("shortlist_only", True))
+        conf = (CONFIG.get("actors") or {}).get("apify") or {}
+        shortlist_only = bool(conf.get("shortlist_only", True))
+        # 2026-11-13: every shortlisted BLR/HYD company with a LinkedIn page had been bought, so the
+        # queue sat at 0 and the credit went unspent ("in the past 10 days only 0.23 spent"). After
+        # the shortlist come the companies a CSV can carry anyway — proved ₹20 LPA+ pay, software only.
+        then_pay_proved = bool(conf.get("then_pay_proved", True))
+        from jobhunter import india
         from jobhunter.db import in_focus
 
+        def mailable(c: Company) -> bool:
+            # the name too: a description is sometimes a press quote with no industry word in it
+            return (then_pay_proved and india.pay_proved(c)[0]
+                    and not india.hardware_domain(f"{c.name} {c.description or ''}")
+                    and not re.search(r"\b(space|aero\w*|drones?|robo\w*)\b", c.name or "", re.I))
+
+        # 2026-11-13, Tejmul: "remote first, India second" — the remote-from-India targets
+        # (jobhunter/remote.py: a full-time, non-senior tech role he can do from India, pay ≥ $50k
+        # where stated) go before everything, and are bought until they hold remote_referrers_wanted
+        remote_order: dict[int, int] = {}
+        if (CONFIG.get("focus") or {}).get("remote_first"):
+            from jobhunter import remote
+
+            remote_order = {t.company_id: i for i, t in enumerate(remote.targets(session, need_linkedin=True))}
+        remote_wanted = int(conf.get("remote_referrers_wanted", 5))
         rows = [c for c in rows
-                if in_focus(c) and not c.overrated and c.tier != "reject" and not c.do_not_contact
-                and (c.id in slot or (not shortlist_only and (c.list_key or any(x in (c.city or "").lower()
-                                                                                for x in _HUNTER_CITIES))))
+                if (c.id in remote_order and not c.do_not_contact and backoff.due(c, "apify")) or
+                in_focus(c) and not c.overrated and c.tier != "reject" and not c.do_not_contact
+                and (c.id in slot or mailable(c)
+                     or (not shortlist_only and (c.list_key or any(x in (c.city or "").lower()
+                                                                   for x in _HUNTER_CITIES))))
                 and backoff.due(c, "apify")]
         tech = dict(session.exec(select(Contact.company_id, func.count()).where(
             col(Contact.company_id).in_([c.id for c in rows] or [-1]),
@@ -360,8 +383,9 @@ def apify_queue() -> list[int]:
             col(Contact.affiliation).in_(["verified-current", "likely-current"]),
             col(Contact.email).is_not(None), Contact.confidence != "pattern-guessed",
             col(Contact.do_not_contact).is_not(True)).group_by(Contact.company_id)).all())
-        picks = [c for c in rows if tech.get(c.id, 0) < 2]
-        picks.sort(key=lambda c: (slot.get(c.id, (9, 9999)), 0 if c.list_key else 1,
+        picks = [c for c in rows if tech.get(c.id, 0) < (remote_wanted if c.id in remote_order else 2)]
+        picks.sort(key=lambda c: (0 if c.id in remote_order else 1, remote_order.get(c.id, 0),
+                                  slot.get(c.id, (9, 9999)), 0 if c.list_key else 1,
                                   _HUNTER_BANDS.get(c.pay_power_band or "", 3), -(c.priority_score or 0), c.id))
         return [c.id for c in picks]
 

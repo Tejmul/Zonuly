@@ -55,9 +55,14 @@ for the visual.
   search address counts as proved only when the vendor's SMTP check says valid + deliverable + not
   catch-all (`best_email` "verified"); one that is only on the person's profile is "published" and
   stays unproved (`linkedin_public._prove` writes the proof before the contact is saved).
-- **Focus: Bengaluru + Hyderabad only** (2026-10-31, `focus.cities` in config.yaml). The people step,
-  Apify and every fill queue skip or sink everything else; the YC directory is not admitted. Remote
-  waits until Bengaluru + Hyderabad are complete (planned end of November) — then empty the list.
+- **Focus: remote first, India second** (2026-11-13, `focus.remote_first` in config.yaml; was Bengaluru +
+  Hyderabad only since 10-31). *"in India getting 50 lpa is tough while … in remote it may be around 50k $"*.
+  A remote target (`jobhunter/remote.py`) is a company with a posting he can do **remotely from India**
+  (`normalize.remote_from_india` — the posting's own location, never assumed; "remote-first" in a US-only
+  ad is not it), full-time, non-senior tech, pay ≥ $50k/yr where stated (no stated pay is fine), software
+  only, no gig marketplaces. Remote targets go first in Apify, the people step and every fill queue; then
+  Bengaluru + Hyderabad (`focus.cities`). Remote jobs come from Himalayas (`scrapers/himalayas.py`,
+  `country=India`) plus the older boards. TODO and evidence: `system docs/REMOTE-TODO.md`.
 - **When Tejmul asks for a CSV** (his mail-merge sheet): `python scripts/export_referrals_csv.py`, in his
   format `company,email,subject,message,name,role,address`. Verified addresses only — a pure list of
   people — unless he asks for unverified (`--with-unproved`, labelled). The verified-sprint batch

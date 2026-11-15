@@ -65,6 +65,7 @@ def spent_today(label: str | None = None) -> float:
 
 
 MONTHLY_STOP_USD = float(_CONF.get("monthly_stop_usd", 18.5))
+PACE_DAYS = int(_CONF.get("pace_days", 0))   # 0 = spread over the whole cycle
 _USAGE: dict = {"at": 0.0, "used": None, "max": None, "end": None}
 # 2026-10-31, Tejmul: "till 15 you can scrape best companies and leads which are verified … in 2 days".
 # A sprint (scripts/verified_sprint.py) may spend everything up to monthly_stop_usd today instead of
@@ -107,6 +108,9 @@ def daily_cap() -> float:
         return round(max(0.0, stop - used + spent_today()), 4)
     today = datetime.now().date()
     days_left = max(1, (datetime.strptime(end, "%Y-%m-%d").date() - today).days + 1)
+    # 2026-11-13, Tejmul ("make the scrapper apify use its potential"): the cycle's credit is spread
+    # over its first pace_days, not all 30 — 500 remote referrers are wanted now, not in a month
+    days_left = min(days_left, PACE_DAYS) if PACE_DAYS else days_left
     # today's own spend is already inside `used`, so add it back before splitting
     pace = max(0.0, stop - used + spent_today()) / days_left
     return round(min(DAILY_USD, pace), 4)
