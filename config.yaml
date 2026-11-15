@@ -1085,6 +1085,7 @@ sources:
   ashby: true
   hn_hiring: true
   remoteok: true
+  himalayas: true     # 2026-11-13: remote roles open to India, full-time, not senior (scrapers/himalayas.py)
   wwr: true
   yc: true
   wellfound: true

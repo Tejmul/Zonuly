@@ -15,6 +15,7 @@ REGISTRY: dict[str, str] = {
     "ashby": "jobhunter.scrapers.ashby",
     "hn_hiring": "jobhunter.scrapers.hn_hiring",
     "remoteok": "jobhunter.scrapers.remoteok",
+    "himalayas": "jobhunter.scrapers.himalayas",   # 2026-11-13: remote roles open to India
     "wwr": "jobhunter.scrapers.wwr",
     "yc": "jobhunter.scrapers.yc",
     "wellfound": "jobhunter.scrapers.wellfound",

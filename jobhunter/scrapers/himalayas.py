@@ -1,0 +1,103 @@
+"""Himalayas public job API — remote roles that are open to someone in India (2026-11-13).
+
+Tejmul, 13 Nov: remote first, *"the companies should allow to work remotely"*, a full-time role,
+around $50k a year. Himalayas carries 118k remote postings and — unlike the other remote boards — says
+which countries each one is open to (`locationRestrictions`), with employment type, seniority and pay.
+Its search takes `country=India`, so every posting read here is one he is allowed to apply for.
+
+The location stored is "Remote — <the countries it is open to>" (or "Remote — Worldwide"), which is
+what `normalize.remote_from_india` reads. Kept: full-time, a software / AI / data / DevOps title, not
+senior, and pay ≥ focus.remote_min_usd where a figure is given. The posting URL is Himalayas' own.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import re
+
+import httpx
+
+from jobhunter import CONFIG
+from jobhunter.scrapers.base import RawJob, get_json, html_to_text, parse_ts
+
+log = logging.getLogger(__name__)
+
+SOURCE = "himalayas"
+SEARCH = "https://himalayas.app/jobs/api/search"
+_OPTS = (CONFIG.get("sources") or {}).get("himalayas_opts") or {}
+QUERIES = list(_OPTS.get("queries") or [
+    "software engineer", "developer", "backend", "frontend", "full stack", "machine learning", "AI engineer",
+    "data engineer", "data scientist", "devops", "site reliability", "platform engineer", "python", "react",
+    "node", "golang", "mobile developer", "QA engineer", "junior", "graduate",
+])
+MAX_PAGES = int(_OPTS.get("max_pages", 15))          # 20 a page
+MIN_USD = float((CONFIG.get("focus") or {}).get("remote_min_usd", 50000))
+
+TECH = re.compile(r"engineer|develop|sde|swe|software|\bai\b|\bml\b|machine learning|data|backend|front|full[- ]?stack|"
+                  r"platform|devops|sre|reliability|security|scientist|programmer|\bqa\b|test|cloud|infrastructure|"
+                  r"mobile|android|ios|web", re.I)
+NOT_TECH = re.compile(r"recruit|talent|sales|marketing|account (?:exec|manager)|\bhr\b|finance|legal|designer|"
+                      r"customer|support|writer|tutor|annotat|rater|interviewer|consultant", re.I)
+SENIOR_LEVELS = {"senior", "lead", "manager", "director", "executive", "principal", "staff"}
+SENIOR_TITLE = re.compile(r"senior|\bsr\.?\b|staff|principal|lead|manager|director|head|architect|\bvp\b|\bii\b|\biii\b",
+                          re.I)
+
+
+def keep(j: dict) -> bool:
+    title = j.get("title") or ""
+    if not TECH.search(title) or NOT_TECH.search(title) or SENIOR_TITLE.search(title):
+        return False
+    if (j.get("employmentType") or "").lower() not in ("full time", "full-time", "fulltime"):
+        return False          # "I care about giving me a full time role"
+    if {str(s).lower() for s in (j.get("seniority") or [])} & SENIOR_LEVELS:
+        return False
+    hi = j.get("maxSalary") or j.get("minSalary")
+    period = (j.get("salaryPeriod") or "annual").lower()
+    if hi and period == "annual" and (j.get("currency") or "USD").upper() == "USD" and hi < MIN_USD:
+        return False          # states a figure under the bar
+    return True
+
+
+def to_raw(j: dict) -> RawJob | None:
+    title, company = (j.get("title") or "").strip(), (j.get("companyName") or "").strip()
+    url = j.get("guid") or j.get("applicationLink")
+    if not (title and company and url):
+        return None
+    where = [str(x) for x in (j.get("locationRestrictions") or [])]
+    lo, hi, cur = j.get("minSalary"), j.get("maxSalary"), (j.get("currency") or "USD")
+    salary = f"{cur} {lo or ''}-{hi or ''}" if (lo or hi) and (j.get("salaryPeriod") or "annual") == "annual" else None
+    return RawJob(company_name=company, title=title, url=url, source=SOURCE,
+                  location="Remote — " + (", ".join(where) if where else "Worldwide"), remote=True,
+                  description=html_to_text(j.get("description") or j.get("excerpt")),
+                  posted_at=parse_ts(j.get("pubDate")), salary_raw=salary,
+                  extra={"himalayas_company": j.get("companySlug"), "seniority": j.get("seniority"),
+                         "employment": j.get("employmentType")})
+
+
+async def _query(http: httpx.AsyncClient, q: str) -> list[dict]:
+    out: list[dict] = []
+    for page in range(1, MAX_PAGES + 1):
+        data = await get_json(http, SEARCH, params={"q": q, "country": "India", "page": page})
+        jobs = (data or {}).get("jobs") or []
+        out.extend(jobs)
+        if len(jobs) < 20:
+            break
+        await asyncio.sleep(0.5)       # a public API: be polite
+    return out
+
+
+async def fetch(http: httpx.AsyncClient, companies: list[dict] | None = None) -> list[RawJob]:
+    seen: dict[str, RawJob] = {}
+    read = 0
+    for q in QUERIES:
+        for j in await _query(http, q):
+            read += 1
+            url = j.get("guid") or j.get("applicationLink")
+            if not url or url in seen or not keep(j):
+                continue
+            raw = to_raw(j)
+            if raw:
+                seen[url] = raw
+    log.info("himalayas: %d read, %d kept (open to India, full-time, not senior, pay ok)", read, len(seen))
+    return list(seen.values())
