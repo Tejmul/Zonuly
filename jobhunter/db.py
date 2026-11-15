@@ -805,13 +805,51 @@ _FOCUS_ALIASES = {"bangalore": "bengaluru", "bengaluru": "bengaluru", "hyderabad
 FOCUS_CITIES = {_FOCUS_ALIASES.get(str(c).lower(), str(c).lower()) for c in ((CONFIG.get("focus") or {}).get("cities") or [])}
 
 
+#: 2026-11-13, Tejmul: "remote first, India second" — a company with a role he can do remotely from
+#: India (normalize.remote_from_india) is in focus ahead of Bengaluru / Hyderabad.
+FOCUS_REMOTE_FIRST = bool((CONFIG.get("focus") or {}).get("remote_first", False))
+_REMOTE_IDS: dict = {"at": 0.0, "ids": frozenset()}
+
+
+def remote_company_ids(max_age_s: float = 900.0) -> frozenset:
+    """Companies (active) with at least one posting that can be done remotely from India. Cached a
+    quarter of an hour per process: the launchd ticks are short-lived, the API refreshes it."""
+    import time
+
+    if _REMOTE_IDS["ids"] and time.time() - _REMOTE_IDS["at"] < max_age_s:
+        return _REMOTE_IDS["ids"]
+    from sqlalchemy import text
+
+    from jobhunter.normalize import remote_from_india
+
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "select j.company_id, j.location, j.description from job j join company c on c.id = j.company_id "
+            "where c.status is null and (j.remote = 1 or j.remote_anywhere = 1 or lower(j.location) like '%remote%' "
+            "or lower(j.location) like '%anywhere%' or lower(j.location) like '%worldwide%' "
+            "or lower(j.location) like '%global%' or lower(j.location) like '%apac%')")).all()
+    _REMOTE_IDS["ids"] = frozenset(cid for cid, loc, desc in rows if remote_from_india(loc, desc))
+    _REMOTE_IDS["at"] = time.time()
+    return _REMOTE_IDS["ids"]
+
+
+def is_remote_company(company: "Company") -> bool:
+    return company.id is not None and company.id in remote_company_ids()
+
+
+def focus_rank(company: "Company") -> int:
+    """0 remote-from-India (when focus.remote_first), 1 a focus city, 2 everything else."""
+    if FOCUS_REMOTE_FIRST and is_remote_company(company):
+        return 0
+    city = (company.city or "").strip().lower()
+    return 1 if (not FOCUS_CITIES or _FOCUS_ALIASES.get(city, city) in FOCUS_CITIES) else 2
+
+
 def in_focus(company: "Company") -> bool:
     """Is this company in the cities we work on right now (config `focus.cities`)? Everything is
-    in focus when the list is empty. 2026-10-31: Bengaluru + Hyderabad only — remote waits."""
-    if not FOCUS_CITIES:
-        return True
-    city = (company.city or "").strip().lower()
-    return _FOCUS_ALIASES.get(city, city) in FOCUS_CITIES
+    in focus when the list is empty. 2026-10-31: Bengaluru + Hyderabad only — remote waits.
+    2026-11-13: with focus.remote_first, a company hiring remotely from India is in focus too."""
+    return focus_rank(company) < 2
 
 
 def fill_order(company: Company) -> tuple:
@@ -830,6 +868,8 @@ def fill_order(company: Company) -> tuple:
                    and (utcnow() - found).days < _INDIA_FILL_FIRST_DAYS)
     # out of focus (config focus.cities) goes after everything in focus, whatever its priority
     first = (0 if listed else 1 if fresh_india else 2) + (0 if in_focus(company) else 10)
+    if FOCUS_REMOTE_FIRST and focus_rank(company) == 0:
+        first = -1        # 2026-11-13: remote-from-India companies first, ahead of the ★ list
     return (first, (company.list_rank or 9999) if listed else 0,
             0 if company.scrape_first else 1, -(prio // 20), done, -prio)
 

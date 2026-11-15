@@ -1,0 +1,132 @@
+"""Remote-from-India targets (2026-11-13).
+
+Tejmul, 13 Nov: *"where should I focus on Indian companies or remote jobs … which can pay well"* —
+remote first, India second. *"the companies should allow to work remotely"*, and on pay: *"pay in remote
+does not matter if it is paying good enough, I care about giving me a full time role … around 50k $ a
+year"*.
+
+A company is a remote target when it has a posting that
+
+  * can be done remotely from India (`normalize.remote_from_india` — the posting's own words),
+  * is a software / AI / data / DevOps role (not sales, not recruiting),
+  * is not senior (no senior, staff, lead, manager, II/III …) — he is a fresher,
+  * is full-time (not part-time, contract, freelance, hourly),
+
+and its pay, where a remote posting states one, reaches `focus.remote_min_usd` a year ($50k ≈ ₹42 LPA).
+No stated pay is allowed — he said pay does not matter if it is good enough, and a remote employer
+paying in dollars almost always is. A stated figure under the bar rules the company out.
+
+Reads only. No scoring, no writes — the Apify queue, the sprint and the CSV export call `targets()`.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from datetime import timedelta
+
+from sqlmodel import col, select
+
+from jobhunter import CONFIG, india
+from jobhunter.db import Company, Job, remote_company_ids, utcnow
+from jobhunter.normalize import place_restricted_title, remote_from_india
+
+_F = CONFIG.get("focus") or {}
+MIN_USD = float(_F.get("remote_min_usd", 50000))
+INR_PER_USD = float(_F.get("inr_per_usd", 84.0))
+MIN_LPA = round(MIN_USD * INR_PER_USD / 100000, 1)        # $50k → ₹42 LPA, the unit job.salary_*_lpa uses
+RECENT_DAYS = int(_F.get("remote_recent_days", 30))
+
+TECH = re.compile(r"engineer|develop|sde|swe|software|\bai\b|\bml\b|machine learning|data|backend|back[- ]end|front|"
+                  r"full[- ]?stack|platform|devops|sre|security|research|scientist|programmer|\bqa\b|test|cloud|"
+                  r"infrastructure|mobile|android|ios|web", re.I)
+NOT_TECH = re.compile(r"recruit|talent|sales|marketing|account (?:exec|manager)|\bhr\b|finance|legal|designer|"
+                      r"customer success|support specialist|operations manager|writer|community|producer|game designer|"
+                      r"consultant|advocate|evangelist|business develop|interviewer|annotator|tutor|rater", re.I)
+SENIOR = re.compile(r"senior|\bsr\.?\b|staff|principal|lead|manager|director|head|architect|\bvp\b|\bii\b|\biii\b|"
+                    r"\biv\b|\bl[4-9]\b|experienced|mid[- ]level|\b[3-9]\+?\s*(?:years|yrs)", re.I)
+# "I care about giving me a full time role" — an internship is not one, unless it says it converts
+NOT_FULL_TIME = re.compile(r"part[- ]time|contract|freelance|contractor|temporary|\btemp\b|hourly|fixed[- ]term|"
+                           r"\bintern(?:ship)?\b(?!.{0,30}(?:full[- ]time|fte|conversion|ppo))", re.I)
+
+
+#: talent marketplaces and staffing shops: they place contractors, they do not give the full-time role
+#: he wants, and a referral there is meaningless (2026-11-13)
+GIG = re.compile(r"\b(toptal|turing|karat|remotepeople|remote people|a\.team|g2i|crossover|braintrust|andela|"
+                 r"mercor|outlier|remotasks|micro1|deel|upwork|fiverr|hivecareers|thehivecareers|remotech|"
+                 r"staffing|recruit\w*|talent\w*|outsourc\w*|consult\w*|hr plus)\b", re.I)
+
+
+@dataclass
+class Target:
+    company_id: int
+    name: str
+    role: str               # the opening the mail names — a real posting, never made up
+    job_id: int
+    location: str
+    recent: bool            # a qualifying role was posted in the last RECENT_DAYS
+    stated_lpa: float | None
+    linkedin: bool
+    roles: list[str] = field(default_factory=list)
+
+    @property
+    def key(self) -> tuple:
+        # recent hiring first, then a stated pay figure (proof beats none), then pay, then name
+        return (0 if self.recent else 1, 0 if self.stated_lpa else 1, -(self.stated_lpa or 0), self.name.lower())
+
+
+def qualifying(job: Job) -> bool:
+    t = job.title or ""
+    return (remote_from_india(job.location, job.description) and bool(TECH.search(t))
+            and not NOT_TECH.search(t) and not SENIOR.search(t) and not job.is_senior
+            and not NOT_FULL_TIME.search(t) and not place_restricted_title(t)
+            and not re.search(r"https?://|www\.", t))         # a URL scraped as the title is not a role
+
+
+def _lpa(job: Job) -> float | None:
+    """A posting's stated annual pay in LPA, if any. salary_*_lpa is already converted by the scrapers."""
+    vals = [v for v in (job.salary_max_lpa, job.salary_min_lpa) if v]
+    return max(vals) if vals else None
+
+
+def targets(session, *, need_linkedin: bool = False) -> list[Target]:
+    ids = remote_company_ids(max_age_s=0)
+    if not ids:
+        return []
+    since = utcnow() - timedelta(days=RECENT_DAYS)
+    jobs = session.exec(select(Job).where(col(Job.company_id).in_(list(ids)))).all()
+    by_co: dict[int, list[Job]] = {}
+    for j in jobs:
+        if qualifying(j):
+            by_co.setdefault(j.company_id, []).append(j)
+    out: list[Target] = []
+    for c in session.exec(select(Company).where(col(Company.id).in_(list(by_co)))).all():
+        if c.status or c.do_not_contact or c.tier == "reject":
+            continue
+        if india.hardware_domain(f"{c.name} {c.description or ''}") or re.search(r"\b(defen[cs]e|government contract|national security|military|warfighter|warfare|conflict)", c.description or "", re.I):
+            continue              # software tech only (2026-11-02), and defence work is US-citizens-only
+        if GIG.search(c.name or "") or GIG.search((c.description or "")[:300]):
+            continue              # a marketplace or agency, not an employer
+        if need_linkedin and not c.linkedin_url:
+            continue
+        roles = by_co[c.id]
+        stated = [x for x in (_lpa(j) for j in roles) if x]
+        if stated and max(stated) < MIN_LPA:
+            continue              # the company itself says it pays under the bar
+        def when(j: Job):
+            return j.posted_at or j.scraped_at
+        roles.sort(key=lambda j: (when(j) is None, -(when(j).timestamp()) if when(j) else 0))
+        best = roles[0]
+        out.append(Target(company_id=c.id, name=c.name, role=best.title, job_id=best.id, location=best.location or "",
+                          recent=any((when(j) or since) >= since and when(j) is not None for j in roles),
+                          stated_lpa=max(stated) if stated else None, linkedin=bool(c.linkedin_url),
+                          roles=[j.title for j in roles[:5]]))
+    out.sort(key=lambda t: t.key)
+    return out
+
+
+def target_ids(session) -> list[int]:
+    return [t.company_id for t in targets(session)]
+
+
+__all__ = ["Target", "targets", "target_ids", "qualifying", "MIN_USD", "MIN_LPA"]

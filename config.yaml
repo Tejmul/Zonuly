@@ -4,6 +4,11 @@
 # Remote comes back when this is emptied (planned: after Bengaluru + Hyderabad are complete, end of Nov).
 focus:
   cities: [Bengaluru, Hyderabad]
+  # 2026-11-13, Tejmul: "remote first, India second" — companies with a role he can do remotely from India
+  # (normalize.remote_from_india) come before Bengaluru / Hyderabad in Apify, the people step and every fill queue.
+  remote_first: true
+  remote_min_usd: 50000     # 2026-11-13: "anything above 50 lpa in rs works, in remote it may be around 50k $ a year"; no stated pay is allowed
+  remote_recent_days: 30    # a role posted in this many days counts as "hiring right now" (sorted first)
 
 openrouter:
   enabled: true
