@@ -337,7 +337,7 @@ _TECH = re.compile(r"\b(ai|artificial intelligence|software|saas|platform|app|ap
 _HARDWARE = re.compile(
     r"\b(aerospace|aeronautic\w*|avionics?|space\s?tech|spacecraft|satellites?|launch vehicles?|rockets?|"
     r"orbital|propulsion|electro[- ]?optics?|optics|photonics?|lidar|radar|"
-    r"robotics?|robots?|cobots?|humanoids?|drones?|uavs?|autonomous vehicles?|"
+    r"robotics?|robots?|cobots?|humanoids?|drones?|uavs?|autonomous vehicles?|aircraft|evtol|delivery crafts?|"
     r"semiconductors?|chipsets?|fabless|vlsi|asic|fpga|embedded hardware|pcb|"
     r"electric vehicles?|\bev\b|batteries|battery|cells?\s+manufactur\w*|solar|wind energy|energy storage|"
     r"biotech\w*|biopharma|pharmaceutical\w*|genomics?|medical devices?|diagnostics lab|"
