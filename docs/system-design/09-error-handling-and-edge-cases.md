@@ -46,7 +46,7 @@ c.execute("COMMIT")
 
 **Two scheduled jobs starting at once.** `tick._Lock` uses a non-blocking `fcntl.flock`. The second job raises "another tick is running" and exits, and the OS frees the lock if the holder dies.
 
-**A crash in the middle of a run.** Every item commits on its own, so the next run carries on. Unique keys (`job.url`, `company.name`, the fingerprint) make a re-run idempotent.
+**A crash in the middle of a run.** The fill and people steps commit company by company, so the next run carries on. The scrape writes its batch in one transaction, so a crash rolls the whole batch back. Unique keys (`job.url`, `company.name`, the fingerprint) make the re-run idempotent.
 
 **Shared objects across threads.** `get_store()` is guarded by a `threading.Lock`.
 

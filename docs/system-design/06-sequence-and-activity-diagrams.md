@@ -20,12 +20,13 @@ sequenceDiagram
   T->>P: scrape(sources)
   P->>S: await fetch(http, companies)
   S-->>P: list[RawJob]
-  loop each RawJob
-    P->>N: salary, fingerprint, remote_from_india
+  loop each unique RawJob
+    P->>N: keep, fingerprint, parse_salary, remote_anywhere
     P->>A: admit(Candidate) returns Verdict
     A-->>P: ok or reason
-    P->>DB: insert or update Job, COMMIT
+    P->>DB: insert or update Job
   end
+  P->>DB: COMMIT (one transaction for the batch)
   P-->>T: ScrapeStats
   T->>DB: setting tick:last:free
 ```
