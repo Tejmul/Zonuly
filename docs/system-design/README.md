@@ -1,6 +1,6 @@
 # ZoNuLy System Design (Low-Level Design)
 
-How ZoNuLy is designed, one topic per file. Every claim points to a real file in this repository. The diagrams are Mermaid, which GitHub draws automatically.
+How ZoNuLy is designed, one topic per file. **New to the code? Start with [11 Architecture and code flow](11-architecture-and-code-flow.md).** Every claim points to a real file in this repository. The diagrams are Mermaid, which GitHub draws automatically.
 
 | # | Topic | What it covers |
 |---|---|---|
@@ -14,6 +14,7 @@ How ZoNuLy is designed, one topic per file. Every claim points to a real file in
 | 8 | [Database schema](08-database-schema.md) | tables, keys, relationships, indexes |
 | 9 | [Error handling and edge cases](09-error-handling-and-edge-cases.md) | validation, failures, concurrency |
 | 10 | [Working implementation](10-working-implementation.md) | how to run it, demo path, tests, deployment |
+| 11 | [Architecture and code flow](11-architecture-and-code-flow.md) | **start here**: which files run, in what order, what runs in parallel; scraping, orchestration and every filter, file by file |
 
 ## The system in one picture
 
