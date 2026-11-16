@@ -1,4 +1,4 @@
-[← 9 Errors](09-error-handling-and-edge-cases.md) · [System design](README.md) · **10 Implementation**
+[← 9 Errors](09-error-handling-and-edge-cases.md) · [System design](README.md) · **10 Implementation** · [11 Code flow →](11-architecture-and-code-flow.md)
 
 # 10. Working implementation
 
@@ -65,4 +65,4 @@ Fill this in before the evaluation. Each member explains their own part.
 | Dashboard | `dashboard/` | |
 
 ---
-[← 9 Errors](09-error-handling-and-edge-cases.md) · [System design](README.md)
+[← 9 Errors](09-error-handling-and-edge-cases.md) · [System design](README.md) · [11 Code flow →](11-architecture-and-code-flow.md)
