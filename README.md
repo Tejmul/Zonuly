@@ -358,7 +358,7 @@ python scripts/smoke.py --db demo.db
 
 ---
 
-**Capstone evaluation (LLD):** requirements, class diagram, OOP, SOLID, design patterns, sequence diagrams, API, schema and error handling, each mapped to the code, are in [docs/CAPSTONE-LLD.md](docs/CAPSTONE-LLD.md).
+**System design (LLD):** requirements, class diagram, OOP, SOLID, design patterns, sequence and activity diagrams, API, database schema, error handling and the working implementation, one file each, in [docs/system-design/](docs/system-design/README.md).
 
 ---
 
