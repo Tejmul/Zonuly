@@ -28,6 +28,7 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 import httpx
 
@@ -197,13 +198,30 @@ class CatalystStore:
         return int(next(iter(cell.values()), 0) or 0)
 
 
+# ------------------------------------------------------------------- the interface
+
+
+@runtime_checkable
+class AccountStore(Protocol):
+    """What the sign-in code needs from wherever accounts live. SqliteStore (a laptop) and
+    CatalystStore (the deployed instance) both satisfy it, so routes.py depends on this
+    interface and never on either class (dependency inversion; get_store picks one)."""
+
+    name: str
+
+    def upsert_login(self, email: str, *, provider: str, name: str | None = None,
+                     google_sub: str | None = None, request=None) -> dict: ...
+
+    def count(self, request=None) -> int: ...
+
+
 # ------------------------------------------------------------------- choice
 
 _store = None
 _store_lock = threading.Lock()
 
 
-def get_store():
+def get_store() -> AccountStore:
     """ZONULY_ACCOUNTS=catalyst on AppSail (set by its start script); SQLite otherwise."""
     global _store
     with _store_lock:
@@ -214,7 +232,7 @@ def get_store():
         return _store
 
 
-def set_store(store) -> None:
+def set_store(store: AccountStore) -> None:
     """For tests."""
     global _store
     with _store_lock:

@@ -353,8 +353,12 @@ python scripts/smoke.py --db demo.db
 - [x] Interview prep on the company page
 - [x] Budgeted Apify sprint for verified referrers at the best bets
 - [ ] Address proof from a port-25 server, so Gmail / Google Workspace / Microsoft addresses can be checked
-- [ ] Remote companies, after Bengaluru and Hyderabad are complete
+- [x] Remote first: roles open to India from Himalayas and the job boards, Apify buying for them first
 - [ ] Sending, restarted on proved addresses only, 25 a day across warmed-up inboxes
+
+---
+
+**Capstone evaluation (LLD):** requirements, class diagram, OOP, SOLID, design patterns, sequence diagrams, API, schema and error handling, each mapped to the code, are in [docs/CAPSTONE-LLD.md](docs/CAPSTONE-LLD.md).
 
 ---
 
