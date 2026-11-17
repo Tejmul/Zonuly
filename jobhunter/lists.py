@@ -59,6 +59,7 @@ LISTS_DIR = ROOT / "data" / "lists"
 
 # ------------------------------------------------------------------ the files
 
+# ZONULY ▸ data ingestion · hand-picked company lists ▸ data ingestion · hand-picked company lists ▸ lists.available(): Every list on disk, with how many of its companies are attached in the database.
 def available() -> list[dict]:
     """Every list on disk, with how many of its companies are attached in the database."""
     init_db()
@@ -77,6 +78,7 @@ def available() -> list[dict]:
     return out
 
 
+# ZONULY ▸ data ingestion · hand-picked company lists ▸ data ingestion · hand-picked company lists ▸ lists._read(): Read a hand-picked list YAML file; raises ValueError unless it has key and companies.
 def _read(path: Path) -> dict:
     """Read a hand-picked list YAML file; raises ValueError unless it has key and companies."""
     spec = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -85,6 +87,7 @@ def _read(path: Path) -> dict:
     return spec
 
 
+# ZONULY ▸ data ingestion · hand-picked company lists ▸ data ingestion · hand-picked company lists ▸ lists.load(): Load the hand-picked list data/lists/<key>.yaml; raises FileNotFoundError when absent.
 def load(key: str) -> dict:
     """Load the hand-picked list data/lists/<key>.yaml; raises FileNotFoundError when absent."""
     path = LISTS_DIR / f"{key}.yaml"
@@ -100,11 +103,13 @@ def load(key: str) -> dict:
 # theirs. A fail leaves the field null — the row then says "no website" rather than
 # pointing every scraper at a stranger.
 
+# ZONULY ▸ scoring ▸ data ingestion · hand-picked company lists ▸ lists._stem(): Reduce a name to lowercase letters and digits only, for matching on a page.
 def _stem(name: str) -> str:
     """Reduce a name to lowercase letters and digits only, for matching on a page."""
     return re.sub(r"[^a-z0-9]", "", name.lower())
 
 
+# ZONULY ▸ scraping · enrichment ▸ data ingestion · hand-picked company lists ▸ lists._check_site(): Check one list entry's website: fetch it and confirm the page names the company.
 async def _check_site(http: httpx.AsyncClient, entry: dict) -> tuple[int, str | None, str]:
     """Check one list entry's website: fetch it and confirm the page names the company.
 
@@ -130,6 +135,7 @@ async def _check_site(http: httpx.AsyncClient, entry: dict) -> tuple[int, str | 
     return entry["rank"], None, "page does not name the company"
 
 
+# ZONULY ▸ enrichment ▸ data ingestion · hand-picked company lists ▸ lists._check_sites(): Check every list entry's website concurrently; returns {rank: (url or None, note)}.
 async def _check_sites(entries: list[dict]) -> dict[int, tuple[str | None, str]]:
     """Check every list entry's website concurrently; returns {rank: (url or None, note)}."""
     from jobhunter.scrapers.base import gather_limited, make_client
@@ -146,6 +152,7 @@ async def _check_sites(entries: list[dict]) -> dict[int, tuple[str | None, str]]
 
 # ------------------------------------------------------------------ sync
 
+# ZONULY ▸ scraping · scoring · ai model call · llm ▸ data ingestion · hand-picked company lists ▸ lists._find(): The list's name, then its aliases, then the harvest's normalized-name match.
 def _find(session, entry: dict) -> Company | None:
     """The list's name, then its aliases, then the harvest's normalized-name match."""
     from jobhunter.harvest import _find_company
@@ -157,6 +164,7 @@ def _find(session, entry: dict) -> Company | None:
     return _find_company(session, entry["name"])
 
 
+# ZONULY ▸ data ingestion · hand-picked company lists ▸ data ingestion · hand-picked company lists ▸ lists.sync(): Attach every company on the list to a database row — creating what is missing,
 def sync(key: str, *, verify_sites: bool = True) -> dict:
     """Attach every company on the list to a database row — creating what is missing,
     filling only the blanks on what exists — and detach rows the list no longer names."""
@@ -236,6 +244,7 @@ def sync(key: str, *, verify_sites: bool = True) -> dict:
 _BANDS = {"pays": 0, "deep_pockets": 1, "funded": 2, "thin": 3, "unknown": 4}
 
 
+# ZONULY ▸ scraping ▸ data ingestion · hand-picked company lists ▸ lists.rows(): The list as the dashboard shows it: the header, then every company in list order
 def rows(key: str) -> dict:
     """The list as the dashboard shows it: the header, then every company in list order
     with what the database knows — roles, people, who to ask first, hiring proof."""
@@ -359,6 +368,7 @@ def rows(key: str) -> dict:
     }
 
 
+# ZONULY ▸ data ingestion · hand-picked company lists ▸ data ingestion · hand-picked company lists ▸ lists._count(): Count how often each value occurs.
 def _count(values) -> dict[str, int]:
     """Count how often each value occurs."""
     out: dict[str, int] = {}
@@ -369,6 +379,7 @@ def _count(values) -> dict[str, int]:
 
 # ------------------------------------------------------------------ people
 
+# ZONULY ▸ people search · referrers ▸ data ingestion · hand-picked company lists ▸ lists.find_people(): Roles and referrers at every company on the list, in list order.
 def find_people(key: str, *, linkedin: bool = True, refresh_days: int = 0,
                 limit: int | None = None, linkedin_only: bool = False,
                 emails_only: bool = False, x_handles: bool = False) -> dict:
@@ -474,6 +485,7 @@ def find_people(key: str, *, linkedin: bool = True, refresh_days: int = 0,
     return out
 
 
+# ZONULY ▸ people search · referrers ▸ data ingestion · hand-picked company lists ▸ lists._emails_for(): One company's address pass — see find_people(emails_only=True).
 def _emails_for(cid: int, name: str, line: dict, out: dict) -> dict:
     """One company's address pass — see find_people(emails_only=True)."""
     from jobhunter.contacts import fill_by_pattern, linkedin_public, web_emails
@@ -510,6 +522,7 @@ def _emails_for(cid: int, name: str, line: dict, out: dict) -> dict:
 
 # ------------------------------------------------------------------ audit
 
+# ZONULY ▸ github scraping · scoring · monitoring ▸ data ingestion · hand-picked company lists ▸ lists.audit_orgs(): Re-check every GitHub org on the list against the strict match, and drop what fails.
 def audit_orgs(key: str, *, fix: bool = True) -> dict:
     """Re-check every GitHub org on the list against the strict match, and drop what fails.
 
@@ -528,6 +541,7 @@ def audit_orgs(key: str, *, fix: bool = True) -> dict:
             select(Company).where(Company.list_key == key, col(Company.github_org).is_not(None))
             .order_by(col(Company.list_rank))).all()]
 
+    # ZONULY ▸ github scraping · monitoring ▸ data ingestion · hand-picked company lists ▸ lists.audit_orgs.run(): Check each listed company's GitHub org is really theirs, concurrently over one HTTP client.
     async def run() -> list:
         """Check each listed company's GitHub org is really theirs, concurrently over one HTTP client."""
         async with make_client() as http:

@@ -67,6 +67,7 @@ from jobhunter.db import get_session, get_setting, init_db, set_setting, utcnow
 log = logging.getLogger(__name__)
 
 
+# ZONULY ▸ data ingestion · community discovery ▸ data ingestion · community discovery ▸ class communities.Community: One room — a Slack workspace, a Discord server, a forum — that posts jobs.
 class Community(SQLModel, table=True):
     """One room — a Slack workspace, a Discord server, a forum — that posts jobs.
 
@@ -111,6 +112,7 @@ _COMMUNITY_LINK = re.compile(r"\[([^\]\[]{2,70})\]\((https://thehiveindex\.com/c
 _MEMBERS = re.compile(r"(?i)\b(?:roughly\s+|about\s+|over\s+|~)?(\d[\d,]*(?:\.\d+)?)\s*([km])?\s*\+?\s*members\b")
 
 
+# ZONULY ▸ data ingestion · community discovery ▸ data ingestion · community discovery ▸ communities.members_from(): The member count a page states, in its own words, or None. Never a guess: a number that is
 def members_from(text: str) -> int | None:
     """The member count a page states, in its own words, or None. Never a guess: a number that is
     not followed by the word "members" is not a member count."""
@@ -133,12 +135,14 @@ _HUGE = 50_000
 _TINY = 50
 
 
+# ZONULY ▸ data ingestion · community discovery ▸ data ingestion · community discovery ▸ communities.slug_of(): Extract the community slug from a Hive Index /communities/ URL (lowercased).
 def slug_of(url: str) -> str:
     """Extract the community slug from a Hive Index /communities/ URL (lowercased)."""
     m = re.search(r"/communities/([^/?#]+)", url or "")
     return (m.group(1) if m else (url or "")).strip("/").lower()
 
 
+# ZONULY ▸ data ingestion · community discovery ▸ data ingestion · community discovery ▸ class communities.Found
 @dataclass
 class Found:
     name: str
@@ -153,6 +157,7 @@ class Found:
     evidence: str | None = None
 
 
+# ZONULY ▸ data ingestion · community discovery ▸ data ingestion · community discovery ▸ class communities.Stats
 @dataclass
 class Stats:
     pages: int = 0
@@ -162,11 +167,13 @@ class Stats:
     skipped: dict = field(default_factory=dict)
     seconds: int = 0
 
+    # ZONULY ▸ data ingestion · community discovery ▸ data ingestion · community discovery ▸ communities.Stats.skip(): Count one skipped community under the given reason.
     def skip(self, why: str) -> None:
         """Count one skipped community under the given reason."""
         self.skipped[why] = self.skipped.get(why, 0) + 1
 
 
+# ZONULY ▸ scoring · people search · referrers ▸ data ingestion · community discovery ▸ communities.score(): How much is this room worth to ONE fresher looking for a referral? Small and specific beats
 def score(c: Found | Community) -> tuple[float, str]:
     """How much is this room worth to ONE fresher looking for a referral? Small and specific beats
     big and famous, because the whole advantage of a community post is that few people see it.
@@ -205,6 +212,7 @@ def score(c: Found | Community) -> tuple[float, str]:
     return max(0.0, min(100.0, s)), "; ".join(why)
 
 
+# ZONULY ▸ data ingestion · community discovery ▸ data ingestion · community discovery ▸ communities.parse_hive(): Communities named on one Hive Index topic × platform page.
 def parse_hive(text: str, *, topic: str, platform: str, page_url: str) -> list[Found]:
     """Communities named on one Hive Index topic × platform page.
 
@@ -230,6 +238,7 @@ def parse_hive(text: str, *, topic: str, platform: str, page_url: str) -> list[F
     return list(out.values())
 
 
+# ZONULY ▸ data ingestion · community discovery ▸ data ingestion · community discovery ▸ communities._save(): Insert a newly found community or update the existing row, rescoring it.
 def _save(session, f: Found, st: Stats) -> None:
     """Insert a newly found community or update the existing row, rescoring it.
     Writes to the community table and bumps the added/updated stats; never blanks a known value."""
@@ -260,6 +269,7 @@ _DIRECT = re.compile(r"\]\((https?://(?!thehiveindex|www\.altium|images\.unsplas
                      r"www\.reddit\.com|docs\.google\.com)[^)\s]+)\)")
 
 
+# ZONULY ▸ data ingestion · community discovery ▸ data ingestion · community discovery ▸ communities.join_link(): Where he actually joins, read off the directory's own page. None when the page does not say
 def join_link(text: str) -> str | None:
     """Where he actually joins, read off the directory's own page. None when the page does not say
     — a join link is never constructed from the community's name."""
@@ -275,6 +285,7 @@ def join_link(text: str) -> str | None:
     return None
 
 
+# ZONULY ▸ enrichment · knowledge graph ▸ data ingestion · community discovery ▸ communities.about(): The community's own description, the paragraph under "## About".
 def about(text: str) -> str | None:
     """The community's own description, the paragraph under "## About"."""
     m = re.search(r"(?s)##\s*About[^\n]*\n(.{40,900}?)(?:\n##|\Z)", text or "")
@@ -283,6 +294,7 @@ def about(text: str) -> str | None:
     return re.sub(r"\s+", " ", m.group(1)).strip()[:600] or None
 
 
+# ZONULY ▸ enrichment ▸ data ingestion · community discovery ▸ communities.enrich(): Read each community's own directory page for the JOIN LINK and its real description.
 def enrich(limit: int = 40, *, budget_s: int = 900, only_missing: bool = True) -> dict:
     """Read each community's own directory page for the JOIN LINK and its real description.
 
@@ -339,6 +351,7 @@ def enrich(limit: int = 40, *, budget_s: int = 900, only_missing: bool = True) -
     return st
 
 
+# ZONULY ▸ scraping ▸ data ingestion · community discovery ▸ communities.harvest(): Walk the next `pages` topic × platform directory pages and store what they name.
 def harvest(pages: int = 8, *, budget_s: int = 600) -> dict:
     """Walk the next `pages` topic × platform directory pages and store what they name."""
     from jobhunter.research import web
@@ -386,6 +399,7 @@ def harvest(pages: int = 8, *, budget_s: int = 600) -> dict:
     return out
 
 
+# ZONULY ▸ data ingestion · community discovery ▸ data ingestion · community discovery ▸ communities.best(): The rooms worth joining, best first — small, on topic, with a job channel.
 def best(limit: int = 40, *, platform: str | None = None, with_jobs: bool = True) -> list[dict]:
     """The rooms worth joining, best first — small, on topic, with a job channel."""
     init_db()
@@ -402,6 +416,7 @@ def best(limit: int = 40, *, platform: str | None = None, with_jobs: bool = True
             for c in rows[:limit]]
 
 
+# ZONULY ▸ validation · guardrails ▸ data ingestion · community discovery ▸ communities._row(): One room as the UI shows it. `evidence` is the directory's own sentence, kept so a
 def _row(c: Community) -> dict:
     """One room as the UI shows it. `evidence` is the directory's own sentence, kept so a
     member count can be argued with rather than trusted."""
@@ -412,6 +427,7 @@ def _row(c: Community) -> dict:
             "first_seen": c.first_seen, "last_seen": c.last_seen}
 
 
+# ZONULY ▸ data ingestion · community discovery ▸ data ingestion · community discovery ▸ communities.listing(): Every room on file, best first, with the counts the page needs to describe itself.
 def listing(*, platform: str | None = None, topic: str | None = None,
             with_jobs: bool | None = None, joined: bool | None = None,
             q: str | None = None, limit: int = 500) -> dict:
@@ -452,6 +468,7 @@ def listing(*, platform: str | None = None, topic: str | None = None,
             "all_topics": sorted({r["topic"] for r in out if r["topic"]})}
 
 
+# ZONULY ▸ data ingestion · community discovery ▸ data ingestion · community discovery ▸ communities.set_joined(): Mark a room joined, or not. Only ever set by hand — code never joins anything.
 def set_joined(community_id: int, joined: bool) -> dict:
     """Mark a room joined, or not. Only ever set by hand — code never joins anything."""
     init_db()

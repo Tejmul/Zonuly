@@ -103,15 +103,18 @@ _last: dict[str, float] = {}
 _cool: dict[str, float] = {}
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ class india_sources.Cooled: The host answered 429 / 503 (or a bot wall) — leave it alone for this run.
 class Cooled(Exception):
     """The host answered 429 / 503 (or a bot wall) — leave it alone for this run."""
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources._host(): Return a URL's lowercase host without www.
 def _host(url: str) -> str:
     """Return a URL's lowercase host without www."""
     return urlparse(url).netloc.lower().removeprefix("www.")
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ india_sources._pace(): Rate-limit scraping per host: sleep until the gap since the last request to it has passed.
 def _pace(host: str, gap: float | None = None) -> None:
     """Rate-limit scraping per host: sleep until the gap since the last request to it has passed."""
     t = _last.get(host)
@@ -121,6 +124,7 @@ def _pace(host: str, gap: float | None = None) -> None:
     _last[host] = time.time()
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources.get(): One GET, paced per host. None on a network error or a 4xx; raises Cooled on a 429 /
 def get(url: str, *, timeout: float = 20, gap: float | None = None, accept: str = "text/html,*/*;q=0.8",
         headers: dict | None = None) -> httpx.Response | None:
     """One GET, paced per host. None on a network error or a 4xx; raises Cooled on a 429 /
@@ -159,6 +163,7 @@ _STRIP = re.compile(r"(?is)<(script|style|noscript|svg|template)\b.*?</\1>")
 _TAG = re.compile(r"<[^>]+>")
 
 
+# ZONULY ▸ lock ▸ data ingestion · company discovery ▸ india_sources.page_text(): Visible text with line breaks at block ends — footers kept (that is where the
 def page_text(html: str) -> str:
     """Visible text with line breaks at block ends — footers kept (that is where the
     office address is)."""
@@ -169,6 +174,7 @@ def page_text(html: str) -> str:
     return re.sub(r"\n\s*\n+", "\n", t).strip()
 
 
+# ZONULY ▸ scoring ▸ data ingestion · company discovery ▸ india_sources.meta(): Return the content of the first matching meta tag (name or property) in HTML, or None.
 def meta(html: str, *names: str) -> str | None:
     """Return the content of the first matching meta tag (name or property) in HTML, or None."""
     for n in names:
@@ -179,12 +185,14 @@ def meta(html: str, *names: str) -> str | None:
     return None
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources.title_of(): Return the page title from HTML, whitespace-collapsed and capped at 200 chars, or None.
 def title_of(html: str) -> str | None:
     """Return the page title from HTML, whitespace-collapsed and capped at 200 chars, or None."""
     m = re.search(r"<title[^>]*>(.*?)</title>", html or "", re.I | re.S)
     return re.sub(r"\s+", " ", unescape(m.group(1))).strip()[:200] if m else None
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources.city_windows(): Short passages around each mention of Bengaluru / Hyderabad — the lines an
 def city_windows(text: str, *, width: int = 140) -> list[str]:
     """Short passages around each mention of Bengaluru / Hyderabad — the lines an
     address or a 'based in' sentence sits on."""
@@ -206,6 +214,7 @@ def city_windows(text: str, *, width: int = 140) -> list[str]:
     return out
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources.city_from_text(): The first passage of a company's own page that places it in Bengaluru / Hyderabad
 def city_from_text(text: str, *, name: str, domain: str | None = None) -> str | None:
     """The first passage of a company's own page that places it in Bengaluru / Hyderabad
     (guardrails.india_city, own_page): a passage that also names Delhi or Pune without
@@ -216,6 +225,7 @@ def city_from_text(text: str, *, name: str, domain: str | None = None) -> str | 
     return None
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources.city_from_markup(): The same, from the page's markup itself — a JSON-LD PostalAddress, a Next.js /
 def city_from_markup(html: str, *, name: str, domain: str | None = None) -> str | None:
     """The same, from the page's markup itself — a JSON-LD PostalAddress, a Next.js /
     Framer data blob, an address in an attribute — for sites whose visible text is drawn
@@ -238,6 +248,7 @@ def city_from_markup(html: str, *, name: str, domain: str | None = None) -> str 
 _SUBPAGES = ("/contact", "/contact-us", "/about", "/about-us")
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ data ingestion · company discovery ▸ india_sources.own_site(): Read the company's own site: homepage first, then a contact / about page until a
 def own_site(website: str, *, name: str | None = None, pages: int = 4) -> dict:
     """Read the company's own site: homepage first, then a contact / about page until a
     passage names Bengaluru / Hyderabad. {ok, final, name, description, quote, url, why}."""
@@ -285,6 +296,7 @@ def own_site(website: str, *, name: str | None = None, pages: int = 4) -> dict:
 _SEEN = "india_src:seen"
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources._seen(): Return the set of keys already seen for one India source (from settings).
 def _seen(session, kind: str) -> set[str]:
     """Return the set of keys already seen for one India source (from settings)."""
     try:
@@ -293,6 +305,7 @@ def _seen(session, kind: str) -> set[str]:
         return set()
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources._mark(): Add keys to one India source's seen set in settings, keeping the last 30,000.
 def _mark(session, keys: list[str], kind: str) -> None:
     """Add keys to one India source's seen set in settings, keeping the last 30,000."""
     if not keys:
@@ -303,6 +316,7 @@ def _mark(session, keys: list[str], kind: str) -> None:
     _put(session, f"{_SEEN}:{kind}", have[-30000:])
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources._json(): Read a JSON value from a setting, or return the default when missing or invalid.
 def _json(session, key: str, default):
     """Read a JSON value from a setting, or return the default when missing or invalid."""
     try:
@@ -312,6 +326,7 @@ def _json(session, key: str, default):
     return default if v is None else v
 
 
+# ZONULY ▸ retry · backoff ▸ data ingestion · company discovery ▸ india_sources._put(): Write a JSON value to a setting, retrying with backoff while the database is locked.
 def _put(session, key: str, value) -> None:
     """Write a JSON value to a setting, retrying with backoff while the database is locked."""
     for attempt in range(5):
@@ -325,6 +340,7 @@ def _put(session, key: str, value) -> None:
             time.sleep(2 + 3 * attempt)
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources._known(): The existing row and whether it already carries a city (then there is nothing to
 def _known(session, name: str, domain: str | None = None):
     """The existing row and whether it already carries a city (then there is nothing to
     learn from fetching anything)."""
@@ -332,6 +348,7 @@ def _known(session, name: str, domain: str | None = None):
     return row, bool(row is not None and (row.city or row.status in ("quarantined", "merged")))
 
 
+# ZONULY ▸ admission gate · filtering · enrichment · lock · sign-in · auth ▸ data ingestion · company discovery ▸ india_sources.admit(): india._admit in its own short session, retried when the fill workers hold the lock.
 def admit(run, cand) -> object | None:
     """india._admit in its own short session, retried when the fill workers hold the lock."""
     from jobhunter import india
@@ -347,6 +364,7 @@ def admit(run, cand) -> object | None:
     return None
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources._skip(): Count one candidate as seen and skipped under its source and reason.
 def _skip(run, kind: str, why: str) -> None:
     """Count one candidate as seen and skipped under its source and reason."""
     run.stat(kind)["seen"] += 1
@@ -361,6 +379,7 @@ K_GH_CURSOR = "india_src:github_cursor2"    # {"q": i, "page": p}
 K_GH_QUEUE = "india_src:github_queue2"      # logins still to read
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources.gh_queries(): Most-followed first: a company's org is followed, a weekend project's is not
 def gh_queries() -> list[str]:
     """Most-followed first: a company's org is followed, a weekend project's is not
     (2026-10-14: newest-first returned hobby orgs). Each stays under the 1,000-result cap."""
@@ -393,6 +412,7 @@ AGENCY = re.compile(
     r"product engineering services|engineering services|software services|staffing|recruitment)\b")
 
 
+# ZONULY ▸ github scraping · enrichment ▸ data ingestion · company discovery ▸ india_sources.parse_gh_org(): github.com/<org>: display name, website, location, description.
 def parse_gh_org(html: str) -> dict:
     """github.com/<org>: display name, website, location, description."""
     out: dict = {}
@@ -413,6 +433,7 @@ def parse_gh_org(html: str) -> dict:
     return out
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources.gh_junk(): Why this org is not a company, or None.
 def gh_junk(login: str, info: dict) -> str | None:
     """Why this org is not a company, or None."""
     site = info.get("website") or ""
@@ -432,6 +453,7 @@ def gh_junk(login: str, info: dict) -> str | None:
     return None
 
 
+# ZONULY ▸ sign-in · auth ▸ data ingestion · company discovery ▸ india_sources._gh_search(): The next page of org logins; None when the search is exhausted or refused.
 def _gh_search(session, run, kind: str) -> list[str] | None:
     """The next page of org logins; None when the search is exhausted or refused."""
     cur = _json(session, K_GH_CURSOR, {"q": 0, "page": 1})
@@ -462,6 +484,7 @@ def _gh_search(session, run, kind: str) -> list[str] | None:
     return None
 
 
+# ZONULY ▸ github scraping ▸ data ingestion · company discovery ▸ india_sources.from_github(): Read up to `orgs` org pages (searching for more when the queue runs dry).
 def from_github(run, *, orgs: int = 25, searches: int = 1, kind: str = "github") -> int:
     """Read up to `orgs` org pages (searching for more when the queue runs dry)."""
     with get_session() as session:
@@ -537,11 +560,13 @@ K_CS_CURSOR = "india_src:cutshort_cursor"   # {"i": page-list index, "page": n}
 _NEXT = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 
 
+# ZONULY ▸ decision ▸ data ingestion · company discovery ▸ india_sources.cs_pages(): Return the Cutshort job-listing URLs for every target city and role.
 def cs_pages() -> list[str]:
     """Return the Cutshort job-listing URLs for every target city and role."""
     return [f"{CS}/jobs/{role}-jobs-in-{slug}" for slug in CS_CITIES.values() for role in CS_ROLES]
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources._walk(): Yield every dict nested anywhere in a JSON object that has the given key.
 def _walk(obj, key: str):
     """Yield every dict nested anywhere in a JSON object that has the given key."""
     if isinstance(obj, dict):
@@ -554,6 +579,7 @@ def _walk(obj, key: str):
             yield from _walk(v, key)
 
 
+# ZONULY ▸ ai model call · llm ▸ data ingestion · company discovery ▸ india_sources.parse_cutshort(): Job posts off a Cutshort list page: company name, alias, type, size, stage,
 def parse_cutshort(html: str) -> list[dict]:
     """Job posts off a Cutshort list page: company name, alias, type, size, stage,
     founded, website, hiringForClient, and the post's title and locations."""
@@ -580,12 +606,14 @@ def parse_cutshort(html: str) -> list[dict]:
     return out
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources._size_floor(): Return the lower bound of a company-size range like 51-200, or 0.
 def _size_floor(size: str | None) -> int:
     """Return the lower bound of a company-size range like 51-200, or 0."""
     nums = [int(n) for n in re.findall(r"\d+", size or "")]
     return nums[0] if nums else 0
 
 
+# ZONULY ▸ decision · review gate ▸ data ingestion · company discovery ▸ india_sources.cs_gate(): Why a Cutshort poster is not a target company, or None.
 def cs_gate(row: dict) -> str | None:
     """Why a Cutshort poster is not a target company, or None."""
     if row["client"]:
@@ -608,6 +636,7 @@ def cs_gate(row: dict) -> str | None:
     return None
 
 
+# ZONULY ▸ scraping · data ingestion · admission gate · filtering ▸ data ingestion · company discovery ▸ india_sources.from_cutshort(): India discovery from Cutshort job posts: scrape listing pages and admit BLR/HYD com…
 def from_cutshort(run, *, pages: int = 2, kind: str = "cutshort") -> int:
     """India discovery from Cutshort job posts: scrape listing pages and admit BLR/HYD companies.
 
@@ -708,6 +737,7 @@ _NOT_COMPANY_HOST = re.compile(
     r"cloudfront|amazonaws|azureedge|shopify|squarespace|framer|zohopublic|forms\.|docs\.)")
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources._links(): (absolute url, anchor text) for every link on a page.
 def _links(html: str, base: str) -> list[tuple[str, str]]:
     """(absolute url, anchor text) for every link on a page."""
     out = []
@@ -718,6 +748,7 @@ def _links(html: str, base: str) -> list[tuple[str, str]]:
     return out
 
 
+# ZONULY ▸ enrichment ▸ data ingestion · company discovery ▸ india_sources.portfolio_items(): Queue items off a portfolio index: {'src', 'website'} (links mode) or {'src',
 def portfolio_items(src: dict, html: str) -> list[dict]:
     """Queue items off a portfolio index: {'src', 'website'} (links mode) or {'src',
     'name', 'page'} (pages mode)."""
@@ -747,6 +778,7 @@ def portfolio_items(src: dict, html: str) -> list[dict]:
     return items
 
 
+# ZONULY ▸ enrichment ▸ data ingestion · company discovery ▸ india_sources.website_from_page(): A portfolio company page's link to the company's own site: an outbound link whose
 def website_from_page(html: str, base: str, name: str) -> str | None:
     """A portfolio company page's link to the company's own site: an outbound link whose
     host carries the company's name."""
@@ -760,6 +792,7 @@ def website_from_page(html: str, base: str, name: str) -> str | None:
     return None
 
 
+# ZONULY ▸ enrichment ▸ data ingestion · company discovery ▸ india_sources.site_name(): The company's name off its own homepage: og:site_name, else a title segment that
 def site_name(site: dict, website: str, hint: str | None = None) -> str | None:
     """The company's name off its own homepage: og:site_name, else a title segment that
     the domain carries, else the anchor text that linked it."""
@@ -778,6 +811,7 @@ def site_name(site: dict, website: str, hint: str | None = None) -> str | None:
     return None
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources._pf_index(): Turn the next not-yet-indexed portfolio page into queue items.
 def _pf_index(session, run, kind: str) -> list[dict]:
     """Turn the next not-yet-indexed portfolio page into queue items."""
     indexed = set(_json(session, K_PF_DONE, []))
@@ -800,6 +834,7 @@ def _pf_index(session, run, kind: str) -> list[dict]:
     return []
 
 
+# ZONULY ▸ enrichment ▸ data ingestion · company discovery ▸ india_sources.from_portfolio(): Resolve up to `companies` portfolio entries: website (off the company's portfolio
 def from_portfolio(run, *, companies: int = 20, kind: str = "portfolio") -> int:
     """Resolve up to `companies` portfolio entries: website (off the company's portfolio
     page when needed), then the company's own site must name Bengaluru / Hyderabad."""
@@ -887,12 +922,14 @@ K_WF_CURSOR = "india_src:wellfound_cursor"
 _WF_CARD = re.compile(r"\]\((https://wellfound\.com/company/([a-z0-9-]+))\)")
 
 
+# ZONULY ▸ wellfound scraping · decision ▸ data ingestion · company discovery ▸ india_sources.wf_pages(): Return the Wellfound location and role pages to walk for the target cities.
 def wf_pages() -> list[str]:
     """Return the Wellfound location and role pages to walk for the target cities."""
     out = [f"{WF}/location/{c}" for c in WF_CITIES.values()]
     return out + [f"{WF}/role/l/{r}/{c}" for c in WF_CITIES.values() for r in WF_ROLES]
 
 
+# ZONULY ▸ wellfound scraping ▸ data ingestion · company discovery ▸ india_sources.parse_wellfound(): Company cards off a Wellfound list page (Jina Markdown): slug, name, blurb, size,
 def parse_wellfound(md: str) -> list[dict]:
     """Company cards off a Wellfound list page (Jina Markdown): slug, name, blurb, size,
     and the city lines of its roles ("In office • Bengaluru")."""
@@ -916,6 +953,7 @@ def parse_wellfound(md: str) -> list[dict]:
     return out
 
 
+# ZONULY ▸ wellfound scraping ▸ data ingestion · company discovery ▸ india_sources.guess_sites(): Domains a company called `name` (Wellfound slug `slug`) is likely to own.
 def guess_sites(name: str, slug: str) -> list[str]:
     """Domains a company called `name` (Wellfound slug `slug`) is likely to own."""
     key = admission.name_key(name) or ""
@@ -930,6 +968,7 @@ def guess_sites(name: str, slug: str) -> list[str]:
     return list(dict.fromkeys(out))[:7]
 
 
+# ZONULY ▸ data ingestion · company discovery ▸ data ingestion · company discovery ▸ india_sources._jina(): Read a page as Markdown through the Jina Reader; None when nothing came back.
 def _jina(url: str) -> str | None:
     """Read a page as Markdown through the Jina Reader; None when nothing came back."""
     from jobhunter.research import web
@@ -945,6 +984,7 @@ def _jina(url: str) -> str | None:
     return body[i + len("Markdown Content:"):] if i >= 0 else body
 
 
+# ZONULY ▸ wellfound scraping · data ingestion · admission gate · filtering ▸ data ingestion · company discovery ▸ india_sources.from_wellfound(): India discovery from Wellfound: read company cards via Jina and admit BL…
 def from_wellfound(run, *, pages: int = 1, kind: str = "wellfound") -> int:
     """India discovery from Wellfound: read company cards via Jina and admit BLR/HYD companies.
 
