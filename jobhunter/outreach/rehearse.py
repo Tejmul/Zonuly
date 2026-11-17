@@ -53,6 +53,7 @@ from pathlib import Path
 from jobhunter import ROOT
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ rehearse._backup(): Copy the live SQLite database to data/backups/ with the backup API and return the copy's path.
 def _backup(tag: str) -> Path:
     """Copy the live SQLite database to data/backups/ with the backup API and return the copy's path."""
     from jobhunter.db import DB_PATH
@@ -68,6 +69,7 @@ def _backup(tag: str) -> Path:
     return dest
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ rehearse.run_on_copy(): Rehearse the sending week on a database copy: back it up, run _simulate in a child process.
 def run_on_copy(*, start: str = "2026-10-19", days: int = 9, keep: bool = True) -> dict:
     """Rehearse the sending week on a database copy: back it up, run _simulate in a child process.
     Returns the per-day results and checks (or an error); optionally deletes the copy afterwards."""
@@ -87,21 +89,26 @@ def run_on_copy(*, start: str = "2026-10-19", days: int = 9, keep: bool = True) 
     return data
 
 
+# ZONULY ▸ lock ▸ outreach · email ▸ class rehearse._Clock
 class _Clock:
+    # ZONULY ▸ lock ▸ outreach · email ▸ rehearse._Clock.__init__(): Start the simulated clock at the given local time.
     def __init__(self, t: datetime):
         """Start the simulated clock at the given local time."""
         self.t = t
 
+    # ZONULY ▸ lock ▸ outreach · email ▸ rehearse._Clock.local(): Return the simulated local time.
     def local(self) -> datetime:
         """Return the simulated local time."""
         return self.t
 
+    # ZONULY ▸ lock ▸ outreach · email ▸ rehearse._Clock.utc(): Return the simulated time shifted to UTC by this machine's current offset.
     def utc(self) -> datetime:
         """Return the simulated time shifted to UTC by this machine's current offset."""
         off = datetime.now().astimezone().utcoffset() or timedelta(0)
         return self.t - off
 
 
+# ZONULY ▸ email drafting · review gate · email sending · replies · follow-up ▸ outreach · email ▸ rehearse._simulate(): Simulate a sending week on a backup copy: drafting, review, dry-run sending, follow-ups, replies.
 def _simulate(start: str, days: int, out_path: str) -> None:   # noqa: C901 — one linear script
     """Simulate a sending week on a backup copy: drafting, review, dry-run sending, follow-ups, replies.
     Patches clock, Gmail, model and notifications; refuses to run on a non-backup DB.
@@ -128,6 +135,7 @@ def _simulate(start: str, days: int, out_path: str) -> None:   # noqa: C901 — 
     sender.OUTBOX = outbox
     sender.SEND_MODE = "dryrun"
 
+    # ZONULY ▸ email sending ▸ outreach · email ▸ rehearse._simulate._refuse(): Stand-in for Gmail send during a rehearsal; always raises so nothing can be mailed.
     def _refuse(*a, **k):
         """Stand-in for Gmail send during a rehearsal; always raises so nothing can be mailed."""
         raise RuntimeError("rehearsal: Gmail is off")
@@ -147,6 +155,7 @@ def _simulate(start: str, days: int, out_path: str) -> None:   # noqa: C901 — 
     _orig_window = sender.in_send_window
     sender.in_send_window = lambda now=None: _orig_window(now or clock.local())
 
+    # ZONULY ▸ email sending ▸ outreach · email ▸ rehearse._simulate._sent_today(): Count emails sent since simulated local midnight (replaces sender.sent_today in rehearsal).
     def _sent_today() -> int:
         """Count emails sent since simulated local midnight (replaces sender.sent_today in rehearsal)."""
         mid = clock.local().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -293,6 +302,7 @@ def _simulate(start: str, days: int, out_path: str) -> None:   # noqa: C901 — 
     Path(out_path).write_text(json.dumps(out, default=str, indent=1))
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ rehearse.table(): Format a rehearsal result as a text table: one row per day, then the checks.
 def table(out: dict) -> str:
     """Format a rehearsal result as a text table: one row per day, then the checks."""
     if out.get("error"):

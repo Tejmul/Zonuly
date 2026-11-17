@@ -96,11 +96,13 @@ from sqlmodel import Field, Session, SQLModel, create_engine
 from jobhunter import CONFIG, ROOT
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ db.utcnow(): Naive UTC timestamp — SQLite has no tz type, and everything here is UTC by convention.
 def utcnow() -> datetime:
     """Naive UTC timestamp — SQLite has no tz type, and everything here is UTC by convention."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ class db.Company
 class Company(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
@@ -256,6 +258,7 @@ class Company(SQLModel, table=True):
     filled_at: Optional[datetime] = Field(default=None, index=True)
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ class db.Job
 class Job(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     # a senior-titled role is kept (the company is hiring) but ranked after fresher roles
@@ -306,6 +309,7 @@ class Job(SQLModel, table=True):
     needs_synthesis: Optional[str] = Field(default=None, index=True)   # none | done | pending | rejected | skipped
 
 
+# ZONULY ▸ people search · referrers ▸ storage · database models and write guards ▸ class db.Contact
 class Contact(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     company_id: int = Field(foreign_key="company.id", index=True)
@@ -364,6 +368,7 @@ class Contact(SQLModel, table=True):
     mailed_by_tejmul_at: Optional[datetime] = Field(default=None, index=True)
 
 
+# ZONULY ▸ scraping · filtering · validation · guardrails ▸ storage · database models and write guards ▸ class db.ExtractionReject: A value a scrape found and the guardrails refused — kept, never silently dropped.
 class ExtractionReject(SQLModel, table=True):
     """A value a scrape found and the guardrails refused — kept, never silently dropped."""
 
@@ -379,6 +384,7 @@ class ExtractionReject(SQLModel, table=True):
     at: datetime = Field(default_factory=utcnow, index=True)
 
 
+# ZONULY ▸ validation · guardrails · email verification · monitoring ▸ storage · database models and write guards ▸ class db.ExtractionWrite: A value the guardrails accepted, with its provenance — what the hourly audit…
 class ExtractionWrite(SQLModel, table=True):
     """A value the guardrails accepted, with its provenance — what the hourly audit samples."""
 
@@ -395,6 +401,7 @@ class ExtractionWrite(SQLModel, table=True):
     at: datetime = Field(default_factory=utcnow, index=True)
 
 
+# ZONULY ▸ github scraping · ai model call · llm ▸ storage · database models and write guards ▸ class db.ChannelHour: Calls per research channel per hour: is Exa MCP / Jina / GitHub / OpenRouter answering?
 class ChannelHour(SQLModel, table=True):
     """Calls per research channel per hour: is Exa MCP / Jina / GitHub / OpenRouter answering?"""
 
@@ -409,6 +416,7 @@ class ChannelHour(SQLModel, table=True):
     last_error: Optional[str] = None
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ class db.Email
 class Email(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     contact_id: int = Field(foreign_key="contact.id", index=True)
@@ -456,6 +464,7 @@ class Email(SQLModel, table=True):
     pattern_note: Optional[str] = None    # why a matching pattern did or did not approve it
 
 
+# ZONULY ▸ email sending · knowledge graph ▸ storage · database models and write guards ▸ class db.SendLedger: One row per candidate per day: the 25-a-day cap, spent irreversibly inside the send.
 class SendLedger(SQLModel, table=True):
     """One row per candidate per day: the 25-a-day cap, spent irreversibly inside the send."""
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -468,6 +477,7 @@ class SendLedger(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+# ZONULY ▸ calendar ▸ storage · database models and write guards ▸ class db.Event: A "yes" that carries a time: a call, an assessment, an interview — on our calendar.
 class Event(SQLModel, table=True):
     """A "yes" that carries a time: a call, an assessment, an interview — on our calendar."""
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -491,6 +501,7 @@ class Event(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ class db.Candidate: Two of us run the same machine: per-candidate identity, mailbox and caps.
 class Candidate(SQLModel, table=True):
     """Two of us run the same machine: per-candidate identity, mailbox and caps."""
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -504,6 +515,7 @@ class Candidate(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ class db.EmailProposal: A PROPOSAL of how one cold email would be written (outreach/proposal.py) — shown to
 class EmailProposal(SQLModel, table=True):
     """A PROPOSAL of how one cold email would be written (outreach/proposal.py) — shown to
     the user to judge the writing, NEVER in the send pipeline: no status, no approval, no
@@ -522,6 +534,7 @@ class EmailProposal(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+# ZONULY ▸ pay · salary · email verification ▸ storage · database models and write guards ▸ class db.EmailPattern: An approved KIND of email (outreach/patterns.py): one segment (structure x market)
 class EmailPattern(SQLModel, table=True):
     """An approved KIND of email (outreach/patterns.py): one segment (structure x market)
     and the template the user approved for it, with his edits. When outreach.pattern_approval
@@ -542,6 +555,7 @@ class EmailPattern(SQLModel, table=True):
     revoked_at: Optional[datetime] = None
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ storage · database models and write guards ▸ class db.EmailCheck: What is known about whether one address takes mail (contacts/reacher.py).
 class EmailCheck(SQLModel, table=True):
     """What is known about whether one address takes mail (contacts/reacher.py).
 
@@ -560,6 +574,7 @@ class EmailCheck(SQLModel, table=True):
     checked_at: datetime = Field(default_factory=utcnow)
 
 
+# ZONULY ▸ csv export ▸ storage · database models and write guards ▸ class db.CsvBatch: One numbered hand-off CSV — data/csv/CSV<n>.csv (2026-11-01, outreach/handoff.py).
 class CsvBatch(SQLModel, table=True):
     """One numbered hand-off CSV — data/csv/CSV<n>.csv (2026-11-01, outreach/handoff.py).
 
@@ -574,6 +589,7 @@ class CsvBatch(SQLModel, table=True):
     count: int = 0                              # leads written (test rows are not leads)
 
 
+# ZONULY ▸ people search · referrers · csv export ▸ storage · database models and write guards ▸ class db.CsvBatchContact: Which leads went out in which batch.
 class CsvBatchContact(SQLModel, table=True):
     """Which leads went out in which batch."""
 
@@ -582,6 +598,7 @@ class CsvBatchContact(SQLModel, table=True):
     contact_id: int = Field(foreign_key="contact.id", primary_key=True)
 
 
+# ZONULY ▸ replies · follow-up ▸ storage · database models and write guards ▸ class db.Reply
 class Reply(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email_id: int = Field(foreign_key="email.id", index=True)
@@ -594,6 +611,7 @@ class Reply(SQLModel, table=True):
     notified: bool = False
 
 
+# ZONULY ▸ decision ▸ storage · database models and write guards ▸ class db.CompanyDecision: The decision brain's latest answer for one company (decide.py, 2026-10-23): P(offer)
 class CompanyDecision(SQLModel, table=True):
     """The decision brain's latest answer for one company (decide.py, 2026-10-23): P(offer)
     with its 80% interval, the five stage probabilities, a verdict and the shortlist slot."""
@@ -617,6 +635,7 @@ class CompanyDecision(SQLModel, table=True):
     at: datetime = Field(default_factory=utcnow)
 
 
+# ZONULY ▸ decision · deployment · snapshot ▸ storage · database models and write guards ▸ class db.DailyPick: One company a day (decide.today). The snapshot is frozen at pick time so
 class DailyPick(SQLModel, table=True):
     """One company a day (decide.today). The snapshot is frozen at pick time so
     `decide calibrate` can score what the brain said then against what happened."""
@@ -634,6 +653,7 @@ class DailyPick(SQLModel, table=True):
     updated_at: Optional[datetime] = None
 
 
+# ZONULY ▸ scoring · decision ▸ storage · database models and write guards ▸ class db.DecisionOutcome: What actually happened at a company — the ground truth the priors get scored against.
 class DecisionOutcome(SQLModel, table=True):
     """What actually happened at a company — the ground truth the priors get scored against."""
 
@@ -644,6 +664,7 @@ class DecisionOutcome(SQLModel, table=True):
     at: datetime = Field(default_factory=utcnow)
 
 
+# ZONULY ▸ scraping ▸ storage · database models and write guards ▸ class db.MixerScrape: One paid lookup the mixer made for one company (mixer.py, 2026-10-23): what it bought,
 class MixerScrape(SQLModel, table=True):
     """One paid lookup the mixer made for one company (mixer.py, 2026-10-23): what it bought,
     what matched the company, what was saved, what it cost, and the culture rating it carried."""
@@ -663,6 +684,7 @@ class MixerScrape(SQLModel, table=True):
     at: datetime = Field(default_factory=utcnow, index=True)
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ class db.UpskillItem: Your progress on one gap the upskill pipeline found (upskill.py, 2026-10-23). Nothing
 class UpskillItem(SQLModel, table=True):
     """Your progress on one gap the upskill pipeline found (upskill.py, 2026-10-23). Nothing
     reaches the profile without proof: a link and a line in your own words."""
@@ -675,6 +697,7 @@ class UpskillItem(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ class db.InterviewNote: What a company's interviews are like (interviews.py, 2026-10-31): one candidate's report
 class InterviewNote(SQLModel, table=True):
     """What a company's interviews are like (interviews.py, 2026-10-31): one candidate's report
     (Glassdoor, Reddit, a blog), the company's own word on its process, or a prep point drawn
@@ -699,6 +722,7 @@ class InterviewNote(SQLModel, table=True):
     fetched_at: datetime = Field(default_factory=utcnow)
 
 
+# ZONULY ▸ enrichment · decision ▸ storage · database models and write guards ▸ class db.ShortlistFill: One pass of shortlist.py over one shortlisted company (2026-10-23): what was missing
 class ShortlistFill(SQLModel, table=True):
     """One pass of shortlist.py over one shortlisted company (2026-10-23): what was missing
     before, what is still missing after and why, and what it cost."""
@@ -716,6 +740,7 @@ class ShortlistFill(SQLModel, table=True):
     at: datetime = Field(default_factory=utcnow, index=True)
 
 
+# ZONULY ▸ email sending ▸ storage · database models and write guards ▸ class db.Setting: Small key/value store for runtime state the config file shouldn't own (send counters, cursors).
 class Setting(SQLModel, table=True):
     """Small key/value store for runtime state the config file shouldn't own (send counters, cursors)."""
 
@@ -744,6 +769,7 @@ engine = create_engine(
 # dashboard's reads, the 10-minute tick and a harvest stop locking each other out. Only
 # writers still queue. The mode is stored in the file, so setting it once sticks; the
 # public snapshot is cut back to a plain journal by scripts/make_demo_db.py.
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ db._sqlite_pragmas(): SQLAlchemy connect listener: switch each new SQLite connection to WAL with synchronous=NORMAL.
 @event.listens_for(engine, "connect")
 def _sqlite_pragmas(dbapi_conn, _record) -> None:
     """SQLAlchemy connect listener: switch each new SQLite connection to WAL with synchronous=NORMAL."""
@@ -763,6 +789,7 @@ _SQLITE_TYPES = {
 }
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ db.ensure_columns(): Add columns the models declare but the database file does not have yet.
 def ensure_columns() -> list[str]:
     """Add columns the models declare but the database file does not have yet.
 
@@ -804,6 +831,7 @@ _KEEP_STATUS = ("bounced", "opted_out")
 _GUESS_MARKERS = ("pattern-guessed", "guessed", "email by pattern", "pattern-filled")
 
 
+# ZONULY ▸ email verification ▸ storage · database models and write guards ▸ db.looks_guessed(): The provenance word that says this address was constructed, not found. None if it was
 def looks_guessed(contact: "Contact") -> str | None:
     """The provenance word that says this address was constructed, not found. None if it was
     genuinely seen somewhere (a commit, a profile, a page) or proved."""
@@ -820,6 +848,7 @@ def looks_guessed(contact: "Contact") -> str | None:
     return None
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ db._no_guessed_addresses(): True when the address was refused. Nothing is kept: not on `email`, not on
 def _no_guessed_addresses(session, obj) -> bool:
     """True when the address was refused. Nothing is kept: not on `email`, not on
     `email_unverified`. The refusal is recorded so it is visible, never silent."""
@@ -839,6 +868,7 @@ def _no_guessed_addresses(session, obj) -> bool:
     return True
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ storage · database models and write guards ▸ db._only_verified_addresses(): No writer puts an unproved address on contact.email (2026-10-30: guessed addresses…
 @event.listens_for(Session, "before_flush")
 def _only_verified_addresses(session, _flush_context, _instances) -> None:
     """No writer puts an unproved address on contact.email (2026-10-30: guessed addresses at
@@ -873,12 +903,14 @@ def _only_verified_addresses(session, _flush_context, _instances) -> None:
             obj.email_status = f"fake:{chk.verdict}" if chk is not None else "fake:not-proved"
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ db.init_db(): Create any missing tables and add any missing columns to the SQLite database.
 def init_db() -> None:
     """Create any missing tables and add any missing columns to the SQLite database."""
     SQLModel.metadata.create_all(engine)
     ensure_columns()
 
 
+# ZONULY ▸ sign-in · auth ▸ storage · database models and write guards ▸ db.get_session(): Open a new database session on the shared SQLite engine.
 def get_session() -> Session:
     """Open a new database session on the shared SQLite engine."""
     return Session(engine)
@@ -897,6 +929,7 @@ FOCUS_REMOTE_FIRST = bool((CONFIG.get("focus") or {}).get("remote_first", False)
 _REMOTE_IDS: dict = {"at": 0.0, "ids": frozenset()}
 
 
+# ZONULY ▸ remote from india · cache ▸ storage · database models and write guards ▸ db.remote_company_ids(): Companies (active) with at least one posting that can be done remotely from India. Cached a
 def remote_company_ids(max_age_s: float = 900.0) -> frozenset:
     """Companies (active) with at least one posting that can be done remotely from India. Cached a
     quarter of an hour per process: the launchd ticks are short-lived, the API refreshes it."""
@@ -919,11 +952,13 @@ def remote_company_ids(max_age_s: float = 900.0) -> frozenset:
     return _REMOTE_IDS["ids"]
 
 
+# ZONULY ▸ remote from india · cache ▸ storage · database models and write guards ▸ db.is_remote_company(): True when the company has at least one posting doable remotely from India (cached id set).
 def is_remote_company(company: "Company") -> bool:
     """True when the company has at least one posting doable remotely from India (cached id set)."""
     return company.id is not None and company.id in remote_company_ids()
 
 
+# ZONULY ▸ remote from india ▸ storage · database models and write guards ▸ db.focus_rank(): 0 remote-from-India (when focus.remote_first), 1 a focus city, 2 everything else.
 def focus_rank(company: "Company") -> int:
     """0 remote-from-India (when focus.remote_first), 1 a focus city, 2 everything else."""
     if FOCUS_REMOTE_FIRST and is_remote_company(company):
@@ -932,6 +967,7 @@ def focus_rank(company: "Company") -> int:
     return 1 if (not FOCUS_CITIES or _FOCUS_ALIASES.get(city, city) in FOCUS_CITIES) else 2
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ db.in_focus(): Is this company in the cities we work on right now (config `focus.cities`)? Everything is
 def in_focus(company: "Company") -> bool:
     """Is this company in the cities we work on right now (config `focus.cities`)? Everything is
     in focus when the list is empty. 2026-10-31: Bengaluru + Hyderabad only — remote waits.
@@ -939,6 +975,7 @@ def in_focus(company: "Company") -> bool:
     return focus_rank(company) < 2
 
 
+# ZONULY ▸ enrichment ▸ storage · database models and write guards ▸ db.fill_order(): The one order every fill-in queue reads (2026-10-07: "the ★ India list first, then
 def fill_order(company: Company) -> tuple:
     """The one order every fill-in queue reads (2026-10-07: "the ★ India list first, then
     all companies"): hand-picked list rows first, in list order; then the Bengaluru /
@@ -961,6 +998,7 @@ def fill_order(company: Company) -> tuple:
             0 if company.scrape_first else 1, -(prio // 20), done, -prio)
 
 
+# ZONULY ▸ people search · referrers ▸ storage · database models and write guards ▸ db.people_order(): The people step's own order (2026-10-08, "referrers first"): the hand-picked list
 def people_order(company: Company) -> tuple:
     """The people step's own order (2026-10-08, "referrers first"): the hand-picked list
     rows in list order; then companies complete except for a referrer with an address;
@@ -977,12 +1015,14 @@ def people_order(company: Company) -> tuple:
             *fill_order(company)[2:])
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ db.get_setting(): Read a value from the key-value setting table, or the default when the key is absent.
 def get_setting(session: Session, key: str, default: str = "") -> str:
     """Read a value from the key-value setting table, or the default when the key is absent."""
     row = session.get(Setting, key)
     return row.value if row else default
 
 
+# ZONULY ▸ storage · database models and write guards ▸ storage · database models and write guards ▸ db.set_setting(): Write a value to the key-value setting table (insert or update) and commit.
 def set_setting(session: Session, key: str, value: str) -> None:
     """Write a value to the key-value setting table (insert or update) and commit."""
     row = session.get(Setting, key)

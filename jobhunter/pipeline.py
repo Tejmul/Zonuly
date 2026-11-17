@@ -48,6 +48,7 @@ log = logging.getLogger(__name__)
 COMPANIES_PATH = ROOT / "companies.yaml"
 
 
+# ZONULY ▸ scraping ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ class pipeline.ScrapeStats
 @dataclass
 class ScrapeStats:
     scraped: int = 0
@@ -59,6 +60,7 @@ class ScrapeStats:
     # postings dropped because their company did not pass the admission gate, by reason
     rejected: dict[str, int] = field(default_factory=dict)
 
+    # ZONULY ▸ scraping ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ pipeline.ScrapeStats.as_dict(): Return the scrape stats as a plain dict.
     def as_dict(self) -> dict:
         """Return the scrape stats as a plain dict."""
         return {
@@ -72,6 +74,7 @@ class ScrapeStats:
         }
 
 
+# ZONULY ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ pipeline.load_companies(): Load the named company entries from c…
 def load_companies() -> list[dict]:
     """Load the named company entries from companies.yaml (empty list when the file is missing)."""
     if not COMPANIES_PATH.exists():
@@ -81,6 +84,7 @@ def load_companies() -> list[dict]:
     return [c for c in (data.get("companies") or []) if c.get("name")]
 
 
+# ZONULY ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ pipeline.sync_companies(): Seed Company rows from companies.yaml.
 def sync_companies() -> int:
     """Seed Company rows from companies.yaml.
 
@@ -117,6 +121,7 @@ def sync_companies() -> int:
     return seeded
 
 
+# ZONULY ▸ scraping ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ pipeline.enabled_sources(): Return the scraper names in the registry that config.yaml switches on.
 def enabled_sources() -> list[str]:
     """Return the scraper names in the registry that config.yaml switches on."""
     src = CONFIG.get("sources") or {}
@@ -127,6 +132,7 @@ def enabled_sources() -> list[str]:
 
 # ---------------------------------------------------------------- scrape
 
+# ZONULY ▸ scraping ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ pipeline.scrape_async(): Scraping: run every enabled job source concurrently over the non-famous seed companies.
 async def scrape_async(sources: list[str] | None = None) -> tuple[list[RawJob], ScrapeStats]:
     """Scraping: run every enabled job source concurrently over the non-famous seed companies.
     Returns the raw postings and stats; a failing source is logged into stats.errors."""
@@ -137,6 +143,7 @@ async def scrape_async(sources: list[str] | None = None) -> tuple[list[RawJob], 
     jobs: list[RawJob] = []
 
     async with make_client() as http:
+        # ZONULY ▸ scraping ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ pipeline.scrape_async.run(): Run one named scraper and return its postings, or the exception it raised.
         async def run(name: str) -> tuple[str, list[RawJob] | Exception]:
             """Run one named scraper and return its postings, or the exception it raised."""
             fetch = get_fetcher(name)
@@ -160,6 +167,7 @@ async def scrape_async(sources: list[str] | None = None) -> tuple[list[RawJob], 
     return jobs, stats
 
 
+# ZONULY ▸ filtering · review gate ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ pipeline.keep(): Pre-store relevance gate. Also repairs text encoding before anything reads it.
 def keep(job: RawJob) -> bool:
     """Pre-store relevance gate. Also repairs text encoding before anything reads it."""
     if not job.title or not job.url or not job.company_name:
@@ -175,6 +183,7 @@ def keep(job: RawJob) -> bool:
     return True
 
 
+# ZONULY ▸ admission gate · filtering · review gate ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ pipeline.upsert_company(): (the company row, why) — or (None, why not) when the admission gat…
 def upsert_company(session: Session, job: RawJob, *, open_roles: int = 1) -> tuple[Company | None, str]:
     """(the company row, why) — or (None, why not) when the admission gate turns the
     company away; its postings are then not stored. `open_roles` is how many postings
@@ -217,12 +226,14 @@ def upsert_company(session: Session, job: RawJob, *, open_roles: int = 1) -> tup
     return company, verdict.reason
 
 
+# ZONULY ▸ scraping · enrichment ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ pipeline._domain_of(): The host of a company website — None for a job board, form, shortener or social
 def _domain_of(url: str | None) -> str | None:
     """The host of a company website — None for a job board, form, shortener or social
     host, which is never the company's own site (admission.bogus_host)."""
     return admission.domain_of(url)
 
 
+# ZONULY ▸ data ingestion · filtering · dedup ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ pipeline.persist(): Filter, dedup, and write to the DB. Existing rows are refreshed, never duplicat…
 def persist(jobs: list[RawJob], stats: ScrapeStats) -> ScrapeStats:
     """Filter, dedup, and write to the DB. Existing rows are refreshed, never duplicated."""
     init_db()
@@ -326,6 +337,7 @@ def persist(jobs: list[RawJob], stats: ScrapeStats) -> ScrapeStats:
     return stats
 
 
+# ZONULY ▸ scraping · data ingestion · filtering · dedup ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ pipeline.scrape(): Job ingestion: seed companies, scrape all sources, then filter, dedup…
 def scrape(sources: list[str] | None = None) -> ScrapeStats:
     """Job ingestion: seed companies, scrape all sources, then filter, dedup and write jobs."""
     sync_companies()
@@ -335,6 +347,7 @@ def scrape(sources: list[str] | None = None) -> ScrapeStats:
 
 # ---------------------------------------------------------------- LLM salary backfill
 
+# ZONULY ▸ pay · salary · ai model call · llm ▸ data ingestion · scraping orchestration · filtering · dedup · persist ▸ pipeline.extract_salaries(): LLM pass over jobs whose salary regex came up empty but that mention p…
 def extract_salaries(limit: int = 60) -> int:
     """LLM pass over jobs whose salary regex came up empty but that mention pay."""
     init_db()

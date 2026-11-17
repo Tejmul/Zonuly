@@ -142,6 +142,7 @@ _TERMS = [
 ]
 
 
+# ZONULY ▸ scraping · remote from india ▸ data ingestion · job discovery ▸ class remote_boards.Stats
 @dataclass
 class Stats:
     searched: int = 0
@@ -157,11 +158,13 @@ class Stats:
     examples: list = field(default_factory=list)
     seconds: int = 0
 
+    # ZONULY ▸ scraping · remote from india ▸ data ingestion · job discovery ▸ remote_boards.Stats.skip(): Count one skipped posting under its reason.
     def skip(self, why: str) -> None:
         """Count one skipped posting under its reason."""
         self.skipped[why] = self.skipped.get(why, 0) + 1
 
 
+# ZONULY ▸ scraping · remote from india ▸ data ingestion · job discovery ▸ remote_boards.queries(): host × entry-level phrasing — 80 distinct searches the cursor walks a slice of.
 def queries() -> list[str]:
     """host × entry-level phrasing — 80 distinct searches the cursor walks a slice of."""
     return [f"site:{h} {t}" for h in _HOSTS for t in _TERMS]
@@ -201,6 +204,7 @@ _US_STATES = re.compile(
     r"\s*[- ]?\s*remote\b|\bremote\s*[-(,]?\s*(?:VA|MD|PA|NC|DE|NJ|DC|CA|NY|TX|WA|MA|IL|GA|FL|OH)\b")
 
 
+# ZONULY ▸ scraping · remote from india ▸ data ingestion · job discovery ▸ remote_boards.is_remote(): Does the POSTING ITSELF say remote, without fencing it to a country we cannot work from?
 def is_remote(location: str | None, description: str | None = None) -> bool:
     """Does the POSTING ITSELF say remote, without fencing it to a country we cannot work from?
 
@@ -233,6 +237,7 @@ def is_remote(location: str | None, description: str | None = None) -> bool:
     return not _FENCED.search(head)
 
 
+# ZONULY ▸ scraping · remote from india ▸ data ingestion · job discovery ▸ remote_boards.is_fresher(): Open to a fresher: explicitly entry-level, OR stating no level at all.
 def is_fresher(title: str | None) -> bool:
     """Open to a fresher: explicitly entry-level, OR stating no level at all.
 
@@ -248,12 +253,14 @@ def is_fresher(title: str | None) -> bool:
     return True
 
 
+# ZONULY ▸ scraping · remote from india ▸ data ingestion · job discovery ▸ remote_boards.stated_fresher(): True only when the title says entry-level in so many words — used for ranking, not gating.
 def stated_fresher(title: str | None) -> bool:
     """True only when the title says entry-level in so many words — used for ranking, not gating."""
     t = title or ""
     return bool(_FRESHER.search(t)) and not _SENIOR.search(t)
 
 
+# ZONULY ▸ scraping · remote from india ▸ data ingestion · job discovery ▸ remote_boards.is_software(): True when a job title reads as a software role and not a non-software one.
 def is_software(title: str | None) -> bool:
     """True when a job title reads as a software role and not a non-software one."""
     t = title or ""
@@ -271,11 +278,13 @@ _CLEARANCE = re.compile(
     r"itar|export control)")
 
 
+# ZONULY ▸ scraping · remote from india ▸ data ingestion · job discovery ▸ remote_boards.blocked_by_clearance(): True when the posting needs a clearance or a citizenship he cannot have.
 def blocked_by_clearance(description: str | None) -> bool:
     """True when the posting needs a clearance or a citizenship he cannot have."""
     return bool(_CLEARANCE.search((description or "")[:3000]))
 
 
+# ZONULY ▸ scraping · filtering · remote from india ▸ data ingestion · job discovery ▸ remote_boards.wanted(): (keep it, why not). One place, so the report can say exactly what was dropped and why.
 def wanted(job) -> tuple[bool, str]:
     """(keep it, why not). One place, so the report can say exactly what was dropped and why."""
     title = getattr(job, "title", "") or ""
@@ -298,6 +307,7 @@ def wanted(job) -> tuple[bool, str]:
     return True, ""
 
 
+# ZONULY ▸ scraping · filtering · remote from india ▸ data ingestion · job discovery ▸ remote_boards.run(): One pass: search, read each new board's public API, keep the remote fresher software
 def run(*, searches: int = 20, boards_per_run: int = 80, budget_s: int = 1200) -> dict:
     """One pass: search, read each new board's public API, keep the remote fresher software
     postings and store them through the normal pipeline."""

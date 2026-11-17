@@ -56,11 +56,13 @@ TEMPLATE_NOT_LAST = (
 )
 
 
+# ZONULY ▸ replies · follow-up ▸ outreach · email ▸ followup._when(): Say "last week" for 5 or more days since the first mail, else "a few days ago".
 def _when(days: int) -> str:
     """Say "last week" for 5 or more days since the first mail, else "a few days ago"."""
     return "last week" if days >= 5 else "a few days ago"
 
 
+# ZONULY ▸ email drafting · replies · follow-up ▸ outreach · email ▸ followup.template_body(): Follow-up `n`: the new thing it adds, and "the last time" only on the last one.
 def template_body(parent: Email, *, company: str | None, days: int, n: int = 1) -> str:
     """Follow-up `n`: the new thing it adds, and "the last time" only on the last one."""
     from jobhunter.outreach import drafter
@@ -72,6 +74,7 @@ def template_body(parent: Email, *, company: str | None, days: int, n: int = 1) 
     return tpl.format(when=_when(days), what=what, new=new)
 
 
+# ZONULY ▸ replies · follow-up ▸ outreach · email ▸ followup.due(): Cold mail sent more than `after_days` ago with no reply, no follow-up yet, not
 def due(session, *, after_days: int | None = None, now=None) -> list[Email]:
     """Cold mail sent more than `after_days` ago with no reply, no follow-up yet, not
     bounced, not suppressed — and really sent (a dry-run thread is skipped when live)."""
@@ -106,6 +109,7 @@ def due(session, *, after_days: int | None = None, now=None) -> list[Email]:
     return out
 
 
+# ZONULY ▸ email drafting · replies · follow-up · ai model call · llm ▸ outreach · email ▸ followup._template_followup(): Draft a follow-up from the fixed template (no model) for a sent cold email.
 def _template_followup(email_id: int, *, now=None) -> dict:
     """Draft a follow-up from the fixed template (no model) for a sent cold email.
 
@@ -144,6 +148,7 @@ def _template_followup(email_id: int, *, now=None) -> dict:
         return {"email_id": email.id, "subject": email.subject, "template": True}
 
 
+# ZONULY ▸ email verification · review gate · replies · follow-up ▸ outreach · email ▸ followup.queue(): Queue one follow-up per silent thread (into the review queue, never approved).
 def queue(*, after_days: int | None = None, limit: int = 25, use_model: bool = True, now=None) -> dict:
     """Queue one follow-up per silent thread (into the review queue, never approved)."""
     from jobhunter.outreach import drafter

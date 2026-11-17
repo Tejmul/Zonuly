@@ -112,6 +112,7 @@ PREP = [
 ]
 
 
+# ZONULY ▸ apify scraping · apify people search ▸ enrichment · one-off interview import ▸ interviews_cynlr.main(): Save CynLr's interview reports (Apify or saved output), official note and prep points to the DB.
 def main() -> int:
     """Save CynLr's interview reports (Apify or saved output), official note and prep points to the DB."""
     ap = argparse.ArgumentParser()

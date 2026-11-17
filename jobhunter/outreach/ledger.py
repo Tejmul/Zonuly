@@ -42,11 +42,13 @@ DAILY_CAP = int(_O.get("daily_send_cap", 25))
 GUESSED_CAP = int(_O.get("guessed_daily_cap", 5))
 
 
+# ZONULY ▸ email sending · knowledge graph ▸ outreach · email ▸ ledger._today(): Return today's local date as YYYY-MM-DD, the send ledger's day key.
 def _today() -> str:
     """Return today's local date as YYYY-MM-DD, the send ledger's day key."""
     return datetime.now().astimezone().strftime("%Y-%m-%d")
 
 
+# ZONULY ▸ email sending · knowledge graph ▸ outreach · email ▸ ledger._conn(): Open an autocommit SQLite connection to the database with a 30 s busy timeout.
 def _conn() -> sqlite3.Connection:
     """Open an autocommit SQLite connection to the database with a 30 s busy timeout."""
     c = sqlite3.connect(str(DB_PATH), timeout=30, isolation_level=None)
@@ -54,6 +56,7 @@ def _conn() -> sqlite3.Connection:
     return c
 
 
+# ZONULY ▸ email sending · knowledge graph ▸ outreach · email ▸ ledger.effective_cap(): The day's cap: the sum of the sending inboxes' warm-up quotas (outreach/inboxes.py) —
 def effective_cap(day: str) -> int:
     """The day's cap: the sum of the sending inboxes' warm-up quotas (outreach/inboxes.py) —
     the Gmail's is outreach.warmup under daily_send_cap — never above total_daily_cap."""
@@ -64,6 +67,7 @@ def effective_cap(day: str) -> int:
         return inboxes.total_quota(session, day)
 
 
+# ZONULY ▸ email sending · knowledge graph ▸ outreach · email ▸ ledger._row(): (id, cap, used, guessed_cap, guessed_used) for the day. The cap is the lower of the
 def _row(c: sqlite3.Connection, candidate_id: int, day: str) -> tuple:
     """(id, cap, used, guessed_cap, guessed_used) for the day. The cap is the lower of the
     stored one and today's warm-up quota, and the guessed cap never exceeds the cap — a
@@ -83,6 +87,7 @@ def _row(c: sqlite3.Connection, candidate_id: int, day: str) -> tuple:
     return rid, cap, used, min(int(gcap), GUESSED_CAP, cap), gused
 
 
+# ZONULY ▸ email sending · knowledge graph ▸ outreach · email ▸ ledger.status(): Return today's send-cap ledger: cap, used and left, plus the guessed-address cap and usage.
 def status(candidate_id: int = 1) -> dict:
     """Return today's send-cap ledger: cap, used and left, plus the guessed-address cap and usage.
 
@@ -107,6 +112,7 @@ def status(candidate_id: int = 1) -> dict:
             "guessed_cap": gcap, "guessed_used": gused, "guessed_left": max(0, gcap - gused)}
 
 
+# ZONULY ▸ email sending · knowledge graph ▸ outreach · email ▸ ledger.reserve(): Take one slot for today, atomically. (ok, reason).
 def reserve(candidate_id: int = 1, *, guessed: bool = False) -> tuple[bool, str]:
     """Take one slot for today, atomically. (ok, reason)."""
     day = _today()
@@ -129,6 +135,7 @@ def reserve(candidate_id: int = 1, *, guessed: bool = False) -> tuple[bool, str]
     return True, "reserved"
 
 
+# ZONULY ▸ email sending · knowledge graph ▸ outreach · email ▸ ledger.release(): A send that failed after reserving gives its slot back.
 def release(candidate_id: int = 1, *, guessed: bool = False) -> None:
     """A send that failed after reserving gives its slot back."""
     with _conn() as c:

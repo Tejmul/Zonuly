@@ -41,6 +41,7 @@ API = "https://api.github.com"
 _GH_JSON_FIELDS = "fullName,description,language,stargazersCount,url,updatedAt,owner"
 
 
+# ZONULY ▸ github scraping ▸ enrichment · web research layer ▸ github._api_headers(): Build GitHub REST API request headers, adding the bearer token when one is available.
 def _api_headers() -> dict[str, str]:
     """Build GitHub REST API request headers, adding the bearer token when one is available."""
     h = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
@@ -50,6 +51,7 @@ def _api_headers() -> dict[str, str]:
     return h
 
 
+# ZONULY ▸ github scraping ▸ enrichment · web research layer ▸ github._repo_from_gh(): Convert one repo record from the gh CLI's JSON output into a RepoHit.
 def _repo_from_gh(item: dict) -> RepoHit:
     """Convert one repo record from the gh CLI's JSON output into a RepoHit."""
     owner = item.get("owner") or {}
@@ -64,6 +66,7 @@ def _repo_from_gh(item: dict) -> RepoHit:
     )
 
 
+# ZONULY ▸ github scraping ▸ enrichment · web research layer ▸ github._repo_from_api(): Convert one repo record from the GitHub REST API into a RepoHit.
 def _repo_from_api(item: dict) -> RepoHit:
     """Convert one repo record from the GitHub REST API into a RepoHit."""
     owner = item.get("owner") or {}
@@ -78,6 +81,7 @@ def _repo_from_api(item: dict) -> RepoHit:
     )
 
 
+# ZONULY ▸ github scraping ▸ enrichment · web research layer ▸ github.search_repos(): Search public repositories. {query, backend, results: [RepoHit], error?}
 def search_repos(query: str, limit: int = 10, *, fresh: bool = False, timeout: int | None = None) -> dict:
     """Search public repositories. {query, backend, results: [RepoHit], error?}"""
     query = (query or "").strip()
@@ -129,6 +133,7 @@ def search_repos(query: str, limit: int = 10, *, fresh: bool = False, timeout: i
     }
 
 
+# ZONULY ▸ github scraping ▸ enrichment · web research layer ▸ github._api_search_repos(): Search GitHub repositories via the REST API, sorted by stars; empty list on any error.
 def _api_search_repos(query: str, limit: int, timeout: int | None) -> list[RepoHit]:
     """Search GitHub repositories via the REST API, sorted by stars; empty list on any error.
     Network call."""
@@ -148,6 +153,7 @@ def _api_search_repos(query: str, limit: int, timeout: int | None) -> list[RepoH
         return []
 
 
+# ZONULY ▸ github scraping · sign-in · auth ▸ enrichment · web research layer ▸ github.find_org(): Best guess at a company's GitHub org login, or None.
 def find_org(company: str, *, website: str | None = None, timeout: int | None = None) -> str | None:
     """Best guess at a company's GitHub org login, or None.
 
@@ -205,6 +211,7 @@ def find_org(company: str, *, website: str | None = None, timeout: int | None = 
     return None
 
 
+# ZONULY ▸ github scraping ▸ enrichment · web research layer ▸ github.org_repos(): An org's most recently pushed public repos.
 def org_repos(org: str, limit: int = 8, *, fresh: bool = False, timeout: int | None = None) -> dict:
     """An org's most recently pushed public repos."""
     org = (org or "").strip().rstrip("/").split("/")[-1]
@@ -254,6 +261,7 @@ def org_repos(org: str, limit: int = 8, *, fresh: bool = False, timeout: int | N
     return out
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ enrichment · web research layer ▸ github.search_users(): Search GitHub people — the raw hits, not contact records.
 def search_users(query: str, limit: int = 10, *, timeout: int | None = None) -> dict:
     """Search GitHub people — the raw hits, not contact records.
 

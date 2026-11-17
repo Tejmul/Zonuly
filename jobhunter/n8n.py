@@ -38,6 +38,7 @@ URL_ENV = "N8N_CAMPAIGN_WEBHOOK_URL"
 TIMEOUT = float(_N8N.get("timeout_seconds", 15))
 
 
+# ZONULY ▸ outreach · n8n bridge ▸ outreach · n8n bridge ▸ class n8n.N8nError: n8n could not be reached, did not answer in time, or refused the call.
 class N8nError(RuntimeError):
     """n8n could not be reached, did not answer in time, or refused the call.
 
@@ -45,27 +46,32 @@ class N8nError(RuntimeError):
     at all (DNS, connection, timeout).
     """
 
+    # ZONULY ▸ outreach · n8n bridge ▸ outreach · n8n bridge ▸ n8n.N8nError.__init__(): Store the error message and the HTTP status n8n returned (None if no response).
     def __init__(self, message: str, *, status: int | None = None):
         """Store the error message and the HTTP status n8n returned (None if no response)."""
         super().__init__(message)
         self.status = status
 
 
+# ZONULY ▸ outreach · n8n bridge ▸ outreach · n8n bridge ▸ n8n.webhook_url(): Return the n8n campaign webhook URL from the secret store.
 def webhook_url() -> str:
     """Return the n8n campaign webhook URL from the secret store."""
     return secret(URL_ENV)
 
 
+# ZONULY ▸ outreach · n8n bridge ▸ outreach · n8n bridge ▸ n8n.configured(): True when an n8n campaign webhook URL is configured.
 def configured() -> bool:
     """True when an n8n campaign webhook URL is configured."""
     return bool(webhook_url())
 
 
+# ZONULY ▸ outreach · n8n bridge ▸ outreach · n8n bridge ▸ n8n._host(): The safe part of the URL for logs and status: host only, no path.
 def _host() -> str:
     """The safe part of the URL for logs and status: host only, no path."""
     return urlsplit(webhook_url()).netloc if configured() else ""
 
 
+# ZONULY ▸ scraping · monitoring ▸ outreach · n8n bridge ▸ n8n.status(): Reported by /api/health and /api/campaigns/status so the dashboard can say so.
 def status() -> dict:
     """Reported by /api/health and /api/campaigns/status so the dashboard can say so."""
     return {
@@ -76,6 +82,7 @@ def status() -> dict:
     }
 
 
+# ZONULY ▸ calendar ▸ outreach · n8n bridge ▸ n8n.trigger_campaign(): POST the campaign event to n8n and return what it answered.
 def trigger_campaign(campaign_id: str, campaign_name: str | None = None, *,
                      action: str = "start", extra: dict | None = None) -> dict:
     """POST the campaign event to n8n and return what it answered.

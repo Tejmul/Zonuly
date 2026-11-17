@@ -81,6 +81,7 @@ _TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9+#.\-]{1,29}")
 _KEEP = {"c++", "c#", ".net", "node.js", "next.js", "ci/cd", "f#", "objective-c"}
 
 
+# ZONULY ▸ scoring ▸ scoring · lexical fit gate ▸ fit.tokenize(): Distinct meaningful terms in a blob of text.
 def tokenize(text: str) -> set[str]:
     """Distinct meaningful terms in a blob of text.
 
@@ -108,6 +109,7 @@ def tokenize(text: str) -> set[str]:
 # ---------------------------------------------------------------- idf corpus
 
 
+# ZONULY ▸ scoring · cache ▸ scoring · lexical fit gate ▸ fit.build_idf(): Document frequencies over every posting in the database, cached in Setting.
 def build_idf(*, force: bool = False, min_docs: int = MIN_DOCS_FOR_IDF) -> dict[str, float]:
     """Document frequencies over every posting in the database, cached in Setting.
 
@@ -147,6 +149,7 @@ def build_idf(*, force: bool = False, min_docs: int = MIN_DOCS_FOR_IDF) -> dict[
         return idf
 
 
+# ZONULY ▸ enrichment · scoring ▸ scoring · lexical fit gate ▸ fit._job_blob(): Join a job's title, company and first 6,000 chars of description into one text for scoring.
 def _job_blob(title: str | None, company: str | None, description: str | None) -> str:
     """Join a job's title, company and first 6,000 chars of description into one text for scoring."""
     return "\n".join(x for x in (title, company, (description or "")[:6000]) if x)
@@ -155,6 +158,7 @@ def _job_blob(title: str | None, company: str | None, description: str | None) -
 _idf_cache: dict[str, float] | None = None
 
 
+# ZONULY ▸ scoring ▸ scoring · lexical fit gate ▸ fit.idf(): Return the IDF term weights for lexical fit scoring, building and caching them on first use.
 def idf() -> dict[str, float]:
     """Return the IDF term weights for lexical fit scoring, building and caching them on first use."""
     global _idf_cache
@@ -163,6 +167,7 @@ def idf() -> dict[str, float]:
     return _idf_cache
 
 
+# ZONULY ▸ scraping · scoring ▸ scoring · lexical fit gate ▸ fit.refresh(): Force an IDF rebuild — call after a big scrape or a resume change.
 def refresh() -> int:
     """Force an IDF rebuild — call after a big scrape or a resume change."""
     global _idf_cache
@@ -173,6 +178,7 @@ def refresh() -> int:
 # ---------------------------------------------------------------- scoring
 
 
+# ZONULY ▸ scoring ▸ scoring · lexical fit gate ▸ fit.score(): Share of the JD's distinctive weight that the resume can answer for, 0..1.
 def score(jd_text: str, resume_terms: set[str], weights: dict[str, float] | None = None) -> float:
     """Share of the JD's distinctive weight that the resume can answer for, 0..1."""
     jd_terms = tokenize(jd_text)
@@ -197,6 +203,7 @@ def score(jd_text: str, resume_terms: set[str], weights: dict[str, float] | None
     return round(matched / total, 4)
 
 
+# ZONULY ▸ scoring ▸ scoring · lexical fit gate ▸ fit.explain(): Same score, plus which terms carried it and which were missed.
 def explain(jd_text: str, resume_terms: set[str] | None = None, top: int = 12) -> dict:
     """Same score, plus which terms carried it and which were missed.
 
@@ -228,6 +235,7 @@ def explain(jd_text: str, resume_terms: set[str] | None = None, top: int = 12) -
 _resume_terms: set[str] | None = None
 
 
+# ZONULY ▸ scoring ▸ scoring · lexical fit gate ▸ fit.resume_profile_terms(): The resume as a term set, computed once per process.
 def resume_profile_terms(*, force: bool = False) -> set[str]:
     """The resume as a term set, computed once per process."""
     global _resume_terms
@@ -237,6 +245,7 @@ def resume_profile_terms(*, force: bool = False) -> set[str]:
     return _resume_terms
 
 
+# ZONULY ▸ scoring · ai model call · llm ▸ scoring · lexical fit gate ▸ fit.score_job(): Score how well the resume answers a job's distinctive terms (0..1); lexical, no model.
 def score_job(job: Job, resume_terms: set[str] | None = None) -> float:
     """Score how well the resume answers a job's distinctive terms (0..1); lexical, no model."""
     return score(
@@ -245,6 +254,7 @@ def score_job(job: Job, resume_terms: set[str] | None = None) -> float:
     )
 
 
+# ZONULY ▸ scoring ▸ scoring · lexical fit gate ▸ fit.stats(): Return lexical fit-scoring stats: corpus and resume term counts, jobs scored vs total.
 def stats() -> dict:
     """Return lexical fit-scoring stats: corpus and resume term counts, jobs scored vs total."""
     weights = idf()

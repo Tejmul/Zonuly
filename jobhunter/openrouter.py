@@ -98,18 +98,22 @@ _TITLE = str(_OR.get("app_title", "ZoNuLy JobHunter"))
 KEY_ENV = "OPENROUTER_API_KEY"
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ class openrouter.LLMUnavailable: No key, provider unreachable, or the model refused the request.
 class LLMUnavailable(RuntimeError):
     """No key, provider unreachable, or the model refused the request."""
 
 
+# ZONULY ▸ ai model call · llm · budget · cost · retry · backoff ▸ ai models · openrouter ▸ class openrouter.BudgetExceeded: The daily or monthly cap is spent. Deliberately NOT retryable.
 class BudgetExceeded(LLMUnavailable):
     """The daily or monthly cap is spent. Deliberately NOT retryable."""
 
 
+# ZONULY ▸ ai model call · llm · budget · cost ▸ ai models · openrouter ▸ class openrouter.NotFree: `free_only` is on and the model would have cost money. Never a surprise bill.
 class NotFree(LLMUnavailable):
     """`free_only` is on and the model would have cost money. Never a surprise bill."""
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ class openrouter.RateLimited: OpenRouter said 429. On the free tier this is the normal ceiling, not a fault.
 class RateLimited(LLMUnavailable):
     """OpenRouter said 429. On the free tier this is the normal ceiling, not a fault.
 
@@ -118,6 +122,7 @@ class RateLimited(LLMUnavailable):
     """
 
 
+# ZONULY ▸ ai model call · llm · budget · cost ▸ ai models · openrouter ▸ class openrouter.Answer: One completed model call, with what it cost.
 @dataclass
 class Answer:
     """One completed model call, with what it cost."""
@@ -133,6 +138,7 @@ class Answer:
     finish_reason: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
+    # ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter.Answer.as_dict(): Return the model answer as a dict without the raw response, plus its character count.
     def as_dict(self) -> dict:
         """Return the model answer as a dict without the raw response, plus its character count."""
         d = {k: v for k, v in self.__dict__.items() if k != "raw"}
@@ -163,6 +169,7 @@ CREATE INDEX IF NOT EXISTS ix_llm_call_ts ON llm_call(ts);
 _READY = False
 
 
+# ZONULY ▸ email sending · ai model call · llm · knowledge graph ▸ ai models · openrouter ▸ openrouter._conn(): Open the OpenRouter call-ledger SQLite connection, creating the llm_call table on first use.
 def _conn() -> sqlite3.Connection:
     """Open the OpenRouter call-ledger SQLite connection, creating the llm_call table on first use."""
     global _READY
@@ -174,6 +181,7 @@ def _conn() -> sqlite3.Connection:
     return conn
 
 
+# ZONULY ▸ email sending · ai model call · llm · budget · cost · knowledge graph ▸ ai models · openrouter ▸ openrouter._record(): Write the cost row. A failed ledger write must never lose the answer.
 def _record(
     *,
     alias: str,
@@ -211,6 +219,7 @@ def _record(
         log.debug("ledger write failed: %s", e)
 
 
+# ZONULY ▸ calendar · ai model call · llm · budget · cost ▸ ai models · openrouter ▸ openrouter.spend(): What has been spent, and on what. `month` = calendar month to date.
 def spend(days: int | None = None, *, month: bool = False) -> dict:
     """What has been spent, and on what. `month` = calendar month to date.
 
@@ -255,6 +264,7 @@ def spend(days: int | None = None, *, month: bool = False) -> dict:
     }
 
 
+# ZONULY ▸ ai model call · llm · budget · cost ▸ ai models · openrouter ▸ openrouter.budget_status(): Report OpenRouter spend in INR today and this month against the daily and monthly caps.
 def budget_status() -> dict:
     """Report OpenRouter spend in INR today and this month against the daily and monthly caps."""
     today = spend()
@@ -274,6 +284,7 @@ def budget_status() -> dict:
 _CEILING_DAY: str | None = None
 
 
+# ZONULY ▸ email sending · ai model call · llm · knowledge graph ▸ ai models · openrouter ▸ openrouter._ceiling_today(): True when the free-model daily ceiling was hit today (in memory or a logged 429 in the ledger).
 def _ceiling_today() -> bool:
     """True when the free-model daily ceiling was hit today (in memory or a logged 429 in the ledger)."""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -297,6 +308,7 @@ OUTREACH_RESERVE = int(_OR.get("outreach_reserve", 20))
 OUTREACH_PURPOSES = {"draft", "followup", "writer", "reply-classify", "verify"}
 
 
+# ZONULY ▸ email sending · ai model call · llm · knowledge graph ▸ ai models · openrouter ▸ openrouter._requests_today(): Count OpenRouter calls logged in the ledger today (UTC); 0 on a database error.
 def _requests_today() -> int:
     """Count OpenRouter calls logged in the ledger today (UTC); 0 on a database error."""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -308,6 +320,7 @@ def _requests_today() -> int:
         return 0
 
 
+# ZONULY ▸ ai model call · llm · budget · cost ▸ ai models · openrouter ▸ openrouter.check_budget(): Raise BudgetExceeded if a cap is already spent. Called before every request.
 def check_budget(purpose: str = "") -> None:
     """Raise BudgetExceeded if a cap is already spent. Called before every request.
 
@@ -340,6 +353,7 @@ def check_budget(purpose: str = "") -> None:
 _client: httpx.Client | None = None
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter.client(): Return the shared httpx client for the OpenRouter API, creating it on first use.
 def client() -> httpx.Client:
     """Return the shared httpx client for the OpenRouter API, creating it on first use."""
     global _client
@@ -348,11 +362,13 @@ def client() -> httpx.Client:
     return _client
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter.api_key(): Return the OpenRouter API key from the secret store.
 def api_key() -> str:
     """Return the OpenRouter API key from the secret store."""
     return secret(KEY_ENV)
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter.configured(): True when an OpenRouter API key is configured.
 def configured() -> bool:
     """True when an OpenRouter API key is configured."""
     return bool(api_key())
@@ -362,6 +378,7 @@ def configured() -> bool:
 _DEAD: set[str] = set()
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter.models_for(): The alias's ranked models, the ones known dead in this process moved last.
 def models_for(alias: str) -> list[str]:
     """The alias's ranked models, the ones known dead in this process moved last."""
     if alias in ALIASES:
@@ -376,6 +393,7 @@ def models_for(alias: str) -> list[str]:
     )
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter.model_for(): Resolve an alias to its first-choice model id. An unknown alias is a config error, not a guess.
 def model_for(alias: str) -> str:
     """Resolve an alias to its first-choice model id. An unknown alias is a config error, not a guess."""
     if alias in ALIASES or "/" in alias:
@@ -386,11 +404,13 @@ def model_for(alias: str) -> str:
     )
 
 
+# ZONULY ▸ ai model call · llm · budget · cost ▸ ai models · openrouter ▸ openrouter.is_free(): OpenRouter marks zero-cost models with a `:free` suffix on the id.
 def is_free(model_id: str) -> bool:
     """OpenRouter marks zero-cost models with a `:free` suffix on the id."""
     return model_id.endswith(":free") or model_id == "openrouter/free"
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter.enforce_free(): Raise NotFree when free_only is on and the model is a paid one; no call is made.
 def enforce_free(model_id: str) -> None:
     """Raise NotFree when free_only is on and the model is a paid one; no call is made."""
     if FREE_ONLY and not is_free(model_id):
@@ -404,6 +424,7 @@ def enforce_free(model_id: str) -> None:
 _last_request = 0.0
 
 
+# ZONULY ▸ filtering · ai model call · llm ▸ ai models · openrouter ▸ openrouter._space_requests(): Keep a gap between calls so the free tier's per-minute limit is not the thing
 def _space_requests() -> None:
     """Keep a gap between calls so the free tier's per-minute limit is not the thing
     that stops a scoring run. Sleeps at most one interval, never unbounded."""
@@ -417,6 +438,7 @@ def _space_requests() -> None:
     _last_request = time.monotonic()
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter.complete(): One completion, down the alias's fallback chain. A model that is gone or busy
 def complete(
     prompt: str,
     system: str | None = None,
@@ -450,10 +472,12 @@ def complete(
     raise last  # type: ignore[misc]
 
 
+# ZONULY ▸ review gate · ai model call · llm ▸ ai models · openrouter ▸ class openrouter._ModelGone: This model id cannot serve the call (retired, gated, provider down) — try the next.
 class _ModelGone(LLMUnavailable):
     """This model id cannot serve the call (retired, gated, provider down) — try the next."""
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter._complete_one(): Make one chat completion call to one OpenRouter model and return its Answer.
 def _complete_one(
     prompt: str,
     system: str | None,
@@ -612,6 +636,7 @@ def _complete_one(
     return answer
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter._error_detail(): Extract a short error message from an OpenRouter error response.
 def _error_detail(response: httpx.Response) -> str:
     """Extract a short error message from an OpenRouter error response."""
     try:
@@ -629,6 +654,7 @@ def _error_detail(response: httpx.Response) -> str:
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter._clean(): Strip reasoning traces. §4.2: an unclosed `<think>` means the model ran out
 def _clean(text: str) -> str:
     """Strip reasoning traces. §4.2: an unclosed `<think>` means the model ran out
     of budget mid-thought — that is not an answer, so it is discarded."""
@@ -643,6 +669,7 @@ def _clean(text: str) -> str:
 # ---------------------------------------------------------------- health
 
 
+# ZONULY ▸ ai model call · llm · budget · cost · monitoring ▸ ai models · openrouter ▸ openrouter.health(): Key, aliases, caps and today's spend. Never raises; never echoes the key.
 def health() -> dict:
     """Key, aliases, caps and today's spend. Never raises; never echoes the key."""
     key_present = configured()
@@ -677,6 +704,7 @@ def health() -> dict:
     return out
 
 
+# ZONULY ▸ email verification · email sending · ai model call · llm · budget · cost · knowledge graph ▸ ai models · openrouter ▸ openrouter.verify(): Actually spend one tiny call to prove the key, the alias and the ledg…
 def verify(alias: str = DEFAULT_ALIAS) -> dict:
     """Actually spend one tiny call to prove the key, the alias and the ledger work."""
     try:
@@ -693,6 +721,7 @@ def verify(alias: str = DEFAULT_ALIAS) -> dict:
     return {"ok": True, **answer.as_dict()}
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter.models(): List models OpenRouter serves. Unauthenticated and free to call — this is how
 def models(query: str = "", limit: int = 20, *, free: bool = False) -> dict:
     """List models OpenRouter serves. Unauthenticated and free to call — this is how
     you re-check the roster, which changes as free models come and go."""
@@ -727,6 +756,7 @@ def models(query: str = "", limit: int = 20, *, free: bool = False) -> dict:
     }
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter._price(): Return a model's prompt or completion price in USD per million tokens, or None.
 def _price(model: dict, kind: str) -> float | None:
     """Return a model's prompt or completion price in USD per million tokens, or None."""
     try:
@@ -735,6 +765,7 @@ def _price(model: dict, kind: str) -> float | None:
         return None
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · openrouter ▸ openrouter.resolve_aliases(): Check every configured alias against the live model list. Catches a typo or
 def resolve_aliases() -> dict:
     """Check every configured alias against the live model list. Catches a typo or
     a model that was retired, before a stage tries to use it."""

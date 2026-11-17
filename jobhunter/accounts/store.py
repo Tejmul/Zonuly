@@ -55,15 +55,18 @@ log = logging.getLogger(__name__)
 TABLE = os.environ.get("ZONULY_USERS_TABLE", "ZonulyUsers")
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ class store.StoreError: The account store could not be reached or refused the write.
 class StoreError(RuntimeError):
     """The account store could not be reached or refused the write."""
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ store._now(): Return the current UTC time as an ISO-8601 string without microseconds.
 def _now() -> str:
     """Return the current UTC time as an ISO-8601 string without microseconds."""
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ store._public_user(): Reduce a stored account row to the public user dict (id, email, name, provider).
 def _public_user(row: dict) -> dict:
     """Reduce a stored account row to the public user dict (id, email, name, provider)."""
     return {
@@ -76,9 +79,11 @@ def _public_user(row: dict) -> dict:
 
 # ------------------------------------------------------------------- SQLite
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ class store.SqliteStore
 class SqliteStore:
     name = "sqlite"
 
+    # ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ store.SqliteStore.__init__(): Open the local accounts SQLite file (data/accounts.db by default) and create the users table.
     def __init__(self, path: Path | None = None):
         """Open the local accounts SQLite file (data/accounts.db by default) and create the users table."""
         self.path = Path(path or os.environ.get("ZONULY_ACCOUNTS_DB") or ROOT / "data" / "accounts.db")
@@ -93,12 +98,14 @@ class SqliteStore:
                 " created_at text not null, last_login_at text, login_count integer not null default 0)"
             )
 
+    # ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ store.SqliteStore._connect(): Open a SQLite connection to the accounts file with dict-like rows.
     def _connect(self) -> sqlite3.Connection:
         """Open a SQLite connection to the accounts file with dict-like rows."""
         con = sqlite3.connect(self.path, timeout=10)
         con.row_factory = sqlite3.Row
         return con
 
+    # ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ store.SqliteStore.upsert_login(): Record a sign-in in SQLite: insert a new user or bump last_login_at and login_count.
     def upsert_login(self, email: str, *, provider: str, name: str | None = None,
                      google_sub: str | None = None, request=None) -> dict:
         """Record a sign-in in SQLite: insert a new user or bump last_login_at and login_count.
@@ -123,6 +130,7 @@ class SqliteStore:
             row = con.execute("select * from users where email = ?", (email,)).fetchone()
         return _public_user(dict(row))
 
+    # ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ store.SqliteStore.count(): Return the number of user accounts in the local SQLite store.
     def count(self, request=None) -> int:
         """Return the number of user accounts in the local SQLite store."""
         with self._connect() as con:
@@ -131,6 +139,7 @@ class SqliteStore:
 
 # ------------------------------------------------------------------- Catalyst
 
+# ZONULY ▸ review gate · sign-in · auth · deployment · snapshot ▸ api · sign-in · accounts ▸ store._header(): Catalyst's gateway headers, read case-insensitively as the SDK does.
 def _header(headers, name: str) -> str:
     """Catalyst's gateway headers, read case-insensitively as the SDK does."""
     value = headers.get(name)
@@ -140,9 +149,11 @@ def _header(headers, name: str) -> str:
     return value or ""
 
 
+# ZONULY ▸ sign-in · auth · deployment · snapshot ▸ api · sign-in · accounts ▸ class store.CatalystStore
 class CatalystStore:
     name = "catalyst"
 
+    # ZONULY ▸ sign-in · auth · deployment · snapshot ▸ api · sign-in · accounts ▸ store.CatalystStore.__init__(): Set the Catalyst API base URL from the environment (the deployed accounts store).
     def __init__(self):
         """Set the Catalyst API base URL from the environment (the deployed accounts store)."""
         # In AppSail this is set by the runtime; the default is this project's data centre.
@@ -150,6 +161,7 @@ class CatalystStore:
 
     # The request the SDK would build — headers and path — for a Data Store call in
     # admin scope. Any request that reached us through the Catalyst gateway carries them.
+    # ZONULY ▸ sign-in · auth · deployment · snapshot ▸ api · sign-in · accounts ▸ store.CatalystStore._call(): Make one Catalyst Data Store HTTP call using the admin credential on the incoming request.
     def _call(self, request, method: str, path: str, *, accept: str = "application/vnd.catalyst.v2+json",
               **kwargs) -> dict:
         """Make one Catalyst Data Store HTTP call using the admin credential on the incoming request.
@@ -190,6 +202,7 @@ class CatalystStore:
         except ValueError as e:
             raise StoreError(f"Data Store answered non-JSON: {r.text[:200]}") from e
 
+    # ZONULY ▸ sign-in · auth · deployment · snapshot ▸ api · sign-in · accounts ▸ store.CatalystStore._find(): Look up one user row by email in the Catalyst table via a ZCQL query; None when absent.
     def _find(self, request, email: str) -> dict | None:
         """Look up one user row by email in the Catalyst table via a ZCQL query; None when absent."""
         # `email` has already passed realness.well_formed, which admits no quote; the
@@ -200,6 +213,7 @@ class CatalystStore:
         rows = out.get("data") or []
         return rows[0].get(TABLE) if rows else None
 
+    # ZONULY ▸ sign-in · auth · deployment · snapshot ▸ api · sign-in · accounts ▸ store.CatalystStore.upsert_login(): Record a sign-in in the Catalyst Data Store: insert a new row or patch login time and count.
     def upsert_login(self, email: str, *, provider: str, name: str | None = None,
                      google_sub: str | None = None, request=None) -> dict:
         """Record a sign-in in the Catalyst Data Store: insert a new row or patch login time and count.
@@ -223,6 +237,7 @@ class CatalystStore:
         self._call(request, "PATCH", f"/table/{TABLE}/row", json=[patch])
         return _public_user({**row, **patch})
 
+    # ZONULY ▸ sign-in · auth · deployment · snapshot ▸ api · sign-in · accounts ▸ store.CatalystStore.count(): Return the number of user rows in the Catalyst Data Store table (ZCQL COUNT query).
     def count(self, request=None) -> int:
         """Return the number of user rows in the Catalyst Data Store table (ZCQL COUNT query)."""
         out = self._call(request, "POST", "/query", accept="application/vnd.catalyst.v2+zcql",
@@ -237,6 +252,7 @@ class CatalystStore:
 # ------------------------------------------------------------------- the interface
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ class store.AccountStore: What the sign-in code needs from wherever accounts live. SqliteStore (a laptop) and
 @runtime_checkable
 class AccountStore(Protocol):
     """What the sign-in code needs from wherever accounts live. SqliteStore (a laptop) and
@@ -245,11 +261,13 @@ class AccountStore(Protocol):
 
     name: str
 
+    # ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ store.AccountStore.upsert_login(): Record a sign-in for this email and return the public user dict (interface method).
     def upsert_login(self, email: str, *, provider: str, name: str | None = None,
                      google_sub: str | None = None, request=None) -> dict:
         """Record a sign-in for this email and return the public user dict (interface method)."""
         ...
 
+    # ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ store.AccountStore.count(): Return how many accounts the store holds (interface method).
     def count(self, request=None) -> int:
         """Return how many accounts the store holds (interface method)."""
         ...
@@ -261,6 +279,7 @@ _store = None
 _store_lock = threading.Lock()
 
 
+# ZONULY ▸ sign-in · auth · deployment · snapshot ▸ api · sign-in · accounts ▸ store.get_store(): ZONULY_ACCOUNTS=catalyst on AppSail (set by its start script); SQLite otherwise.
 def get_store() -> AccountStore:
     """ZONULY_ACCOUNTS=catalyst on AppSail (set by its start script); SQLite otherwise."""
     global _store
@@ -272,6 +291,7 @@ def get_store() -> AccountStore:
         return _store
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ store.set_store(): For tests.
 def set_store(store: AccountStore) -> None:
     """For tests."""
     global _store

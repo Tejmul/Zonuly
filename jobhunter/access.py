@@ -103,26 +103,31 @@ _OPERATOR_ONLY = (
 _operator: ContextVar[bool] = ContextVar("zonuly_operator", default=False)
 
 
+# ZONULY ▸ access control ▸ api · access control middleware ▸ access.set_operator(): Returns the token to reset with, so one request cannot leak into the next.
 def set_operator(value: bool):
     """Returns the token to reset with, so one request cannot leak into the next."""
     return _operator.set(value)
 
 
+# ZONULY ▸ access control ▸ api · access control middleware ▸ access.reset_operator(): Reset the per-request operator flag with the token `set_operator` returned.
 def reset_operator(token) -> None:
     """Reset the per-request operator flag with the token `set_operator` returned."""
     _operator.reset(token)
 
 
+# ZONULY ▸ access control ▸ api · access control middleware ▸ access._unrestricted(): True when the API is not in public mode or the current request is the operator's (full data access).
 def _unrestricted() -> bool:
     """True when the API is not in public mode or the current request is the operator's (full data access)."""
     return not PUBLIC or _operator.get()
 
 
+# ZONULY ▸ access control ▸ api · access control middleware ▸ access.can_read_private(): For a public route that carries an operator-only part (names, bodies).
 def can_read_private() -> bool:
     """For a public route that carries an operator-only part (names, bodies)."""
     return _unrestricted()
 
 
+# ZONULY ▸ access control ▸ api · access control middleware ▸ access.is_operator(): True when the caller presented the operator key.
 def is_operator(headers) -> bool:
     """True when the caller presented the operator key.
 
@@ -136,6 +141,7 @@ def is_operator(headers) -> bool:
     return bool(offered) and hmac.compare_digest(offered, _KEY)
 
 
+# ZONULY ▸ sign-in · auth · access control ▸ api · access control middleware ▸ access.session_user(): The signed-in visitor, from the session cookie — or None. Verified, not trusted.
 def session_user(headers) -> dict | None:
     """The signed-in visitor, from the session cookie — or None. Verified, not trusted."""
     raw = headers.get("cookie") or ""
@@ -154,6 +160,7 @@ def session_user(headers) -> dict | None:
     return tokens.read_session(morsel.value) if morsel else None
 
 
+# ZONULY ▸ review gate · sign-in · auth · access control ▸ api · access control middleware ▸ access.is_open_when_gated(): Readable without signing in, even with the gate up.
 def is_open_when_gated(method: str, path: str) -> bool:
     """Readable without signing in, even with the gate up."""
     return path in _ALWAYS or path.startswith(_AUTH_PREFIX) or (
@@ -161,6 +168,7 @@ def is_open_when_gated(method: str, path: str) -> bool:
     )
 
 
+# ZONULY ▸ access control ▸ api · access control middleware ▸ access.refusal(): `(status, detail)` if this request must be refused, else None.
 def refusal(method: str, path: str, headers) -> tuple[int, str] | None:
     """`(status, detail)` if this request must be refused, else None."""
     if not PUBLIC or is_operator(headers):
@@ -183,6 +191,7 @@ def refusal(method: str, path: str, headers) -> tuple[int, str] | None:
     return None
 
 
+# ZONULY ▸ access control ▸ api · access control middleware ▸ access.mask_email(): `paul@example.com` -> `p•••@example.com`.
 def mask_email(address: str | None) -> str | None:
     """`paul@example.com` -> `p•••@example.com`.
 
@@ -196,6 +205,7 @@ def mask_email(address: str | None) -> str | None:
     return f"{local[:1]}•••@{domain}"
 
 
+# ZONULY ▸ people search · referrers · access control ▸ api · access control middleware ▸ access.redact_contact(): Mask a serialised contact. No-op locally, and no-op for the key holder.
 def redact_contact(row: dict) -> dict:
     """Mask a serialised contact. No-op locally, and no-op for the key holder."""
     if _unrestricted():
@@ -211,6 +221,7 @@ def redact_contact(row: dict) -> dict:
     return row
 
 
+# ZONULY ▸ email drafting · access control ▸ api · access control middleware ▸ access.redact_email(): Same for a drafted message: the draft is the demo, the recipient is not.
 def redact_email(row: dict) -> dict:
     """Same for a drafted message: the draft is the demo, the recipient is not."""
     if _unrestricted():
@@ -219,6 +230,7 @@ def redact_email(row: dict) -> dict:
     return row
 
 
+# ZONULY ▸ scraping · access control · monitoring ▸ api · access control middleware ▸ access.status(): Reported by /api/health so the dashboard can say so on screen.
 def status() -> dict:
     """Reported by /api/health so the dashboard can say so on screen."""
     return {"public": PUBLIC, "read_only": PUBLIC, "operator_key_set": bool(_KEY),

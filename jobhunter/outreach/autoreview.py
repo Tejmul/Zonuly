@@ -91,6 +91,7 @@ _EXPERIENCE = re.compile(r"experience|exp\b|building|working|professional|indust
                          r"engineering|development)|\bof (software|backend|engineering|development|coding|programming)", re.I)
 
 
+# ZONULY ▸ review gate ▸ outreach · email ▸ autoreview._years_asked(): The smallest experience floor a posting states ("3+ years of experience", "2-4 yrs
 def _years_asked(text: str) -> int:
     """The smallest experience floor a posting states ("3+ years of experience", "2-4 yrs
     building …"), or 0. A number of years with no experience word right after it ("founded
@@ -100,6 +101,7 @@ def _years_asked(text: str) -> int:
     return min(floors) if floors else 0
 
 
+# ZONULY ▸ email verification · email drafting · review gate ▸ outreach · email ▸ autoreview._deliverability(): Run the deliverability gate on a draft against the last 30 days of other cold mail.
 def _deliverability(session, e: Email) -> list[dict]:
     """Run the deliverability gate on a draft against the last 30 days of other cold mail.
     Returns only the deliverability flags (spam-like wording, repeats, signature issues)."""
@@ -122,6 +124,7 @@ def _deliverability(session, e: Email) -> list[dict]:
                                             sent=sent, to_email=e.to_email) if f["kind"] == "deliverability"]
 
 
+# ZONULY ▸ review gate ▸ outreach · email ▸ autoreview.role_problem(): Why this role is not one for a fresher (senior / lead / II, or 3+ years asked), or None.
 def role_problem(job) -> str | None:
     """Why this role is not one for a fresher (senior / lead / II, or 3+ years asked), or None.
     Also used to keep such companies out of the circle (focus.py)."""
@@ -135,6 +138,7 @@ def role_problem(job) -> str | None:
     return None
 
 
+# ZONULY ▸ email drafting · review gate ▸ outreach · email ▸ autoreview.waits(): Why this draft may not go YET (another ask at the company still open, a pause after a
 def waits(session, e: Email) -> str | None:
     """Why this draft may not go YET (another ask at the company still open, a pause after a
     spam block) — it stays a draft and is read again next run. None when nothing holds it."""
@@ -143,6 +147,7 @@ def waits(session, e: Email) -> str | None:
     return suppress.cooldown(session, e) or suppress.spam_hold(session, e)
 
 
+# ZONULY ▸ email drafting · review gate ▸ outreach · email ▸ autoreview.problems(): Why this draft may never go as written, or [] when it may.
 def problems(session, e: Email) -> list[str]:
     """Why this draft may never go as written, or [] when it may."""
     from jobhunter import guardrails
@@ -191,6 +196,7 @@ def problems(session, e: Email) -> list[str]:
     return out + _letter(e, first)
 
 
+# ZONULY ▸ review gate · replies · follow-up ▸ outreach · email ▸ autoreview._letter(): The checks every letter passes, a cold ask or a follow-up.
 def _letter(e: Email, first: str) -> list[str]:
     """The checks every letter passes, a cold ask or a follow-up."""
     out: list[str] = []
@@ -204,6 +210,7 @@ def _letter(e: Email, first: str) -> list[str]:
     return out
 
 
+# ZONULY ▸ review gate · replies · follow-up ▸ outreach · email ▸ autoreview.followup_problems(): Why this follow-up may never go, or [] when it may (2026-10-29: follow-ups waited for a
 def followup_problems(session, e: Email) -> list[str]:
     """Why this follow-up may never go, or [] when it may (2026-10-29: follow-ups waited for a
     click that no longer comes). It nudges an ask already delivered, so the address is proven
@@ -228,6 +235,7 @@ def followup_problems(session, e: Email) -> list[str]:
     return out + _letter(e, first)
 
 
+# ZONULY ▸ filtering · email verification · email drafting · review gate ▸ outreach · email ▸ autoreview.run(): Approve every cold draft that passes, reject every one that never can, and leave the
 def run(limit: int = 200, *, now: datetime | None = None) -> dict:
     """Approve every cold draft that passes, reject every one that never can, and leave the
     ones held for now (waits) as drafts."""

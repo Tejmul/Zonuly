@@ -239,6 +239,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 app = typer.Typer(add_completion=False, help="JobHunter — AI job scraping & referral outreach")
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run._setup_logging(): Configure CLI logging (DEBUG when verbose, else INFO) and quiet the HTTP client loggers.
 def _setup_logging(verbose: bool = False) -> None:
     """Configure CLI logging (DEBUG when verbose, else INFO) and quiet the HTTP client loggers."""
     logging.basicConfig(
@@ -251,11 +252,13 @@ def _setup_logging(verbose: bool = False) -> None:
     logging.getLogger("googleapiclient").setLevel(logging.WARNING)
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run._echo(): Print data as indented JSON.
 def _echo(data: object) -> None:
     """Print data as indented JSON."""
     typer.echo(json.dumps(data, indent=2, default=str))
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.doctor(): Check every external dependency and report what's missing.
 @app.command()
 def doctor() -> None:
     """Check every external dependency and report what's missing."""
@@ -296,6 +299,7 @@ def doctor() -> None:
     _echo(matcher.counts())
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.profile(): Parse the resume into profile.json.
 @app.command()
 def profile(path: str = typer.Option(None, help="Path to resume PDF/MD/TXT")) -> None:
     """Parse the resume into profile.json."""
@@ -306,6 +310,7 @@ def profile(path: str = typer.Option(None, help="Path to resume PDF/MD/TXT")) ->
     _echo({k: v for k, v in data.items() if not k.startswith("_")})
 
 
+# ZONULY ▸ scraping · data ingestion ▸ cli entry point ▸ run.scrape(): Run the scraper fleet and persist new jobs.
 @app.command()
 def scrape(
     sources: str = typer.Option(None, help="Comma-separated subset, e.g. 'greenhouse,hn_hiring'"),
@@ -319,6 +324,7 @@ def scrape(
     _echo(pipeline.scrape(names).as_dict())
 
 
+# ZONULY ▸ scoring · review gate ▸ cli entry point ▸ run.score(): Lexically gate unscored jobs, then rubric-score the most promising.
 @app.command()
 def score(
     limit: int = typer.Option(40, help="How many jobs to rubric-score this run"),
@@ -338,6 +344,7 @@ def score(
     _echo(result)
 
 
+# ZONULY ▸ data ingestion · scoring · people search · referrers ▸ cli entry point ▸ run.find_contacts(): Discover contactable people at high-match companies.
 @app.command(name="find-contacts")
 def find_contacts(
     company: int = typer.Option(None, help="Company id; omit to sweep high-match companies"),
@@ -351,6 +358,7 @@ def find_contacts(
     _echo(contacts.discover(company) if company else contacts.discover_for_high_matches(limit=limit))
 
 
+# ZONULY ▸ people search · referrers · email drafting · review gate ▸ cli entry point ▸ run.draft(): Queue referral drafts in the review queue.
 @app.command()
 def draft(
     contact: int = typer.Option(None, help="Contact id; omit to draft for high-match companies"),
@@ -369,6 +377,7 @@ def draft(
         _echo(drafter.draft_for_high_matches(limit=limit, per_company=per_company))
 
 
+# ZONULY ▸ email sending · sign-in · auth ▸ cli entry point ▸ run.gmail_verify(): Sign in to Gmail with the app password and report whether Google accepts it.
 @app.command(name="gmail-verify")
 def gmail_verify() -> None:
     """Sign in to Gmail with the app password and report whether Google accepts it."""
@@ -377,6 +386,7 @@ def gmail_verify() -> None:
     _echo({"from": gmail.from_header(), **gmail.verify(force=True)})
 
 
+# ZONULY ▸ email sending ▸ cli entry point ▸ run.gmail_auth(): Run the one-time Gmail OAuth consent flow (opens a browser).
 @app.command(name="gmail-auth")
 def gmail_auth() -> None:
     """Run the one-time Gmail OAuth consent flow (opens a browser)."""
@@ -390,6 +400,7 @@ def gmail_auth() -> None:
         raise typer.Exit(1) from e
 
 
+# ZONULY ▸ email verification · email drafting · email sending ▸ cli entry point ▸ run.send(): Send approved drafts, respecting the daily cap and send window.
 @app.command()
 def send(
     email_id: int = typer.Option(None, help="Send one specific email"),
@@ -408,6 +419,7 @@ def send(
         _echo(sender.send_approved(limit=limit, ignore_window=ignore_window, stagger=not no_stagger))
 
 
+# ZONULY ▸ scraping · email verification · email drafting ▸ cli entry point ▸ run.approve(): Approve a draft from the CLI (the dashboard is the usual place).
 @app.command()
 def approve(email_id: int) -> None:
     """Approve a draft from the CLI (the dashboard is the usual place)."""
@@ -417,6 +429,7 @@ def approve(email_id: int) -> None:
     _echo(sender.approve(email_id))
 
 
+# ZONULY ▸ email sending · replies · follow-up ▸ cli entry point ▸ run.poll(): Poll Gmail for replies and classify them.
 @app.command()
 def poll(followups: bool = typer.Option(True, help="Also queue follow-ups for silent threads")) -> None:
     """Poll Gmail for replies and classify them."""
@@ -430,6 +443,7 @@ def poll(followups: bool = typer.Option(True, help="Also queue follow-ups for si
     notify.notify_replies()
 
 
+# ZONULY ▸ scraping · data ingestion · scoring ▸ cli entry point ▸ run.daily(): Run the full ingestion cycle once: scrape -> salaries -> embed -> score -> notify.
 @app.command()
 def daily() -> None:
     """Run the full ingestion cycle once: scrape -> salaries -> embed -> score -> notify."""
@@ -439,6 +453,7 @@ def daily() -> None:
     _echo(scheduler.daily_cycle())
 
 
+# ZONULY ▸ scraping · data ingestion ▸ cli entry point ▸ run.discover(): Probe for new public ATS boards and append them to companies.yaml.
 @app.command()
 def discover(limit: int = typer.Option(60, help="How many YC companies to probe")) -> None:
     """Probe for new public ATS boards and append them to companies.yaml."""
@@ -452,6 +467,7 @@ def discover(limit: int = typer.Option(60, help="How many YC companies to probe"
     from jobhunter.scrapers.base import make_client
     from jobhunter.scrapers.yc import discover_companies
 
+    # ZONULY ▸ yc scraping · data ingestion ▸ cli entry point ▸ run.discover.go(): Open an HTTP client and discover YC companies (up to limit).
     async def go():
         """Open an HTTP client and discover YC companies (up to limit)."""
         async with make_client() as http:
@@ -482,6 +498,7 @@ def discover(limit: int = typer.Option(60, help="How many YC companies to probe"
     _echo({"added": len(fresh), "total": len(existing), "new": [c["name"] for c in fresh]})
 
 
+# ZONULY ▸ scraping ▸ cli entry point ▸ run.add_company_cmd(): Add one company: find its job board, seed companies.yaml, pull its roles.
 @app.command(name="add-company")
 def add_company_cmd(
     name: str = typer.Argument(..., help="Company name"),
@@ -501,6 +518,7 @@ def add_company_cmd(
         raise typer.Exit(1)
 
 
+# ZONULY ▸ scheduler · tick ▸ cli entry point ▸ run.serve(): Start the FastAPI backend and the scheduler.
 @app.command()
 def serve(
     host: str = typer.Option(None),
@@ -524,6 +542,7 @@ kg_app = typer.Typer(add_completion=False, help="Knowledge graph — pipeline da
 app.add_typer(kg_app, name="kg")
 
 
+# ZONULY ▸ knowledge graph ▸ cli entry point ▸ run.kg_build(): Load knowledge/context.yaml, mirror every table, write BRIEF.md and the HTML viewer.
 @kg_app.command("build")
 def kg_build(no_viewer: bool = typer.Option(False, help="Skip writing knowledge/graph.html")) -> None:
     """Load knowledge/context.yaml, mirror every table, write BRIEF.md and the HTML viewer."""
@@ -542,6 +561,7 @@ def kg_build(no_viewer: bool = typer.Option(False, help="Skip writing knowledge/
     _echo(out)
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.kg_sync(): Mirror the pipeline tables into the data layer (runs automatically after each cycle).
 @kg_app.command("sync")
 def kg_sync() -> None:
     """Mirror the pipeline tables into the data layer (runs automatically after each cycle)."""
@@ -551,6 +571,7 @@ def kg_sync() -> None:
     _echo(sync.sync_all())
 
 
+# ZONULY ▸ knowledge graph · sign-in · auth ▸ cli entry point ▸ run.kg_context(): Reload only the context layer from knowledge/context.yaml (session notes are kept).
 @kg_app.command("context")
 def kg_context() -> None:
     """Reload only the context layer from knowledge/context.yaml (session notes are kept)."""
@@ -562,6 +583,7 @@ def kg_context() -> None:
         _echo(context.load(g))
 
 
+# ZONULY ▸ csv export · knowledge graph · sign-in · auth ▸ cli entry point ▸ run.kg_brief(): Render knowledge/BRIEF.md — the context handoff a fresh session reads first.
 @kg_app.command("brief")
 def kg_brief(print_: bool = typer.Option(False, "--print", help="Print instead of writing the file")) -> None:
     """Render knowledge/BRIEF.md — the context handoff a fresh session reads first."""
@@ -570,6 +592,7 @@ def kg_brief(print_: bool = typer.Option(False, "--print", help="Print instead o
     typer.echo(brief.render() if print_ else brief.write())
 
 
+# ZONULY ▸ knowledge graph ▸ cli entry point ▸ run.kg_stats(): Print knowledge graph node and edge counts.
 @kg_app.command("stats")
 def kg_stats() -> None:
     """Print knowledge graph node and edge counts."""
@@ -579,6 +602,7 @@ def kg_stats() -> None:
         _echo(g.stats())
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.kg_search(): Full-text search across both layers.
 @kg_app.command("search")
 def kg_search(
     query: str,
@@ -602,6 +626,7 @@ def kg_search(
         typer.echo("no matches")
 
 
+# ZONULY ▸ knowledge graph ▸ cli entry point ▸ run.kg_show(): A node, its properties and everything it links to.
 @kg_app.command("show")
 def kg_show(node_id: str, depth: int = 1, json_: bool = typer.Option(False, "--json")) -> None:
     """A node, its properties and everything it links to."""
@@ -641,6 +666,7 @@ def kg_show(node_id: str, depth: int = 1, json_: bool = typer.Option(False, "--j
             typer.echo(f"  {e['rel']:<16} {e['src']:<44} {labels.get(e['src'], '')[:70]}")
 
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ cli entry point ▸ run.kg_path(): Shortest path between two nodes — e.g. how a contact connects to a constraint.
 @kg_app.command("path")
 def kg_path(a: str, b: str, max_depth: int = 6) -> None:
     """Shortest path between two nodes — e.g. how a contact connects to a constraint."""
@@ -659,6 +685,7 @@ def kg_path(a: str, b: str, max_depth: int = 6) -> None:
             typer.echo(f"{step['id']}  {step['label'][:80]}")
 
 
+# ZONULY ▸ decision ▸ cli entry point ▸ run.kg_note(): Remember something — a decision, a result, what changed. This is how context accumulates.
 @kg_app.command("note")
 def kg_note(
     text: str,
@@ -680,6 +707,7 @@ def kg_note(
     _echo(result)
 
 
+# ZONULY ▸ email drafting ▸ cli entry point ▸ run.kg_compose(): Pick the best feature per stage across every architecture draft for a problem statement.
 @kg_app.command("compose")
 def kg_compose(
     statement: str = typer.Argument(None, help="Problem statement; defaults to the problem node"),
@@ -714,6 +742,7 @@ def kg_compose(
         typer.echo("")
 
 
+# ZONULY ▸ knowledge graph ▸ cli entry point ▸ run.kg_hubs(): Most load-bearing nodes by betweenness centrality (NetworkX).
 @kg_app.command("hubs")
 def kg_hubs(
     layer: str = typer.Option("context", help="context | data | all"),
@@ -733,6 +762,7 @@ def kg_hubs(
         typer.secho(f"\n{len(orphans)} unlinked node(s): " + ", ".join(o["id"] for o in orphans[:10]), fg=typer.colors.YELLOW)
 
 
+# ZONULY ▸ csv export · knowledge graph ▸ cli entry point ▸ run.kg_export(): Write the graph as a standalone HTML viewer, JSON, or GraphML.
 @kg_app.command("export")
 def kg_export(
     all_jobs: bool = typer.Option(False, help="Include unscored jobs (default: scored only)"),
@@ -752,6 +782,7 @@ def kg_export(
 
 # ---------------------------------------------------------------- web research
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.kg_why(): Should we write to this company, to whom, and what do we actually know?
 @kg_app.command("why")
 def kg_why(
     company: list[str] = typer.Argument(..., help="Company name, or a company:<id> node"),
@@ -829,6 +860,7 @@ def kg_why(
     typer.echo()
 
 
+# ZONULY ▸ decision · people search · referrers · knowledge graph ▸ cli entry point ▸ run.kg_shortlist(): Rank targets by everything the graph knows: grade, verified hiring, skill overlap, reachable people.
 @kg_app.command("shortlist")
 def kg_shortlist(
     limit: int = typer.Option(15),
@@ -852,6 +884,7 @@ def kg_shortlist(
             typer.echo(f"        ask first: {r['ask_first']['name']} ({r['ask_first']['role_class']})")
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.kg_expand(): Who else did their investors fund? Companies two hops away, underrated by construction.
 @kg_app.command("expand")
 def kg_expand(
     ref: list[str] = typer.Argument(..., help="A company or an investor"),
@@ -872,6 +905,7 @@ def kg_expand(
         typer.echo(f"  [{r['tier'] or '-'}] {r['name']:34} shared: {', '.join(r['via'][:3])}")
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.kg_guard(): May we write to them? MOTIV §6's cooldown rules, answered by traversal.
 @kg_app.command("guard")
 def kg_guard(ref: list[str] = typer.Argument(..., help="A contact or a company")) -> None:
     """May we write to them? MOTIV §6's cooldown rules, answered by traversal."""
@@ -892,6 +926,7 @@ def kg_guard(ref: list[str] = typer.Argument(..., help="A contact or a company")
         typer.secho(f"{out['contact']}: {out['why']}", fg=colour)
 
 
+# ZONULY ▸ knowledge graph · monitoring ▸ cli entry point ▸ run.kg_audit(): Contradictions between what different parts of the graph believe.
 @kg_app.command("audit")
 def kg_audit(
     limit: int = typer.Option(10, help="Rows per check"),
@@ -927,6 +962,7 @@ research_app = typer.Typer(
 app.add_typer(research_app, name="research")
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.research_doctor(): Which research channels work on this machine, and how to fix the rest.
 @research_app.command("doctor")
 def research_doctor() -> None:
     """Which research channels work on this machine, and how to fix the rest."""
@@ -951,6 +987,7 @@ def research_doctor() -> None:
            "exa_budget": report["exa_budget"]})
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.research_web(): Semantic web search. Describe the ideal page, not keywords.
 @research_app.command("web")
 def research_web(
     query: str,
@@ -964,6 +1001,7 @@ def research_web(
     _echo(research.search_web(query, limit=limit, fresh=fresh))
 
 
+# ZONULY ▸ sign-in · auth ▸ cli entry point ▸ run.research_x(): Posts on X via a site:x.com web search — no X account, no cookies, no X API. Records only.
 @research_app.command("x")
 def research_x(
     query: str,
@@ -978,6 +1016,7 @@ def research_x(
     _echo(research.search_x(query, limit=limit, days=days, fresh=fresh))
 
 
+# ZONULY ▸ x search · sign-in · auth ▸ cli entry point ▸ run.research_x_search(): Live X search through the THROWAWAY session in .env — read-only, capped per day, gapped. Records only.
 @research_app.command("x-search")
 def research_x_search(
     query: str,
@@ -991,6 +1030,7 @@ def research_x_search(
     _echo(x_search.search(query, limit=limit, fresh=fresh))
 
 
+# ZONULY ▸ scraping ▸ cli entry point ▸ run.research_read(): Fetch one page as readable text.
 @research_app.command("read")
 def research_read(
     url: str,
@@ -1006,6 +1046,7 @@ def research_read(
     typer.echo(page.get("text", "") if text else json.dumps(page, indent=2, default=str))
 
 
+# ZONULY ▸ github scraping ▸ cli entry point ▸ run.research_github(): Search public GitHub repositories.
 @research_app.command("github")
 def research_github(query: str, limit: int = 10, fresh: bool = False) -> None:
     """Search public GitHub repositories."""
@@ -1015,6 +1056,7 @@ def research_github(query: str, limit: int = 10, fresh: bool = False) -> None:
     _echo(research.search_github(query, limit=limit, fresh=fresh))
 
 
+# ZONULY ▸ reddit ▸ cli entry point ▸ run.research_reddit(): Search Reddit. Needs a logged-in backend — Reddit has no anonymous path.
 @research_app.command("reddit")
 def research_reddit(
     query: str,
@@ -1029,6 +1071,7 @@ def research_reddit(
     _echo(research.search_reddit(query, limit=limit, subreddit=subreddit, fresh=fresh))
 
 
+# ZONULY ▸ youtube ▸ cli entry point ▸ run.research_youtube(): Search YouTube, or pull one video's subtitles with --transcript URL.
 @research_app.command("youtube")
 def research_youtube(
     query: str,
@@ -1042,6 +1085,7 @@ def research_youtube(
     _echo(research.youtube_transcript(transcript) if transcript else research.search_youtube(query, limit=limit))
 
 
+# ZONULY ▸ github scraping · enrichment ▸ cli entry point ▸ run.research_company_cmd(): Research one company: what it builds, funding, GitHub, hiring signals.
 @research_app.command("company")
 def research_company_cmd(
     name: str,
@@ -1056,6 +1100,7 @@ def research_company_cmd(
     _echo(research.research_company(name, website=website, depth=depth, fresh=fresh))
 
 
+# ZONULY ▸ enrichment ▸ cli entry point ▸ run.research_startups(): Recently funded startups, with funding and hiring information.
 @research_app.command("startups")
 def research_startups(
     topic: str = typer.Option("AI", help="Sector, e.g. AI / fintech / robotics"),
@@ -1098,6 +1143,7 @@ def research_startups(
         typer.echo("")
 
 
+# ZONULY ▸ cache ▸ cli entry point ▸ run.research_cache(): Research cache stats, or purge stale entries.
 @research_app.command("cache")
 def research_cache(purge: bool = typer.Option(False, help="Delete entries older than the TTL")) -> None:
     """Research cache stats, or purge stale entries."""
@@ -1112,6 +1158,7 @@ actor_app = typer.Typer(add_completion=False, help="Actors — our own Apify: Li
 app.add_typer(actor_app, name="actor")
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run._actor_done(): Print an actor run's summary and the first few dataset items.
 def _actor_done(row: dict, show: int = 10) -> None:
     """Print an actor run's summary and the first few dataset items."""
     from jobhunter import actors
@@ -1122,6 +1169,7 @@ def _actor_done(row: dict, show: int = 10) -> None:
                                      default=str, ensure_ascii=False)[:400])
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.actor_list(): The actors this machine can run.
 @actor_app.command("list")
 def actor_list() -> None:
     """The actors this machine can run."""
@@ -1131,6 +1179,7 @@ def actor_list() -> None:
         typer.echo(f"{name:22} {(fn.__doc__ or '').strip().splitlines()[0]}")
 
 
+# ZONULY ▸ linkedin scraping ▸ cli entry point ▸ run.actor_jobs(): LinkedIn job search through the logged-out endpoint.
 @actor_app.command("jobs")
 def actor_jobs(
     keywords: str,
@@ -1150,6 +1199,7 @@ def actor_jobs(
                            posted_days=days, experience=experience, max_items=max_items, details=details))
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.actor_company(): Public company pages, by slug or URL.
 @actor_app.command("company")
 def actor_company(companies: list[str], fresh: bool = False) -> None:
     """Public company pages, by slug or URL."""
@@ -1159,6 +1209,7 @@ def actor_company(companies: list[str], fresh: bool = False) -> None:
     _actor_done(actors.run("linkedin-company", fresh=fresh, companies=companies))
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.actor_profile(): Public profiles: current and former employers, schools, location.
 @actor_app.command("profile")
 def actor_profile(urls: list[str], fresh: bool = False) -> None:
     """Public profiles: current and former employers, schools, location."""
@@ -1168,6 +1219,7 @@ def actor_profile(urls: list[str], fresh: bool = False) -> None:
     _actor_done(actors.run("linkedin-profile", fresh=fresh, urls=urls))
 
 
+# ZONULY ▸ data ingestion · people search · referrers ▸ cli entry point ▸ run.actor_employees(): Who works at a company now — discovered, then verified on each public profile.
 @actor_app.command("employees")
 def actor_employees(
     company_id: int = typer.Argument(..., help="Company id in jobhunter.db"),
@@ -1203,6 +1255,7 @@ def actor_employees(
         typer.echo(f"saved {lp._save(company_id, people, 'actor:linkedin-employees') if people else 0} new contacts")
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ cli entry point ▸ run.actor_people(): The LinkedIn People tab for a company — without our LinkedIn account.
 @actor_app.command("people")
 def actor_people(
     company_id: int = typer.Argument(None, help="Company id in jobhunter.db (fills name, domain, website, city, GitHub org)"),
@@ -1261,6 +1314,7 @@ def actor_people(
         typer.echo(f"saved {lp._save(company_id, keep, 'actor:company-people') if keep else 0} new contacts")
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ cli entry point ▸ run.actor_fill(): Fill companies that have no current referrer: find people, store them, apply the address format.
 @actor_app.command("fill")
 def actor_fill(
     limit: int = typer.Option(5, help="How many unfilled companies this run"),
@@ -1285,6 +1339,7 @@ def actor_fill(
     _echo([{k: r.get(k) for k in ("company", "run_id", "sources", "addresses")} for r in rows])
 
 
+# ZONULY ▸ apify scraping · apify people search · budget · cost ▸ cli entry point ▸ run.actor_apify(): Apify source: token present, today's spend against the cap.
 @actor_app.command("apify")
 def actor_apify() -> None:
     """Apify source: token present, today's spend against the cap."""
@@ -1293,6 +1348,7 @@ def actor_apify() -> None:
     _echo(apify_source.status())
 
 
+# ZONULY ▸ email sending · knowledge graph ▸ cli entry point ▸ run.actor_runs(): The run ledger, newest first.
 @actor_app.command("runs")
 def actor_runs(limit: int = 15) -> None:
     """The run ledger, newest first."""
@@ -1303,6 +1359,7 @@ def actor_runs(limit: int = 15) -> None:
                    f"{r['run_id']}  {(r.get('error') or '')[:70]}")
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.actor_show(): A run's dataset.
 @actor_app.command("show")
 def actor_show(run_id: str, limit: int = 50) -> None:
     """A run's dataset."""
@@ -1312,6 +1369,7 @@ def actor_show(run_id: str, limit: int = 50) -> None:
         typer.echo(json.dumps(x, default=str, ensure_ascii=False))
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.actor_status(): Per-route breaker state and today's request count.
 @actor_app.command("status")
 def actor_status() -> None:
     """Per-route breaker state and today's request count."""
@@ -1320,6 +1378,7 @@ def actor_status() -> None:
     _echo(actors.host_status())
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.actor_reset(): Clear a route's cooldown by hand. Only after the wall is gone — check in a browser first.
 @actor_app.command("reset")
 def actor_reset(route: str = typer.Argument(..., help='e.g. "www.linkedin.com/in"')) -> None:
     """Clear a route's cooldown by hand. Only after the wall is gone — check in a browser first."""
@@ -1335,6 +1394,7 @@ models_app = typer.Typer(add_completion=False, help="OpenRouter — aliases, spe
 app.add_typer(models_app, name="models")
 
 
+# ZONULY ▸ ai model call · llm ▸ cli entry point ▸ run.models_status(): Key, aliases, caps and what has been spent today.
 @models_app.command("status")
 def models_status() -> None:
     """Key, aliases, caps and what has been spent today."""
@@ -1344,6 +1404,7 @@ def models_status() -> None:
     _echo(llm.health())
 
 
+# ZONULY ▸ ai model call · llm ▸ cli entry point ▸ run.models_check(): Verify the configured model ids exist, and optionally that they answer.
 @models_app.command("check")
 def models_check(
     alias: str = typer.Option(None, help="Verify one alias; omit to verify every configured alias"),
@@ -1396,6 +1457,7 @@ def models_check(
             typer.secho(f"[FAIL] {name:<7} {result['error']}", fg=typer.colors.RED)
 
 
+# ZONULY ▸ ai model call · llm · budget · cost ▸ cli entry point ▸ run.models_list(): Search OpenRouter's catalogue. Costs nothing and needs no key.
 @models_app.command("list")
 def models_list(
     query: str = typer.Argument("", help="Substring of a model id"),
@@ -1434,6 +1496,7 @@ def models_list(
                    " refuses it anyway, since the guard reads the id, not a price list.")
 
 
+# ZONULY ▸ ai model call · llm · budget · cost ▸ cli entry point ▸ run.models_costs(): What the model layer has cost, by alias and by stage.
 @models_app.command("costs")
 def models_costs(
     days: int = typer.Option(1, help="Look back this many days"),
@@ -1445,6 +1508,7 @@ def models_costs(
     _echo({"spend": openrouter.spend(days=days, month=month), "budget": openrouter.budget_status()})
 
 
+# ZONULY ▸ scoring · review gate ▸ cli entry point ▸ run.fit_explain(): Show why the free lexical gate scored one job the way it did.
 @app.command()
 def fit_explain(job_id: int) -> None:
     """Show why the free lexical gate scored one job the way it did."""
@@ -1474,6 +1538,7 @@ targets_app = typer.Typer(
 app.add_typer(targets_app, name="targets")
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run._tier_colour(): Return the terminal colour for a company tier (red when unknown).
 def _tier_colour(tier: str | None) -> str:
     """Return the terminal colour for a company tier (red when unknown)."""
     return {
@@ -1482,6 +1547,7 @@ def _tier_colour(tier: str | None) -> str:
     }.get(tier or "", typer.colors.RED)
 
 
+# ZONULY ▸ filtering · enrichment · pay · salary · decision ▸ cli entry point ▸ run.targets_grade(): Grade every company: hyped -> reject, then funding, then the stipend bar and the tiers.
 @targets_app.command("grade")
 def targets_grade(
     pay: bool = typer.Option(True, help="Re-read stipend / PPO out of job descriptions first"),
@@ -1499,6 +1565,7 @@ def targets_grade(
     typer.echo(f"  (of the rejects, {counts.get('hyped_excluded', 0)} are hyped names)")
 
 
+# ZONULY ▸ decision ▸ cli entry point ▸ run.targets_list(): The graded registry, best first.
 @targets_app.command("list")
 def targets_list(
     tier: str = typer.Option(None, help="tier1 | tier2 | prospect | unknown | reject"),
@@ -1524,6 +1591,7 @@ def targets_list(
         typer.echo(f"        why: {(r['reason'] or '')[:110]}")
 
 
+# ZONULY ▸ enrichment · decision ▸ cli entry point ▸ run.targets_enrich(): Read each company's own site: what they do, and who funded them. Re-grades after.
 @targets_app.command("enrich")
 def targets_enrich(
     limit: int = typer.Option(10, help="How many companies to research"),
@@ -1548,6 +1616,7 @@ def targets_enrich(
             typer.echo(f"      funding: {r['funding']}")
 
 
+# ZONULY ▸ scraping · enrichment · hiring verification · decision ▸ cli entry point ▸ run.targets_verify(): Is the hiring claim real? Check the company's own ATS board and careers page.
 @targets_app.command("verify")
 def targets_verify(
     limit: int = typer.Option(10),
@@ -1593,6 +1662,7 @@ tick_app = typer.Typer(
 app.add_typer(tick_app, name="tick")
 
 
+# ZONULY ▸ scheduler · tick · lock ▸ cli entry point ▸ run.tick_run(): Run one bounded slice now (what launchd calls). Takes the lock; skips if another tick is running.
 @tick_app.command("run")
 def tick_run(kind: str = typer.Option("free", help="free | paid | all | send | apify | shortlist")) -> None:
     """Run one bounded slice now (what launchd calls). Takes the lock; skips if another tick is running."""
@@ -1602,6 +1672,7 @@ def tick_run(kind: str = typer.Option("free", help="free | paid | all | send | a
     _echo(tick.run(kind))
 
 
+# ZONULY ▸ scheduler · tick · sign-in · auth ▸ cli entry point ▸ run.tick_install(): Write and load the LaunchAgents: com.zonuly.tick.free (every 10 min + on wake), .paid (daily 06:15 + on login),
 @tick_app.command("install")
 def tick_install() -> None:
     """Write and load the LaunchAgents: com.zonuly.tick.free (every 10 min + on wake), .paid (daily 06:15 + on login),
@@ -1612,6 +1683,7 @@ def tick_install() -> None:
     _echo(tick.install())
 
 
+# ZONULY ▸ scheduler · tick ▸ cli entry point ▸ run.tick_uninstall(): Unload and remove both LaunchAgents.
 @tick_app.command("uninstall")
 def tick_uninstall() -> None:
     """Unload and remove both LaunchAgents."""
@@ -1620,6 +1692,7 @@ def tick_uninstall() -> None:
     _echo(tick.uninstall())
 
 
+# ZONULY ▸ scheduler · tick ▸ cli entry point ▸ run.tick_status(): Are the agents loaded, when did each last run, and what did it do.
 @tick_app.command("status")
 def tick_status() -> None:
     """Are the agents loaded, when did each last run, and what did it do."""
@@ -1637,6 +1710,7 @@ referrals_app = typer.Typer(
 app.add_typer(referrals_app, name="referrals")
 
 
+# ZONULY ▸ people search · referrers ▸ cli entry point ▸ run.referrals_measure(): Ready referrers per company, with an address, the ★ list, complete companies.
 @referrals_app.command("measure")
 def referrals_measure() -> None:
     """Ready referrers per company, with an address, the ★ list, complete companies."""
@@ -1645,6 +1719,7 @@ def referrals_measure() -> None:
     _echo(referrals.measure())
 
 
+# ZONULY ▸ people search · referrers ▸ cli entry point ▸ run.referrals_patterns(): Learn each company's address format from its own addresses (≥2 agree, or 1 + their page) and
 @referrals_app.command("patterns")
 def referrals_patterns(apply: bool = typer.Option(False, "--apply", help="back up, then write (default: dry run)")) -> None:
     """Learn each company's address format from its own addresses (≥2 agree, or 1 + their page) and
@@ -1659,6 +1734,7 @@ def referrals_patterns(apply: bool = typer.Option(False, "--apply", help="back u
     _echo(out)
 
 
+# ZONULY ▸ linkedin scraping · github scraping · people search · referrers ▸ cli entry point ▸ run.referrals_people(): The people step (GitHub, team pages via Jina, the open web, LinkedIn via keyless search).
 @referrals_app.command("people")
 def referrals_people(
     limit: int = typer.Option(50, help="companies"),
@@ -1673,6 +1749,7 @@ def referrals_people(
     _echo(referrals.people_step(limit, budget_s=budget, list_key=list_key, top=top))
 
 
+# ZONULY ▸ people search · referrers ▸ cli entry point ▸ run.referrals_run(): One cycle of the referral job — referral work ONLY: Bengaluru (★ first) → Hyderabad → other India →
 @referrals_app.command("run")
 def referrals_run(
     budget: int = typer.Option(None, help="seconds (default: referrals.cycle_seconds, 1200)"),
@@ -1705,6 +1782,7 @@ def referrals_run(
     _echo(tick.run_referrals(**kw))
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ cli entry point ▸ run.referrals_reverify(): Re-confirm ready referrers whose evidence is older than 90 days; failing → unconfirmed.
 @referrals_app.command("reverify")
 def referrals_reverify(limit: int = typer.Option(150)) -> None:
     """Re-confirm ready referrers whose evidence is older than 90 days; failing → unconfirmed."""
@@ -1714,6 +1792,7 @@ def referrals_reverify(limit: int = typer.Option(150)) -> None:
     _echo(referrals.reverify_referrers(limit))
 
 
+# ZONULY ▸ validation · guardrails · enrichment · people search · referrers ▸ cli entry point ▸ run.referrals_revalidate(): Re-check companies (never-checked first): site answers, description passes, careers lists roles.
 @referrals_app.command("revalidate")
 def referrals_revalidate(limit: int = typer.Option(30)) -> None:
     """Re-check companies (never-checked first): site answers, description passes, careers lists roles."""
@@ -1736,6 +1815,7 @@ audit_app = typer.Typer(
 app.add_typer(audit_app, name="audit")
 
 
+# ZONULY ▸ scheduler · tick · monitoring ▸ cli entry point ▸ run.audit_run(): Run one audit now (what launchd calls every hour) and store the report.
 @audit_app.command("run")
 def audit_run(
     quiet: bool = typer.Option(False, help="no macOS notification on an alert"),
@@ -1768,6 +1848,7 @@ def audit_run(
         typer.secho(f"ALERT {a}", fg="red")
 
 
+# ZONULY ▸ monitoring ▸ cli entry point ▸ run.audit_show(): The last stored report and how many hours of history are kept.
 @audit_app.command("show")
 def audit_show() -> None:
     """The last stored report and how many hours of history are kept."""
@@ -1777,6 +1858,7 @@ def audit_show() -> None:
     _echo({"last": d["last"], "history_hours": len(d["history"])})
 
 
+# ZONULY ▸ monitoring ▸ cli entry point ▸ run.audit_install(): Write and load com.zonuly.audit (every hour).
 @audit_app.command("install")
 def audit_install() -> None:
     """Write and load com.zonuly.audit (every hour)."""
@@ -1785,6 +1867,7 @@ def audit_install() -> None:
     _echo(audit.install())
 
 
+# ZONULY ▸ scheduler · tick · monitoring ▸ cli entry point ▸ run.audit_uninstall(): Unload and remove the hourly audit launchd job.
 @audit_app.command("uninstall")
 def audit_uninstall() -> None:
     """Unload and remove the hourly audit launchd job."""
@@ -1793,6 +1876,7 @@ def audit_uninstall() -> None:
     _echo(audit.uninstall())
 
 
+# ZONULY ▸ scheduler · tick · monitoring ▸ cli entry point ▸ run.audit_status(): Show whether the hourly audit launchd job is loaded and its last run's result.
 @audit_app.command("status")
 def audit_status() -> None:
     """Show whether the hourly audit launchd job is loaded and its last run's result."""
@@ -1810,6 +1894,7 @@ outreach_app = typer.Typer(
 app.add_typer(outreach_app, name="outreach")
 
 
+# ZONULY ▸ email drafting · review gate ▸ cli entry point ▸ run.outreach_bets(): Draft one gated email per company that is ready to ask (best lead, best role). Goes to the queue.
 @outreach_app.command("bets")
 def outreach_bets(limit: int = typer.Option(10, help="One draft per ready-to-ask company")) -> None:
     """Draft one gated email per company that is ready to ask (best lead, best role). Goes to the queue."""
@@ -1819,6 +1904,7 @@ def outreach_bets(limit: int = typer.Option(10, help="One draft per ready-to-ask
     _echo(drafter.draft_for_bets(limit=limit))
 
 
+# ZONULY ▸ decision · email verification · email sending ▸ cli entry point ▸ run.outreach_send(): Send what you approved. outreach.send_mode decides dry-run (outbox/) or Gmail.
 @outreach_app.command("send")
 def outreach_send(
     limit: int = typer.Option(None, help="At most this many, inside the daily cap"),
@@ -1832,6 +1918,7 @@ def outreach_send(
     _echo(sender.send_approved(limit=limit, ignore_window=ignore_window, stagger=not no_stagger))
 
 
+# ZONULY ▸ email sending · knowledge graph ▸ cli entry point ▸ run.outreach_ledger_cmd(): Today's send ledger: cap, used, guessed-address cap.
 @outreach_app.command("ledger")
 def outreach_ledger_cmd() -> None:
     """Today's send ledger: cap, used, guessed-address cap."""
@@ -1840,6 +1927,7 @@ def outreach_ledger_cmd() -> None:
     _echo({"send_mode": sender.SEND_MODE, **ledger.status()})
 
 
+# ZONULY ▸ replies · follow-up · scheduler · tick ▸ cli entry point ▸ run.outreach_reply(): Record a reply by hand: classified, and scheduled if it carries a yes with a time.
 @outreach_app.command("reply")
 def outreach_reply(
     email_id: int = typer.Argument(..., help="The sent email the reply belongs to"),
@@ -1853,6 +1941,7 @@ def outreach_reply(
     _echo(tracker.record_reply(email_id, body, sender=sender or "them"))
 
 
+# ZONULY ▸ calendar ▸ cli entry point ▸ run.outreach_events(): Every call, assessment and interview on record, with the sentence it was read from.
 @outreach_app.command("events")
 def outreach_events(upcoming: bool = typer.Option(False)) -> None:
     """Every call, assessment and interview on record, with the sentence it was read from."""
@@ -1861,6 +1950,7 @@ def outreach_events(upcoming: bool = typer.Option(False)) -> None:
     _echo(schedule.list_events(upcoming_only=upcoming))
 
 
+# ZONULY ▸ calendar ▸ cli entry point ▸ run.outreach_confirm(): Confirm a proposed time; it goes on the calendar when the OAuth client is in place.
 @outreach_app.command("confirm")
 def outreach_confirm(event_id: int) -> None:
     """Confirm a proposed time; it goes on the calendar when the OAuth client is in place."""
@@ -1870,6 +1960,7 @@ def outreach_confirm(event_id: int) -> None:
     _echo(schedule.confirm(event_id))
 
 
+# ZONULY ▸ email sending ▸ cli entry point ▸ run.outreach_preflight(): Is everything in place for live sending? Red / amber / green, with the exact fix for each.
 @outreach_app.command("preflight")
 def outreach_preflight(
     as_json: bool = typer.Option(False, "--json", help="The raw report"),
@@ -1888,6 +1979,7 @@ def outreach_preflight(
         typer.echo(f"  {i}. {step}")
 
 
+# ZONULY ▸ email drafting ▸ cli entry point ▸ run.outreach_batch(): Build the week's drafts — ★ India first, then the best complete companies, one ask per
 @outreach_app.command("batch")
 def outreach_batch(
     n: int = typer.Option(None, help="How many drafts (default: the warm-up week minus what is approved or in review)"),
@@ -1912,6 +2004,7 @@ def outreach_batch(
     _echo(out)
 
 
+# ZONULY ▸ validation · guardrails · decision ▸ cli entry point ▸ run.outreach_proposal(): PROPOSALS: how the pipeline would write to the best targets — evidence, structure,
 @outreach_app.command("proposal")
 def outreach_proposal(
     n: int = typer.Option(10, help="How many proposals (spread across structures and India / Remote)"),
@@ -1939,6 +2032,7 @@ def outreach_proposal(
         typer.echo(f"Subject: {i['subject']}\n\n{i['body']}")
 
 
+# ZONULY ▸ email drafting · ai model call · llm ▸ cli entry point ▸ run.outreach_polish(): Re-write template drafts with the model now that it is available (they stay drafts).
 @outreach_app.command("polish")
 def outreach_polish(limit: int = typer.Option(10)) -> None:
     """Re-write template drafts with the model now that it is available (they stay drafts)."""
@@ -1948,6 +2042,7 @@ def outreach_polish(limit: int = typer.Option(10)) -> None:
     _echo(drafter.polish_pending(limit))
 
 
+# ZONULY ▸ replies · follow-up ▸ cli entry point ▸ run.outreach_track(): Every cold email and where it stands: sent, waiting (days, follow-up due), replied
 @outreach_app.command("track")
 def outreach_track(status: str = typer.Option(None), sentiment: str = typer.Option(None)) -> None:
     """Every cold email and where it stands: sent, waiting (days, follow-up due), replied
@@ -1962,6 +2057,7 @@ def outreach_track(status: str = typer.Option(None), sentiment: str = typer.Opti
                    f"{'due ' + r['followup_due'] if r['followup_due'] else ''}")
 
 
+# ZONULY ▸ review gate ▸ cli entry point ▸ run.outreach_week(): The warm-up week: each day's quota, and what the review queue holds for it.
 @outreach_app.command("week")
 def outreach_week(start: str = typer.Option(None, help="YYYY-MM-DD; default the warm-up start")) -> None:
     """The warm-up week: each day's quota, and what the review queue holds for it."""
@@ -1970,6 +2066,7 @@ def outreach_week(start: str = typer.Option(None, help="YYYY-MM-DD; default the 
     _echo(batch.week(start))
 
 
+# ZONULY ▸ email verification · email sending ▸ cli entry point ▸ run.outreach_send_due(): What the send agent does every 5 minutes: send the approved mail whose slot is due.
 @outreach_app.command("send-due")
 def outreach_send_due() -> None:
     """What the send agent does every 5 minutes: send the approved mail whose slot is due."""
@@ -1979,6 +2076,7 @@ def outreach_send_due() -> None:
     _echo(sender.send_due())
 
 
+# ZONULY ▸ email drafting · review gate · replies · follow-up ▸ cli entry point ▸ run.outreach_followups(): Draft one follow-up per silent thread into the review queue.
 @outreach_app.command("followups")
 def outreach_followups(
     after_days: int = typer.Option(None, help="Silent this many days (default outreach.followup_after_days)"),
@@ -1991,6 +2089,7 @@ def outreach_followups(
     _echo(followup.queue(after_days=after_days, use_model=not no_model))
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.outreach_rehearse_week(): The whole week on a COPY of the database (sqlite backup → data/backups/): warm-up caps,
 @outreach_app.command("rehearse-week")
 def outreach_rehearse_week(
     start: str = typer.Option("2026-10-19", help="The Monday to start on"),
@@ -2005,6 +2104,7 @@ def outreach_rehearse_week(
     _echo({k: v for k, v in out.items() if k not in ("days",)})
 
 
+# ZONULY ▸ people search · referrers · suppression · bounces ▸ cli entry point ▸ run.outreach_unsuppress(): Clear a do-not-contact flag set by an opt-out (only when they asked to hear from you again).
 @outreach_app.command("unsuppress")
 def outreach_unsuppress(
     company: int = typer.Option(None, help="Company id"), contact: int = typer.Option(None, help="Contact id"),
@@ -2025,6 +2125,7 @@ def outreach_unsuppress(
     _echo({"cleared": {"company": company, "contact": contact}})
 
 
+# ZONULY ▸ pay · salary · replies · follow-up ▸ cli entry point ▸ run.outreach_learn(): Reply and yes rates by who we asked, what they can pay, segment, region, source, framing.
 @outreach_app.command("learn")
 def outreach_learn(days: int = typer.Option(None, help="Only sends in the last N days")) -> None:
     """Reply and yes rates by who we asked, what they can pay, segment, region, source, framing."""
@@ -2041,6 +2142,7 @@ lists_app = typer.Typer(help="Hand-picked company lists (data/lists/*.yaml) — 
 app.add_typer(lists_app, name="lists")
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.lists_ls(): Every list on disk and how much of it is attached to the database.
 @lists_app.command("ls")
 def lists_ls() -> None:
     """Every list on disk and how much of it is attached to the database."""
@@ -2050,6 +2152,7 @@ def lists_ls() -> None:
         typer.echo(f"  {l['key']:14} {l['name']:12} {l['attached']}/{l['companies']} attached — {l['title'] or ''}")
 
 
+# ZONULY ▸ people search · referrers ▸ cli entry point ▸ run.lists_show(): The list in its own order, with roles and people found so far.
 @lists_app.command("show")
 def lists_show(key: str = typer.Argument("india-star"), json_: bool = typer.Option(False, "--json")) -> None:
     """The list in its own order, with roles and people found so far."""
@@ -2071,6 +2174,7 @@ def lists_show(key: str = typer.Argument("india-star"), json_: bool = typer.Opti
                    f"{r['roles']['total']:>3} roles {r['people']['total']:>3} people — {ask}{site}")
 
 
+# ZONULY ▸ enrichment ▸ cli entry point ▸ run.lists_sync(): Attach the list's companies to database rows; verify guessed websites first.
 @lists_app.command("sync")
 def lists_sync(key: str = typer.Argument("india-star"),
                no_verify: bool = typer.Option(False, "--no-verify", help="Skip fetching guessed websites")) -> None:
@@ -2081,6 +2185,7 @@ def lists_sync(key: str = typer.Argument("india-star"),
     _echo(lists.sync(key, verify_sites=not no_verify))
 
 
+# ZONULY ▸ github scraping · people search · referrers · monitoring ▸ cli entry point ▸ run.lists_audit(): Re-verify every GitHub org on the list; a wrong org loses its contacts.
 @lists_app.command("audit")
 def lists_audit(key: str = typer.Argument("india-star"),
                 dry: bool = typer.Option(False, "--dry", help="Report only; clear nothing")) -> None:
@@ -2091,6 +2196,7 @@ def lists_audit(key: str = typer.Argument("india-star"),
     _echo(lists.audit_orgs(key, fix=not dry))
 
 
+# ZONULY ▸ scraping · people search · referrers ▸ cli entry point ▸ run.lists_people(): Boards, roles and referrers for every company on the list, in list order.
 @lists_app.command("people")
 def lists_people(
     key: str = typer.Argument("india-star"),
@@ -2132,6 +2238,7 @@ harvest_app = typer.Typer(
 app.add_typer(harvest_app, name="harvest")
 
 
+# ZONULY ▸ yc scraping · scraping · admission gate · filtering ▸ cli entry point ▸ run.harvest_yc(): Admit every hiring YC company that fits (region, size, not hyped) from the open yc-oss mirror.
 @harvest_app.command("yc")
 def harvest_yc(limit: int = typer.Option(None, help="Newest batches first; default all that fit")) -> None:
     """Admit every hiring YC company that fits (region, size, not hyped) from the open yc-oss mirror."""
@@ -2141,6 +2248,7 @@ def harvest_yc(limit: int = typer.Option(None, help="Newest batches first; defau
     _echo(harvest.admit_yc(limit=limit).as_dict())
 
 
+# ZONULY ▸ scraping ▸ cli entry point ▸ run.harvest_exa(): Company sites from Exa's company index — one search per query, inside exa_daily_cap.
 @harvest_app.command("exa")
 def harvest_exa(
     query: list[str] = typer.Option(None, "--query", "-q", help="Repeatable; default is harvest.exa_queries"),
@@ -2154,6 +2262,7 @@ def harvest_exa(
     _echo(harvest.admit_exa(query or None, per_query=per_query, fresh=fresh).as_dict())
 
 
+# ZONULY ▸ scraping · sign-in · auth ▸ cli entry point ▸ run.harvest_x(): Hiring posts on X (throwaway session, capped) -> companies with the post as their hiring record.
 @harvest_app.command("x")
 def harvest_x(
     query: list[str] = typer.Option(None, "--query", "-q", help="Repeatable; default is harvest.x_queries"),
@@ -2167,6 +2276,7 @@ def harvest_x(
     _echo(harvest.admit_x(query or None, per_query=per_query, fresh=fresh).as_dict())
 
 
+# ZONULY ▸ scraping · hiring verification ▸ cli entry point ▸ run.harvest_probe(): Find each new company's public ATS board. A live board = hiring verified.
 @harvest_app.command("probe")
 def harvest_probe(limit: int = typer.Option(None), concurrency: int = typer.Option(6),
                   list_key: str = typer.Option(None, "--list", help="Only companies on this list (e.g. india-star)")) -> None:
@@ -2177,6 +2287,7 @@ def harvest_probe(limit: int = typer.Option(None), concurrency: int = typer.Opti
     _echo(harvest.probe_ats(limit=limit, concurrency=concurrency, list_key=list_key))
 
 
+# ZONULY ▸ scraping · data ingestion · filtering · review gate ▸ cli entry point ▸ run.harvest_roles(): Every open role from each discovered board, through the normal relevance and location gates.
 @harvest_app.command("roles")
 def harvest_roles(
     limit: int = typer.Option(None),
@@ -2190,6 +2301,7 @@ def harvest_roles(
     _echo(harvest.scrape_roles(limit=limit, only_without_jobs=not all_boards, list_key=list_key))
 
 
+# ZONULY ▸ scraping · enrichment ▸ cli entry point ▸ run.harvest_careers(): Find each company's careers page (homepage links, common paths, keyless search), the hosted board
 @harvest_app.command("careers")
 def harvest_careers(
     list_key: str = typer.Option(None, "--list", help="Only companies on this list (e.g. india-star)"),
@@ -2214,6 +2326,7 @@ def harvest_careers(
     _echo(out)
 
 
+# ZONULY ▸ scraping · enrichment ▸ cli entry point ▸ run.harvest_facts(): Company facts — what they do, round, amount, date, total, valuation, HQ, website — best priority first,
 @harvest_app.command("facts")
 def harvest_facts(
     limit: int = typer.Option(60, help="Companies to look up today (one Exa search each, inside exa_daily_cap)"),
@@ -2234,6 +2347,7 @@ def harvest_facts(
            "errors": sum(1 for r in res if r.get("error")), "exa": web.exa_budget()})
 
 
+# ZONULY ▸ scraping · enrichment ▸ cli entry point ▸ run.harvest_websites(): Find and verify the website of companies that arrived as a bare name (funding feeds, X, directories):
 @harvest_app.command("websites")
 def harvest_websites(
     limit: int = typer.Option(100, help="Name-only companies to find a website for, best priority first"),
@@ -2247,6 +2361,7 @@ def harvest_websites(
     _echo(enrich.find_websites(limit=limit, keyless=not paid))
 
 
+# ZONULY ▸ scraping · enrichment · people search · referrers ▸ cli entry point ▸ run.harvest_scrape_first(): Flag the companies we hold nothing about (no site, description, roles or people) so every
 @harvest_app.command("scrape-first")
 def harvest_scrape_first(dry_run: bool = typer.Option(False, "--dry-run", help="Count, write nothing")) -> None:
     """Flag the companies we hold nothing about (no site, description, roles or people) so every
@@ -2257,6 +2372,7 @@ def harvest_scrape_first(dry_run: bool = typer.Option(False, "--dry-run", help="
     _echo(hygiene.mark_empty(dry_run=dry_run))
 
 
+# ZONULY ▸ scraping · scoring ▸ cli entry point ▸ run.harvest_priority(): Regrade overrated + priority score + city for every company (bulk, seconds).
 @harvest_app.command("priority")
 def harvest_priority(dry_run: bool = typer.Option(False, "--dry-run", help="Compute and report, write nothing")) -> None:
     """Regrade overrated + priority score + city for every company (bulk, seconds)."""
@@ -2266,6 +2382,7 @@ def harvest_priority(dry_run: bool = typer.Option(False, "--dry-run", help="Comp
     _echo(targeting.refresh_priority(dry_run=dry_run))
 
 
+# ZONULY ▸ scraping · enrichment ▸ cli entry point ▸ run.harvest_story(): Read each company's own site (home + About) for description, origin story, funding, valuation, team. No Exa.
 @harvest_app.command("story")
 def harvest_story(
     limit: int = typer.Option(300, help="Companies to read tonight"),
@@ -2281,6 +2398,7 @@ def harvest_story(
            "valuation": sum(1 for r in res if r.get("valuation_usd_m")), "errors": sum(1 for r in res if r.get("error"))})
 
 
+# ZONULY ▸ github scraping · scraping · people search · referrers ▸ cli entry point ▸ run.harvest_people(): Who could refer us — the free waterfall (GitHub, site, pattern) over fitting companies, list rows first.
 @harvest_app.command("people")
 def harvest_people(
     limit: int = typer.Option(200, help="How many companies to search this run"),
@@ -2298,6 +2416,7 @@ def harvest_people(
                               require_roles=not any_roles, list_key=list_key, topup_days=topup_days))
 
 
+# ZONULY ▸ scraping · enrichment · hiring verification ▸ cli entry point ▸ run.harvest_verify(): Hiring verification against the company's own board / careers page. With --list, every list row
 @harvest_app.command("verify")
 def harvest_verify(
     limit: int = typer.Option(60, help="Companies to check, list rows first"),
@@ -2317,6 +2436,7 @@ def harvest_verify(
     _echo({"checked": len(res), "by_status": counts})
 
 
+# ZONULY ▸ linkedin scraping · scraping · people search · referrers · sign-in · auth ▸ cli entry point ▸ run.harvest_linkedin(): Public-LinkedIn leads (no login): companies with roles and no leads, and list rows short o…
 @harvest_app.command("linkedin")
 def harvest_linkedin(
     limit: int = typer.Option(30, help="Companies to search, list rows first"),
@@ -2329,6 +2449,7 @@ def harvest_linkedin(
     _echo(linkedin_public.find_pending(limit=limit, list_key=list_key))
 
 
+# ZONULY ▸ scraping · dedup · ai model call · llm ▸ cli entry point ▸ run.harvest_parallel(): Run all four channels at once (keyless · Exa · OpenRouter · scrape.do), each a different stage, no duplicates.
 @harvest_app.command("parallel")
 def harvest_parallel(minutes: int = typer.Option(30, help="How long to run the four channels")) -> None:
     """Run all four channels at once (keyless · Exa · OpenRouter · scrape.do), each a different stage, no duplicates."""
@@ -2338,6 +2459,7 @@ def harvest_parallel(minutes: int = typer.Option(30, help="How long to run the f
     _echo(harvest.parallel_run(minutes=minutes))
 
 
+# ZONULY ▸ scraping · data ingestion · admission gate · filtering · enrichment · scoring ▸ cli entry point ▸ run.harvest_discover(): Find new funded startups from the funding press (via Exa) and admit the ones that fit.
 @harvest_app.command("discover")
 def harvest_discover(
     topic: list[str] = typer.Option(None, "--topic", "-t", help="Repeatable; default is the eight standard topics"),
@@ -2350,6 +2472,7 @@ def harvest_discover(
     _echo(harvest.discover_funded(topics=topic or None, max_searches=max_searches).as_dict())
 
 
+# ZONULY ▸ linkedin scraping · scraping ▸ cli entry point ▸ run.harvest_india_jobs(): Bengaluru / Hyderabad companies found by their postings: LinkedIn Jobs (public, no
 @harvest_app.command("india-jobs")
 def harvest_india_jobs(
     force: bool = typer.Option(True, "--force/--if-due", help="Run now, or only when india_jobs.every_hours has passed"),
@@ -2385,6 +2508,7 @@ def harvest_india_jobs(
                          lead_searches=lead_searches, community=community, **kw))
 
 
+# ZONULY ▸ scraping · data ingestion ▸ cli entry point ▸ run.harvest_discover_parallel(): Three discovery branches at once (Exa · RSS · scrape.do), each finding new funded companies.
 @harvest_app.command("discover-parallel")
 def harvest_discover_parallel(minutes: int = typer.Option(20)) -> None:
     """Three discovery branches at once (Exa · RSS · scrape.do), each finding new funded companies."""
@@ -2394,6 +2518,7 @@ def harvest_discover_parallel(minutes: int = typer.Option(20)) -> None:
     _echo(harvest.discover_parallel(minutes=minutes))
 
 
+# ZONULY ▸ scraping · pay · salary ▸ cli entry point ▸ run.harvest_levels(): Read levels.fyi pay (via scrape.do) for companies with roles and no stated figure.
 @harvest_app.command("levels")
 def harvest_levels(limit: int = typer.Option(40, help="Companies to look up on levels.fyi")) -> None:
     """Read levels.fyi pay (via scrape.do) for companies with roles and no stated figure."""
@@ -2403,6 +2528,7 @@ def harvest_levels(limit: int = typer.Option(40, help="Companies to look up on l
     _echo(levels.lookup_pending(limit=limit))
 
 
+# ZONULY ▸ scraping · scoring ▸ cli entry point ▸ run.harvest_status(): How many different companies fit, and how far each has got.
 @harvest_app.command("status")
 def harvest_status() -> None:
     """How many different companies fit, and how far each has got."""
@@ -2411,6 +2537,7 @@ def harvest_status() -> None:
     _echo(harvest.status())
 
 
+# ZONULY ▸ scraping · enrichment · pay · salary · people search · referrers · email verification ▸ cli entry point ▸ run.harvest_run(): The whole scrape: companies -> roles + hiring proof -> description, story, pay (Pay…
 @harvest_app.command("run")
 def harvest_run(
     target: int = typer.Option(500, help="How many different fitting companies we are after"),
@@ -2433,6 +2560,7 @@ people_app = typer.Typer(
 app.add_typer(people_app, name="people")
 
 
+# ZONULY ▸ people search · referrers ▸ cli entry point ▸ run.people_classify(): Label every contact: founder · senior engineer · engineer · EM · tech HR · recruiter.
 @people_app.command("classify")
 def people_classify(
     all_: bool = typer.Option(False, "--all", help="Re-classify everyone, not just the unlabelled"),
@@ -2451,6 +2579,7 @@ def people_classify(
         typer.echo(f"    {roles.RANKS.get(key, 9)} {key:16} {stats[key]}")
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ cli entry point ▸ run.people_emails(): Any real address at one company from the open web, then fill everyone by pattern.
 @people_app.command("emails")
 def people_emails(company_id: int = typer.Argument(..., help="The company to find addresses at")) -> None:
     """Any real address at one company from the open web, then fill everyone by pattern."""
@@ -2462,6 +2591,7 @@ def people_emails(company_id: int = typer.Argument(..., help="The company to fin
     _echo(out)
 
 
+# ZONULY ▸ people search · referrers ▸ cli entry point ▸ run.people_x_handles(): X handles for a company's best people — the DM route when there is no address.
 @people_app.command("x-handles")
 def people_x_handles(company_id: int = typer.Argument(..., help="The company whose people to look up"),
                      limit: int = typer.Option(5, help="Searches to spend — best referral rank first")) -> None:
@@ -2472,6 +2602,7 @@ def people_x_handles(company_id: int = typer.Argument(..., help="The company who
     _echo(x_handles.find_for_company(company_id, limit=limit))
 
 
+# ZONULY ▸ github scraping · enrichment · people search · referrers ▸ cli entry point ▸ run.people_x_backfill(): X handles from the GitHub profiles of contacts already on record.
 @people_app.command("x-backfill")
 def people_x_backfill(list_key: str = typer.Option(None, "--list", help="Only companies on this list"),
                       limit: int = typer.Option(400)) -> None:
@@ -2489,6 +2620,7 @@ def people_x_backfill(list_key: str = typer.Option(None, "--list", help="Only co
     _echo(x_handles.backfill_github(ids, limit=limit))
 
 
+# ZONULY ▸ people search · referrers ▸ cli entry point ▸ run.people_queue(): The referral queue: who to ask first, and why we think they can refer.
 @people_app.command("queue")
 def people_queue(
     company_id: int = typer.Option(None, help="Only this company"),
@@ -2516,6 +2648,7 @@ india_app = typer.Typer(help="India: the ₹20 LPA pay floor and Bengaluru / Hyd
 app.add_typer(india_app, name="india")
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.india_pay_floor(): Hide (status below_pay_bar) or bring back every India company by the ₹20L floor.
 @india_app.command("pay-floor")
 def india_pay_floor(dry_run: bool = typer.Option(False, "--dry-run", help="Report only; write nothing")) -> None:
     """Hide (status below_pay_bar) or bring back every India company by the ₹20L floor."""
@@ -2525,6 +2658,7 @@ def india_pay_floor(dry_run: bool = typer.Option(False, "--dry-run", help="Repor
     _echo(india.apply_pay_floor(dry_run=dry_run))
 
 
+# ZONULY ▸ data ingestion · admission gate · filtering · review gate ▸ cli entry point ▸ run.india_discover(): Admit new underrated Bengaluru / Hyderabad startups through the admission gate.
 @india_app.command("discover")
 def india_discover(
     limit: int = typer.Option(30, help="New companies to admit this run"),
@@ -2553,6 +2687,7 @@ decide_app = typer.Typer(help="Which Bengaluru / Hyderabad companies to spend th
 app.add_typer(decide_app, name="decide")
 
 
+# ZONULY ▸ decision ▸ cli entry point ▸ run._decide_line(): Format one decision row (rank, name, verdict, P(offer) and range, lift, DSA) as a line.
 def _decide_line(i: dict) -> str:
     """Format one decision row (rank, name, verdict, P(offer) and range, lift, DSA) as a line."""
     return (f"#{i['rank'] or '-':>3} {(i['name'] or '')[:28]:28} {i['verdict_label']:10} "
@@ -2560,6 +2695,7 @@ def _decide_line(i: dict) -> str:
             f"{(str(i['lift']) + '×') if i['lift'] else '':7} DSA {i['dsa']:.2f}  weakest: {i['weakest']}")
 
 
+# ZONULY ▸ decision ▸ cli entry point ▸ run.decide_run(): Decide every Bengaluru / Hyderabad company and re-rank the shortlists.
 @decide_app.command("run")
 def decide_run() -> None:
     """Decide every Bengaluru / Hyderabad company and re-rank the shortlists."""
@@ -2569,6 +2705,7 @@ def decide_run() -> None:
     _echo(decide.run())
 
 
+# ZONULY ▸ decision ▸ cli entry point ▸ run.decide_top(): The ranked shortlist, or the companies parked under one verdict.
 @decide_app.command("top")
 def decide_top(pool: str = typer.Option("all", help="Bengaluru | Hyderabad | all"),
                verdict: str = typer.Option(None, help="after_dsa | skip | target | fill_first (default: the shortlist)"),
@@ -2587,6 +2724,7 @@ def decide_top(pool: str = typer.Option("all", help="Bengaluru | Hyderabad | all
             typer.echo(f"      {i['reason']}")
 
 
+# ZONULY ▸ validation · guardrails · decision ▸ cli entry point ▸ run.decide_show(): One company: every question, its probability and the evidence behind it.
 @decide_app.command("show")
 def decide_show(company_id: int, json_: bool = typer.Option(False, "--json")) -> None:
     """One company: every question, its probability and the evidence behind it."""
@@ -2608,6 +2746,7 @@ def decide_show(company_id: int, json_: bool = typer.Option(False, "--json")) ->
         typer.echo(f"  DSA {e['delta']:+.1f}  {e['signal']}" + (f" — “{e['quote'][:90]}”" if e.get("quote") else ""))
 
 
+# ZONULY ▸ enrichment · decision · people search · referrers ▸ cli entry point ▸ run.decide_today(): Today's company — fill it or ask its referrer.
 @decide_app.command("today")
 def decide_today(skip: str = typer.Option(None, help="skip today's company, with a reason; the next one is picked"),
                  asked: bool = typer.Option(False, "--asked", help="mark today's company as asked")) -> None:
@@ -2627,6 +2766,7 @@ def decide_today(skip: str = typer.Option(None, help="skip today's company, with
         typer.echo("  fill it:  python scripts/run.py decide fill   (or the Fill button on Best bets)")
 
 
+# ZONULY ▸ enrichment · decision · people search · referrers · email verification ▸ cli entry point ▸ run.decide_fill(): Fill one company completely (description, hiring proof, facts, referrers), then decide it again.
 @decide_app.command("fill")
 def decide_fill(company_id: int = typer.Option(None, help="default: today's company")) -> None:
     """Fill one company completely (description, hiring proof, facts, referrers), then decide it again."""
@@ -2642,6 +2782,7 @@ def decide_fill(company_id: int = typer.Option(None, help="default: today's comp
     _echo(decide.company_view(cid))
 
 
+# ZONULY ▸ scoring · decision ▸ cli entry point ▸ run.decide_outcome(): Record what happened — the ground truth `decide calibrate` scores the brain against.
 @decide_app.command("outcome")
 def decide_outcome(company_id: int, stage: str = typer.Argument(..., help="replied | referred | interview | offer | rejected | no_response"),
                    note: str = typer.Option(None)) -> None:
@@ -2651,6 +2792,7 @@ def decide_outcome(company_id: int, stage: str = typer.Argument(..., help="repli
     _echo(decide.record_outcome(company_id, stage, note))
 
 
+# ZONULY ▸ scoring · decision ▸ cli entry point ▸ run.decide_calibrate(): Brier score and log loss of what the brain said vs what happened (Laya's proper scoring rules).
 @decide_app.command("calibrate")
 def decide_calibrate() -> None:
     """Brier score and log loss of what the brain said vs what happened (Laya's proper scoring rules)."""
@@ -2666,6 +2808,7 @@ mixer_app = typer.Typer(help="Decide first, then buy job ads from Apify only for
 app.add_typer(mixer_app, name="mixer")
 
 
+# ZONULY ▸ budget · cost ▸ cli entry point ▸ run.mixer_plan(): The free funnel, layer by layer, and who would be bought next. Spends nothing.
 @mixer_app.command("plan")
 def mixer_plan(limit: int = typer.Option(None, help="companies a run would buy (default: mixer.per_run)")) -> None:
     """The free funnel, layer by layer, and who would be bought next. Spends nothing."""
@@ -2681,6 +2824,7 @@ def mixer_plan(limit: int = typer.Option(None, help="companies a run would buy (
                + ("can buy now" if p["can_spend_now"] else "will NOT buy now: referrals first"))
 
 
+# ZONULY ▸ scoring · decision ▸ cli entry point ▸ run.mixer_run(): Decide, buy the next companies' ads (cheapest source first), re-score, decide again.
 @mixer_app.command("run")
 def mixer_run(limit: int = typer.Option(None), company: list[int] = typer.Option(None, "--company", help="buy these ids instead of the plan")) -> None:
     """Decide, buy the next companies' ads (cheapest source first), re-score, decide again."""
@@ -2690,6 +2834,7 @@ def mixer_run(limit: int = typer.Option(None), company: list[int] = typer.Option
     _echo(mixer.run(limit or mixer.PER_RUN, company_ids=company or None))
 
 
+# ZONULY ▸ scoring · budget · cost ▸ cli entry point ▸ run.mixer_history(): Every paid lookup: what it found, matched, saved and cost.
 @mixer_app.command("history")
 def mixer_history(limit: int = typer.Option(20)) -> None:
     """Every paid lookup: what it found, matched, saved and cost."""
@@ -2706,6 +2851,7 @@ shortlist_app = typer.Typer(help="Complete the shortlist one company at a time, 
 app.add_typer(shortlist_app, name="shortlist")
 
 
+# ZONULY ▸ enrichment · decision ▸ cli entry point ▸ run.shortlist_next(): Fill the next shortlisted company (or `limit` of them) completely, now.
 @shortlist_app.command("next")
 def shortlist_next(limit: int = typer.Option(1, help="how many companies, one after another")) -> None:
     """Fill the next shortlisted company (or `limit` of them) completely, now."""
@@ -2715,6 +2861,7 @@ def shortlist_next(limit: int = typer.Option(1, help="how many companies, one af
     _echo(shortlist.run(limit))
 
 
+# ZONULY ▸ enrichment · decision ▸ cli entry point ▸ run.shortlist_company(): Fill one named company completely, now, whatever its place in the queue.
 @shortlist_app.command("company")
 def shortlist_company(company_id: int) -> None:
     """Fill one named company completely, now, whatever its place in the queue."""
@@ -2724,6 +2871,7 @@ def shortlist_company(company_id: int) -> None:
     _echo(shortlist.one(company_id))
 
 
+# ZONULY ▸ decision ▸ cli entry point ▸ run.shortlist_progress(): How far each pool is: complete / partial / waiting, and what the next run takes.
 @shortlist_app.command("progress")
 def shortlist_progress() -> None:
     """How far each pool is: complete / partial / waiting, and what the next run takes."""
@@ -2743,6 +2891,7 @@ upskill_app = typer.Typer(help="What is missing from the profile, ranked by expe
 app.add_typer(upskill_app, name="upskill")
 
 
+# ZONULY ▸ decision ▸ cli entry point ▸ run.upskill_gaps(): The gaps across your shortlisted companies, best payoff first, and what DSA practice is worth.
 @upskill_app.command("gaps")
 def upskill_gaps(limit: int = typer.Option(25)) -> None:
     """The gaps across your shortlisted companies, best payoff first, and what DSA practice is worth."""
@@ -2758,6 +2907,7 @@ def upskill_gaps(limit: int = typer.Option(25)) -> None:
                    f"+{x['expected_offers_gained']:.3f}  [{x['status']}]")
 
 
+# ZONULY ▸ email verification ▸ cli entry point ▸ run.upskill_mark(): Set an upskill item's status (todo, learning, done); done needs a proof link and note.
 @upskill_app.command("mark")
 def upskill_mark(skill: str, status: str = typer.Argument(..., help="todo | learning | done"),
                  proof_url: str = typer.Option(None), note: str = typer.Option(None, help="what you built, in your words")) -> None:
@@ -2767,6 +2917,7 @@ def upskill_mark(skill: str, status: str = typer.Argument(..., help="todo | lear
     _echo(upskill.mark(skill, status, proof_url, note))
 
 
+# ZONULY ▸ scoring · email verification ▸ cli entry point ▸ run.upskill_add(): Put a done skill (with proof) into profile.json, then re-score everything.
 @upskill_app.command("add")
 def upskill_add(skill: str) -> None:
     """Put a done skill (with proof) into profile.json, then re-score everything."""
@@ -2782,6 +2933,7 @@ selection_app = typer.Typer(help="Selection confidence per role (confidence.py) 
 app.add_typer(selection_app, name="selection")
 
 
+# ZONULY ▸ scoring ▸ cli entry point ▸ run.selection_recompute(): Score roles whose inputs changed (or all of them), then roll up the best role per company.
 @selection_app.command("recompute")
 def selection_recompute(all_: bool = typer.Option(False, "--all", help="Re-score every role, changed or not")) -> None:
     """Score roles whose inputs changed (or all of them), then roll up the best role per company."""
@@ -2792,6 +2944,7 @@ def selection_recompute(all_: bool = typer.Option(False, "--all", help="Re-score
     _echo(confidence.distribution())
 
 
+# ZONULY ▸ scoring ▸ cli entry point ▸ run.selection_top(): The best bets in one market: score, band, top reasons, main blocker.
 @selection_app.command("top")
 def selection_top(market: str = typer.Option("india", help="india | remote | abroad"),
                   limit: int = typer.Option(15), json_: bool = typer.Option(False, "--json")) -> None:
@@ -2817,6 +2970,7 @@ def selection_top(market: str = typer.Option("india", help="india | remote | abr
             typer.echo(f"        - {r['main_blocker'][:120]}")
 
 
+# ZONULY ▸ ai model call · llm · budget · cost ▸ cli entry point ▸ run.selection_briefs(): Build needs briefs for the best roles, within the model and search budgets.
 @selection_app.command("briefs")
 def selection_briefs(market: str = typer.Option(None, help="india | remote (default: both)"),
                      top: int = typer.Option(50, help="Top N roles per market"),
@@ -2830,6 +2984,7 @@ def selection_briefs(market: str = typer.Option(None, help="india | remote (defa
     _echo(confidence.build_briefs(market=market, top=top, synth=synth, web=web, refresh=refresh))
 
 
+# ZONULY ▸ cli entry point ▸ cli entry point ▸ run.selection_brief(): One role's selection breakdown and needs brief.
 @selection_app.command("brief")
 def selection_brief(job_id: int, json_: bool = typer.Option(False, "--json")) -> None:
     """One role's selection breakdown and needs brief."""
@@ -2872,6 +3027,7 @@ notify_app = typer.Typer(
 app.add_typer(notify_app, name="notify")
 
 
+# ZONULY ▸ email sending · replies · follow-up ▸ cli entry point ▸ run.notify_test(): Send ONE test notification now (even with notify.email off). Reply `status` to it to test the loop.
 @notify_app.command("test")
 def notify_test(dry: bool = typer.Option(False, "--dry", help="write outbox/notify/*.eml instead of sending")) -> None:
     """Send ONE test notification now (even with notify.email off). Reply `status` to it to test the loop."""
@@ -2881,6 +3037,7 @@ def notify_test(dry: bool = typer.Option(False, "--dry", help="write outbox/noti
     _echo(notify_bot.test_mail(force_dry=dry))
 
 
+# ZONULY ▸ email sending ▸ cli entry point ▸ run.notify_digest(): Build today's digest (default: write the .eml; --send mails it). --print shows the text only.
 @notify_app.command("digest")
 def notify_digest(dry: bool = typer.Option(True, "--dry/--send"), print_: bool = typer.Option(False, "--print")) -> None:
     """Build today's digest (default: write the .eml; --send mails it). --print shows the text only."""
@@ -2893,6 +3050,7 @@ def notify_digest(dry: bool = typer.Option(True, "--dry/--send"), print_: bool =
     _echo(notify_bot.daily_digest(force=True, force_dry=dry))
 
 
+# ZONULY ▸ email sending · monitoring ▸ cli entry point ▸ run.notify_watchdog(): Run the watchdog's checks and print the issues (sends nothing, kills nothing).
 @notify_app.command("watchdog")
 def notify_watchdog() -> None:
     """Run the watchdog's checks and print the issues (sends nothing, kills nothing)."""
@@ -2902,6 +3060,7 @@ def notify_watchdog() -> None:
     _echo(watchdog.check(kill=False))
 
 
+# ZONULY ▸ email sending · scheduler · tick ▸ cli entry point ▸ run.notify_cycle(): One bot cycle now, as the send tick runs it (default --dry: mails become .eml files).
 @notify_app.command("cycle")
 def notify_cycle(dry: bool = typer.Option(True, "--dry/--send")) -> None:
     """One bot cycle now, as the send tick runs it (default --dry: mails become .eml files)."""
@@ -2911,6 +3070,7 @@ def notify_cycle(dry: bool = typer.Option(True, "--dry/--send")) -> None:
     _echo(notify_bot.cycle(force=True, force_dry=dry))
 
 
+# ZONULY ▸ replies · follow-up ▸ cli entry point ▸ run.notify_commands(): Read your replies to bot mails now (IMAP), run their commands, confirm by reply.
 @notify_app.command("commands")
 def notify_commands() -> None:
     """Read your replies to bot mails now (IMAP), run their commands, confirm by reply."""
@@ -2920,6 +3080,7 @@ def notify_commands() -> None:
     _echo(notify_bot.handle_commands())
 
 
+# ZONULY ▸ replies · follow-up ▸ cli entry point ▸ run.notify_status(): What `status` replies with.
 @notify_app.command("status")
 def notify_status() -> None:
     """What `status` replies with."""

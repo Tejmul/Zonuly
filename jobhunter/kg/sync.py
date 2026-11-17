@@ -57,6 +57,7 @@ CHANNEL_FEATURE = {
 }
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ sync._loads(): Parse JSON text, returning `default` when it is empty or invalid.
 def _loads(text: str | None, default):
     """Parse JSON text, returning `default` when it is empty or invalid."""
     if not text:
@@ -67,11 +68,13 @@ def _loads(text: str | None, default):
         return default
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ sync._iso(): Return a datetime as an ISO string to the second, or None.
 def _iso(dt) -> str | None:
     """Return a datetime as an ISO string to the second, or None."""
     return dt.isoformat(timespec="seconds") if dt else None
 
 
+# ZONULY ▸ decision · knowledge graph ▸ knowledge graph ▸ sync.sync_companies(): Company nodes carry the four things we actually decide on: what they do, the
 def sync_companies(g: Graph, companies: list[Company]) -> int:
     """Company nodes carry the four things we actually decide on: what they do, the
     stipend, what a PPO pays, and the grade that follows from those (targeting.py)."""
@@ -150,6 +153,7 @@ def sync_companies(g: Graph, companies: list[Company]) -> int:
     return len(keep)
 
 
+# ZONULY ▸ enrichment · scoring · knowledge graph ▸ knowledge graph ▸ sync._skill_matcher(): One alternation over every profile skill — 1,200 job descriptions in one pass each.
 def _skill_matcher(skills: list[str]) -> tuple[re.Pattern[str], dict[str, str]] | None:
     """One alternation over every profile skill — 1,200 job descriptions in one pass each."""
     lookup = {s.lower(): s for s in skills if len(s) > 1}
@@ -160,6 +164,7 @@ def _skill_matcher(skills: list[str]) -> tuple[re.Pattern[str], dict[str, str]] 
     return re.compile(r"(?<![a-z0-9])(" + "|".join(alts) + r")(?![a-z0-9])", re.I), lookup
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ sync.sync_jobs(): Mirror jobs into the knowledge graph data layer: job nodes plus company, source and skill edges.
 def sync_jobs(g: Graph, jobs: list[Job], skills: list[str] | None = None) -> int:
     """Mirror jobs into the knowledge graph data layer: job nodes plus company, source and skill edges.
 
@@ -218,6 +223,7 @@ def sync_jobs(g: Graph, jobs: list[Job], skills: list[str] | None = None) -> int
     return len(keep)
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ sync.sync_investors(): company -FUNDED_BY-> investor.
 def sync_investors(g: Graph, companies: list[Company]) -> int:
     """company -FUNDED_BY-> investor.
 
@@ -253,6 +259,7 @@ _FREEMAIL = {
 }
 
 
+# ZONULY ▸ validation · guardrails · decision · people search · referrers · knowledge graph ▸ knowledge graph ▸ sync.employment_evidence(): (verdict, why) — does this address actually place the person at this company?
 def employment_evidence(email: str | None, company_domain: str | None) -> tuple[str, str]:
     """(verdict, why) — does this address actually place the person at this company?
 
@@ -276,6 +283,7 @@ def employment_evidence(email: str | None, company_domain: str | None) -> tuple[
     return "contradicted", f"address is on {domain}, not {company_domain}"
 
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ sync.sync_contacts(): Mirror contacts (leads) into the knowledge graph: nodes plus WORKS_AT, role and channel edges.
 def sync_contacts(g: Graph, contacts: list[Contact], company_domains: dict[int, str] | None = None) -> int:
     """Mirror contacts (leads) into the knowledge graph: nodes plus WORKS_AT, role and channel edges.
 
@@ -330,6 +338,7 @@ def sync_contacts(g: Graph, contacts: list[Contact], company_domains: dict[int, 
     return len(keep)
 
 
+# ZONULY ▸ people search · referrers · replies · follow-up · knowledge graph ▸ knowledge graph ▸ sync.sync_emails(): Mirror emails into the knowledge graph with contact, company, job and follow-up edges.
 def sync_emails(g: Graph, emails: list[Email]) -> int:
     """Mirror emails into the knowledge graph with contact, company, job and follow-up edges.
 
@@ -361,6 +370,7 @@ def sync_emails(g: Graph, emails: list[Email]) -> int:
     return len(keep)
 
 
+# ZONULY ▸ replies · follow-up · knowledge graph ▸ knowledge graph ▸ sync.sync_replies(): Mirror replies into the knowledge graph with a REPLIES_TO edge to their email; prune the rest.
 def sync_replies(g: Graph, replies: list[Reply]) -> int:
     """Mirror replies into the knowledge graph with a REPLIES_TO edge to their email; prune the rest."""
     keep: set[str] = set()
@@ -379,6 +389,7 @@ def sync_replies(g: Graph, replies: list[Reply]) -> int:
     return len(keep)
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ sync._skill_leaves(): Flatten a nested skills structure (str, dict, list) into a flat list of skill strings.
 def _skill_leaves(value) -> list[str]:
     """Flatten a nested skills structure (str, dict, list) into a flat list of skill strings."""
     if isinstance(value, str):
@@ -390,6 +401,7 @@ def _skill_leaves(value) -> list[str]:
     return []
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ sync.sync_profile(): The candidate as a node, with skills as their own nodes so gaps and jobs can point at them.
 def sync_profile(g: Graph) -> list[str]:
     """The candidate as a node, with skills as their own nodes so gaps and jobs can point at them.
 
@@ -425,6 +437,7 @@ def sync_profile(g: Graph) -> list[str]:
     return skills
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ sync.sync_all(): Mirror every table into the data layer. Safe to run after any pipeline stage.
 def sync_all() -> dict:
     """Mirror every table into the data layer. Safe to run after any pipeline stage."""
     init_db()

@@ -42,6 +42,7 @@ sys.path.insert(0, str(ROOT))
 PROBE_HOSTS = ["aspmx.l.google.com", "mx1.hotmail.com", "mx.yandex.net"]
 
 
+# ZONULY ▸ email verification ▸ people · email proof ▸ try_verify.port25_open(): Can we open an SMTP conversation from this network? One honest yes/no.
 def port25_open(timeout: float = 8.0) -> tuple[bool, str]:
     """Can we open an SMTP conversation from this network? One honest yes/no."""
     for host in PROBE_HOSTS:
@@ -57,6 +58,7 @@ def port25_open(timeout: float = 8.0) -> tuple[bool, str]:
     return False, last
 
 
+# ZONULY ▸ email verification ▸ people · email proof ▸ try_verify.main(): CLI entry: check whether outbound port 25 is open, then optionally prove queued addresses.
 def main() -> int:
     """CLI entry: check whether outbound port 25 is open, then optionally prove queued addresses.
 

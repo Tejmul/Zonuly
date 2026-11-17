@@ -1,0 +1,224 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1498" width="1500" height="1498" role="img" aria-label="ZoNuLy code map">
+<defs>
+ <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker>
+ <marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3c5aa8"/></marker>
+ <marker id="e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7d5bc4"/></marker>
+ <marker id="f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c98a1c"/></marker>
+ <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+</defs>
+<rect width="1500" height="1498" fill="#ffffff"/>
+<text x="40" y="44" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#15203a">ZoNuLy code map</text>
+<text x="40" y="68" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="14" fill="#515c77">Each lane is a stage, top to bottom in the order a scheduled run reaches it. Boxes are real files, → is the call order, ↺ is the fallback when something fails.</text>
+<text x="40" y="88" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="14" fill="#515c77">Left: the one database every stage reads and writes. Right: the outside services each stage talks to.</text>
+<rect x="40" y="276" width="100" height="1144" rx="14" fill="#dfe7f7" stroke="#3c5aa8" stroke-width="1.6"/>
+<rect x="170" y="110" width="960" height="148" rx="12" fill="#eef2ff" stroke="#4a5fd0" stroke-width="1.5"/>
+<text x="186" y="132" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2" fill="#4a5fd0">ORCHESTRATION · what starts everything</text>
+<rect x="186" y="144" width="141" height="30" rx="7" fill="#ffffff" stroke="#4a5fd0" stroke-width="1.2"/>
+<text x="197" y="164" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">launchd timers</text>
+<line x1="330" y1="159.0" x2="346" y2="159.0" stroke="#4a5fd0" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="349" y="144" width="141" height="30" rx="7" fill="#ffffff" stroke="#4a5fd0" stroke-width="1.2"/>
+<text x="360" y="164" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">scripts/run.py</text>
+<line x1="493" y1="159.0" x2="509" y2="159.0" stroke="#4a5fd0" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="512" y="144" width="166" height="30" rx="7" fill="#ffffff" stroke="#4a5fd0" stroke-width="1.2"/>
+<text x="523" y="164" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">jobhunter/tick.py</text>
+<rect x="186" y="186" width="294" height="30" rx="7" fill="#ffffff" stroke="#4a5fd0" stroke-width="1.2"/>
+<text x="197" y="206" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">jobs: free · paid · send · apify</text>
+<line x1="483" y1="201.0" x2="499" y2="201.0" stroke="#4a5fd0" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="502" y="186" width="336" height="30" rx="7" fill="#ffffff" stroke="#4a5fd0" stroke-width="1.2"/>
+<text x="513" y="206" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">shortlist · referrals · audit · awake</text>
+<text x="186" y="240" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="12.5" fill="#8a4b00">↺ lock busy → exit, the next timer retries · watchdog.py flags stuck jobs · audit.py checks fill rates hourly</text>
+<rect x="170" y="276" width="960" height="232" rx="12" fill="#e8f4ff" stroke="#2b6cb0" stroke-width="1.5"/>
+<text x="186" y="298" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2" fill="#2b6cb0">SCRAPING · DATA INGESTION</text>
+<rect x="186" y="310" width="82" height="30" rx="7" fill="#ffffff" stroke="#2b6cb0" stroke-width="1.2"/>
+<text x="197" y="330" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">tick.py</text>
+<line x1="270" y1="325.0" x2="286" y2="325.0" stroke="#2b6cb0" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="290" y="310" width="116" height="30" rx="7" fill="#ffffff" stroke="#2b6cb0" stroke-width="1.2"/>
+<text x="300" y="330" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">pipeline.py</text>
+<line x1="408" y1="325.0" x2="424" y2="325.0" stroke="#2b6cb0" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="427" y="310" width="192" height="30" rx="7" fill="#ffffff" stroke="#2b6cb0" stroke-width="1.2"/>
+<text x="438" y="330" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">scrapers/__init__.py</text>
+<line x1="622" y1="325.0" x2="638" y2="325.0" stroke="#2b6cb0" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="641" y="310" width="158" height="30" rx="7" fill="#ffffff" stroke="#2b6cb0" stroke-width="1.2"/>
+<text x="652" y="330" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">scrapers/base.py</text>
+<rect x="186" y="352" width="320" height="30" rx="7" fill="#ffffff" stroke="#2b6cb0" stroke-width="1.2"/>
+<text x="197" y="372" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">scrapers/greenhouse · lever · ashby</text>
+<rect x="186" y="394" width="524" height="30" rx="7" fill="#ffffff" stroke="#2b6cb0" stroke-width="1.2"/>
+<text x="197" y="414" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">scrapers/himalayas · wwr · remoteok · hn_hiring · wellfound</text>
+<line x1="712" y1="409.0" x2="728" y2="409.0" stroke="#2b6cb0" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="732" y="394" width="107" height="30" rx="7" fill="#ffffff" stroke="#2b6cb0" stroke-width="1.2"/>
+<text x="742" y="414" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">harvest.py</text>
+<line x1="842" y1="409.0" x2="858" y2="409.0" stroke="#2b6cb0" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="860" y="394" width="150" height="30" rx="7" fill="#ffffff" stroke="#2b6cb0" stroke-width="1.2"/>
+<text x="872" y="414" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">india_boards.py</text>
+<rect x="186" y="436" width="158" height="30" rx="7" fill="#ffffff" stroke="#2b6cb0" stroke-width="1.2"/>
+<text x="197" y="456" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">remote_boards.py</text>
+<text x="186" y="490" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="12.5" fill="#8a4b00">↺ a source fails → skipped and logged, the others keep going (asyncio.gather, 8 boards at a time)</text>
+<rect x="170" y="526" width="960" height="148" rx="12" fill="#fff6e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="186" y="548" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2" fill="#b7791f">FILTERING · DEDUP · VALIDATION</text>
+<rect x="186" y="560" width="158" height="30" rx="7" fill="#ffffff" stroke="#b7791f" stroke-width="1.2"/>
+<text x="197" y="580" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">pipeline.persist</text>
+<line x1="347" y1="575.0" x2="363" y2="575.0" stroke="#b7791f" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="366" y="560" width="124" height="30" rx="7" fill="#ffffff" stroke="#b7791f" stroke-width="1.2"/>
+<text x="377" y="580" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">normalize.py</text>
+<line x1="493" y1="575.0" x2="509" y2="575.0" stroke="#b7791f" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="512" y="560" width="124" height="30" rx="7" fill="#ffffff" stroke="#b7791f" stroke-width="1.2"/>
+<text x="523" y="580" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">admission.py</text>
+<line x1="639" y1="575.0" x2="655" y2="575.0" stroke="#b7791f" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="658" y="560" width="166" height="30" rx="7" fill="#ffffff" stroke="#b7791f" stroke-width="1.2"/>
+<text x="669" y="580" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">db.py write guard</text>
+<rect x="186" y="602" width="107" height="30" rx="7" fill="#ffffff" stroke="#b7791f" stroke-width="1.2"/>
+<text x="197" y="622" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">hygiene.py</text>
+<line x1="296" y1="617.0" x2="312" y2="617.0" stroke="#b7791f" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="315" y="602" width="132" height="30" rx="7" fill="#ffffff" stroke="#b7791f" stroke-width="1.2"/>
+<text x="326" y="622" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">guardrails.py</text>
+<text x="186" y="656" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="12.5" fill="#8a4b00">↺ junk name, duplicate or agency → rejected with its reason in extraction_reject</text>
+<rect x="170" y="692" width="960" height="106" rx="12" fill="#eafaf1" stroke="#2f855a" stroke-width="1.5"/>
+<text x="186" y="714" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2" fill="#2f855a">ENRICHMENT</text>
+<rect x="186" y="726" width="82" height="30" rx="7" fill="#ffffff" stroke="#2f855a" stroke-width="1.2"/>
+<text x="197" y="746" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">fill.py</text>
+<line x1="270" y1="741.0" x2="286" y2="741.0" stroke="#2f855a" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="290" y="726" width="98" height="30" rx="7" fill="#ffffff" stroke="#2f855a" stroke-width="1.2"/>
+<text x="300" y="746" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">enrich.py</text>
+<line x1="391" y1="741.0" x2="407" y2="741.0" stroke="#2f855a" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="410" y="726" width="107" height="30" rx="7" fill="#ffffff" stroke="#2f855a" stroke-width="1.2"/>
+<text x="421" y="746" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">careers.py</text>
+<line x1="520" y1="741.0" x2="536" y2="741.0" stroke="#2f855a" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="539" y="726" width="158" height="30" rx="7" fill="#ffffff" stroke="#2f855a" stroke-width="1.2"/>
+<text x="550" y="746" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">hiring_verify.py</text>
+<line x1="700" y1="741.0" x2="716" y2="741.0" stroke="#2f855a" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="719" y="726" width="141" height="30" rx="7" fill="#ffffff" stroke="#2f855a" stroke-width="1.2"/>
+<text x="730" y="746" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">india.py (pay)</text>
+<line x1="863" y1="741.0" x2="879" y2="741.0" stroke="#2f855a" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="882" y="726" width="150" height="30" rx="7" fill="#ffffff" stroke="#2f855a" stroke-width="1.2"/>
+<text x="893" y="746" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">research/web.py</text>
+<text x="186" y="780" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="12.5" fill="#8a4b00">↺ site fails → backoff.py waits 1, 3, 7, 21, 60 days · search engines fail → cool-down</text>
+<rect x="170" y="816" width="960" height="106" rx="12" fill="#f5efff" stroke="#6b46c1" stroke-width="1.5"/>
+<text x="186" y="838" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2" fill="#6b46c1">SCORING · DECISION</text>
+<rect x="186" y="850" width="73" height="30" rx="7" fill="#ffffff" stroke="#6b46c1" stroke-width="1.2"/>
+<text x="197" y="870" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">fit.py</text>
+<line x1="262" y1="865.0" x2="278" y2="865.0" stroke="#6b46c1" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="281" y="850" width="107" height="30" rx="7" fill="#ffffff" stroke="#6b46c1" stroke-width="1.2"/>
+<text x="292" y="870" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">matcher.py</text>
+<line x1="391" y1="865.0" x2="407" y2="865.0" stroke="#6b46c1" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="410" y="850" width="73" height="30" rx="7" fill="#ffffff" stroke="#6b46c1" stroke-width="1.2"/>
+<text x="421" y="870" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">llm.py</text>
+<line x1="486" y1="865.0" x2="502" y2="865.0" stroke="#6b46c1" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="505" y="850" width="132" height="30" rx="7" fill="#ffffff" stroke="#6b46c1" stroke-width="1.2"/>
+<text x="516" y="870" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">openrouter.py</text>
+<line x1="640" y1="865.0" x2="656" y2="865.0" stroke="#6b46c1" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="660" y="850" width="98" height="30" rx="7" fill="#ffffff" stroke="#6b46c1" stroke-width="1.2"/>
+<text x="670" y="870" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">decide.py</text>
+<line x1="761" y1="865.0" x2="777" y2="865.0" stroke="#6b46c1" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="780" y="850" width="98" height="30" rx="7" fill="#ffffff" stroke="#6b46c1" stroke-width="1.2"/>
+<text x="791" y="870" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">remote.py</text>
+<line x1="882" y1="865.0" x2="898" y2="865.0" stroke="#6b46c1" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="900" y="850" width="124" height="30" rx="7" fill="#ffffff" stroke="#6b46c1" stroke-width="1.2"/>
+<text x="912" y="870" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">targeting.py</text>
+<text x="186" y="904" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="12.5" fill="#8a4b00">↺ model busy or gone → next model in the chain · thin evidence → 'fill first', collect more</text>
+<rect x="170" y="940" width="960" height="148" rx="12" fill="#fff0f3" stroke="#c53060" stroke-width="1.5"/>
+<text x="186" y="962" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2" fill="#c53060">PEOPLE · EMAIL PROOF</text>
+<rect x="186" y="974" width="124" height="30" rx="7" fill="#ffffff" stroke="#c53060" stroke-width="1.2"/>
+<text x="197" y="994" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">referrals.py</text>
+<line x1="313" y1="989.0" x2="329" y2="989.0" stroke="#c53060" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="332" y="974" width="141" height="30" rx="7" fill="#ffffff" stroke="#c53060" stroke-width="1.2"/>
+<text x="343" y="994" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">remote.targets</text>
+<line x1="476" y1="989.0" x2="492" y2="989.0" stroke="#c53060" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="495" y="974" width="209" height="30" rx="7" fill="#ffffff" stroke="#c53060" stroke-width="1.2"/>
+<text x="506" y="994" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">actors/apify_source.py</text>
+<line x1="707" y1="989.0" x2="723" y2="989.0" stroke="#c53060" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="726" y="974" width="166" height="30" rx="7" fill="#ffffff" stroke="#c53060" stroke-width="1.2"/>
+<text x="737" y="994" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">contacts/roles.py</text>
+<line x1="896" y1="989.0" x2="912" y2="989.0" stroke="#c53060" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="914" y="974" width="184" height="30" rx="7" fill="#ffffff" stroke="#c53060" stroke-width="1.2"/>
+<text x="926" y="994" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">contacts/reacher.py</text>
+<rect x="186" y="1016" width="116" height="30" rx="7" fill="#ffffff" stroke="#c53060" stroke-width="1.2"/>
+<text x="197" y="1036" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">db.py guard</text>
+<text x="186" y="1070" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="12.5" fill="#8a4b00">↺ over budget → refused · same request in 24 h → cache · email not proved → kept aside, re-checked</text>
+<rect x="170" y="1106" width="960" height="148" rx="12" fill="#effaf7" stroke="#2c7a7b" stroke-width="1.5"/>
+<text x="186" y="1128" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2" fill="#2c7a7b">OUTREACH</text>
+<rect x="186" y="1140" width="184" height="30" rx="7" fill="#ffffff" stroke="#2c7a7b" stroke-width="1.2"/>
+<text x="197" y="1160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">outreach/drafter.py</text>
+<line x1="372" y1="1155.0" x2="388" y2="1155.0" stroke="#2c7a7b" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="392" y="1140" width="132" height="30" rx="7" fill="#ffffff" stroke="#2c7a7b" stroke-width="1.2"/>
+<text x="402" y="1160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">autoreview.py</text>
+<line x1="527" y1="1155.0" x2="543" y2="1155.0" stroke="#2c7a7b" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="546" y="1140" width="98" height="30" rx="7" fill="#ffffff" stroke="#2c7a7b" stroke-width="1.2"/>
+<text x="557" y="1160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">sender.py</text>
+<line x1="648" y1="1155.0" x2="664" y2="1155.0" stroke="#2c7a7b" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="666" y="1140" width="116" height="30" rx="7" fill="#ffffff" stroke="#2c7a7b" stroke-width="1.2"/>
+<text x="678" y="1160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">suppress.py</text>
+<line x1="785" y1="1155.0" x2="801" y2="1155.0" stroke="#2c7a7b" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="804" y="1140" width="98" height="30" rx="7" fill="#ffffff" stroke="#2c7a7b" stroke-width="1.2"/>
+<text x="815" y="1160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">ledger.py</text>
+<line x1="906" y1="1155.0" x2="922" y2="1155.0" stroke="#2c7a7b" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="924" y="1140" width="90" height="30" rx="7" fill="#ffffff" stroke="#2c7a7b" stroke-width="1.2"/>
+<text x="936" y="1160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">gmail.py</text>
+<rect x="186" y="1182" width="107" height="30" rx="7" fill="#ffffff" stroke="#2c7a7b" stroke-width="1.2"/>
+<text x="197" y="1202" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">tracker.py</text>
+<text x="186" y="1236" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="12.5" fill="#8a4b00">↺ rejected → reason logged · send fails → slot released, retry ≤ 3 · bounce / opt-out → suppressed</text>
+<rect x="170" y="1272" width="960" height="148" rx="12" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
+<text x="186" y="1294" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2" fill="#475569">API · DASHBOARD · DEPLOY</text>
+<rect x="186" y="1306" width="107" height="30" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2"/>
+<text x="197" y="1326" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">dashboard/</text>
+<line x1="296" y1="1321.0" x2="312" y2="1321.0" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="315" y="1306" width="90" height="30" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2"/>
+<text x="326" y="1326" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">proxy.ts</text>
+<line x1="408" y1="1321.0" x2="424" y2="1321.0" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="427" y="1306" width="107" height="30" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2"/>
+<text x="438" y="1326" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">lib/api.ts</text>
+<line x1="537" y1="1321.0" x2="553" y2="1321.0" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="556" y="1306" width="73" height="30" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2"/>
+<text x="567" y="1326" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">api.py</text>
+<line x1="632" y1="1321.0" x2="648" y2="1321.0" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="651" y="1306" width="98" height="30" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2"/>
+<text x="662" y="1326" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">access.py</text>
+<line x1="752" y1="1321.0" x2="768" y2="1321.0" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="772" y="1306" width="166" height="30" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2"/>
+<text x="782" y="1326" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">snapshot_cache.py</text>
+<line x1="941" y1="1321.0" x2="957" y2="1321.0" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="960" y="1306" width="98" height="30" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2"/>
+<text x="971" y="1326" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">accounts/</text>
+<rect x="186" y="1348" width="218" height="30" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2"/>
+<text x="197" y="1368" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">scripts/make_demo_db.py</text>
+<line x1="406" y1="1363.0" x2="422" y2="1363.0" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="426" y="1348" width="166" height="30" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2"/>
+<text x="436" y="1368" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">build_catalyst.py</text>
+<line x1="595" y1="1363.0" x2="611" y2="1363.0" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="614" y="1348" width="277" height="30" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2"/>
+<text x="625" y="1368" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#1a2238">Zoho Catalyst (read-only copy)</text>
+<text x="186" y="1402" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="12.5" fill="#8a4b00">↺ not signed in → login · write on the public site → 403 · deploy test fails → deploy stops</text>
+<text transform="translate(95.0,848.0) rotate(-90)" text-anchor="middle" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#14204a">SQLite · jobhunter.db · jobhunter/db.py</text>
+<line x1="166" y1="392.0" x2="144" y2="392.0" stroke="#3c5aa8" stroke-width="1.6" marker-end="url(#d)" marker-start="url(#d)"/>
+<line x1="166" y1="600.0" x2="144" y2="600.0" stroke="#3c5aa8" stroke-width="1.6" marker-end="url(#d)" marker-start="url(#d)"/>
+<line x1="166" y1="745.0" x2="144" y2="745.0" stroke="#3c5aa8" stroke-width="1.6" marker-end="url(#d)" marker-start="url(#d)"/>
+<line x1="166" y1="869.0" x2="144" y2="869.0" stroke="#3c5aa8" stroke-width="1.6" marker-end="url(#d)" marker-start="url(#d)"/>
+<line x1="166" y1="1014.0" x2="144" y2="1014.0" stroke="#3c5aa8" stroke-width="1.6" marker-end="url(#d)" marker-start="url(#d)"/>
+<line x1="166" y1="1180.0" x2="144" y2="1180.0" stroke="#3c5aa8" stroke-width="1.6" marker-end="url(#d)" marker-start="url(#d)"/>
+<line x1="166" y1="1346.0" x2="144" y2="1346.0" stroke="#3c5aa8" stroke-width="1.6" marker-end="url(#d)" marker-start="url(#d)"/>
+<rect x="1190" y="370.0" width="270" height="44" rx="10" fill="#f6f0ff" stroke="#7d5bc4" stroke-width="1.4"/>
+<text x="1325.0" y="397.0" text-anchor="middle" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#2e1d55">Job boards · company sites</text>
+<line x1="1186" y1="392.0" x2="1134" y2="392.0" stroke="#7d5bc4" stroke-width="1.5" marker-end="url(#e)" marker-start="url(#e)"/>
+<rect x="1190" y="723.0" width="270" height="44" rx="10" fill="#f6f0ff" stroke="#7d5bc4" stroke-width="1.4"/>
+<text x="1325.0" y="750.0" text-anchor="middle" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#2e1d55">Company sites · web search</text>
+<line x1="1186" y1="745.0" x2="1134" y2="745.0" stroke="#7d5bc4" stroke-width="1.5" marker-end="url(#e)" marker-start="url(#e)"/>
+<rect x="1190" y="847.0" width="270" height="44" rx="10" fill="#f6f0ff" stroke="#7d5bc4" stroke-width="1.4"/>
+<text x="1325.0" y="874.0" text-anchor="middle" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#2e1d55">OpenRouter AI models</text>
+<line x1="1186" y1="869.0" x2="1134" y2="869.0" stroke="#7d5bc4" stroke-width="1.5" marker-end="url(#e)" marker-start="url(#e)"/>
+<rect x="1190" y="992.0" width="270" height="44" rx="10" fill="#f6f0ff" stroke="#7d5bc4" stroke-width="1.4"/>
+<text x="1325.0" y="1019.0" text-anchor="middle" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#2e1d55">Apify · GitHub · public pages</text>
+<line x1="1186" y1="1014.0" x2="1134" y2="1014.0" stroke="#7d5bc4" stroke-width="1.5" marker-end="url(#e)" marker-start="url(#e)"/>
+<rect x="1190" y="1158.0" width="270" height="44" rx="10" fill="#f6f0ff" stroke="#7d5bc4" stroke-width="1.4"/>
+<text x="1325.0" y="1185.0" text-anchor="middle" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#2e1d55">Gmail</text>
+<line x1="1186" y1="1180.0" x2="1134" y2="1180.0" stroke="#7d5bc4" stroke-width="1.5" marker-end="url(#e)" marker-start="url(#e)"/>
+<rect x="1190" y="1324.0" width="270" height="44" rx="10" fill="#f6f0ff" stroke="#7d5bc4" stroke-width="1.4"/>
+<text x="1325.0" y="1351.0" text-anchor="middle" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#2e1d55">Catalyst · Vercel · GitHub Actions</text>
+<line x1="1186" y1="1346.0" x2="1134" y2="1346.0" stroke="#7d5bc4" stroke-width="1.5" marker-end="url(#e)" marker-start="url(#e)"/>
+<line x1="650.0" y1="260" x2="650.0" y2="274" stroke="#94a3b8" stroke-width="2" marker-end="url(#g)"/>
+<line x1="650.0" y1="510" x2="650.0" y2="524" stroke="#94a3b8" stroke-width="2" marker-end="url(#g)"/>
+<line x1="650.0" y1="676" x2="650.0" y2="690" stroke="#94a3b8" stroke-width="2" marker-end="url(#g)"/>
+<line x1="650.0" y1="800" x2="650.0" y2="814" stroke="#94a3b8" stroke-width="2" marker-end="url(#g)"/>
+<line x1="650.0" y1="924" x2="650.0" y2="938" stroke="#94a3b8" stroke-width="2" marker-end="url(#g)"/>
+<line x1="650.0" y1="1090" x2="650.0" y2="1104" stroke="#94a3b8" stroke-width="2" marker-end="url(#g)"/>
+<line x1="650.0" y1="1256" x2="650.0" y2="1270" stroke="#94a3b8" stroke-width="2" marker-end="url(#g)"/>
+<text x="40" y="1450" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="12.5" fill="#515c77">Search the code for a lane name (SCRAPING, FILTERING, ENRICHMENT, ...) or a phrase like "apify scraping": every function has a "# ZONULY ▸" tag line above it.</text><text x="40" y="1468" font-family="Inter, Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="12.5" fill="#515c77">Full folder guide: CODEMAP.md · regenerate the tags with python scripts/codemap.py</text>
+</svg>

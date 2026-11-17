@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from jobhunter import hygiene  # noqa: E402
 
 
+# ZONULY ▸ filtering · cleanup script ▸ filtering · cleanup script ▸ cleanup_companies.main(): CLI entry: run the company hygiene clean-up (dry run by default, --apply writes) and print it.
 def main() -> int:
     """CLI entry: run the company hygiene clean-up (dry run by default, --apply writes) and print it."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

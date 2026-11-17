@@ -44,16 +44,19 @@ _PROFILE = re.compile(r"^https?://(?:www\.)?(?:x|twitter)\.com/([A-Za-z0-9_]{1,1
 _RESERVED = {"home", "search", "explore", "i", "intent", "share", "hashtag", "login", "settings", "messages"}
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ x_handles._name_stems(): Return the letters-only lowercase parts (longer than 2 chars) of a person's name.
 def _name_stems(name: str) -> list[str]:
     """Return the letters-only lowercase parts (longer than 2 chars) of a person's name."""
     return [re.sub(r"[^a-z]", "", p.lower()) for p in name.split() if len(p) > 2]
 
 
+# ZONULY ▸ scoring · people search · referrers ▸ people · contact discovery · email proof ▸ x_handles._stem(): Reduce text to lowercase letters only, for loose name matching.
 def _stem(text: str | None) -> str:
     """Reduce text to lowercase letters only, for loose name matching."""
     return re.sub(r"[^a-z]", "", (text or "").lower())
 
 
+# ZONULY ▸ x search · people search · referrers · sign-in · auth ▸ people · contact discovery · email proof ▸ x_handles.find_for_contact(): One person: one X search; accept an author only if their display name is the
 def find_for_contact(contact_id: int) -> dict:
     """One person: one X search; accept an author only if their display name is the
     person's name and the post or bio places them at the company."""
@@ -100,6 +103,7 @@ def find_for_contact(contact_id: int) -> dict:
     return {"contact": name, "handle": None, "why": "no post author with that name at that company"}
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ x_handles.find_for_company(): The people at one company most worth a DM — best referral rank first, named,
 def find_for_company(company_id: int, *, limit: int = 5) -> dict:
     """The people at one company most worth a DM — best referral rank first, named,
     without a handle yet — up to `limit` searches."""
@@ -124,6 +128,7 @@ def find_for_company(company_id: int, *, limit: int = 5) -> dict:
     return out
 
 
+# ZONULY ▸ github scraping · x search · enrichment · people search · referrers ▸ people · contact discovery · email proof ▸ x_handles.backfill_github(): X handles for contacts found on GitHub before their profile's `twi…
 def backfill_github(company_ids: list[int] | None = None, *, limit: int = 400) -> dict:
     """X handles for contacts found on GitHub before their profile's `twitter_username`
     was read — one profile call each, inside GitHub's hourly budget."""
@@ -141,6 +146,7 @@ def backfill_github(company_ids: list[int] | None = None, *, limit: int = 400) -
         rows = session.exec(stmt).all()
         todo = [(p.id, p.github.rstrip("/").split("/")[-1]) for p in rows][:limit]
 
+    # ZONULY ▸ github scraping · scraping · enrichment · people search · referrers ▸ people · contact discovery · email proof ▸ x_handles.backfill_github.run(): Fetch each GitHub user's profile and return (contact id, X han…
     async def run() -> list[tuple[int, str | None]]:
         """Fetch each GitHub user's profile and return (contact id, X handle or None) pairs."""
         async with make_client() as http:

@@ -45,6 +45,7 @@ _scheduler: BackgroundScheduler | None = None
 _last_runs: dict[str, dict] = {}
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ scheduler._record(): Remember the time, result and error of the last run of a scheduler job, for status().
 def _record(name: str, result: object, error: str | None = None) -> None:
     """Remember the time, result and error of the last run of a scheduler job, for status()."""
     _last_runs[name] = {
@@ -54,6 +55,7 @@ def _record(name: str, result: object, error: str | None = None) -> None:
     }
 
 
+# ZONULY ▸ scraping · data ingestion · enrichment · pay · salary · scoring · scheduler · tick ▸ orchestration · scheduler ▸ scheduler.daily_cycle(): Scrape -> salary backfill -> embed -> score -> notify. The whole inges…
 def daily_cycle() -> dict:
     """Scrape -> salary backfill -> embed -> score -> notify. The whole ingestion loop."""
     from jobhunter import matcher, notify, pipeline
@@ -82,6 +84,7 @@ def daily_cycle() -> dict:
     return summary
 
 
+# ZONULY ▸ scheduler · tick · knowledge graph ▸ orchestration · scheduler ▸ scheduler._sync_graph(): Mirror the tables into the knowledge graph. Never fails a cycle — the graph is derived.
 def _sync_graph() -> dict:
     """Mirror the tables into the knowledge graph. Never fails a cycle — the graph is derived."""
     from jobhunter.kg import brief, sync
@@ -95,6 +98,7 @@ def _sync_graph() -> dict:
         return {"error": str(e)[:300]}
 
 
+# ZONULY ▸ email sending · replies · follow-up · scheduler · tick ▸ orchestration · scheduler ▸ scheduler.reply_cycle(): Poll Gmail, classify replies, queue follow-ups, notify.
 def reply_cycle() -> dict:
     """Poll Gmail, classify replies, queue follow-ups, notify."""
     from jobhunter import notify
@@ -116,6 +120,7 @@ def reply_cycle() -> dict:
     return summary
 
 
+# ZONULY ▸ email sending · replies · follow-up · scheduler · tick ▸ orchestration · scheduler ▸ scheduler._mail_positive(): A positive reply found by this poll is mailed now (notify_bot), not at the next send
 def _mail_positive() -> dict:
     """A positive reply found by this poll is mailed now (notify_bot), not at the next send
     tick. Deduplicated with the tick's runs through data/notify_state.json."""
@@ -131,6 +136,7 @@ def _mail_positive() -> dict:
         return {"error": str(e)[:200]}
 
 
+# ZONULY ▸ scraping · scoring · replies · follow-up · scheduler · tick ▸ orchestration · scheduler ▸ scheduler.start(): Start the background scheduler (idempotent): the daily scrape + score and the reply poll.
 def start() -> BackgroundScheduler:
     """Start the background scheduler (idempotent): the daily scrape + score and the reply poll.
 
@@ -167,6 +173,7 @@ def start() -> BackgroundScheduler:
     return _scheduler
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ scheduler.stop(): Shut down the background scheduler if it is running.
 def stop() -> None:
     """Shut down the background scheduler if it is running."""
     global _scheduler
@@ -176,6 +183,7 @@ def stop() -> None:
     _scheduler = None
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ scheduler.status(): Return whether the scheduler runs, its jobs with next run times, and the last run results.
 def status() -> dict:
     """Return whether the scheduler runs, its jobs with next run times, and the last run results."""
     if not _scheduler or not _scheduler.running:

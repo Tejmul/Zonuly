@@ -103,6 +103,7 @@ FIELDS = ("description", "funding_stage", "funding_amount", "funding_date", "inv
 
 # ------------------------------------------------------------------ measurements
 
+# ZONULY ▸ enrichment · monitoring ▸ monitoring · data-quality audit ▸ audit.fill_rates(): {companies, rates: {field: 0–1}, counts: {field: n}} over active companies.
 def fill_rates(session) -> dict:
     """{companies, rates: {field: 0–1}, counts: {field: n}} over active companies."""
     rows = session.exec(select(Company).where(col(Company.status).is_(None))).all()
@@ -133,6 +134,7 @@ def fill_rates(session) -> dict:
             "rates": {f: round(v / n, 4) for f, v in counts.items()}}
 
 
+# ZONULY ▸ people search · referrers · monitoring ▸ monitoring · data-quality audit ▸ audit.contact_labels(): Count contacts by affiliation, address confidence and email kind for the audit report.
 def contact_labels(session) -> dict:
     """Count contacts by affiliation, address confidence and email kind for the audit report."""
     return {
@@ -145,9 +147,11 @@ def contact_labels(session) -> dict:
     }
 
 
+# ZONULY ▸ people search · referrers · monitoring ▸ monitoring · data-quality audit ▸ audit.throughput(): Count companies, contacts and roles added since a time, plus extraction writes by field.
 def throughput(session, since: datetime) -> dict:
     """Count companies, contacts and roles added since a time, plus extraction writes by field.
     Used by the hourly audit as its output/throughput section."""
+    # ZONULY ▸ ai model call · llm · monitoring ▸ monitoring · data-quality audit ▸ audit.throughput.count(): Count rows of a model whose given timestamp column is at or after `since`.
     def count(model, column) -> int:
         """Count rows of a model whose given timestamp column is at or after `since`."""
         return session.exec(select(func.count()).select_from(model).where(col(column) >= since)).one()
@@ -164,6 +168,7 @@ def throughput(session, since: datetime) -> dict:
     }
 
 
+# ZONULY ▸ filtering · validation · guardrails · monitoring ▸ monitoring · data-quality audit ▸ audit.rejects(): Summarise guardrail rejects (extraction_reject) since a time, grouped by reason and channel.
 def rejects(session, since: datetime) -> dict:
     """Summarise guardrail rejects (extraction_reject) since a time, grouped by reason and channel."""
     by_reason = session.exec(select(ExtractionReject.field, ExtractionReject.reason, func.count()).where(
@@ -171,6 +176,7 @@ def rejects(session, since: datetime) -> dict:
     by_channel = dict(session.exec(select(ExtractionReject.channel, func.count()).where(
         col(ExtractionReject.at) >= since).group_by(ExtractionReject.channel)).all())
 
+    # ZONULY ▸ filtering · monitoring ▸ monitoring · data-quality audit ▸ audit.rejects.norm(): Collapse a reject reason to its stem so variants with different numbers group together.
     def norm(reason: str) -> str:
         """Collapse a reject reason to its stem so variants with different numbers group together."""
         # "too short (41 chars, need 60)" and "too short (12 chars…)" are one reason
@@ -185,6 +191,7 @@ def rejects(session, since: datetime) -> dict:
             "by_channel": {k or "unknown": v for k, v in sorted(by_channel.items(), key=lambda kv: -kv[1])}}
 
 
+# ZONULY ▸ email sending · ai model call · llm · knowledge graph · monitoring ▸ monitoring · data-quality audit ▸ audit.openrouter_health(): From the model ledger (llm_call): calls, failures, and whether a daily ceiling
 def openrouter_health(since: datetime) -> dict:
     """From the model ledger (llm_call): calls, failures, and whether a daily ceiling
     (ours in INR, or the free tier's per-day limit) was hit today."""
@@ -223,6 +230,7 @@ def openrouter_health(since: datetime) -> dict:
     return out
 
 
+# ZONULY ▸ email verification · monitoring ▸ monitoring · data-quality audit ▸ audit.tools(): The Agent Reach CLIs, actually run — `which` is not proof of health.
 def tools() -> dict:
     """The Agent Reach CLIs, actually run — `which` is not proof of health."""
     from jobhunter.research import backends
@@ -237,6 +245,7 @@ def tools() -> dict:
     return out
 
 
+# ZONULY ▸ github scraping · budget · cost · monitoring ▸ monitoring · data-quality audit ▸ audit.github_budget(): GitHub's core budget (the /rate_limit call itself is free).
 def github_budget() -> dict:
     """GitHub's core budget (the /rate_limit call itself is free)."""
     import httpx
@@ -252,6 +261,7 @@ def github_budget() -> dict:
         return {"error": f"{type(e).__name__}: {str(e)[:100]}"}
 
 
+# ZONULY ▸ scraping · monitoring ▸ monitoring · data-quality audit ▸ audit._aware(): A local naive timestamp → ISO with the local offset, so the dashboard reads it right.
 def _aware(stamp: str | None) -> str | None:
     """A local naive timestamp → ISO with the local offset, so the dashboard reads it right."""
     if not stamp:
@@ -263,6 +273,7 @@ def _aware(stamp: str | None) -> str | None:
     return (dt if dt.tzinfo else dt.astimezone()).isoformat(timespec="seconds")
 
 
+# ZONULY ▸ monitoring ▸ monitoring · data-quality audit ▸ audit.channel_health(): Per research channel, report ok/fail counts, cooldowns and fail rate for the last hour and day.
 def channel_health() -> dict:
     """Per research channel, report ok/fail counts, cooldowns and fail rate for the last hour and day."""
     hour = channels.summary(1)
@@ -279,6 +290,7 @@ def channel_health() -> dict:
 
 # ------------------------------------------------------------------ re-validate a sample
 
+# ZONULY ▸ admission gate · filtering · validation · guardrails · monitoring ▸ monitoring · data-quality audit ▸ audit._revalidate(): Does what the row holds NOW still pass the validator that admitted it?
 def _revalidate(session, w: ExtractionWrite) -> tuple[bool, str]:
     """Does what the row holds NOW still pass the validator that admitted it?"""
     if w.contact_id:
@@ -322,6 +334,7 @@ def _revalidate(session, w: ExtractionWrite) -> tuple[bool, str]:
     return True, ""
 
 
+# ZONULY ▸ validation · guardrails · monitoring ▸ monitoring · data-quality audit ▸ audit.sample(): Re-validate a random sample of recent extraction writes against today's validators.
 def sample(session, since: datetime, n: int = SAMPLE) -> dict:
     """Re-validate a random sample of recent extraction writes against today's validators.
     Returns how many were checked, passed, and the details of each failure."""
@@ -342,6 +355,7 @@ def sample(session, since: datetime, n: int = SAMPLE) -> dict:
 
 # ------------------------------------------------------------------ the report
 
+# ZONULY ▸ monitoring ▸ monitoring · data-quality audit ▸ audit._history(): Load the stored audit history (setting audit:history) as a list; empty on missing or bad JSON.
 def _history() -> list[dict]:
     """Load the stored audit history (setting audit:history) as a list; empty on missing or bad JSON."""
     with get_session() as s:
@@ -353,6 +367,7 @@ def _history() -> list[dict]:
         return []
 
 
+# ZONULY ▸ decision · monitoring ▸ monitoring · data-quality audit ▸ audit._closest(): Pick the history entry closest to a target time, within a tolerance in hours, or None.
 def _closest(history: list[dict], target: datetime, tolerance_h: float) -> dict | None:
     """Pick the history entry closest to a target time, within a tolerance in hours, or None."""
     best, gap = None, None
@@ -368,6 +383,7 @@ def _closest(history: list[dict], target: datetime, tolerance_h: float) -> dict 
     return best
 
 
+# ZONULY ▸ enrichment · monitoring ▸ monitoring · data-quality audit ▸ audit._delta(): Compute per-field fill-rate change between the current report and an earlier one.
 def _delta(now: dict, then: dict | None) -> dict | None:
     """Compute per-field fill-rate change between the current report and an earlier one."""
     if not then:
@@ -376,6 +392,7 @@ def _delta(now: dict, then: dict | None) -> dict | None:
     return {f: round(a.get(f, 0) - b.get(f, 0), 4) for f in FIELDS if f in b}
 
 
+# ZONULY ▸ monitoring ▸ monitoring · data-quality audit ▸ audit.stall_check(): The alerts. Pure, so the tests can call it: nothing new (fields written + rows
 def stall_check(*, progress_last_hour: int, tick_ran: bool, channel_rates: dict[str, dict],
                 openrouter: dict | None = None) -> list[str]:
     """The alerts. Pure, so the tests can call it: nothing new (fields written + rows
@@ -402,6 +419,7 @@ def stall_check(*, progress_last_hour: int, tick_ran: bool, channel_rates: dict[
     return alerts
 
 
+# ZONULY ▸ scheduler · tick · monitoring ▸ monitoring · data-quality audit ▸ audit._tick_ran(): Check whether the free scheduler tick finished since a time; returns (ran, its start/finish).
 def _tick_ran(since: datetime) -> tuple[bool, dict | None]:
     """Check whether the free scheduler tick finished since a time; returns (ran, its start/finish)."""
     from jobhunter import tick
@@ -416,6 +434,7 @@ def _tick_ran(since: datetime) -> tuple[bool, dict | None]:
     return at >= since, {"at": _aware(last.get("at")), "finished": _aware(last.get("finished"))}
 
 
+# ZONULY ▸ monitoring ▸ monitoring · data-quality audit ▸ audit.run(): One audit. Stores and returns the report; notifies on an alert.
 def run(*, notify: bool = True, probe_tools: bool = True) -> dict:
     """One audit. Stores and returns the report; notifies on an alert."""
     init_db()
@@ -479,6 +498,7 @@ def run(*, notify: bool = True, probe_tools: bool = True) -> dict:
     return report
 
 
+# ZONULY ▸ dedup · monitoring ▸ monitoring · data-quality audit ▸ audit._mail(): The notification bot, hourly: the audit's emergencies as URGENT mail, then one bot
 def _mail(alerts: list[str]) -> dict:
     """The notification bot, hourly: the audit's emergencies as URGENT mail, then one bot
     cycle (watchdog, positive replies, the digest, commands) with the reply-poll fallback —
@@ -499,6 +519,7 @@ def _mail(alerts: list[str]) -> dict:
         return {"error": f"{type(e).__name__}: {str(e)[:200]}"}
 
 
+# ZONULY ▸ monitoring ▸ monitoring · data-quality audit ▸ audit._compact(): What the history keeps per hour: enough for the deltas and the trend, not the samples.
 def _compact(report: dict) -> dict:
     """What the history keeps per hour: enough for the deltas and the trend, not the samples."""
     return {"at": report["at"], "status": report["status"], "alerts": report["alerts"],
@@ -511,6 +532,7 @@ def _compact(report: dict) -> dict:
                                    "linkedin_added", "emails_found", "companies_reached_target")}}
 
 
+# ZONULY ▸ monitoring ▸ monitoring · data-quality audit ▸ audit._store(): Save the audit report as audit:last, append it to audit:history, and log one JSON line.
 def _store(report: dict, history: list[dict]) -> None:
     """Save the audit report as audit:last, append it to audit:history, and log one JSON line."""
     history = (history + [_compact(report)])[-HISTORY:]
@@ -520,6 +542,7 @@ def _store(report: dict, history: list[dict]) -> None:
     _log_line(_compact(report))
 
 
+# ZONULY ▸ monitoring ▸ monitoring · data-quality audit ▸ audit._log_line(): Append one JSON object as a line to logs/audit.log.
 def _log_line(obj: dict) -> None:
     """Append one JSON object as a line to logs/audit.log."""
     LOGS.mkdir(exist_ok=True)
@@ -527,6 +550,7 @@ def _log_line(obj: dict) -> None:
         fh.write(json.dumps(obj, default=str) + "\n")
 
 
+# ZONULY ▸ scraping · monitoring ▸ monitoring · data-quality audit ▸ audit.latest(): {last, history} for the API and the dashboard.
 def latest() -> dict:
     """{last, history} for the API and the dashboard."""
     with get_session() as s:
@@ -540,6 +564,7 @@ def latest() -> dict:
 
 # ------------------------------------------------------------------ launchd
 
+# ZONULY ▸ scheduler · tick · monitoring ▸ monitoring · data-quality audit ▸ audit._plist(): Build the launchd plist dict that runs `run.py audit run` every INTERVAL_S seconds.
 def _plist() -> dict:
     """Build the launchd plist dict that runs `run.py audit run` every INTERVAL_S seconds."""
     from jobhunter import tick
@@ -559,6 +584,7 @@ def _plist() -> dict:
     }
 
 
+# ZONULY ▸ monitoring ▸ monitoring · data-quality audit ▸ audit.install(): Install and load the hourly audit LaunchAgent (writes the plist, calls launchctl).
 def install() -> dict:
     """Install and load the hourly audit LaunchAgent (writes the plist, calls launchctl)."""
     LOGS.mkdir(exist_ok=True)
@@ -571,6 +597,7 @@ def install() -> dict:
             "every": f"{INTERVAL_S // 60} min"}
 
 
+# ZONULY ▸ monitoring ▸ monitoring · data-quality audit ▸ audit.uninstall(): Unload the audit LaunchAgent and delete its plist file.
 def uninstall() -> dict:
     """Unload the audit LaunchAgent and delete its plist file."""
     path = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
@@ -580,6 +607,7 @@ def uninstall() -> dict:
     return {"unloaded": r.returncode == 0}
 
 
+# ZONULY ▸ monitoring ▸ monitoring · data-quality audit ▸ audit.status(): Report whether the audit LaunchAgent is loaded, plus the last audit's time, status and alerts.
 def status() -> dict:
     """Report whether the audit LaunchAgent is loaded, plus the last audit's time, status and alerts."""
     r = subprocess.run(["launchctl", "list"], capture_output=True, text=True)

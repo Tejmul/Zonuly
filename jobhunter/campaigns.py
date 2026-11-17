@@ -41,6 +41,7 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
 
 
+# ZONULY ▸ outreach · campaigns ▸ outreach · campaigns ▸ class campaigns.CampaignStartIn
 class CampaignStartIn(BaseModel):
     campaign_id: str | None = Field(None, min_length=1, max_length=120,
                                     description="Your id for the campaign; minted when omitted")
@@ -49,12 +50,14 @@ class CampaignStartIn(BaseModel):
     metadata: dict | None = None
 
 
+# ZONULY ▸ api route GET /status ▸ outreach · campaigns ▸ campaigns.campaigns_status(): Whether the n8n side is wired up. The URL itself is never returned.
 @router.get("/status")
 def campaigns_status() -> dict:
     """Whether the n8n side is wired up. The URL itself is never returned."""
     return {"n8n": n8n.status()}
 
 
+# ZONULY ▸ api route POST /start ▸ outreach · campaigns ▸ campaigns.start_campaign(): POST /api/campaigns/start — trigger an n8n campaign start; mints a campaign id if none.
 @router.post("/start")
 def start_campaign(body: CampaignStartIn) -> dict:
     """POST /api/campaigns/start — trigger an n8n campaign start; mints a campaign id if none.
@@ -78,6 +81,7 @@ def start_campaign(body: CampaignStartIn) -> dict:
 
 # ---------------------------------------------------------------- events from n8n
 
+# ZONULY ▸ scraping · calendar ▸ outreach · campaigns ▸ class campaigns.CampaignEventIn: What the n8n workflow tells us after it acts — 2026-09-22, so the dashboard shows
 class CampaignEventIn(BaseModel):
     """What the n8n workflow tells us after it acts — 2026-09-22, so the dashboard shows
     n8n's sends and replies live instead of a sheet. Add an HTTP Request node after
@@ -94,6 +98,7 @@ class CampaignEventIn(BaseModel):
     from_addr: str | None = Field(None, max_length=200)   # replied: who wrote back
 
 
+# ZONULY ▸ people search · referrers · calendar ▸ outreach · campaigns ▸ campaigns._contact_for(): Find the contact for an n8n event's address, or create one (and its company if needed).
 def _contact_for(session, ev: CampaignEventIn) -> Contact:
     """Find the contact for an n8n event's address, or create one (and its company if needed).
     Writes to the company and contact tables when the person is new."""
@@ -120,6 +125,7 @@ def _contact_for(session, ev: CampaignEventIn) -> Contact:
     return contact
 
 
+# ZONULY ▸ calendar ▸ outreach · campaigns ▸ campaigns._email_for(): Find the sent email an n8n event refers to: by thread id first, else latest sent to the address.
 def _email_for(session, ev: CampaignEventIn) -> Email | None:
     """Find the sent email an n8n event refers to: by thread id first, else latest sent to the address."""
     addr = ev.to_email.strip().lower()
@@ -131,6 +137,7 @@ def _email_for(session, ev: CampaignEventIn) -> Email | None:
     return session.exec(q.where(col(Email.status).in_(["sent", "replied"])).order_by(col(Email.sent_at).desc())).first()
 
 
+# ZONULY ▸ api route POST /events · email sending · suppression · bounces · replies · follow-up · calendar ▸ outreach · campaigns ▸ campaigns.campaign_event(): POST /api/campaigns/events — record an n8n send, reply or b…
 @router.post("/events")
 def campaign_event(ev: CampaignEventIn) -> dict:
     """POST /api/campaigns/events — record an n8n send, reply or bounce against the email table.

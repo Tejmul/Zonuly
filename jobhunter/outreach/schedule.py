@@ -77,6 +77,7 @@ If the sender gives options, list each as its own time. A vague "sometime next w
 intent with an empty times list, not an invented time."""
 
 
+# ZONULY ▸ scheduler · tick ▸ outreach · email ▸ schedule._parse_iso(): Parse an ISO time (local zone when none given) into a naive UTC datetime, or None.
 def _parse_iso(s: str | None) -> datetime | None:
     """Parse an ISO time (local zone when none given) into a naive UTC datetime, or None."""
     if not s:
@@ -105,6 +106,7 @@ _INTENT_WORDS = [("interview", re.compile(r"\binterview\b", re.I)), ("assessment
                  ("referral_done", re.compile(r"\b(referred you|submitted your|put you forward|passed (?:your|it) (?:on|along))\b", re.I))]
 
 
+# ZONULY ▸ ai model call · llm · scheduler · tick ▸ outreach · email ▸ schedule._regex_times(): Plain phrases — "Thursday 4pm IST", "tomorrow at 10:30" — resolved without a model.
 def _regex_times(body: str, now: datetime) -> tuple[list[dict], str | None]:
     """Plain phrases — "Thursday 4pm IST", "tomorrow at 10:30" — resolved without a model.
     A day word without a clock, or a clock without a day, is not a time."""
@@ -144,6 +146,7 @@ def _regex_times(body: str, now: datetime) -> tuple[list[dict], str | None]:
     return found, tz_seen
 
 
+# ZONULY ▸ scoring · replies · follow-up · scheduler · tick ▸ outreach · email ▸ schedule._regex_intent(): Classify a reply's scheduling intent by keyword regex; none when nothing matches.
 def _regex_intent(body: str) -> str:
     """Classify a reply's scheduling intent by keyword regex; none when nothing matches."""
     for kind, rx in _INTENT_WORDS:
@@ -152,6 +155,7 @@ def _regex_intent(body: str) -> str:
     return "none"
 
 
+# ZONULY ▸ replies · follow-up · scheduler · tick ▸ outreach · email ▸ schedule.extract(): Read scheduling out of one reply. Always returns a dict; empty means 'nothing to schedule'.
 def extract(body: str, *, sender: str, company: str, now: datetime | None = None) -> dict:
     """Read scheduling out of one reply. Always returns a dict; empty means 'nothing to schedule'.
     The model reads it first; plain regex stands in when the model is unavailable, and
@@ -199,6 +203,7 @@ def extract(body: str, *, sender: str, company: str, now: datetime | None = None
     return out
 
 
+# ZONULY ▸ calendar · scheduler · tick ▸ outreach · email ▸ schedule._conflicts_with(): Return an existing event for the same candidate that overlaps the proposed time, or None.
 def _conflicts_with(session, candidate_id: int, start: datetime, minutes: int, exclude: int | None) -> Event | None:
     """Return an existing event for the same candidate that overlaps the proposed time, or None."""
     window = timedelta(minutes=CONFLICT_MINUTES)
@@ -216,6 +221,7 @@ def _conflicts_with(session, candidate_id: int, start: datetime, minutes: int, e
     return None
 
 
+# ZONULY ▸ replies · follow-up · calendar · scheduler · tick ▸ outreach · email ▸ schedule.events_from_reply(): Turn one reply into Event rows (one per proposed time; one with no time if only a
 def events_from_reply(reply_id: int) -> list[dict]:
     """Turn one reply into Event rows (one per proposed time; one with no time if only a
     link/deadline/intent was found). Detects conflicts and drafts the reschedule."""
@@ -270,6 +276,7 @@ def events_from_reply(reply_id: int) -> list[dict]:
     return out
 
 
+# ZONULY ▸ email drafting · review gate · scheduler · tick ▸ outreach · email ▸ schedule.draft_reschedule(): The reschedule email, into the review queue — never sent by the machine.
 def draft_reschedule(event_id: int) -> dict:
     """The reschedule email, into the review queue — never sent by the machine."""
     from jobhunter.outreach.drafter import _compose, signature  # noqa: F401  (signature used by _compose)
@@ -311,6 +318,7 @@ def draft_reschedule(event_id: int) -> dict:
         return {"email_id": draft.id, "subject": draft.subject}
 
 
+# ZONULY ▸ scheduler · tick ▸ outreach · email ▸ schedule._fmt(): Format a UTC datetime as a readable local time for messages; a placeholder when missing.
 def _fmt(dt: datetime | None, tz: str | None) -> str:
     """Format a UTC datetime as a readable local time for messages; a placeholder when missing."""
     if not dt:
@@ -324,6 +332,7 @@ def _fmt(dt: datetime | None, tz: str | None) -> str:
         return dt.strftime("%Y-%m-%d %H:%M UTC")
 
 
+# ZONULY ▸ email sending · calendar · scheduler · tick ▸ outreach · email ▸ schedule._notify(): Send a notification for each saved event (marking conflicts) and stamp notified_at.
 def _notify(events: list[dict], company: str, contact: str) -> None:
     """Send a notification for each saved event (marking conflicts) and stamp notified_at.
 
@@ -348,6 +357,7 @@ def _notify(events: list[dict], company: str, contact: str) -> None:
         log.debug("notify failed: %s", ex)
 
 
+# ZONULY ▸ calendar · scheduler · tick ▸ outreach · email ▸ schedule.confirm(): The human confirms a proposed time; it goes on the calendar if one is wired.
 def confirm(event_id: int, *, push: bool = True) -> dict:
     """The human confirms a proposed time; it goes on the calendar if one is wired."""
     init_db()
@@ -366,6 +376,7 @@ def confirm(event_id: int, *, push: bool = True) -> dict:
     return result
 
 
+# ZONULY ▸ people search · referrers · replies · follow-up · calendar · scheduler · tick ▸ outreach · email ▸ schedule.list_events(): List calendar events read from replies, with company, contact and local time, for the…
 def list_events(*, upcoming_only: bool = False, limit: int = 100) -> list[dict]:
     """List calendar events read from replies, with company, contact and local time, for the API."""
     init_db()

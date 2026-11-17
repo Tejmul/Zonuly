@@ -43,21 +43,25 @@ MONTHLY_BUDGET = 25
 _USED_KEY = "hunter_used"      # "YYYY-MM:count"
 
 
+# ZONULY ▸ people search · referrers · hunter.io ▸ people · contact discovery · email proof ▸ class hunter.HunterResult
 @dataclass
 class HunterResult:
     pattern: str | None = None          # e.g. "{first}.{last}"
     emails: list[dict] = None           # [{email, first_name, last_name, position, confidence}]
 
+    # ZONULY ▸ people search · referrers · hunter.io ▸ people · contact discovery · email proof ▸ hunter.HunterResult.__post_init__(): Default the emails list to empty when none was given.
     def __post_init__(self) -> None:
         """Default the emails list to empty when none was given."""
         self.emails = self.emails or []
 
 
+# ZONULY ▸ people search · referrers · hunter.io ▸ people · contact discovery · email proof ▸ hunter.available(): True when a Hunter.io API key is configured.
 def available() -> bool:
     """True when a Hunter.io API key is configured."""
     return bool(API_KEY)
 
 
+# ZONULY ▸ people search · referrers · hunter.io · budget · cost ▸ people · contact discovery · email proof ▸ hunter._month_key(): Return the current UTC month as YYYY-MM, the key of the Hunter budget counter.
 def _month_key() -> str:
     """Return the current UTC month as YYYY-MM, the key of the Hunter budget counter."""
     from datetime import datetime, timezone
@@ -65,6 +69,7 @@ def _month_key() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m")
 
 
+# ZONULY ▸ people search · referrers · hunter.io · budget · cost ▸ people · contact discovery · email proof ▸ hunter.budget_left(): Return how many Hunter.io searches are left this month (0 without an API key).
 def budget_left() -> int:
     """Return how many Hunter.io searches are left this month (0 without an API key).
 
@@ -83,6 +88,7 @@ def budget_left() -> int:
         return MONTHLY_BUDGET
 
 
+# ZONULY ▸ people search · referrers · hunter.io · budget · cost ▸ people · contact discovery · email proof ▸ hunter._spend(): Count one Hunter.io search against this month's budget in the hunter_used setting.
 def _spend() -> None:
     """Count one Hunter.io search against this month's budget in the hunter_used setting."""
     with get_session() as session:
@@ -111,6 +117,7 @@ _PATTERN_MAP = {
 }
 
 
+# ZONULY ▸ people search · referrers · hunter.io · budget · cost ▸ people · contact discovery · email proof ▸ hunter.domain_search(): One Hunter lookup. Returns None if unconfigured or out of monthly budget.
 async def domain_search(http: httpx.AsyncClient, domain: str) -> HunterResult | None:
     """One Hunter lookup. Returns None if unconfigured or out of monthly budget."""
     if not API_KEY:

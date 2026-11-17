@@ -102,6 +102,7 @@ _OVERRIDE: bool | None = None
 _cfg_cache: dict = {"mtime": None, "value": None}
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ patterns._outreach_cfg(): outreach.* read fresh from config.yaml when the file changed, so flipping
 def _outreach_cfg() -> dict:
     """outreach.* read fresh from config.yaml when the file changed, so flipping
     pattern_approval takes effect without restarting the API."""
@@ -117,6 +118,7 @@ def _outreach_cfg() -> dict:
         return CONFIG.get("outreach") or {}
 
 
+# ZONULY ▸ email verification · email drafting ▸ outreach · email ▸ patterns.enabled(): True when approved email patterns may auto-approve drafts (config pattern_approval or an override).
 def enabled() -> bool:
     """True when approved email patterns may auto-approve drafts (config pattern_approval or an override)."""
     if _OVERRIDE is not None:
@@ -124,11 +126,13 @@ def enabled() -> bool:
     return bool(_outreach_cfg().get("pattern_approval", False))
 
 
+# ZONULY ▸ scoring · email verification · email drafting ▸ outreach · email ▸ patterns.min_quality(): Minimum draft quality score a pattern needs before it can auto-approve (config, default 75).
 def min_quality() -> int:
     """Minimum draft quality score a pattern needs before it can auto-approve (config, default 75)."""
     return int(_outreach_cfg().get("pattern_min_quality", 75))
 
 
+# ZONULY ▸ email verification · email sending ▸ outreach · email ▸ patterns.max_waiting(): Auto-approved mail never stacks up more than one day's cap ahead of the send agent.
 def max_waiting() -> int:
     """Auto-approved mail never stacks up more than one day's cap ahead of the send agent."""
     from jobhunter.outreach import sender
@@ -138,6 +142,7 @@ def max_waiting() -> int:
 
 # ------------------------------------------------------------------ segments
 
+# ZONULY ▸ remote from india ▸ outreach · email ▸ patterns.market(): india | remote | abroad — the same reading the proposals page uses.
 def market(job: dict | None, company: dict | None) -> str:
     """india | remote | abroad — the same reading the proposals page uses."""
     j, co = job or {}, company or {}
@@ -151,17 +156,20 @@ def market(job: dict | None, company: dict | None) -> str:
     return "remote" if j.get("remote") else "abroad"
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ patterns.segment(): Build a pattern segment key from the email structure and market, e.g. direct_intro:abroad.
 def segment(structure: str | None, mkt: str | None) -> str:
     """Build a pattern segment key from the email structure and market, e.g. direct_intro:abroad."""
     return f"{structure or 'direct_intro'}:{mkt or 'abroad'}"
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ patterns.segment_label(): Human-readable label for a pattern segment (structure and market labels).
 def segment_label(seg: str | None) -> str:
     """Human-readable label for a pattern segment (structure and market labels)."""
     st, _, mk = (seg or ":").partition(":")
     return f"{STRUCTURE_LABEL.get(st, st or '?')} · {MARKET_LABEL.get(mk, mk or '?')}"
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ patterns.segment_of_email(): A stored draft's segment (older drafts did not record one).
 def segment_of_email(session, e: Email) -> str:
     """A stored draft's segment (older drafts did not record one)."""
     if e.segment:
@@ -175,11 +183,13 @@ def segment_of_email(session, e: Email) -> str:
 
 # ------------------------------------------------------------------ templates
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ patterns._cap(): Capitalize the first character of a string, leaving the rest unchanged.
 def _cap(s: str) -> str:
     """Capitalize the first character of a string, leaving the rest unchanged."""
     return s[0].upper() + s[1:] if s else s
 
 
+# ZONULY ▸ enrichment · people search · referrers · email drafting ▸ outreach · email ▸ patterns.slots(): The per-person facts of one email, by slot name — what a template leaves open.
 def slots(contract: dict | None) -> dict[str, str]:
     """The per-person facts of one email, by slot name — what a template leaves open."""
     c = contract or {}
@@ -216,6 +226,7 @@ def slots(contract: dict | None) -> dict[str, str]:
     return {k: str(v).strip() for k, v in out.items() if v and len(str(v).strip()) >= 2}
 
 
+# ZONULY ▸ people search · referrers · email drafting ▸ outreach · email ▸ patterns.to_template(): Replace every per-person fact in `text` with its {{slot}} — longest first, so the
 def to_template(text: str, values: dict[str, str]) -> str:
     """Replace every per-person fact in `text` with its {{slot}} — longest first, so the
     hook sentence goes before the company name inside it. A capitalised use ("Migrated
@@ -227,10 +238,12 @@ def to_template(text: str, values: dict[str, str]) -> str:
     return out
 
 
+# ZONULY ▸ enrichment · people search · referrers · email drafting ▸ outreach · email ▸ patterns.render(): The template filled with one person's facts; the slots it needs that they lack.
 def render(template: str, values: dict[str, str]) -> tuple[str, list[str]]:
     """The template filled with one person's facts; the slots it needs that they lack."""
     missing: list[str] = []
 
+    # ZONULY ▸ people search · referrers · email drafting ▸ outreach · email ▸ patterns.render.sub(): Replace one template slot with the person's value, recording slots that have no value.
     def sub(m: re.Match) -> str:
         """Replace one template slot with the person's value, recording slots that have no value."""
         name = m.group(1)
@@ -244,6 +257,7 @@ def render(template: str, values: dict[str, str]) -> tuple[str, list[str]]:
     return _SLOT.sub(sub, template or ""), missing
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ patterns.used_slots(): Return the slot names a template uses, with the first letter lowercased.
 def used_slots(template: str) -> set[str]:
     """Return the slot names a template uses, with the first letter lowercased."""
     return {m[0].lower() + m[1:] for m in _SLOT.findall(template or "")}
@@ -251,14 +265,17 @@ def used_slots(template: str) -> set[str]:
 
 # ------------------------------------------------------------------ reads
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ patterns._active(): The newest active email pattern for a segment, or None.
 def _active(session, seg: str) -> EmailPattern | None:
     """The newest active email pattern for a segment, or None."""
     return session.exec(select(EmailPattern).where(EmailPattern.segment == seg, EmailPattern.status == "active")
                         .order_by(col(EmailPattern.id).desc())).first()
 
 
+# ZONULY ▸ email verification · email drafting ▸ outreach · email ▸ patterns._pattern_dict(): Serialize an email pattern with its templates, slots and how many emails it approved or sent.
 def _pattern_dict(session, p: EmailPattern) -> dict:
     """Serialize an email pattern with its templates, slots and how many emails it approved or sent."""
+    # ZONULY ▸ scoring ▸ outreach · email ▸ patterns._pattern_dict.n(): Count emails written with this pattern that match the given conditions.
     def n(*conds) -> int:
         """Count emails written with this pattern that match the given conditions."""
         return session.exec(select(func.count()).select_from(Email).where(Email.pattern_id == p.id, *conds)).one()
@@ -275,6 +292,7 @@ def _pattern_dict(session, p: EmailPattern) -> dict:
             "written_for_review": n(Email.status == "draft")}
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ patterns.list_patterns(): List every email pattern (active first) with counts and drafts waiting per segment, for the API.
 def list_patterns() -> dict:
     """List every email pattern (active first) with counts and drafts waiting per segment, for the API."""
     init_db()
@@ -291,10 +309,12 @@ def list_patterns() -> dict:
     return {"enabled": enabled(), "min_quality": min_quality(), "max_waiting": max_waiting(), "patterns": items}
 
 
+# ZONULY ▸ email verification · email drafting · review gate ▸ outreach · email ▸ patterns.review_counts(): What needs the user: drafts waiting for review, and auto-approved mail he can still undo.
 def review_counts() -> dict:
     """What needs the user: drafts waiting for review, and auto-approved mail he can still undo."""
     init_db()
     with get_session() as session:
+        # ZONULY ▸ scoring · review gate ▸ outreach · email ▸ patterns.review_counts.n(): Count emails matching the given conditions.
         def n(*conds) -> int:
             """Count emails matching the given conditions."""
             return session.exec(select(func.count()).select_from(Email).where(*conds)).one()
@@ -307,6 +327,7 @@ def review_counts() -> dict:
 
 # ------------------------------------------------------------------ the drafter's hook
 
+# ZONULY ▸ decision · email drafting ▸ outreach · email ▸ patterns.decide(): For a complete cold draft about to be stored: the active pattern for its segment
 def decide(g: dict, r: dict) -> dict | None:
     """For a complete cold draft about to be stored: the active pattern for its segment
     rewrites it from the template and says whether it may be auto-approved. None when
@@ -356,6 +377,7 @@ def decide(g: dict, r: dict) -> dict | None:
     return out
 
 
+# ZONULY ▸ decision · email verification · email drafting ▸ outreach · email ▸ patterns.finish(): After the drafter stored the draft: approve it for the pattern when the decision
 def finish(email_id: int, decision: dict | None) -> dict | None:
     """After the drafter stored the draft: approve it for the pattern when the decision
     allows and sender.approve's own checks pass; otherwise leave the reason on it."""
@@ -399,6 +421,7 @@ def finish(email_id: int, decision: dict | None) -> dict | None:
 
 # ------------------------------------------------------------------ the user's actions
 
+# ZONULY ▸ email verification · email drafting ▸ outreach · email ▸ patterns.approve_from(): Make this draft — with the user's edits — the pattern for its segment, and approve
 def approve_from(email_id: int, *, subject: str | None = None, body: str | None = None) -> dict:
     """Make this draft — with the user's edits — the pattern for its segment, and approve
     the draft itself. Replaces the segment's previous pattern (kept, marked replaced)."""
@@ -455,6 +478,7 @@ def approve_from(email_id: int, *, subject: str | None = None, body: str | None 
     return {"approved": True, "email_id": email_id, "pattern": out, "enabled": enabled()}
 
 
+# ZONULY ▸ email verification · email drafting · review gate · email sending ▸ outreach · email ▸ patterns._back_to_review(): approved -> draft for unsent mail, atomically against the sender's claim
 def _back_to_review(session, where, note: str) -> int:
     """approved -> draft for unsent mail, atomically against the sender's claim
     (approved -> sending): whatever the send agent already took is not touched."""
@@ -464,6 +488,7 @@ def _back_to_review(session, where, note: str) -> int:
     return r.rowcount or 0
 
 
+# ZONULY ▸ email verification · review gate ▸ outreach · email ▸ patterns.revoke(): Stop the pattern now; every email it approved that has not left goes back to review.
 def revoke(pattern_id: int) -> dict:
     """Stop the pattern now; every email it approved that has not left goes back to review."""
     init_db()
@@ -479,6 +504,7 @@ def revoke(pattern_id: int) -> dict:
     return {"revoked": True, "pattern_id": pattern_id, "back_to_review": back}
 
 
+# ZONULY ▸ email verification · email sending ▸ outreach · email ▸ patterns.unapprove(): Undo one approval (yours or a pattern's) before the send agent takes it.
 def unapprove(email_id: int) -> dict:
     """Undo one approval (yours or a pattern's) before the send agent takes it."""
     init_db()
@@ -494,6 +520,7 @@ def unapprove(email_id: int) -> dict:
     return {"unapproved": True, "email_id": email_id}
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ patterns.save(): Save an edit to a draft without approving it.
 def save(email_id: int, *, subject: str | None = None, body: str | None = None) -> dict:
     """Save an edit to a draft without approving it."""
     init_db()
@@ -516,6 +543,7 @@ def save(email_id: int, *, subject: str | None = None, body: str | None = None) 
     return {"saved": True, "email_id": email_id}
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ patterns.apply_to_waiting(): Run an active pattern over the drafts already waiting in its segment: each is
 def apply_to_waiting(pattern_id: int, limit: int = 50) -> dict:
     """Run an active pattern over the drafts already waiting in its segment: each is
     rewritten from the template and auto-approved when every gate passes (the switch must

@@ -45,11 +45,13 @@ _URL = "https://api.millionverifier.com/api/v3/"
 PREFIX = "check:"
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ verify_address.configured(): Return True when the MillionVerifier API key (paid mailbox check) is set.
 def configured() -> bool:
     """Return True when the MillionVerifier API key (paid mailbox check) is set."""
     return bool(secret(KEY_ENV) or os.environ.get(KEY_ENV))
 
 
+# ZONULY ▸ decision ▸ outreach · email ▸ verify_address.has_mail_server(): True / False, or None when DNS could not answer (not a verdict).
 @lru_cache(maxsize=4096)
 def has_mail_server(domain: str) -> bool | None:
     """True / False, or None when DNS could not answer (not a verdict)."""
@@ -76,6 +78,7 @@ def has_mail_server(domain: str) -> bool | None:
         return None
 
 
+# ZONULY ▸ decision ▸ outreach · email ▸ verify_address.millionverifier(): ok | catch_all | unknown | invalid | disposable, or None on an error (not a verdict).
 def millionverifier(address: str) -> str | None:
     """ok | catch_all | unknown | invalid | disposable, or None on an error (not a verdict)."""
     key = secret(KEY_ENV) or os.environ.get(KEY_ENV)
@@ -96,6 +99,7 @@ def millionverifier(address: str) -> str | None:
 _DEAD = {"invalid", "disposable", "no_mx"}
 
 
+# ZONULY ▸ decision ▸ outreach · email ▸ verify_address.check(): The stored or fresh verdict for `address`: ok / catch_all / unknown / invalid /
 def check(contact, address: str) -> str | None:
     """The stored or fresh verdict for `address`: ok / catch_all / unknown / invalid /
     disposable / no_mx, or None when nothing could be learned. Writes it on the contact."""
@@ -112,6 +116,7 @@ def check(contact, address: str) -> str | None:
     return verdict
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ verify_address.state(): verified | guessed | dead for a cold mail to `address`.
 def state(contact, address: str, confidence: str | None) -> str:
     """verified | guessed | dead for a cold mail to `address`."""
     if (confidence or "verified") == "verified":

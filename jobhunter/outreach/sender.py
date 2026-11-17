@@ -77,6 +77,7 @@ SEND_MODE = {"live": "gmail"}.get(str(_O.get("send_mode", "dryrun")).lower(), st
 OUTBOX = ROOT / "outbox"
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender.sent_today(): Sends since local midnight, counted from the DB rather than a counter that can drift.
 def sent_today() -> int:
     """Sends since local midnight, counted from the DB rather than a counter that can drift."""
     midnight_local = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -89,6 +90,7 @@ def sent_today() -> int:
         ).one()
 
 
+# ZONULY ▸ email sending · knowledge graph ▸ outreach · email ▸ sender.remaining_today(): How many emails may still be sent today: the send ledger's slots, cross-checked with the DB count.
 def remaining_today(candidate_id: int = 1) -> int:
     """How many emails may still be sent today: the send ledger's slots, cross-checked with the DB count."""
     # the ledger is the truth (a slot is taken inside the send, its cap is the warm-up
@@ -96,6 +98,7 @@ def remaining_today(candidate_id: int = 1) -> int:
     return min(ledger.status(candidate_id)["left"], max(0, ledger.effective_cap(ledger._today()) - sent_today()))
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender._dryrun_send(): Write the mail to outbox/ and return a fake Gmail result, so the loop completes.
 def _dryrun_send(email_id: int, to: str, subject: str, body: str, *, in_reply_to: str | None = None,
                  thread_id: str | None = None, box: inboxes.Inbox | None = None) -> dict:
     """Write the mail to outbox/ and return a fake Gmail result, so the loop completes.
@@ -122,6 +125,7 @@ def _dryrun_send(email_id: int, to: str, subject: str, body: str, *, in_reply_to
     return {"id": msg["Message-ID"], "threadId": thread_id or f"dryrun:{email_id}", "path": str(path)}
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender.in_send_window(): Inside the hours AND on a sending day (outreach.send_days).
 def in_send_window(now: datetime | None = None) -> bool:
     """Inside the hours AND on a sending day (outreach.send_days)."""
     from jobhunter.outreach import warmup
@@ -131,6 +135,7 @@ def in_send_window(now: datetime | None = None) -> bool:
     return lo <= now.hour < hi and warmup.is_send_day(now)
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender._build_message(): Build a Gmail API send payload (base64 raw message, optional thread id) for one email.
 def _build_message(to: str, subject: str, body: str, thread_id: str | None) -> dict:
     """Build a Gmail API send payload (base64 raw message, optional thread id) for one email."""
     # the same message the SMTP path sends (gmail.build_message): one build, one fingerprint
@@ -142,6 +147,7 @@ def _build_message(to: str, subject: str, body: str, thread_id: str | None) -> d
     return payload
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers · email sending ▸ outreach · email ▸ sender._referrer_problem(): A cold ask may only go to a confirmed-current referrer (guardrails.affiliation), to
 def _referrer_problem(session, email: Email) -> str | None:
     """A cold ask may only go to a confirmed-current referrer (guardrails.affiliation), to
     someone not suppressed (bounced, opted out, do-not-contact), and one company at a time
@@ -178,6 +184,7 @@ def _referrer_problem(session, email: Email) -> str | None:
     return None
 
 
+# ZONULY ▸ email sending · replies · follow-up ▸ outreach · email ▸ sender._inbox_for(): The inbox this mail leaves from, or why none can send it now. A follow-up goes from the
 def _inbox_for(session, email: Email, parent: Email | None, want: str | None, guessed: bool) -> inboxes.Inbox | str:
     """The inbox this mail leaves from, or why none can send it now. A follow-up goes from the
     inbox its first mail went from; a cold mail from the one asked for, else the ready inbox
@@ -206,6 +213,7 @@ def _inbox_for(session, email: Email, parent: Email | None, want: str | None, gu
     return max(pool, key=lambda b: inboxes.left_today(session, b))
 
 
+# ZONULY ▸ email verification · email sending ▸ outreach · email ▸ sender.send_email(): Send one approved email. Refuses if the cap is hit or we're outside the send window.
 def send_email(email_id: int, *, ignore_window: bool = False, inbox: str | None = None) -> dict:
     """Send one approved email. Refuses if the cap is hit or we're outside the send window.
     `inbox` names the sending inbox (outreach/inboxes.py); without it one is chosen."""
@@ -359,6 +367,7 @@ _TRANSIENT = re.compile(r"ssl|eof occurred|timed? ?out|nodename|name or service|
 _PERMANENT = re.compile(r"\b5\.\d\.\d|\b55\d\b|limit exceeded|spam|blocked|not found|auth", re.I)
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender.transient(): A failure that says nothing about the mail or the account: a dropped network, DNS,
 def transient(e: BaseException | str) -> bool:
     """A failure that says nothing about the mail or the account: a dropped network, DNS,
     a TLS hiccup, a timeout, a 4xx try-later. A refusal (5xx, limit, spam, auth) never is."""
@@ -366,12 +375,14 @@ def transient(e: BaseException | str) -> bool:
     return bool(_TRANSIENT.search(text)) and not _PERMANENT.search(text)
 
 
+# ZONULY ▸ email sending · retry · backoff ▸ outreach · email ▸ sender.retries(): Read the retry count from an email error string like 'retry 2: ...'; 0 when absent.
 def retries(error: str | None) -> int:
     """Read the retry count from an email error string like 'retry 2: ...'; 0 when absent."""
     m = re.match(r"retry (\d+):", error or "")
     return int(m.group(1)) if m else 0
 
 
+# ZONULY ▸ email verification · email sending ▸ outreach · email ▸ sender.requeue_failed(): Failed sends of the last `days` whose failure was transient: back to approved, in the
 def requeue_failed(days: int = 3) -> list[int]:
     """Failed sends of the last `days` whose failure was transient: back to approved, in the
     queue's front, under the same cap and gaps as everything else."""
@@ -390,6 +401,7 @@ def requeue_failed(days: int = 3) -> list[int]:
     return out
 
 
+# ZONULY ▸ email sending · suppression · bounces ▸ outreach · email ▸ sender._delivered(): The parent mail went out at least `days` ago and did not bounce.
 def _delivered(parent: Email | None, days: int = 2) -> bool:
     """The parent mail went out at least `days` ago and did not bounce."""
     from datetime import timedelta
@@ -398,6 +410,7 @@ def _delivered(parent: Email | None, days: int = 2) -> bool:
                 and utcnow() - parent.sent_at >= timedelta(days=days))
 
 
+# ZONULY ▸ email verification · email sending ▸ outreach · email ▸ sender._claim(): approved -> sending, atomically; False when someone else got there first.
 def _claim(email_id: int) -> bool:
     """approved -> sending, atomically; False when someone else got there first."""
     from sqlalchemy import text
@@ -408,6 +421,7 @@ def _claim(email_id: int) -> bool:
         return (r.rowcount or 0) == 1
 
 
+# ZONULY ▸ email verification · email sending ▸ outreach · email ▸ sender._unclaim(): Put an email stuck in 'sending' back to 'approved' so a later send run can pick it up.
 def _unclaim(email_id: int) -> None:
     """Put an email stuck in 'sending' back to 'approved' so a later send run can pick it up."""
     from sqlalchemy import text
@@ -417,6 +431,7 @@ def _unclaim(email_id: int) -> None:
         session.commit()
 
 
+# ZONULY ▸ email verification · email sending · replies · follow-up ▸ outreach · email ▸ sender._queue(): Approved mail in send order: follow-ups first (they are due on a day), then cold
 def _queue(session, limit: int) -> list[Email]:
     """Approved mail in send order: follow-ups first (they are due on a day), then cold
     asks in the order they were approved."""
@@ -426,6 +441,7 @@ def _queue(session, limit: int) -> list[Email]:
     return rows[:limit]
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender.recipient_tz(): Where the recipient works, from their company: an India company (or one with no region
 def recipient_tz(session, email: Email) -> str:
     """Where the recipient works, from their company: an India company (or one with no region
     on file) is the local zone; a US / UK / EU / remote-first company is that region's."""
@@ -434,6 +450,7 @@ def recipient_tz(session, email: Email) -> str:
     return company_tz(session.get(Company, email.company_id))
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender.company_tz(): Time zone to send in for a company: India local time, or the zone of its HQ region.
 def company_tz(c) -> str:
     """Time zone to send in for a company: India local time, or the zone of its HQ region."""
     if c is None or (c.hq_region or "india") == "india" or (c.city or "").lower().startswith(("bengaluru", "hyderabad")):
@@ -441,6 +458,7 @@ def company_tz(c) -> str:
     return _TZ_BY_REGION.get(c.hq_region, _LOCAL_TZ)
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender.abroad_per_day(): Sends one foreign time zone's morning holds (recipient_hours, min_gap_minutes apart,
 def abroad_per_day() -> int:
     """Sends one foreign time zone's morning holds (recipient_hours, min_gap_minutes apart,
     the gap jittered up to 50%): the most mail a day that should be planned into it."""
@@ -448,6 +466,7 @@ def abroad_per_day() -> int:
     return max(1, int(span / (MIN_GAP_MINUTES * 1.25)) - 1)
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender._local(): Convert a time (naive means local India time) into the given time zone.
 def _local(now: datetime, tz: str) -> datetime:
     """Convert a time (naive means local India time) into the given time zone."""
     from zoneinfo import ZoneInfo
@@ -456,6 +475,7 @@ def _local(now: datetime, tz: str) -> datetime:
     return base.astimezone(ZoneInfo(tz))
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender.in_recipient_morning(): A weekday morning where the recipient is (outreach.recipient_hours, outreach.send_days).
 def in_recipient_morning(session, email: Email, now: datetime) -> bool:
     """A weekday morning where the recipient is (outreach.recipient_hours, outreach.send_days)."""
     from jobhunter.outreach import warmup
@@ -464,6 +484,7 @@ def in_recipient_morning(session, email: Email, now: datetime) -> bool:
     return int(RECIPIENT_HOURS[0]) <= t.hour < int(RECIPIENT_HOURS[1]) and warmup.is_send_day(t.date())
 
 
+# ZONULY ▸ email sending · scheduler · tick ▸ outreach · email ▸ sender.send_due(): The send agent's one run (every few minutes, launchd): send what today's jittered
 def send_due(now: datetime | None = None, *, stagger: bool = True, max_per_run: int | None = None) -> dict:
     """The send agent's one run (every few minutes, launchd): send what today's jittered
     slots say is due — the warm-up quota spread across the window — and no more than
@@ -570,6 +591,7 @@ def send_due(now: datetime | None = None, *, stagger: bool = True, max_per_run: 
     return out
 
 
+# ZONULY ▸ email verification · email sending ▸ outreach · email ▸ sender.send_approved(): Drain the approved queue up to the daily cap, spacing sends out.
 def send_approved(limit: int | None = None, *, ignore_window: bool = False, stagger: bool = True) -> dict:
     """Drain the approved queue up to the daily cap, spacing sends out."""
     init_db()
@@ -596,6 +618,7 @@ def send_approved(limit: int | None = None, *, ignore_window: bool = False, stag
     return {"sent": sent, "attempted": len(ids), "remaining_today": remaining_today(), "results": results}
 
 
+# ZONULY ▸ email verification · email drafting · review gate · email sending ▸ outreach · email ▸ sender.approve(): Approve a draft, optionally with the user's edits from the review queue.
 def approve(email_id: int, *, subject: str | None = None, body: str | None = None) -> dict:
     """Approve a draft, optionally with the user's edits from the review queue."""
     init_db()
@@ -629,6 +652,7 @@ def approve(email_id: int, *, subject: str | None = None, body: str | None = Non
     return {"approved": True, "email_id": email_id}
 
 
+# ZONULY ▸ filtering · email drafting · email sending ▸ outreach · email ▸ sender.reject(): Reject an unsent email draft (status rejected); refuses one that was already sent.
 def reject(email_id: int) -> dict:
     """Reject an unsent email draft (status rejected); refuses one that was already sent."""
     init_db()
@@ -644,6 +668,7 @@ def reject(email_id: int) -> dict:
     return {"rejected": True, "email_id": email_id}
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender.quota(): Report sending quota and state: cap, warm-up, sent and left today, window, mode, Gmail, inboxes.
 def quota() -> dict:
     """Report sending quota and state: cap, warm-up, sent and left today, window, mode, Gmail, inboxes."""
     from jobhunter.outreach import warmup
@@ -664,12 +689,14 @@ def quota() -> dict:
     }
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender._inbox_rows(): Describe every sending inbox (reads the DB) for the quota report.
 def _inbox_rows() -> list[dict]:
     """Describe every sending inbox (reads the DB) for the quota report."""
     with get_session() as session:
         return inboxes.describe(session)
 
 
+# ZONULY ▸ email sending · suppression · bounces ▸ outreach · email ▸ sender._wants_opt_out(): The user's own email (direct_intro) carries no opt-out line unless
 def _wants_opt_out(email) -> bool:
     """The user's own email (direct_intro) carries no opt-out line unless
     outreach.compose.direct_opt_out says so; every other cold structure does."""
@@ -678,6 +705,7 @@ def _wants_opt_out(email) -> bool:
     return not (getattr(email, "structure", None) == "direct_intro" and not compose.DIRECT_OPT_OUT)
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender.next_send_day(): The day the next batch goes: today while the window is still ahead, else the next send day.
 def next_send_day(now: datetime | None = None) -> date:
     """The day the next batch goes: today while the window is still ahead, else the next send day."""
     from jobhunter.outreach import warmup
@@ -692,6 +720,7 @@ def next_send_day(now: datetime | None = None) -> date:
     return d
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ sender.plan(): What goes out on `day` (default: the next send day) and roughly when, worked out now
 def plan(day: date | str | None = None) -> dict:
     """What goes out on `day` (default: the next send day) and roughly when, worked out now
     from the approved queue with the same rules send_due applies on the day: the cap, the
@@ -737,6 +766,7 @@ def plan(day: date | str | None = None) -> dict:
                 waiting.append({**row, "why": why})
                 continue
             tz = recipient_tz(session, e)
+            # ZONULY ▸ email sending ▸ outreach · email ▸ sender.plan.clear(): True when a candidate send time is at least the minimum gap from every time already planned.
             def clear(x: datetime) -> bool:
                 """True when a candidate send time is at least the minimum gap from every time already planned."""
                 return all(abs((x - y).total_seconds()) >= gap_s for y in taken)

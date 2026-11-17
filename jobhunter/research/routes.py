@@ -43,12 +43,14 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/research", tags=["research"])
 
 
+# ZONULY ▸ api route GET /doctor ▸ api · research routes ▸ routes.research_doctor(): Which channels are live, which need setup, and what the fix is.
 @router.get("/doctor")
 def research_doctor() -> dict:
     """Which channels are live, which need setup, and what the fix is."""
     return research.doctor()
 
 
+# ZONULY ▸ api route GET /search · cache ▸ api · research routes ▸ routes.search(): GET /api/research/search — semantic web search for a described page (cached unless fresh).
 @router.get("/search")
 def search(
     q: str = Query(..., min_length=2, description="Describe the ideal page, not keywords"),
@@ -59,6 +61,7 @@ def search(
     return research.search_web(q, limit=limit, fresh=fresh)
 
 
+# ZONULY ▸ api route GET /x · sign-in · auth ▸ api · research routes ▸ routes.x_posts(): Posts on X via a site:x.com web search — no X account, no cookies, no X API. Records only.
 @router.get("/x")
 def x_posts(
     q: str = Query(..., min_length=2, description="What the ideal post says, e.g. 'we are hiring a founding AI engineer, remote'"),
@@ -70,6 +73,7 @@ def x_posts(
     return research.search_x(q, limit=limit, days=days, fresh=fresh)
 
 
+# ZONULY ▸ api route GET /read · scraping · cache ▸ api · research routes ▸ routes.read(): GET /api/research/read — fetch one public page as readable text (cached unless fresh).
 @router.get("/read")
 def read(
     url: str = Query(..., description="Public http(s) URL"),
@@ -80,12 +84,14 @@ def read(
     return research.read_page(url, max_chars=max_chars, fresh=fresh)
 
 
+# ZONULY ▸ api route GET /github · github scraping ▸ api · research routes ▸ routes.github(): GET /api/research/github — search GitHub for the query.
 @router.get("/github")
 def github(q: str = Query(..., min_length=2), limit: int = Query(10, ge=1, le=50), fresh: bool = False) -> dict:
     """GET /api/research/github — search GitHub for the query."""
     return research.search_github(q, limit=limit, fresh=fresh)
 
 
+# ZONULY ▸ api route GET /reddit · reddit ▸ api · research routes ▸ routes.reddit(): GET /api/research/reddit — search Reddit posts, optionally within one subreddit.
 @router.get("/reddit")
 def reddit(
     q: str = Query(..., min_length=2),
@@ -97,18 +103,21 @@ def reddit(
     return research.search_reddit(q, limit=limit, subreddit=subreddit, fresh=fresh)
 
 
+# ZONULY ▸ api route GET /youtube · youtube ▸ api · research routes ▸ routes.youtube(): GET /api/research/youtube — search YouTube videos for the query.
 @router.get("/youtube")
 def youtube(q: str = Query(..., min_length=2), limit: int = Query(5, ge=1, le=25), fresh: bool = False) -> dict:
     """GET /api/research/youtube — search YouTube videos for the query."""
     return research.search_youtube(q, limit=limit, fresh=fresh)
 
 
+# ZONULY ▸ api route GET /youtube/transcript · youtube · scraping ▸ api · research routes ▸ routes.youtube_transcript(): GET /api/research/youtube/transcript — fetch the transcript of one YouTube video.
 @router.get("/youtube/transcript")
 def youtube_transcript(url: str = Query(...), lang: str = "en") -> dict:
     """GET /api/research/youtube/transcript — fetch the transcript of one YouTube video."""
     return research.youtube_transcript(url, lang=lang)
 
 
+# ZONULY ▸ api route GET /company ▸ api · research routes ▸ routes.company(): GET /api/research/company — research one company at quick, standard or deep depth.
 @router.get("/company")
 def company(
     name: str = Query(..., min_length=1),
@@ -120,6 +129,7 @@ def company(
     return research.research_company(name, website=website, depth=depth, fresh=fresh)
 
 
+# ZONULY ▸ api route POST /startups · enrichment ▸ api · research routes ▸ routes.startups(): Recently funded startups with funding and hiring signals.
 @router.post("/startups")
 def startups(
     topic: str = Body("AI"),
@@ -144,6 +154,7 @@ def startups(
     )
 
 
+# ZONULY ▸ api route POST /cache/purge · cache ▸ api · research routes ▸ routes.purge(): POST /api/research/cache/purge — delete stale research cache rows; returns count and cache stats.
 @router.post("/cache/purge")
 def purge(older_than_hours: int | None = Body(None, embed=True)) -> dict:
     """POST /api/research/cache/purge — delete stale research cache rows; returns count and cache stats."""

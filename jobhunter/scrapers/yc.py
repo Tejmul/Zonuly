@@ -46,6 +46,7 @@ INTERESTING = {
 _FETCHERS = {"greenhouse": greenhouse.fetch_board, "lever": lever.fetch_board, "ashby": ashby.fetch_board}
 
 
+# ZONULY ▸ yc scraping · scraping · filtering ▸ scraping · data ingestion ▸ yc._interesting(): Filter a YC directory company: hiring, not inactive, and in an AI/dev-tools/B2B/engineering space.
 def _interesting(c: dict) -> bool:
     """Filter a YC directory company: hiring, not inactive, and in an AI/dev-tools/B2B/engineering space."""
     if not c.get("isHiring"):
@@ -57,6 +58,7 @@ def _interesting(c: dict) -> bool:
     return bool(tags & INTERESTING) or "engineering" in industry or "b2b" in industry
 
 
+# ZONULY ▸ yc scraping · scraping · data ingestion · enrichment ▸ scraping · data ingestion ▸ yc.discover_companies(): Return [{name, website, ats, ats_slug}] for YC companies with a live public board.
 async def discover_companies(http: httpx.AsyncClient, limit: int = PROBE_LIMIT) -> list[dict]:
     """Return [{name, website, ats, ats_slug}] for YC companies with a live public board."""
     data = await get_json(http, DIRECTORY)
@@ -94,6 +96,7 @@ async def discover_companies(http: httpx.AsyncClient, limit: int = PROBE_LIMIT) 
     return out
 
 
+# ZONULY ▸ yc scraping · scraping · dedup ▸ scraping · data ingestion ▸ yc.fetch(): Scrape jobs from YC companies. `companies` (from companies.yaml) are skipped as duplicates.
 async def fetch(http: httpx.AsyncClient, companies: list[dict] | None = None) -> list[RawJob]:
     """Scrape jobs from YC companies. `companies` (from companies.yaml) are skipped as duplicates."""
     known = {(c.get("ats"), c.get("ats_slug")) for c in (companies or [])}

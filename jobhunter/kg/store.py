@@ -76,17 +76,20 @@ CREATE VIRTUAL TABLE IF NOT EXISTS kg_fts USING fts5(
 """
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.now_iso(): Current UTC time as a naive ISO string with seconds, used for knowledge graph timestamps.
 def now_iso() -> str:
     """Current UTC time as a naive ISO string with seconds, used for knowledge graph timestamps."""
     return datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.slugify(): Turn text into a lowercase dash-separated slug for knowledge graph node ids (max_len chars).
 def slugify(text: str, max_len: int = 60) -> str:
     """Turn text into a lowercase dash-separated slug for knowledge graph node ids (max_len chars)."""
     s = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
     return s[:max_len].rstrip("-") or "x"
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store._flatten(): Every string leaf of a nested props structure — what the FTS body is made of.
 def _flatten(value: Any) -> Iterable[str]:
     """Every string leaf of a nested props structure — what the FTS body is made of."""
     if isinstance(value, str):
@@ -101,6 +104,7 @@ def _flatten(value: Any) -> Iterable[str]:
         yield str(value)
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store._row_node(): Convert a kg_node row to a dict with its props JSON decoded.
 def _row_node(row: sqlite3.Row) -> dict:
     """Convert a kg_node row to a dict with its props JSON decoded."""
     d = dict(row)
@@ -108,6 +112,7 @@ def _row_node(row: sqlite3.Row) -> dict:
     return d
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store._row_edge(): Convert a kg_edge row to a dict with its props JSON decoded.
 def _row_edge(row: sqlite3.Row) -> dict:
     """Convert a kg_edge row to a dict with its props JSON decoded."""
     d = dict(row)
@@ -115,9 +120,11 @@ def _row_edge(row: sqlite3.Row) -> dict:
     return d
 
 
+# ZONULY ▸ lock · knowledge graph ▸ knowledge graph ▸ class store.Graph: One connection, one transaction per `with` block. Commits on clean exit.
 class Graph:
     """One connection, one transaction per `with` block. Commits on clean exit."""
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.__init__(): Open the knowledge graph SQLite store, create its tables and add the fts_hash column if missing.
     def __init__(self, path: Path | str = DB_PATH):
         """Open the knowledge graph SQLite store, create its tables and add the fts_hash column if missing."""
         self.conn = sqlite3.connect(str(path), check_same_thread=False)
@@ -129,10 +136,12 @@ class Graph:
             self.conn.execute("ALTER TABLE kg_node ADD COLUMN fts_hash TEXT")
             self.conn.commit()
 
+    # ZONULY ▸ lock · knowledge graph ▸ knowledge graph ▸ store.Graph.__enter__(): Enter a `with` block; returns the graph itself.
     def __enter__(self) -> "Graph":
         """Enter a `with` block; returns the graph itself."""
         return self
 
+    # ZONULY ▸ lock · knowledge graph ▸ knowledge graph ▸ store.Graph.__exit__(): Leave a `with` block: commit on success, roll back on error, then close the connection.
     def __exit__(self, exc_type, exc, tb) -> None:
         """Leave a `with` block: commit on success, roll back on error, then close the connection."""
         if exc_type is None:
@@ -141,12 +150,14 @@ class Graph:
             self.conn.rollback()
         self.conn.close()
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.commit(): Commit pending knowledge graph writes.
     def commit(self) -> None:
         """Commit pending knowledge graph writes."""
         self.conn.commit()
 
     # ------------------------------------------------------------------ write
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.upsert_node(): Insert or update a knowledge graph node and its full-text search row; returns the node id.
     def upsert_node(
         self,
         id: str,
@@ -196,6 +207,7 @@ class Graph:
         )
         return id
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.upsert_edge(): Insert or update a knowledge graph edge (src, rel, dst) with its props and layer.
     def upsert_edge(self, src: str, rel: str, dst: str, *, props: dict | None = None, layer: str = "context") -> None:
         """Insert or update a knowledge graph edge (src, rel, dst) with its props and layer."""
         self.conn.execute(
@@ -206,12 +218,14 @@ class Graph:
             (src, rel, dst, json.dumps(props or {}, default=str), layer, now_iso()),
         )
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.delete_node(): Delete a knowledge graph node with its edges and full-text search row.
     def delete_node(self, id: str) -> None:
         """Delete a knowledge graph node with its edges and full-text search row."""
         self.conn.execute("DELETE FROM kg_edge WHERE src = ? OR dst = ?", (id, id))
         self.conn.execute("DELETE FROM kg_fts WHERE id = ?", (id,))
         self.conn.execute("DELETE FROM kg_node WHERE id = ?", (id,))
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.prune(): Drop nodes of a kind that are no longer in `keep_ids` — rows deleted upstream.
     def prune(self, kind: str, keep_ids: set[str]) -> int:
         """Drop nodes of a kind that are no longer in `keep_ids` — rows deleted upstream."""
         stale = [
@@ -222,6 +236,7 @@ class Graph:
             self.delete_node(nid)
         return len(stale)
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.clear_layer(): Delete every knowledge graph node and edge in one layer (data or context).
     def clear_layer(self, layer: str) -> None:
         """Delete every knowledge graph node and edge in one layer (data or context)."""
         ids = [r["id"] for r in self.conn.execute("SELECT id FROM kg_node WHERE layer = ?", (layer,))]
@@ -229,6 +244,7 @@ class Graph:
             self.delete_node(nid)
         self.conn.execute("DELETE FROM kg_edge WHERE layer = ?", (layer,))
 
+    # ZONULY ▸ knowledge graph · sign-in · auth ▸ knowledge graph ▸ store.Graph.remember(): Add a dated session note. This is how context accumulates between sessions.
     def remember(self, text: str, *, about: Iterable[str] = (), tags: Iterable[str] = (), title: str | None = None) -> dict:
         """Add a dated session note. This is how context accumulates between sessions."""
         ts = now_iso()
@@ -256,11 +272,13 @@ class Graph:
 
     # ------------------------------------------------------------------- read
 
+    # ZONULY ▸ scraping · knowledge graph ▸ knowledge graph ▸ store.Graph.get(): Fetch one knowledge graph node by id as a dict, or None.
     def get(self, id: str) -> dict | None:
         """Fetch one knowledge graph node by id as a dict, or None."""
         row = self.conn.execute("SELECT * FROM kg_node WHERE id = ?", (id,)).fetchone()
         return _row_node(row) if row else None
 
+    # ZONULY ▸ filtering · knowledge graph ▸ knowledge graph ▸ store.Graph.nodes(): List knowledge graph nodes, optionally filtered by kind and layer, ordered by kind and id.
     def nodes(self, *, kind: str | None = None, layer: str | None = None, limit: int | None = None) -> list[dict]:
         """List knowledge graph nodes, optionally filtered by kind and layer, ordered by kind and id."""
         sql, args = "SELECT * FROM kg_node", []
@@ -278,6 +296,7 @@ class Graph:
             sql += f" LIMIT {int(limit)}"
         return [_row_node(r) for r in self.conn.execute(sql, args)]
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.edges(): List edges touching a node: outgoing, incoming or both, optionally of one relation.
     def edges(self, id: str, *, direction: str = "both", rel: str | None = None) -> list[dict]:
         """List edges touching a node: outgoing, incoming or both, optionally of one relation."""
         out: list[dict] = []
@@ -295,6 +314,7 @@ class Graph:
             out += [_row_edge(r) for r in self.conn.execute(sql, args)]
         return out
 
+    # ZONULY ▸ filtering · knowledge graph ▸ knowledge graph ▸ store.Graph.all_edges(): List every knowledge graph edge, optionally filtered by layer and relation.
     def all_edges(self, *, layer: str | None = None, rel: str | None = None) -> list[dict]:
         """List every knowledge graph edge, optionally filtered by layer and relation."""
         sql, args, conds = "SELECT * FROM kg_edge", [], []
@@ -308,6 +328,7 @@ class Graph:
             sql += " WHERE " + " AND ".join(conds)
         return [_row_edge(r) for r in self.conn.execute(sql, args)]
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.neighbors(): BFS out to `depth` hops in both directions. Returns {nodes, edges} with the root first.
     def neighbors(
         self,
         id: str,
@@ -346,6 +367,7 @@ class Graph:
                 break
         return {"nodes": list(seen.values()), "edges": list(edges.values())}
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.path(): Shortest undirected path as alternating node/edge dicts. Empty if none within max_depth.
     def path(self, a: str, b: str, *, max_depth: int = 6) -> list[dict]:
         """Shortest undirected path as alternating node/edge dicts. Empty if none within max_depth."""
         if self.get(a) is None or self.get(b) is None:
@@ -376,6 +398,7 @@ class Graph:
         steps.reverse()
         return steps
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.search(): Full-text search. `mode='or'` ranks by overlap; `'and'` requires every term.
     def search(self, q: str, *, kinds: Iterable[str] | None = None, limit: int = 20, mode: str = "and") -> list[dict]:
         """Full-text search. `mode='or'` ranks by overlap; `'and'` requires every term."""
         query = fts_query(q, mode)
@@ -401,6 +424,7 @@ class Graph:
                 out.append(node)
         return out
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.subgraph(): Return the nodes of a layer (optionally only some kinds) and the edges between them.
     def subgraph(self, *, layer: str | None = None, kinds: Iterable[str] | None = None) -> dict:
         """Return the nodes of a layer (optionally only some kinds) and the edges between them."""
         nodes = self.nodes(layer=layer)
@@ -411,6 +435,7 @@ class Graph:
         edges = [e for e in self.all_edges() if e["src"] in ids and e["dst"] in ids]
         return {"nodes": nodes, "edges": edges}
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.Graph.stats(): Count knowledge graph nodes and edges by kind, relation and layer.
     def stats(self) -> dict:
         """Count knowledge graph nodes and edges by kind, relation and layer."""
         kinds = {r["kind"]: r["n"] for r in self.conn.execute("SELECT kind, COUNT(*) n FROM kg_node GROUP BY kind ORDER BY n DESC")}
@@ -433,11 +458,13 @@ _STOP = {
 }
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.tokens(): Split text into lowercase search tokens, dropping stop words and one-character tokens.
 def tokens(text: str) -> list[str]:
     """Split text into lowercase search tokens, dropping stop words and one-character tokens."""
     return [t.lower().strip(".-_") for t in _TOKEN_RE.findall(text or "") if t.lower() not in _STOP and len(t) > 1]
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ store.fts_query(): Quote every token so user text can never be an FTS5 syntax error.
 def fts_query(q: str, mode: str = "and") -> str:
     """Quote every token so user text can never be an FTS5 syntax error."""
     toks = tokens(q)

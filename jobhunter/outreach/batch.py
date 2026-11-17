@@ -49,6 +49,7 @@ _ROLE_ORDER = {"engineer": 0, "senior_engineer": 0, "eng_manager": 1, "founder":
                "recruiter": 5, "other": 6}
 
 
+# ZONULY ▸ scoring ▸ outreach · email ▸ batch._selection_score(): jobhunter.confidence's score for a company, if that module exists yet. Every
 def _selection_score(session, company: Company) -> float | None:
     """jobhunter.confidence's score for a company, if that module exists yet. Every
     failure (not built, another signature, an error inside) falls back to None."""
@@ -84,6 +85,7 @@ def _selection_score(session, company: Company) -> float | None:
     return None
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ batch._busy_companies(): company_id -> why no new ask goes there now.
 def _busy_companies(session, candidate_id: int) -> dict[int, str]:
     """company_id -> why no new ask goes there now."""
     out: dict[int, str] = {}
@@ -100,6 +102,7 @@ def _busy_companies(session, candidate_id: int) -> dict[int, str]:
     return out
 
 
+# ZONULY ▸ people search · referrers ▸ outreach · email ▸ batch._referrer_key(): Sort key for referrers: real addresses first, then referral rank, role, verified and current.
 def _referrer_key(p: Contact) -> tuple:
     """Sort key for referrers: real addresses first, then referral rank, role, verified and current."""
     # a guessed company address last of all (2026-10-23): real addresses deliver, guessed ones bounce
@@ -107,6 +110,7 @@ def _referrer_key(p: Contact) -> tuple:
             p.affiliation != "verified-current", p.name is None, p.id)
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ batch.plan(): Who the next drafts would go to, best first — reads only. `guessed_max` caps how
 def plan(limit: int = 50, *, candidate_id: int = 1, guessed_max: int | None = None) -> dict:
     """Who the next drafts would go to, best first — reads only. `guessed_max` caps how
     many non-verified addresses are picked (the guessed cap × the sending days the batch
@@ -184,6 +188,7 @@ def plan(limit: int = 50, *, candidate_id: int = 1, guessed_max: int | None = No
                 r["selection_score"] is not None for r in cands) else "priority score (jobhunter.confidence not available)")}
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ batch.week(): The warm-up week from `start` (default: the warm-up start) and what the queue holds.
 def week(start: date | str | None = None) -> dict:
     """The warm-up week from `start` (default: the warm-up start) and what the queue holds."""
     from jobhunter.outreach import warmup
@@ -204,6 +209,7 @@ def week(start: date | str | None = None) -> dict:
             "note": "drafts expire after outreach.draft_expiry_days — approve within the week they were written"}
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ batch.build(): Draft the next `n` asks (default: the warm-up week's total minus what is already
 def build(n: int | None = None, *, candidate_id: int = 1, research: bool = True, dry_run: bool = False,
           use_model: bool = True) -> dict:
     """Draft the next `n` asks (default: the warm-up week's total minus what is already

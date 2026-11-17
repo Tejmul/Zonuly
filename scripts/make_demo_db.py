@@ -65,6 +65,7 @@ CLEARED = (
 _ADDRESS = re.compile(r"([A-Za-z0-9._%+\-]+)@([A-Za-z0-9.\-]+\.[A-Za-z]{2,})")
 
 
+# ZONULY ▸ deployment · public snapshot ▸ deployment · public snapshot ▸ make_demo_db._stand_in(): A real address → a stand-in on the same domain: first letter + 7 hex of its hash. The
 def _stand_in(m: re.Match) -> str:
     """A real address → a stand-in on the same domain: first letter + 7 hex of its hash. The
     domain is the company's (public, and half the evidence); the local part is what makes a
@@ -75,6 +76,7 @@ def _stand_in(m: re.Match) -> str:
     return f"{local[:1].lower()}{hashlib.sha1(m.group(0).lower().encode()).hexdigest()[:7]}@{domain.lower()}"
 
 
+# ZONULY ▸ deployment · snapshot ▸ deployment · public snapshot ▸ make_demo_db.mask_addresses(): 2026-10-23: demo.db.gz sits in a public repository, so masking at the API was not
 def mask_addresses(con: sqlite3.Connection) -> dict:
     """2026-10-23: demo.db.gz sits in a public repository, so masking at the API was not
     enough — the file itself carried 25,060 contact addresses. Every text column of every
@@ -115,6 +117,7 @@ _JSON_COLUMNS = (("job", "selection_why"), ("kg_node", "props"), ("company", "fi
 _GRAPH_MIRRORS = ("contact", "job", "email")
 
 
+# ZONULY ▸ knowledge graph · deployment · snapshot ▸ deployment · public snapshot ▸ make_demo_db.slim_graph(): Drop the graph's per-row mirror of tables the snapshot already carries in full.
 def slim_graph(con: sqlite3.Connection, existing: set[str]) -> dict:
     """Drop the graph's per-row mirror of tables the snapshot already carries in full."""
     if "kg_node" not in existing:
@@ -133,6 +136,7 @@ def slim_graph(con: sqlite3.Connection, existing: set[str]) -> dict:
     return out
 
 
+# ZONULY ▸ dedup · scoring · deployment · snapshot ▸ deployment · public snapshot ▸ make_demo_db.slim(): Make the snapshot fit the deployed disk without losing a row: merge the full-text
 def slim(con: sqlite3.Connection, existing: set[str]) -> dict:
     """Make the snapshot fit the deployed disk without losing a row: merge the full-text
     index's segments, write stored JSON without spaces, and drop the posting text of senior
@@ -164,6 +168,7 @@ def slim(con: sqlite3.Connection, existing: set[str]) -> dict:
     return out
 
 
+# ZONULY ▸ deployment · snapshot ▸ deployment · public snapshot ▸ make_demo_db.build(): Build the public demo snapshot from the live database: copy, clear private tables, slim, mask.
 def build(src: Path, out: Path) -> dict:
     """Build the public demo snapshot from the live database: copy, clear private tables, slim, mask.
 
@@ -253,6 +258,7 @@ print(json.dumps({"stamp": stamp, "problems": problems}))
 """
 
 
+# ZONULY ▸ filtering ▸ deployment · public snapshot ▸ make_demo_db._finish(): Bring the copy up to the code, stamp it, and refuse to keep it if a list is short.
 def _finish(out: Path) -> dict:
     """Bring the copy up to the code, stamp it, and refuse to keep it if a list is short."""
     env = {**os.environ, "ZONULY_DB_PATH": str(out)}
@@ -268,6 +274,7 @@ def _finish(out: Path) -> dict:
     return result["stamp"]
 
 
+# ZONULY ▸ deployment · snapshot ▸ deployment · public snapshot ▸ make_demo_db.main(): CLI entry: build the demo snapshot, gzip it for commit and print what was kept and cleared.
 def main() -> None:
     """CLI entry: build the demo snapshot, gzip it for commit and print what was kept and cleared."""
     ap = argparse.ArgumentParser(description=__doc__)

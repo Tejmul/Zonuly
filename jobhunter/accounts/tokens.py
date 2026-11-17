@@ -56,12 +56,14 @@ OAUTH_TTL = 10 * 60
 _LOCAL_KEY = secrets.token_bytes(32)
 
 
+# ZONULY ▸ sign-in · auth · access control ▸ api · sign-in · accounts ▸ tokens.configured(): True when a real signing secret is set. A public instance must not sign with a
 def configured() -> bool:
     """True when a real signing secret is set. A public instance must not sign with a
     throwaway key: every login would end at the next restart, and AppSail restarts often."""
     return len(secret("ZONULY_SESSION_SECRET")) >= 32
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ tokens._key(): Return the HMAC signing key: ZONULY_SESSION_SECRET, else a per-process local key.
 def _key() -> bytes:
     """Return the HMAC signing key: ZONULY_SESSION_SECRET, else a per-process local key."""
     raw = secret("ZONULY_SESSION_SECRET")
@@ -70,27 +72,32 @@ def _key() -> bytes:
     return raw.encode() if raw else _LOCAL_KEY
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ tokens._b64(): Encode bytes as unpadded URL-safe base64 text.
 def _b64(raw: bytes) -> str:
     """Encode bytes as unpadded URL-safe base64 text."""
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ tokens._unb64(): Decode unpadded URL-safe base64 text back to bytes.
 def _unb64(text: str) -> bytes:
     """Decode unpadded URL-safe base64 text back to bytes."""
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ tokens._mac(): Return the base64 HMAC-SHA256 of a token body, bound to its purpose string.
 def _mac(purpose: str, body: str) -> str:
     """Return the base64 HMAC-SHA256 of a token body, bound to its purpose string."""
     return _b64(hmac.new(_key(), f"{purpose}.{body}".encode(), hashlib.sha256).digest())
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ tokens.sign(): Sign a dict as a token: base64 JSON body with an expiry, then a dot and its HMAC.
 def sign(purpose: str, data: dict, ttl: int) -> str:
     """Sign a dict as a token: base64 JSON body with an expiry, then a dot and its HMAC."""
     body = _b64(json.dumps({**data, "exp": int(time.time()) + ttl}, separators=(",", ":")).encode())
     return f"{body}.{_mac(purpose, body)}"
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ tokens.verify(): The payload, or None when the token is malformed, forged, for another purpose, or old.
 def verify(purpose: str, token: str | None) -> dict | None:
     """The payload, or None when the token is malformed, forged, for another purpose, or old."""
     if not token or token.count(".") != 1:
@@ -107,16 +114,19 @@ def verify(purpose: str, token: str | None) -> dict | None:
     return data
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ tokens.code_mac(): What a challenge carries in place of its code (see the module docstring).
 def code_mac(email: str, nonce: str, code: str) -> str:
     """What a challenge carries in place of its code (see the module docstring)."""
     return _mac("code", f"{email}|{nonce}|{code}")
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ tokens.new_code(): Return a random six-digit sign-in code.
 def new_code() -> str:
     """Return a random six-digit sign-in code."""
     return f"{secrets.randbelow(1_000_000):06d}"
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ tokens.new_nonce(): Return a random URL-safe nonce string.
 def new_nonce() -> str:
     """Return a random URL-safe nonce string."""
     return secrets.token_urlsafe(12)
@@ -124,16 +134,19 @@ def new_nonce() -> str:
 
 # ------------------------------------------------------------------- sessions
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ tokens.session_for(): Issue a signed session token carrying the user's id and email.
 def session_for(user: dict) -> str:
     """Issue a signed session token carrying the user's id and email."""
     return sign("session", {"uid": str(user["id"]), "email": user["email"]}, SESSION_TTL)
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ tokens.read_session(): Verify a session cookie token and return its payload, or None when invalid or expired.
 def read_session(token: str | None) -> dict | None:
     """Verify a session cookie token and return its payload, or None when invalid or expired."""
     return verify("session", token)
 
 
+# ZONULY ▸ sign-in · auth · deployment · snapshot ▸ api · sign-in · accounts ▸ tokens.internal_session(): A session for the API calling itself (the start-up prewarm and the post-deploy
 def internal_session() -> str:
     """A session for the API calling itself (the start-up prewarm and the post-deploy
     smoke test), so those requests clear the login gate like a signed-in visitor would —

@@ -66,10 +66,12 @@ __all__ = [
 ]
 
 
+# ZONULY ▸ pay · salary · scoring · ai model call · llm ▸ ai models · llm client ▸ class llm.EmbeddingsUnsupported: OpenRouter has no embeddings endpoint. Use `jobhunter.fit` instead.
 class EmbeddingsUnsupported(LLMUnavailable):
     """OpenRouter has no embeddings endpoint. Use `jobhunter.fit` instead."""
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · llm client ▸ llm.chat(): Single-turn chat. Returns the assistant text with any reasoning stripped.
 def chat(
     prompt: str,
     system: str | None = None,
@@ -102,6 +104,7 @@ def chat(
     return answer.text
 
 
+# ZONULY ▸ ai model call · llm · retry · backoff ▸ ai models · llm client ▸ llm.chat_json(): Chat in JSON mode with parse-retry. Returns `default` if the model never
 def chat_json(
     prompt: str,
     system: str | None = None,
@@ -145,11 +148,13 @@ _EMBED_MSG = (
 )
 
 
+# ZONULY ▸ pay · salary · ai model call · llm ▸ ai models · llm client ▸ llm.embed(): Embeddings are no longer supported; always raises EmbeddingsUnsupported.
 def embed(texts: list[str], *, model: str | None = None) -> list[list[float]]:
     """Embeddings are no longer supported; always raises EmbeddingsUnsupported."""
     raise EmbeddingsUnsupported(_EMBED_MSG)
 
 
+# ZONULY ▸ pay · salary · ai model call · llm ▸ ai models · llm client ▸ llm.embed_one(): Embeddings are no longer supported; always raises EmbeddingsUnsupported.
 def embed_one(text: str, **kw: Any) -> list[float]:
     """Embeddings are no longer supported; always raises EmbeddingsUnsupported."""
     raise EmbeddingsUnsupported(_EMBED_MSG)
@@ -158,6 +163,7 @@ def embed_one(text: str, **kw: Any) -> list[float]:
 # ---------------------------------------------------------------- health
 
 
+# ZONULY ▸ ai model call · llm · monitoring ▸ ai models · llm client ▸ llm.health(): Provider status for `doctor` and `/api/health`.
 def health() -> dict:
     """Provider status for `doctor` and `/api/health`.
 
@@ -183,6 +189,7 @@ def health() -> dict:
 # ---------------------------------------------------------------- helpers
 
 
+# ZONULY ▸ ai model call · llm ▸ ai models · llm client ▸ llm._extract_json(): Parse JSON, tolerating markdown fences and leading/trailing prose.
 def _extract_json(raw: str) -> Any:
     """Parse JSON, tolerating markdown fences and leading/trailing prose."""
     import json

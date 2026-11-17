@@ -29,6 +29,7 @@ from sqlmodel import select
 from jobhunter.db import Company, Contact, Email, Job, Reply, get_session, init_db, utcnow
 
 
+# ZONULY ▸ replies · follow-up ▸ outreach · email ▸ learn._bucket(): Group sent emails by a key and count sent, replied and positive, with reply and yes rates.
 def _bucket(rows, key):
     """Group sent emails by a key and count sent, replied and positive, with reply and yes rates."""
     out: dict[str, dict] = defaultdict(lambda: {"sent": 0, "replied": 0, "positive": 0})
@@ -46,6 +47,7 @@ def _bucket(rows, key):
     }
 
 
+# ZONULY ▸ lever scraping · replies · follow-up ▸ outreach · email ▸ learn.report(): Reply and yes rates by every lever we control, plus the weekly curve.
 def report(*, days: int | None = None) -> dict:
     """Reply and yes rates by every lever we control, plus the weekly curve."""
     from jobhunter import segments as seg
@@ -114,6 +116,7 @@ def report(*, days: int | None = None) -> dict:
     }
 
 
+# ZONULY ▸ replies · follow-up ▸ outreach · email ▸ learn.variants(): Reply / positive rates per writing variant — structure, subject pattern, hook type,
 def variants(rows: list[dict], min_sent: int | None = None) -> dict:
     """Reply / positive rates per writing variant — structure, subject pattern, hook type,
     send hour, quality band, model vs template. A bucket with fewer than `min_sent` sends
@@ -123,11 +126,13 @@ def variants(rows: list[dict], min_sent: int | None = None) -> dict:
     n = LEARN_MIN_SENT if min_sent is None else min_sent
     cold = [r for r in rows if r.get("kind", "cold") == "cold"]
 
+    # ZONULY ▸ outreach · email ▸ outreach · email ▸ learn.variants.hour(): Bucket key: the hour window an email was sent in, or None.
     def hour(r):
         """Bucket key: the hour window an email was sent in, or None."""
         h = r.get("send_hour")
         return None if h is None else f"{h:02d}:00–{(h + 1) % 24:02d}:00"
 
+    # ZONULY ▸ scoring ▸ outreach · email ▸ learn.variants.band(): Bucket key: the email's quality score band (80+, 60-79, under 60), or None.
     def band(r):
         """Bucket key: the email's quality score band (80+, 60-79, under 60), or None."""
         q = r.get("quality")
@@ -147,6 +152,7 @@ def variants(rows: list[dict], min_sent: int | None = None) -> dict:
     return out
 
 
+# ZONULY ▸ replies · follow-up ▸ outreach · email ▸ learn._reading(): Return a plain-English reading of the reply rate with what to do next.
 def _reading(total: int, replied: int, positive: int, closed: int) -> str:
     """Return a plain-English reading of the reply rate with what to do next."""
     if total == 0:

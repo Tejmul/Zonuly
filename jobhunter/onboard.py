@@ -49,10 +49,12 @@ log = logging.getLogger(__name__)
 COMPANIES_PATH = ROOT / "companies.yaml"
 
 
+# ZONULY ▸ scraping ▸ data ingestion · add one company by hand ▸ class onboard.AddError: Something the caller did, phrased for the caller.
 class AddError(Exception):
     """Something the caller did, phrased for the caller."""
 
 
+# ZONULY ▸ scraping · enrichment ▸ data ingestion · add one company by hand ▸ onboard._clean_website(): Trim a website and add https:// when no scheme is given; None when empty.
 def _clean_website(website: str | None) -> str | None:
     """Trim a website and add https:// when no scheme is given; None when empty."""
     if not website:
@@ -65,6 +67,7 @@ def _clean_website(website: str | None) -> str | None:
     return site
 
 
+# ZONULY ▸ scraping ▸ data ingestion · add one company by hand ▸ onboard._domain_of(): Return the lowercase host of a URL without www., or None.
 def _domain_of(url: str | None) -> str | None:
     """Return the lowercase host of a URL without www., or None."""
     if not url:
@@ -73,6 +76,7 @@ def _domain_of(url: str | None) -> str | None:
     return host.removeprefix("www.") or None
 
 
+# ZONULY ▸ scraping · scoring ▸ data ingestion · add one company by hand ▸ onboard._existing(): Match on name case-insensitively, then on domain — the same company arrives
 def _existing(session, name: str, domain: str | None) -> Company | None:
     """Match on name case-insensitively, then on domain — the same company arrives
     spelled two ways often enough to be worth both checks."""
@@ -84,6 +88,7 @@ def _existing(session, name: str, domain: str | None) -> Company | None:
     return session.exec(select(Company).where(Company.domain == domain)).first()
 
 
+# ZONULY ▸ scraping · enrichment ▸ data ingestion · add one company by hand ▸ onboard._find_board(): Find a company's ATS job board by name, website and hint (network call).
 async def _find_board(name: str, website: str | None, hint: str | None):
     """Find a company's ATS job board by name, website and hint (network call)."""
     from jobhunter.scrapers.base import make_client
@@ -93,6 +98,7 @@ async def _find_board(name: str, website: str | None, hint: str | None):
         return await find_ats(http, name, website, hint=hint)
 
 
+# ZONULY ▸ scraping ▸ data ingestion · add one company by hand ▸ onboard._verify_board(): Confirm a board the caller named, rather than guessing at one.
 def _verify_board(ats: str, slug: str):
     """Confirm a board the caller named, rather than guessing at one."""
     from jobhunter.scrapers.base import make_client
@@ -101,6 +107,7 @@ def _verify_board(ats: str, slug: str):
     if ats not in PROBES:
         raise AddError(f"Job boards this can read: {', '.join(PROBES)}.")
 
+    # ZONULY ▸ scraping ▸ data ingestion · add one company by hand ▸ onboard._verify_board.go(): Probe the named ATS board slug over a fresh HTTP client.
     async def go():
         """Probe the named ATS board slug over a fresh HTTP client."""
         async with make_client() as http:
@@ -113,6 +120,7 @@ def _verify_board(ats: str, slug: str):
         return None
 
 
+# ZONULY ▸ scraping · data ingestion ▸ data ingestion · add one company by hand ▸ onboard._scrape_board(): Pull this one board now. Reuses the normal ingest path, so a role added this
 async def _scrape_board(entry: dict) -> int:
     """Pull this one board now. Reuses the normal ingest path, so a role added this
     way is indistinguishable from one the daily cycle found."""
@@ -132,6 +140,7 @@ async def _scrape_board(entry: dict) -> int:
     return stats.inserted
 
 
+# ZONULY ▸ scraping ▸ data ingestion · add one company by hand ▸ onboard._already_in_yaml(): True when companies.yaml already has an entry with this name or ATS slug.
 def _already_in_yaml(text: str, name: str, slug: str | None) -> bool:
     """True when companies.yaml already has an entry with this name or ATS slug."""
     if re.search(rf'^\s*-\s*name:\s*["\']?{re.escape(name)}["\']?\s*$', text, re.M | re.I):
@@ -139,6 +148,7 @@ def _already_in_yaml(text: str, name: str, slug: str | None) -> bool:
     return bool(slug and re.search(rf'^\s*ats_slug:\s*["\']?{re.escape(slug)}["\']?\s*$', text, re.M))
 
 
+# ZONULY ▸ scraping ▸ data ingestion · add one company by hand ▸ onboard._append_to_yaml(): Append one entry, preserving every comment already in the file.
 def _append_to_yaml(entry: dict) -> bool:
     """Append one entry, preserving every comment already in the file."""
     if not COMPANIES_PATH.exists():
@@ -147,6 +157,7 @@ def _append_to_yaml(entry: dict) -> bool:
     if _already_in_yaml(text, entry["name"], entry.get("ats_slug")):
         return False
 
+    # ZONULY ▸ scraping ▸ data ingestion · add one company by hand ▸ onboard._append_to_yaml.q(): Quote a value as a double-quoted YAML string, escaping backslashes and quotes.
     def q(v: object) -> str:
         """Quote a value as a double-quoted YAML string, escaping backslashes and quotes."""
         return '"' + str(v).replace('\\', '\\\\').replace('"', '\\"') + '"'
@@ -163,6 +174,7 @@ def _append_to_yaml(entry: dict) -> bool:
     return True
 
 
+# ZONULY ▸ scraping ▸ data ingestion · add one company by hand ▸ onboard.add_company(): Add one company end to end. Safe to call twice — the second call reports
 def add_company(
     name: str,
     website: str | None = None,
@@ -266,6 +278,7 @@ def add_company(
     }
 
 
+# ZONULY ▸ scraping ▸ data ingestion · add one company by hand ▸ onboard._note(): One sentence the dashboard can show verbatim.
 def _note(already: bool, has_board: bool, scraped: int) -> str:
     """One sentence the dashboard can show verbatim."""
     if not has_board:

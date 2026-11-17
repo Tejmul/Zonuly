@@ -91,6 +91,7 @@ _SALARY = re.compile(
     r"(lpa|lakhs?|l\b|per annum|/year|a year|cr\b|crores?)")
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ class india_boards.Found
 @dataclass
 class Found:
     name: str
@@ -103,6 +104,7 @@ class Found:
     pay_lpa: float | None = None
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ class india_boards.Stats
 @dataclass
 class Stats:
     searched: int = 0
@@ -114,6 +116,7 @@ class Stats:
     names: list = field(default_factory=list)
     seconds: int = 0
 
+    # ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ india_boards.Stats.skip(): Count one skipped candidate under the given reason.
     def skip(self, why: str) -> None:
         """Count one skipped candidate under the given reason."""
         self.skipped[why] = self.skipped.get(why, 0) + 1
@@ -146,6 +149,7 @@ _TERMS = _ROLES + [
 ]
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ india_boards.queries(): host × term × city, as `site:` searches — about 1,500 distinct questions.
 def queries() -> list[str]:
     """host × term × city, as `site:` searches — about 1,500 distinct questions.
 
@@ -157,6 +161,7 @@ def queries() -> list[str]:
     return [f"site:{h} {city} {t}" for h in _HOSTS for t in _TERMS for city in _CITY_WORDS]
 
 
+# ZONULY ▸ scraping · pay · salary ▸ data ingestion · company discovery ▸ india_boards.lpa_from(): The highest plausible ₹ LPA figure in a posting's own words, and the sentence that said it.
 def lpa_from(text: str | None) -> tuple[float | None, str | None]:
     """The highest plausible ₹ LPA figure in a posting's own words, and the sentence that said it.
     A figure is evidence only when the posting states it; nothing is inferred from a band name."""
@@ -182,6 +187,7 @@ def lpa_from(text: str | None) -> tuple[float | None, str | None]:
     return best, quote
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ india_boards.board_name(): The company's REAL name, from the board's own metadata — never the slug.
 def board_name(ats: str, slug: str) -> str | None:
     """The company's REAL name, from the board's own metadata — never the slug.
 
@@ -221,6 +227,7 @@ def board_name(ats: str, slug: str) -> str | None:
         return None
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ india_boards._board(): Every posting on one public board, through the scrapers we already have.
 async def _board(http: httpx.AsyncClient, ats: str, slug: str) -> list:
     """Every posting on one public board, through the scrapers we already have."""
     from jobhunter.scrapers import ashby, greenhouse, lever
@@ -236,8 +243,10 @@ async def _board(http: httpx.AsyncClient, ats: str, slug: str) -> list:
     return []
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ india_boards._read_board(): Read every posting on one public ATS board; empty list on failure. Network call.
 def _read_board(ats: str, slug: str) -> list:
     """Read every posting on one public ATS board; empty list on failure. Network call."""
+    # ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ india_boards._read_board.go(): Open an HTTP client and fetch the board's postings.
     async def go():
         """Open an HTTP client and fetch the board's postings."""
         async with httpx.AsyncClient(timeout=25, follow_redirects=True,
@@ -250,6 +259,7 @@ def _read_board(ats: str, slug: str) -> list:
         return []
 
 
+# ZONULY ▸ scraping · scoring ▸ data ingestion · company discovery ▸ india_boards.judge(): Does this board belong to a Bengaluru / Hyderabad software company? The postings answer.
 def judge(ats: str, slug: str, jobs: list, st: Stats) -> Found | None:
     """Does this board belong to a Bengaluru / Hyderabad software company? The postings answer."""
     if not jobs:
@@ -295,6 +305,7 @@ def judge(ats: str, slug: str, jobs: list, st: Stats) -> Found | None:
                  pay_quote=pay_quote, pay_lpa=pay_lpa)
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ india_boards._candidates(): (ats, slug, url) pairs off the search results — the cheap half of the work.
 def _candidates(limit_queries: int, st: Stats) -> list[tuple[str, str, str]]:
     """(ats, slug, url) pairs off the search results — the cheap half of the work."""
     from jobhunter.research import web
@@ -331,6 +342,7 @@ def _candidates(limit_queries: int, st: Stats) -> list[tuple[str, str, str]]:
     return list(out.values())
 
 
+# ZONULY ▸ scraping · admission gate · filtering · pay · salary · review gate ▸ data ingestion · company discovery ▸ india_boards._admit(): Admit a company found on an India board via the admission gate; set its ATS boa…
 def _admit(session, f: Found, st: Stats) -> Company | None:
     """Admit a company found on an India board via the admission gate; set its ATS board, city and pay.
     Writes to the company table through the session; returns the company, or None when refused.
@@ -366,6 +378,7 @@ def _admit(session, f: Found, st: Stats) -> Company | None:
     return company
 
 
+# ZONULY ▸ scraping · scoring ▸ data ingestion · company discovery ▸ india_boards.run(): One pass: `searches` keyless searches, then up to `boards` public boards read and judged.
 def run(*, searches: int = 40, boards: int = 120, budget_s: int = 900) -> dict:
     """One pass: `searches` keyless searches, then up to `boards` public boards read and judged."""
     init_db()

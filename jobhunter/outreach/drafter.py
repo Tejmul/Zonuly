@@ -88,6 +88,7 @@ Reply with exactly:
 {{"body": "<the follow-up body, plain text, no signature block>"}}"""
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ drafter.signature(): Return the full email signature: name, headline, links and email, one per line.
 def signature() -> str:
     """Return the full email signature: name, headline, links and email, one per line."""
     lines = [USER_NAME]
@@ -107,6 +108,7 @@ _GREETING_DUP = re.compile(r"^(hi|hey|hello|dear)\b", re.I)
 _HANDLE = re.compile(r"[\d_@]|^[a-z]+(?:-[a-z]+)+$")   # "kbysani-affirm", "jdoe_42": a login, not a name
 
 
+# ZONULY ▸ github scraping · email drafting ▸ outreach · email ▸ drafter.greeting_name(): The word after "Hi". A real name gives its first word; a GitHub handle or an
 def greeting_name(name: str | None, email: str | None = None) -> str:
     """The word after "Hi". A real name gives its first word; a GitHub handle or an
     empty name falls back to the address ("kailash.bysani@affirm.com" -> "Kailash"),
@@ -123,6 +125,7 @@ def greeting_name(name: str | None, email: str | None = None) -> str:
     return "there"
 
 
+# ZONULY ▸ email drafting · ai model call · llm ▸ outreach · email ▸ drafter._clean_body(): Clean a drafted email body: em dashes to commas, drop any model sign-off, add a greeting if missing.
 def _clean_body(body: str, contact_name: str | None) -> str:
     """Clean a drafted email body: em dashes to commas, drop any model sign-off, add a greeting if missing."""
     body = _EM_DASH.sub(", ", body or "").strip()
@@ -139,6 +142,7 @@ def _clean_body(body: str, contact_name: str | None) -> str:
     return body
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ drafter._compose(): Return the finished email: cleaned body, then "Best," and the cold signature.
 def _compose(body: str, contact_name: str | None) -> str:
     """Return the finished email: cleaned body, then "Best," and the cold signature."""
     return f"{_clean_body(body, contact_name)}\n\nBest,\n{cold_signature()}"
@@ -149,6 +153,7 @@ CONTACT_COOLDOWN_DAYS = int(_O.get("contact_cooldown_days", 30))
 COMPANY_COOLDOWN_DAYS = int(_O.get("company_cooldown_days", 30))
 
 
+# ZONULY ▸ validation · guardrails · enrichment · email drafting ▸ outreach · email ▸ drafter._company_facts(): The company's own words the draft may use, and the same as structured evidence.
 def _company_facts(company: Company | None, job: Job | None) -> tuple[str, dict]:
     """The company's own words the draft may use, and the same as structured evidence."""
     if company is None:
@@ -181,6 +186,7 @@ def _company_facts(company: Company | None, job: Job | None) -> tuple[str, dict]
     return ("\n".join(lines) or "(nothing beyond the name)"), facts
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ drafter.needs_hook(): The covered needs, angle and forbidden skills from a role's stored needs brief
 def needs_hook(raw: str | None) -> dict:
     """The covered needs, angle and forbidden skills from a role's stored needs brief
     (Job.needs_brief, written by needs.py). Read as JSON — the drafter never imports the
@@ -217,6 +223,7 @@ def needs_hook(raw: str | None) -> dict:
                          "synthesis": brief.get("synthesis")}}
 
 
+# ZONULY ▸ people search · referrers · email drafting ▸ outreach · email ▸ drafter._cooldown(): MOTIV §6: never both of us to one person in a month; one ask per company per month.
 def _cooldown(session, contact_id: int, company_id: int, candidate_id: int) -> str | None:
     """MOTIV §6: never both of us to one person in a month; one ask per company per month."""
     from datetime import timedelta
@@ -267,6 +274,7 @@ Do not add a signature, a sign-off, a note to forward, a resume link, a bullet l
 Reply with exactly: {{"message": "<the polished message, plain text, starting with Hi {first},>"}}"""
 
 
+# ZONULY ▸ email drafting · ai model call · llm ▸ outreach · email ▸ drafter._polish_call(): Ask the writer model (via llm.chat_json) to polish a draft; returns its JSON or None.
 def _polish_call(prompt: str) -> dict | None:
     """Ask the writer model (via llm.chat_json) to polish a draft; returns its JSON or None."""
     from jobhunter import llm
@@ -287,6 +295,7 @@ _NOT_ENG_TITLE = re.compile(r"manager|director|head of|\bvp\b|sales|account|desi
                             r"construction|automotive|quality|\bqa\b|test engineer|network engineer|sales", re.I)
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ drafter.pick_job(): The role to ask about: an engineering title (not sales, design, hardware, management),
 def pick_job(session, company_id: int) -> Job | None:
     """The role to ask about: an engineering title (not sales, design, hardware, management),
     fresher before senior, remote-from-anywhere first, then selection score, then match."""
@@ -297,6 +306,7 @@ def pick_job(session, company_id: int) -> Job | None:
     return ok[0] if ok else None
 
 
+# ZONULY ▸ email drafting · email sending ▸ outreach · email ▸ drafter.me(): The sender, from the profile and config: name, school, year, resume link, the places
 def me() -> dict:
     """The sender, from the profile and config: name, school, year, resume link, the places
     that count as shared ground."""
@@ -321,6 +331,7 @@ def me() -> dict:
             "internships": internships}
 
 
+# ZONULY ▸ linkedin scraping · email drafting ▸ outreach · email ▸ drafter.cold_signature(): Name, one line ("Final-year B.Tech CS+AI, Newton School of Technology"), LinkedIn.
 def cold_signature() -> str:
     """Name, one line ("Final-year B.Tech CS+AI, Newton School of Technology"), LinkedIn.
     One link in the signature, none of the link row; the resume is offered after a reply."""
@@ -331,12 +342,14 @@ def cold_signature() -> str:
     return "\n".join(lines)
 
 
+# ZONULY ▸ linkedin scraping · email drafting · lock ▸ outreach · email ▸ drafter.direct_signature(): The user's own sign-off block: his name, then his LinkedIn — nothing else.
 def direct_signature() -> str:
     """The user's own sign-off block: his name, then his LinkedIn — nothing else."""
     li = [l for l in USER_LINKS if "linkedin" in l.lower()][:1]
     return "\n".join([USER_NAME, *(f"[LinkedIn]({li[0]})" for _ in li[:1])])
 
 
+# ZONULY ▸ github scraping · people search · referrers · email drafting · ai model call · llm · cache ▸ outreach · email ▸ drafter._repos_for(): Their own public repos: cached on the contact, else read from GitHub (no m…
 def _repos_for(contact: Contact, brief: dict, research: bool) -> list[dict]:
     """Their own public repos: cached on the contact, else read from GitHub (no model)."""
     if brief.get("repos"):
@@ -348,6 +361,7 @@ def _repos_for(contact: Contact, brief: dict, research: bool) -> list[dict]:
     from jobhunter.outreach.researcher import github_work
     from jobhunter.scrapers.base import make_client
 
+    # ZONULY ▸ github scraping · scraping · people search · referrers · email drafting ▸ outreach · email ▸ drafter._repos_for._go(): Read the contact's public GitHub work with a scraper HTTP client (network call).
     async def _go():
         """Read the contact's public GitHub work with a scraper HTTP client (network call)."""
         async with make_client() as http:
@@ -361,6 +375,7 @@ def _repos_for(contact: Contact, brief: dict, research: bool) -> list[dict]:
     return work.get("repos") or []
 
 
+# ZONULY ▸ people search · referrers · email drafting ▸ outreach · email ▸ drafter.gather(): Everything one email may use, read from the DB (and the person's public repos).
 def gather(contact_id: int, job_id: int | None = None, *, research: bool = True,
            allow_unproved: bool = False) -> dict:
     """Everything one email may use, read from the DB (and the person's public repos).
@@ -436,6 +451,7 @@ def gather(contact_id: int, job_id: int | None = None, *, research: bool = True,
             "research_hook": notes.get("hook")}
 
 
+# ZONULY ▸ people search · referrers · email verification · email drafting ▸ outreach · email ▸ drafter._corpus(): Build the fact corpus a draft is checked against: resume, person, company, job, gift and proofs.
 def _corpus(g: dict, c) -> str:
     """Build the fact corpus a draft is checked against: resume, person, company, job, gift and proofs.
 
@@ -460,6 +476,7 @@ def _corpus(g: dict, c) -> str:
     return "\n".join(x for x in bits if x)
 
 
+# ZONULY ▸ email drafting · review gate ▸ outreach · email ▸ drafter._shape_flags(): Flags for the queue the gate itself does not raise: the old cold-template shape in a
 def _shape_flags(message: str, c) -> list[dict]:
     """Flags for the queue the gate itself does not raise: the old cold-template shape in a
     first email (compose.old_shape) and grovelling ("Sir", "kindly", "humbly")."""
@@ -475,6 +492,7 @@ def _shape_flags(message: str, c) -> list[dict]:
     return out
 
 
+# ZONULY ▸ validation · guardrails · enrichment · email drafting · ai model call · llm ▸ outreach · email ▸ drafter.write(): One email from gathered evidence: the contract, the deterministic fill, the model's
 def write(g: dict, *, use_model: bool = True, key=None) -> dict:
     """One email from gathered evidence: the contract, the deterministic fill, the model's
     polish when it is available and keeps the contract, the gate and the quality score.
@@ -501,6 +519,7 @@ def write(g: dict, *, use_model: bool = True, key=None) -> dict:
 
     sent = sent_like(g["person"].get("id"))
 
+    # ZONULY ▸ email verification · email drafting · review gate ▸ outreach · email ▸ drafter.write.evaluate(): Assemble a candidate message and run the review gates on it (faithfulness, shape, deliverability).
     def evaluate(message: str) -> dict:
         """Assemble a candidate message and run the review gates on it (faithfulness, shape, deliverability).
 
@@ -583,6 +602,7 @@ def write(g: dict, *, use_model: bool = True, key=None) -> dict:
     return out
 
 
+# ZONULY ▸ scoring · email drafting · review gate ▸ outreach · email ▸ drafter.evaluate_body(): Gate and score a whole body written some other way than write() — the proposal's
 def evaluate_body(g: dict, r: dict, subject: str, body: str) -> dict:
     """Gate and score a whole body written some other way than write() — the proposal's
     exact text, or a pattern's template filled for this person — against the same facts,
@@ -609,12 +629,14 @@ def evaluate_body(g: dict, r: dict, subject: str, body: str) -> dict:
             "blocked": v.blocked, "dropped": compose.keeps_contract(message, c)}
 
 
+# ZONULY ▸ email drafting · review gate ▸ outreach · email ▸ drafter._into_same_domain(): The gate found a near-copy of this mail, or its subject, already going to the same company.
 def _into_same_domain(flags: list[dict]) -> bool:
     """The gate found a near-copy of this mail, or its subject, already going to the same company."""
     return any(f.get("kind") == "deliverability" and ("near-copies" in f.get("detail", "")
                                                       or "already went to" in f.get("detail", "")) for f in flags)
 
 
+# ZONULY ▸ email verification · email drafting · email sending ▸ outreach · email ▸ drafter.sent_like(): Cold mail drafted, approved, sending or already out in the last `days` (to anyone but
 def sent_like(contact_id: int | None, days: int = 30) -> list[dict]:
     """Cold mail drafted, approved, sending or already out in the last `days` (to anyone but
     this person): what the deliverability gate compares a new draft against. Drafts count
@@ -631,6 +653,7 @@ def sent_like(contact_id: int | None, days: int = 30) -> list[dict]:
     return [{"to": t, "subject": sj, "body": b, "at": sa} for t, sj, b, sa, _ in rows if b]
 
 
+# ZONULY ▸ people search · referrers · email verification · email drafting · review gate ▸ outreach · email ▸ drafter.draft_for(): Create one draft email in the review queue (never approved): the personalisation
 def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = True,
               candidate_id: int = 1, force: bool = False, use_model: bool = True,
               record_incomplete: bool = True, mark_polish: bool = False, text: dict | None = None) -> dict:
@@ -724,6 +747,7 @@ def draft_for(contact_id: int, job_id: int | None = None, *, research: bool = Tr
     return out
 
 
+# ZONULY ▸ email drafting · ai model call · llm ▸ outreach · email ▸ drafter.polish_pending(): Re-write template drafts with the model once it is available again. Still drafts;
 def polish_pending(limit: int = 10) -> dict:
     """Re-write template drafts with the model once it is available again. Still drafts;
     the old one is replaced only when the model's version keeps the contract and scores
@@ -756,6 +780,7 @@ def polish_pending(limit: int = 10) -> dict:
     return out
 
 
+# ZONULY ▸ remote from india · email verification · email drafting ▸ outreach · email ▸ drafter.draft_for_bets(): One draft per company that is ready to ask: hiring proven, a fresher role, remote from
 def draft_for_bets(limit: int = 10, *, candidate_id: int = 1) -> list[dict]:
     """One draft per company that is ready to ask: hiring proven, a fresher role, remote from
     anywhere (or India), and a lead with a usable address — the best lead, the best role."""
@@ -789,12 +814,14 @@ def draft_for_bets(limit: int = 10, *, candidate_id: int = 1) -> list[dict]:
     return out
 
 
+# ZONULY ▸ email drafting · replies · follow-up ▸ outreach · email ▸ drafter.followup_count(): Return how many follow-up emails were drafted under the given parent email.
 def followup_count(session, email_id: int) -> int:
     """Return how many follow-up emails were drafted under the given parent email."""
     return len(session.exec(select(Email.id).where(Email.parent_email_id == email_id,
                                                     Email.kind == "followup")).all())
 
 
+# ZONULY ▸ email drafting · replies · follow-up ▸ outreach · email ▸ drafter.followup_new_value(): The one NEW thing follow-up `n` adds (a follow-up never just bumps): the first, a
 def followup_new_value(parent: Email, n: int) -> str:
     """The one NEW thing follow-up `n` adds (a follow-up never just bumps): the first, a
     second proof from the parent's own contract; the last, the offer of his resume and a
@@ -809,6 +836,7 @@ def followup_new_value(parent: Email, n: int) -> str:
     return "if it would help, I'm happy to send my resume or a two-line summary you could forward"
 
 
+# ZONULY ▸ email drafting · replies · follow-up ▸ outreach · email ▸ drafter.draft_followup(): Queue one polite follow-up on an unanswered thread (at most outreach.max_followups,
 def draft_followup(email_id: int) -> dict:
     """Queue one polite follow-up on an unanswered thread (at most outreach.max_followups,
     each adding something new; the last one says it is the last)."""
@@ -872,6 +900,7 @@ def draft_followup(email_id: int) -> dict:
         return {"email_id": email.id, "subject": email.subject}
 
 
+# ZONULY ▸ email drafting · replies · follow-up ▸ outreach · email ▸ drafter.queue_followups(): Find sent emails that have gone quiet and queue one follow-up each.
 def queue_followups(after_days: int | None = None, limit: int = 10) -> list[dict]:
     """Find sent emails that have gone quiet and queue one follow-up each."""
     init_db()
@@ -897,6 +926,7 @@ def queue_followups(after_days: int | None = None, limit: int = 10) -> list[dict
     return [draft_followup(eid) for eid in ids]
 
 
+# ZONULY ▸ scoring · people search · referrers · email drafting ▸ outreach · email ▸ drafter.draft_for_high_matches(): Draft referral asks to the best contacts at companies with high-match jobs.
 def draft_for_high_matches(limit: int = 5, *, per_company: int = 2) -> list[dict]:
     """Draft referral asks to the best contacts at companies with high-match jobs."""
     init_db()

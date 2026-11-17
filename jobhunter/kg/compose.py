@@ -35,6 +35,7 @@ STATUS_WEIGHT = {"built": 1.0, "partial": 0.85, "gap": 0.75, "open": 0.5, "dropp
 WEIGHTS = {"relevance": 0.40, "fit": 0.30, "status": 0.20, "consensus": 0.10}
 
 
+# ZONULY ▸ email drafting · knowledge graph ▸ knowledge graph ▸ compose._index_context(): Index the knowledge graph context layer: nodes by id, plus outgoing and incoming edges by node.
 def _index_context(g: Graph) -> tuple[dict[str, dict], dict[str, list[dict]], dict[str, list[dict]]]:
     """Index the knowledge graph context layer: nodes by id, plus outgoing and incoming edges by node."""
     nodes = {n["id"]: n for n in g.nodes(layer="context")}
@@ -46,6 +47,7 @@ def _index_context(g: Graph) -> tuple[dict[str, dict], dict[str, list[dict]], di
     return nodes, out_edges, in_edges
 
 
+# ZONULY ▸ email drafting · knowledge graph ▸ knowledge graph ▸ compose.default_statement(): The problem node plus its sub-problems, as the statement to compose against.
 def default_statement(g: Graph) -> str:
     """The problem node plus its sub-problems, as the statement to compose against."""
     parts = []
@@ -58,6 +60,7 @@ def default_statement(g: Graph) -> str:
     return "\n".join(parts)
 
 
+# ZONULY ▸ scoring · email drafting · knowledge graph ▸ knowledge graph ▸ compose.compose(): Score every feature node in the knowledge graph and pick the best ones per pipeline stage.
 def compose(
     statement: str | None = None,
     *,
@@ -133,6 +136,7 @@ def compose(
         for s in scored:
             by_stage[s["stage"]].append(s)
 
+        # ZONULY ▸ email drafting · knowledge graph ▸ knowledge graph ▸ compose.compose.stage_order(): Sort key for a stage node: its 'order' prop; unknown stages and unstaged features go last.
         def stage_order(sid: str | None) -> float:
             """Sort key for a stage node: its 'order' prop; unknown stages and unstaged features go last."""
             if sid is None:

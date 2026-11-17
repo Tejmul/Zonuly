@@ -35,6 +35,7 @@ from jobhunter import ROOT
 META_KEY = "snapshot:meta"
 
 
+# ZONULY ▸ deployment · snapshot ▸ api · public snapshot check ▸ snapshot.schema_signature(): A short hash of every table.column the models declare.
 def schema_signature() -> str:
     """A short hash of every table.column the models declare."""
     import jobhunter.db  # noqa: F401 — registers every table on SQLModel.metadata
@@ -43,6 +44,7 @@ def schema_signature() -> str:
     return hashlib.sha256("\n".join(cols).encode()).hexdigest()[:16]
 
 
+# ZONULY ▸ deployment · snapshot ▸ api · public snapshot check ▸ snapshot.git_sha(): Return the short git commit hash of the repo, or None when git is unavailable.
 def git_sha() -> str | None:
     """Return the short git commit hash of the repo, or None when git is unavailable."""
     try:
@@ -53,6 +55,7 @@ def git_sha() -> str | None:
         return None
 
 
+# ZONULY ▸ deployment · snapshot ▸ api · public snapshot check ▸ snapshot.read_meta(): The stamp written by scripts/make_demo_db.py, or None on a working database.
 def read_meta() -> dict | None:
     """The stamp written by scripts/make_demo_db.py, or None on a working database."""
     from jobhunter.db import get_session, get_setting
@@ -65,6 +68,7 @@ def read_meta() -> dict | None:
         return None
 
 
+# ZONULY ▸ deployment · snapshot · monitoring ▸ api · public snapshot check ▸ snapshot.status(): For /api/health. None when this database was never cut as a snapshot.
 def status() -> dict | None:
     """For /api/health. None when this database was never cut as a snapshot."""
     meta = read_meta()

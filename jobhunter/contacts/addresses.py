@@ -58,12 +58,14 @@ log = logging.getLogger(__name__)
 _READ_SOURCES = ("github", "site", "web", "hunter", "linkedin-public")
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ people · contact discovery · email proof ▸ addresses._pattern_made(): Return True when the contact's address was built from a pattern (guessed), per its proven…
 def _pattern_made(p: Contact) -> bool:
     """Return True when the contact's address was built from a pattern (guessed), per its provenance."""
     return (p.confidence == "pattern-guessed" or p.source == "pattern"
             or "by pattern" in (p.research_notes or ""))
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ addresses._read_on_domain(): The contact's address when it was READ (not made) on the company's own domain.
 def _read_on_domain(p: Contact, dom: str) -> str | None:
     """The contact's address when it was READ (not made) on the company's own domain."""
     if not p.email or _pattern_made(p) or p.source not in _READ_SOURCES:
@@ -75,6 +77,7 @@ def _read_on_domain(p: Contact, dom: str) -> str | None:
     return e if chk and chk.value[1] == "company" else None
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ addresses.examples(): (name, address) pairs read on the company's domain, with a name not taken from the address.
 def examples(rows: list[Contact], domain: str) -> list[tuple[str, str]]:
     """(name, address) pairs read on the company's domain, with a name not taken from the address.
 
@@ -101,6 +104,7 @@ def examples(rows: list[Contact], domain: str) -> list[tuple[str, str]]:
     return out
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ addresses.stated(): (pattern, url) when the company's own page states its address format.
 def stated(session, company: Company) -> tuple[str, str] | None:
     """(pattern, url) when the company's own page states its address format."""
     if not company.domain:
@@ -123,6 +127,7 @@ def stated(session, company: Company) -> tuple[str, str] | None:
     return None
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ addresses.learn(): Learn the company's email address pattern from its contacts' addresses and any stated format.
 def learn(session, company: Company, rows: list[Contact] | None = None) -> patterns.PatternVerdict:
     """Learn the company's email address pattern from its contacts' addresses and any stated format.
 
@@ -135,6 +140,7 @@ def learn(session, company: Company, rows: list[Contact] | None = None) -> patte
     return patterns.learn_with_evidence(examples(rows, company.domain), stated=stated(session, company))
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ class addresses.Plan
 @dataclass
 class Plan:
     company_id: int
@@ -147,6 +153,7 @@ class Plan:
     mx_ok: bool | None = None
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ addresses.plan_company(): What the learn / apply / retract step would do for one company (no writes).
 def plan_company(session, company: Company, *, check_mx: bool = True) -> Plan:
     """What the learn / apply / retract step would do for one company (no writes)."""
     rows = session.exec(select(Contact).where(Contact.company_id == company.id)).all()
@@ -214,6 +221,7 @@ def plan_company(session, company: Company, *, check_mx: bool = True) -> Plan:
     return plan
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ people · contact discovery · email proof ▸ addresses.apply_plan(): Write a plan through the guardrails. The caller commits.
 def apply_plan(session, company: Company, plan: Plan) -> dict:
     """Write a plan through the guardrails. The caller commits."""
     out = {"pattern": guardrails.set_email_pattern(session, company, plan.verdict), "added": 0, "retracted": 0}
@@ -239,6 +247,7 @@ def apply_plan(session, company: Company, plan: Plan) -> dict:
     return out
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ people · contact discovery · email proof ▸ addresses.fill(): Learn, retract and apply for one company, committed.
 def fill(company_id: int, *, dry_run: bool = False) -> dict:
     """Learn, retract and apply for one company, committed."""
     init_db()

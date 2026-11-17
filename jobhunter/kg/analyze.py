@@ -31,6 +31,7 @@ from jobhunter.kg.store import Graph
 GRAPHML_PATH = ROOT / "knowledge" / "graph.graphml"
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ analyze.to_networkx(): A directed multigraph with node kind/label/layer and edge rel as attributes.
 def to_networkx(*, layer: str | None = None, include_all_jobs: bool = True) -> nx.MultiDiGraph:
     """A directed multigraph with node kind/label/layer and edge rel as attributes."""
     with Graph() as g:
@@ -46,6 +47,7 @@ def to_networkx(*, layer: str | None = None, include_all_jobs: bool = True) -> n
     return G
 
 
+# ZONULY ▸ decision · knowledge graph ▸ knowledge graph ▸ analyze.hubs(): Most load-bearing nodes — where the most decisions, features and guarantees meet.
 def hubs(*, layer: str | None = "context", kinds: list[str] | None = None, top: int = 15) -> list[dict]:
     """Most load-bearing nodes — where the most decisions, features and guarantees meet.
 
@@ -75,12 +77,14 @@ def hubs(*, layer: str | None = "context", kinds: list[str] | None = None, top: 
     return rows[:top]
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ analyze.orphans(): Context nodes with no edges — usually a typo in a link key in context.yaml.
 def orphans(*, layer: str | None = "context") -> list[dict]:
     """Context nodes with no edges — usually a typo in a link key in context.yaml."""
     G = to_networkx(layer=layer)
     return [{"id": n, "kind": d["kind"], "label": d["label"]} for n, d in G.nodes(data=True) if G.degree(n) == 0]
 
 
+# ZONULY ▸ decision · knowledge graph ▸ knowledge graph ▸ analyze.communities(): Greedy-modularity communities — which features, decisions and constraints cluster together.
 def communities(*, layer: str | None = "context") -> list[list[str]]:
     """Greedy-modularity communities — which features, decisions and constraints cluster together."""
     U = nx.Graph(to_networkx(layer=layer))
@@ -90,6 +94,7 @@ def communities(*, layer: str | None = "context") -> list[list[str]]:
     return [sorted(c) for c in comms]
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ analyze.write_graphml(): GraphML for Gephi, yEd, Obsidian-Juggl and friends. Multigraph edges get their rel as the key.
 def write_graphml(path: Path | str = GRAPHML_PATH, *, layer: str | None = None, include_all_jobs: bool = False) -> str:
     """GraphML for Gephi, yEd, Obsidian-Juggl and friends. Multigraph edges get their rel as the key."""
     G = to_networkx(layer=layer, include_all_jobs=include_all_jobs)

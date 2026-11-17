@@ -107,6 +107,7 @@ CHANNEL = "linkedin-guest"
 
 # ------------------------------------------------------------------ bookkeeping
 
+# ZONULY ▸ data ingestion · job discovery ▸ data ingestion · job discovery ▸ class india_jobs.Report
 @dataclass
 class Report:
     sources: dict = field(default_factory=dict)
@@ -119,10 +120,12 @@ class Report:
     leads: dict = field(default_factory=dict)
     pages: dict = field(default_factory=lambda: {"search": 0, "job": 0, "company": 0, "board": 0})
 
+    # ZONULY ▸ scraping ▸ data ingestion · job discovery ▸ india_jobs.Report.src(): Return (creating if needed) the per-source counters for this scrape report.
     def src(self, name: str) -> dict:
         """Return (creating if needed) the per-source counters for this scrape report."""
         return self.sources.setdefault(name, {"cards": 0, "companies": 0, "new": 0, "existing": 0, "jobs": 0})
 
+    # ZONULY ▸ filtering ▸ data ingestion · job discovery ▸ india_jobs.Report.reject(): Record a company name under a rejection reason in the report, once.
     def reject(self, reason: str, name: str) -> None:
         """Record a company name under a rejection reason in the report, once."""
         names = self.rejects.setdefault(reason, [])
@@ -133,6 +136,7 @@ class Report:
 _last_hit: dict[str, float] = {}
 
 
+# ZONULY ▸ data ingestion · job discovery ▸ data ingestion · job discovery ▸ india_jobs._pace(): At least GAP_S between two requests to one site.
 def _pace(host: str) -> None:
     """At least GAP_S between two requests to one site."""
     t = _last_hit.get(host)
@@ -143,6 +147,7 @@ def _pace(host: str) -> None:
     _last_hit[host] = time.time()
 
 
+# ZONULY ▸ linkedin scraping · retry · backoff ▸ data ingestion · job discovery ▸ india_jobs._backoff_until(): Return when the LinkedIn India-jobs backoff ends, from the settings table, if still in the future.
 def _backoff_until(session) -> datetime | None:
     """Return when the LinkedIn India-jobs backoff ends, from the settings table, if still in the future."""
     raw = get_setting(session, K_UNTIL, "")
@@ -153,6 +158,7 @@ def _backoff_until(session) -> datetime | None:
     return until if until and until > utcnow() else None
 
 
+# ZONULY ▸ linkedin scraping · retry · backoff · lock ▸ data ingestion · job discovery ▸ india_jobs._block(): Start a BACKOFF_H-hour LinkedIn backoff: store it, mark the channel down, note it in the report.
 def _block(session, rep: Report, why: str) -> None:
     """Start a BACKOFF_H-hour LinkedIn backoff: store it, mark the channel down, note it in the report."""
     until = utcnow() + timedelta(hours=BACKOFF_H)
@@ -161,10 +167,12 @@ def _block(session, rep: Report, why: str) -> None:
     rep.problems.append(f"linkedin: {why} — backing off until {until:%Y-%m-%d %H:%M}")
 
 
+# ZONULY ▸ data ingestion · job discovery ▸ data ingestion · job discovery ▸ class india_jobs.Blocked
 class Blocked(Exception):
     pass
 
 
+# ZONULY ▸ linkedin scraping ▸ data ingestion · job discovery ▸ india_jobs._linkedin(): One LinkedIn page through Jina Reader, as Markdown. Raises Blocked on a 429, a 999
 def _linkedin(session, rep: Report, url: str, kind: str) -> str | None:
     """One LinkedIn page through Jina Reader, as Markdown. Raises Blocked on a 429, a 999
     or a login wall (and records the backoff); None on a one-off failure."""
@@ -208,6 +216,7 @@ def _linkedin(session, rep: Report, url: str, kind: str) -> str | None:
     return text
 
 
+# ZONULY ▸ scraping ▸ data ingestion · job discovery ▸ india_jobs._board(): Read a job-board page as text via the web reader (paced, network call); None on error or empty.
 def _board(rep: Report, url: str) -> str | None:
     """Read a job-board page as text via the web reader (paced, network call); None on error or empty."""
     from jobhunter.research import web
@@ -223,6 +232,7 @@ def _board(rep: Report, url: str) -> str | None:
     return page["text"]
 
 
+# ZONULY ▸ scraping ▸ data ingestion · job discovery ▸ india_jobs._leads(): Return the saved India job-scrape leads list from the settings table ([] when bad).
 def _leads(session) -> list[dict]:
     """Return the saved India job-scrape leads list from the settings table ([] when bad)."""
     try:
@@ -232,11 +242,13 @@ def _leads(session) -> list[dict]:
         return []
 
 
+# ZONULY ▸ scraping ▸ data ingestion · job discovery ▸ india_jobs._save_leads(): Store the last 300 India job-scrape leads in the settings table.
 def _save_leads(session, rows: list[dict]) -> None:
     """Store the last 300 India job-scrape leads in the settings table."""
     set_setting(session, K_LEADS, json.dumps(rows[-300:]))
 
 
+# ZONULY ▸ linkedin scraping · admission gate · filtering ▸ data ingestion · job discovery ▸ india_jobs.add_lead(): Queue a company to look up on LinkedIn by name. The lookup is what admits it: a
 def add_lead(session, name: str, source: str, evidence: str | None = None, *, city: str | None = None,
              band: str | None = None, slug: str | None = None, requeue: bool = False) -> bool:
     """Queue a company to look up on LinkedIn by name. The lookup is what admits it: a
@@ -260,6 +272,7 @@ def add_lead(session, name: str, source: str, evidence: str | None = None, *, ci
 
 # ------------------------------------------------------------------ one company through the gate
 
+# ZONULY ▸ review gate ▸ data ingestion · job discovery ▸ class india_jobs.Posting: One role as a source showed it, before the gate.
 @dataclass
 class Posting:
     """One role as a source showed it, before the gate."""
@@ -280,6 +293,7 @@ class Posting:
     seniority: str | None = None
 
 
+# ZONULY ▸ review gate ▸ data ingestion · job discovery ▸ india_jobs._gate(): The reason this company is turned away, or None.
 def _gate(name: str, posts: list[Posting], *, about: str | None = None, industry: str | None = None,
           headcount: int | None = None) -> str | None:
     """The reason this company is turned away, or None."""
@@ -297,6 +311,7 @@ def _gate(name: str, posts: list[Posting], *, about: str | None = None, industry
     return None
 
 
+# ZONULY ▸ validation · guardrails ▸ data ingestion · job discovery ▸ india_jobs._city_line(): Return the evidence sentence saying the company is hiring this title in this city, and where seen.
 def _city_line(name: str, p: Posting) -> str:
     """Return the evidence sentence saying the company is hiring this title in this city, and where seen."""
     where = {"linkedin-jobs": "LinkedIn job posting", "jobfound": "jobfound listing",
@@ -304,6 +319,7 @@ def _city_line(name: str, p: Posting) -> str:
     return f"{name} is hiring {p.title} in {p.location} ({where})"
 
 
+# ZONULY ▸ admission gate · filtering ▸ data ingestion · job discovery ▸ india_jobs._admit(): Write one company and its roles. Everything is checked by now except admission.
 def _admit(rep: Report, name: str, posts: list[Posting], *, info: dict | None = None) -> Company | None:
     """Write one company and its roles. Everything is checked by now except admission."""
     from jobhunter import harvest, pipeline
@@ -371,6 +387,7 @@ def _admit(rep: Report, name: str, posts: list[Posting], *, info: dict | None = 
     return company
 
 
+# ZONULY ▸ pay · salary ▸ data ingestion · job discovery ▸ india_jobs._band_top(): Return the largest number in a pay band string (top of the band), or None.
 def _band_top(band: str | None) -> float | None:
     """Return the largest number in a pay band string (top of the band), or None."""
     import re
@@ -381,6 +398,7 @@ def _band_top(band: str | None) -> float | None:
 
 # ------------------------------------------------------------------ sources
 
+# ZONULY ▸ review gate ▸ data ingestion · job discovery ▸ india_jobs._process(): The gate and the writes for one source's postings, grouped by company.
 def _process(rep: Report, groups: dict[str, list[Posting]], *, reads: dict, session_holder) -> None:
     """The gate and the writes for one source's postings, grouped by company."""
     for name, posts in groups.items():
@@ -464,6 +482,7 @@ def _process(rep: Report, groups: dict[str, list[Posting]], *, reads: dict, sess
         _admit(rep, name, posts, info=info)
 
 
+# ZONULY ▸ admission gate · filtering · filtering · dedup ▸ data ingestion · job discovery ▸ india_jobs._group(): Group relevant-title postings by company (dedup on the admission name key and posting URL).
 def _group(posts: list[Posting]) -> dict[str, list[Posting]]:
     """Group relevant-title postings by company (dedup on the admission name key and posting URL)."""
     out: dict[str, list[Posting]] = {}
@@ -478,6 +497,7 @@ def _group(posts: list[Posting]) -> dict[str, list[Posting]]:
     return out
 
 
+# ZONULY ▸ linkedin scraping ▸ data ingestion · job discovery ▸ india_jobs.from_linkedin(): Guest search pages: keyword × city by cursor, then the seed / lead name searches.
 def from_linkedin(session, rep: Report, *, searches: int, lead_searches: int, cities=CITIES) -> list[Posting]:
     """Guest search pages: keyword × city by cursor, then the seed / lead name searches."""
     posts: list[Posting] = []
@@ -536,6 +556,7 @@ def from_linkedin(session, rep: Report, *, searches: int, lead_searches: int, ci
     return looked + sorted(posts, key=lambda p: norm.is_senior(p.title))
 
 
+# ZONULY ▸ scraping · pay · salary ▸ data ingestion · job discovery ▸ india_jobs.from_jobfound(): Scrape the jobfound India board and return its cards as Postings (with the listed pay band).
 def from_jobfound(rep: Report) -> list[Posting]:
     """Scrape the jobfound India board and return its cards as Postings (with the listed pay band)."""
     text = _board(rep, ij.JOBFOUND_INDIA)
@@ -545,6 +566,7 @@ def from_jobfound(rep: Report) -> list[Posting]:
                     location=c["location"], posted_at=c["posted_at"], listed_band=c["listed_band"]) for c in cards]
 
 
+# ZONULY ▸ scraping ▸ data ingestion · job discovery ▸ india_jobs.from_instahyre(): Scrape one Instahyre city page, rotating the city each call, and return its cards as Postings.
 def from_instahyre(session, rep: Report, cities=CITIES) -> list[Posting]:
     """Scrape one Instahyre city page, rotating the city each call, and return its cards as Postings."""
     try:
@@ -559,6 +581,7 @@ def from_instahyre(session, rep: Report, cities=CITIES) -> list[Posting]:
                     location=c["location"], blurb=c["blurb"], headcount=c["headcount_min"]) for c in cards]
 
 
+# ZONULY ▸ data ingestion · job discovery ▸ data ingestion · job discovery ▸ india_jobs.from_community(): Offer posts -> company names -> the lead queue. Nothing about them is stored.
 def from_community(session, rep: Report, *, queries: int) -> None:
     """Offer posts -> company names -> the lead queue. Nothing about them is stored."""
     from jobhunter.research import web
@@ -586,6 +609,7 @@ def from_community(session, rep: Report, *, queries: int) -> None:
 
 # ------------------------------------------------------------------ the step
 
+# ZONULY ▸ scraping ▸ data ingestion · job discovery ▸ india_jobs.due(): Return True when the India job scrape has not run in the last EVERY_HOURS hours.
 def due(session) -> bool:
     """Return True when the India job scrape has not run in the last EVERY_HOURS hours."""
     raw = get_setting(session, K_LAST, "")
@@ -595,6 +619,7 @@ def due(session) -> bool:
         return True
 
 
+# ZONULY ▸ data ingestion · job discovery ▸ data ingestion · job discovery ▸ india_jobs.run(): One pass over every source. Returns the report (also kept in india_jobs:last_report).
 def run(*, force: bool = False, searches: int | None = None, page_reads: int | None = None,
         company_reads: int | None = None, lead_searches: int | None = None, community: int | None = None,
         sources: tuple[str, ...] = ("linkedin", "jobfound", "instahyre", "community"),
@@ -647,11 +672,13 @@ def run(*, force: bool = False, searches: int | None = None, page_reads: int | N
     return out
 
 
+# ZONULY ▸ pay · salary ▸ data ingestion · job discovery ▸ india_jobs._bucket(): Bucket an LPA pay figure into ≥30, 20–30 or <20.
 def _bucket(v: float) -> str:
     """Bucket an LPA pay figure into ≥30, 20–30 or <20."""
     return "≥30" if v >= 30 else "20–30" if v >= 20 else "<20"
 
 
+# ZONULY ▸ scraping · filtering · pay · salary ▸ data ingestion · job discovery ▸ india_jobs.summary(): Summarise an India job-scrape report: new vs existing companies, pay buckets, rejects, problems.
 def summary(rep: Report) -> dict:
     """Summarise an India job-scrape report: new vs existing companies, pay buckets, rejects, problems."""
     stated = {"≥30": 0, "20–30": 0, "<20": 0}
@@ -676,6 +703,7 @@ def summary(rep: Report) -> dict:
     }
 
 
+# ZONULY ▸ scraping ▸ data ingestion · job discovery ▸ india_jobs.last_report(): Return the last India job-scrape summary saved in the settings table ({} when none).
 def last_report() -> dict:
     """Return the last India job-scrape summary saved in the settings table ({} when none)."""
     init_db()

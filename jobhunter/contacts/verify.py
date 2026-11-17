@@ -46,6 +46,7 @@ _SYNTAX = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 CATCH_ALL_MX = ("google.com", "googlemail.com", "outlook.com", "protection.outlook.com", "pphosted.com")
 
 
+# ZONULY ▸ decision · people search · referrers ▸ people · contact discovery · email proof ▸ class verify.Verdict
 @dataclass
 class Verdict:
     email: str
@@ -54,6 +55,7 @@ class Verdict:
     smtp_ok: bool | None = None    # None = could not determine
     reason: str = ""
 
+    # ZONULY ▸ decision · people search · referrers · email verification ▸ people · contact discovery · email proof ▸ verify.Verdict.confidence(): Label the verdict: verified (SMTP accepted), invalid, or pattern-guessed.
     @property
     def confidence(self) -> str:
         """Label the verdict: verified (SMTP accepted), invalid, or pattern-guessed."""
@@ -64,6 +66,7 @@ class Verdict:
         return "pattern-guessed"
 
 
+# ZONULY ▸ people search · referrers · email verification · cache ▸ people · contact discovery · email proof ▸ verify.mx_hosts(): Return a domain's MX hosts sorted by preference; empty tuple when the DNS lookup fails (c…
 @lru_cache(maxsize=512)
 def mx_hosts(domain: str) -> tuple[str, ...]:
     """Return a domain's MX hosts sorted by preference; empty tuple when the DNS lookup fails (cached)."""
@@ -78,6 +81,7 @@ def mx_hosts(domain: str) -> tuple[str, ...]:
         return ()
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ people · contact discovery · email proof ▸ verify.verify(): Check an email address: syntax, then MX records, then an optional SMTP RCPT probe.
 def verify(email: str, *, smtp: bool | None = None) -> Verdict:
     """Check an email address: syntax, then MX records, then an optional SMTP RCPT probe.
 
@@ -109,6 +113,7 @@ def verify(email: str, *, smtp: bool | None = None) -> Verdict:
     return v
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ verify._rcpt_probe(): RCPT TO check — asks the server whether the mailbox exists, then quits.
 def _rcpt_probe(host: str, email: str) -> tuple[bool | None, str]:
     """RCPT TO check — asks the server whether the mailbox exists, then quits."""
     try:
@@ -137,6 +142,7 @@ def _rcpt_probe(host: str, email: str) -> tuple[bool | None, str]:
     return None, f"inconclusive ({code}): {detail}"
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ verify.best_candidate(): Verify candidates in order; return the first accepted, else the first plausible.
 def best_candidate(emails: list[str]) -> tuple[str | None, Verdict | None]:
     """Verify candidates in order; return the first accepted, else the first plausible."""
     fallback: tuple[str, Verdict] | None = None

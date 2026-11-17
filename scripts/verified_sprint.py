@@ -76,6 +76,7 @@ for _noisy in ("httpx", "httpcore"):   # their INFO lines carry the Apify token 
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 
+# ZONULY ▸ scoring ▸ people · apify sprint ▸ verified_sprint.fresher_tech_job(): Return a company's best-matching non-senior tech job (fresher fit), or None.
 def fresher_tech_job(session, cid: int) -> Job | None:
     """Return a company's best-matching non-senior tech job (fresher fit), or None."""
     for j in session.exec(select(Job).where(Job.company_id == cid, col(Job.is_senior).is_not(True))
@@ -86,12 +87,14 @@ def fresher_tech_job(session, cid: int) -> Job | None:
     return None
 
 
+# ZONULY ▸ pay · salary ▸ people · apify sprint ▸ verified_sprint.pays_24(): True when stated pay reaches 24 LPA, or with no stated pay when pay power is at least 85.
 def pays_24(c: Company, job: Job | None) -> bool:
     """True when stated pay reaches 24 LPA, or with no stated pay when pay power is at least 85."""
     stated = [x for x in (c.ppo_lpa, job and job.ppo_lpa, job and job.salary_min_lpa) if x]
     return max(stated) >= 24 if stated else (c.pay_power or 0) >= 85
 
 
+# ZONULY ▸ apify scraping · apify people search · decision · budget · cost ▸ people · apify sprint ▸ verified_sprint.targets(): The companies worth Apify credit, best first — each with why it is there.
 def targets(session) -> list[dict]:
     """The companies worth Apify credit, best first — each with why it is there."""
     bets = referrals.best_bets(session)
@@ -133,6 +136,7 @@ REMOTE_BATCH_KEY = "csv:held_remote"
 REMOTE_WANTED = int(((CONFIG.get("actors") or {}).get("apify") or {}).get("remote_referrers_wanted", 5))
 
 
+# ZONULY ▸ linkedin scraping · decision · remote from india ▸ people · apify sprint ▸ verified_sprint.remote_targets(): 2026-11-13, "remote first": jobhunter/remote.py's targets with a LinkedIn page, recent hiring
 def remote_targets(session) -> list[dict]:
     """2026-11-13, "remote first": jobhunter/remote.py's targets with a LinkedIn page, recent hiring
     first, each until it holds REMOTE_WANTED engineers with a proved address."""
@@ -154,6 +158,7 @@ def remote_targets(session) -> list[dict]:
     return out
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ people · apify sprint ▸ verified_sprint.proved_people(): Contacts at this company saved since `since` whose address is proved (email set = safe).
 def proved_people(cid: int, since: datetime) -> list[int]:
     """Contacts at this company saved since `since` whose address is proved (email set = safe)."""
     with get_session() as s:
@@ -161,6 +166,7 @@ def proved_people(cid: int, since: datetime) -> list[int]:
                                                            Contact.created_at >= since)).all()]
 
 
+# ZONULY ▸ apify scraping · apify people search · decision · people search · referrers · budget · cost ▸ people · apify sprint ▸ verified_sprint.main(): CLI entry: list sprint targets and the Apify spend, then buy peopl…
 def main() -> int:
     """CLI entry: list sprint targets and the Apify spend, then buy people for them unless --dry-run.
 
@@ -213,6 +219,7 @@ def main() -> int:
         return _buy(args, queue, est, stop, titles, fill_company)
 
 
+# ZONULY ▸ apify scraping · apify people search · decision · people search · referrers · email verification ▸ people · apify sprint ▸ verified_sprint._buy(): Buy people per target company via Apify until the monthly sto…
 def _buy(args, queue, est, stop, titles, fill_company) -> int:
     """Buy people per target company via Apify until the monthly stop, holding proved people as a batch.
 

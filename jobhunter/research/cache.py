@@ -55,6 +55,7 @@ CREATE INDEX IF NOT EXISTS ix_research_cache_kind ON research_cache(kind, create
 _READY = False
 
 
+# ZONULY ▸ cache ▸ enrichment · web research layer ▸ cache._conn(): Open the research cache SQLite connection, creating its table on first use.
 def _conn() -> sqlite3.Connection:
     """Open the research cache SQLite connection, creating its table on first use."""
     global _READY
@@ -66,12 +67,14 @@ def _conn() -> sqlite3.Connection:
     return conn
 
 
+# ZONULY ▸ cache ▸ enrichment · web research layer ▸ cache._key(): Hash (kind, subject, params) into the research cache key.
 def _key(kind: str, subject: str, **params: Any) -> str:
     """Hash (kind, subject, params) into the research cache key."""
     raw = json.dumps([kind, subject.strip().lower(), params], sort_keys=True, default=str)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
+# ZONULY ▸ cache ▸ enrichment · web research layer ▸ cache.get(): A fresh cached payload, or None. A cache miss is never an error.
 def get(kind: str, subject: str, *, ttl_hours: int | None = None, **params: Any) -> dict | None:
     """A fresh cached payload, or None. A cache miss is never an error."""
     ttl = TTL_HOURS if ttl_hours is None else ttl_hours
@@ -105,6 +108,7 @@ def get(kind: str, subject: str, *, ttl_hours: int | None = None, **params: Any)
     return data
 
 
+# ZONULY ▸ cache ▸ enrichment · web research layer ▸ cache.put(): Store a research result in the cache table (skipped when the cache TTL is 0); errors are logged.
 def put(kind: str, subject: str, payload: dict, *, backend: str = "", **params: Any) -> None:
     """Store a research result in the cache table (skipped when the cache TTL is 0); errors are logged."""
     if TTL_HOURS <= 0:
@@ -128,6 +132,7 @@ def put(kind: str, subject: str, payload: dict, *, backend: str = "", **params: 
         log.debug("cache write failed: %s", e)
 
 
+# ZONULY ▸ cache ▸ enrichment · web research layer ▸ cache.purge(): Drop stale rows. Returns how many went.
 def purge(older_than_hours: int | None = None) -> int:
     """Drop stale rows. Returns how many went."""
     ttl = TTL_HOURS if older_than_hours is None else older_than_hours
@@ -142,6 +147,7 @@ def purge(older_than_hours: int | None = None) -> int:
         return 0
 
 
+# ZONULY ▸ cache ▸ enrichment · web research layer ▸ cache.stats(): Count cached research results in total and by kind, with the TTL.
 def stats() -> dict:
     """Count cached research results in total and by kind, with the TTL."""
     try:

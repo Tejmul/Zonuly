@@ -68,6 +68,7 @@ _VERDICT_COL = ("result", "verdict", "status", "state", "deliverability", "valid
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 
 
+# ZONULY ▸ people search · referrers ▸ people · email proof ▸ verify_queue.rank(): (address, person, company, why it is high value) — best first.
 def rank(session) -> list[tuple[str, str, str, str]]:
     """(address, person, company, why it is high value) — best first.
 
@@ -105,6 +106,7 @@ def rank(session) -> list[tuple[str, str, str, str]]:
     return uniq
 
 
+# ZONULY ▸ email verification · csv export ▸ people · email proof ▸ verify_queue.export(): Write the ranked unproved-address queue to a CSV (email, name, company, why) for a verifier.
 def export(path: Path, limit: int) -> dict:
     """Write the ranked unproved-address queue to a CSV (email, name, company, why) for a verifier."""
     init_db()
@@ -118,6 +120,7 @@ def export(path: Path, limit: int) -> dict:
     return {"written": len(rows), "file": str(path)}
 
 
+# ZONULY ▸ scoring · csv export ▸ people · email proof ▸ verify_queue._col(): Find the CSV column matching one of the wanted names (exact first, then substring), or None.
 def _col(fieldnames: list[str], wanted: tuple[str, ...]) -> str | None:
     """Find the CSV column matching one of the wanted names (exact first, then substring), or None."""
     low = {(f or "").strip().lower(): f for f in fieldnames}
@@ -130,6 +133,7 @@ def _col(fieldnames: list[str], wanted: tuple[str, ...]) -> str | None:
     return None
 
 
+# ZONULY ▸ decision · email verification ▸ people · email proof ▸ verify_queue.load(): Read a verifier's result file back in. Only an explicit good verdict becomes proof.
 def load(path: Path) -> dict:
     """Read a verifier's result file back in. Only an explicit good verdict becomes proof."""
     init_db()
@@ -173,6 +177,7 @@ def load(path: Path) -> dict:
     return out
 
 
+# ZONULY ▸ csv export ▸ people · email proof ▸ verify_queue.main(): CLI entry: export the verification queue CSV, or load a verifier's result file with --load.
 def main() -> int:
     """CLI entry: export the verification queue CSV, or load a verifier's result file with --load."""
     ap = argparse.ArgumentParser(description=__doc__)

@@ -27,6 +27,7 @@ SOURCE = "ashby"
 API = "https://api.ashbyhq.com/posting-api/job-board/{slug}?includeCompensation=true"
 
 
+# ZONULY ▸ ashby scraping · scraping · pay · salary ▸ scraping · data ingestion ▸ ashby._salary(): Return an Ashby posting's compensation summary text, or None.
 def _salary(job: dict) -> str | None:
     """Return an Ashby posting's compensation summary text, or None."""
     comp = job.get("compensation") or {}
@@ -39,6 +40,7 @@ def _salary(job: dict) -> str | None:
     return None
 
 
+# ZONULY ▸ ashby scraping · scraping ▸ scraping · data ingestion ▸ ashby.fetch_board(): Scrape one company's Ashby job board via its public posting API into RawJob rows.
 async def fetch_board(http: httpx.AsyncClient, slug: str, company_name: str | None = None) -> list[RawJob]:
     """Scrape one company's Ashby job board via its public posting API into RawJob rows."""
     data = await get_json(http, API.format(slug=slug))
@@ -74,6 +76,7 @@ async def fetch_board(http: httpx.AsyncClient, slug: str, company_name: str | No
     return out
 
 
+# ZONULY ▸ ashby scraping · scraping ▸ scraping · data ingestion ▸ ashby.fetch(): Scrape every company that has an Ashby board slug, concurrently; returns all jobs found.
 async def fetch(http: httpx.AsyncClient, companies: list[dict]) -> list[RawJob]:
     """Scrape every company that has an Ashby board slug, concurrently; returns all jobs found."""
     targets = [c for c in companies if c.get("ats") == "ashby" and c.get("ats_slug")]

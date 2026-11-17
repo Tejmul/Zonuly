@@ -52,6 +52,7 @@ _NOISE = ("i am a bot", "welcome to r/", "thank you for your submission", "thank
 _ABOUT = re.compile(r"interview|\boa\b|online assessment|test link|round|hiring|shortlist|placement|offer|ctc", re.I)
 
 
+# ZONULY ▸ enrichment · interview information ▸ enrichment · interview information ▸ interviews._glassdoor_id(): The company's Glassdoor employer id (E1234567) from a Google search, and the organic
 def _glassdoor_id(name: str) -> tuple[str | None, list[dict]]:
     """The company's Glassdoor employer id (E1234567) from a Google search, and the organic
     results of the searches (kept for the caller)."""
@@ -71,6 +72,7 @@ def _glassdoor_id(name: str) -> tuple[str | None, list[dict]]:
     return None, results
 
 
+# ZONULY ▸ enrichment · interview information ▸ enrichment · interview information ▸ interviews._upsert(): Insert or update one interview note for a company keyed by source and source_id; True if new.
 def _upsert(session, company_id: int, source: str, source_id: str, **fields) -> bool:
     """Insert or update one interview note for a company keyed by source and source_id; True if new."""
     row = session.exec(select(InterviewNote).where(InterviewNote.company_id == company_id,
@@ -86,6 +88,7 @@ def _upsert(session, company_id: int, source: str, source_id: str, **fields) -> 
     return new
 
 
+# ZONULY ▸ enrichment · interview information ▸ enrichment · interview information ▸ interviews._when(): Parse an ISO timestamp (Z allowed) to a naive datetime, or None.
 def _when(s: str | None) -> datetime | None:
     """Parse an ISO timestamp (Z allowed) to a naive datetime, or None."""
     try:
@@ -94,6 +97,7 @@ def _when(s: str | None) -> datetime | None:
         return None
 
 
+# ZONULY ▸ enrichment · interview information ▸ enrichment · interview information ▸ interviews.save_glassdoor(): Glassdoor interview reports as the candidates wrote them. Returns how many were new.
 def save_glassdoor(company_id: int, items: list[dict]) -> int:
     """Glassdoor interview reports as the candidates wrote them. Returns how many were new."""
     added = 0
@@ -117,6 +121,7 @@ def save_glassdoor(company_id: int, items: list[dict]) -> int:
     return added
 
 
+# ZONULY ▸ reddit ▸ enrichment · interview information ▸ interviews.save_reddit(): Reddit posts that name the company and are about its hiring, with the comments that say
 def save_reddit(company_id: int, name: str, items: list[dict]) -> int:
     """Reddit posts that name the company and are about its hiring, with the comments that say
     something (bots, removed and deleted comments dropped). Returns how many were new."""
@@ -145,6 +150,7 @@ def save_reddit(company_id: int, name: str, items: list[dict]) -> int:
     return added
 
 
+# ZONULY ▸ enrichment · interview information ▸ enrichment · interview information ▸ interviews.add_note(): One report, official statement or prep point read by hand from a page (a blog, the
 def add_note(company_id: int, *, kind: str, source: str, source_id: str, body: str, **fields) -> bool:
     """One report, official statement or prep point read by hand from a page (a blog, the
     company's own post). Keyed by (source, source_id) so running it again updates the row."""
@@ -154,6 +160,7 @@ def add_note(company_id: int, *, kind: str, source: str, source_id: str, body: s
     return new
 
 
+# ZONULY ▸ apify scraping · apify people search · reddit · scraping ▸ enrichment · interview information ▸ interviews.scrape(): Glassdoor reports and Reddit threads for one company, through Apify.
 def scrape(company_id: int, *, glassdoor_max: int = 30, reddit_max: int = 40) -> dict:
     """Glassdoor reports and Reddit threads for one company, through Apify."""
     init_db()
@@ -179,6 +186,7 @@ def scrape(company_id: int, *, glassdoor_max: int = 30, reddit_max: int = 40) ->
     return out
 
 
+# ZONULY ▸ enrichment · interview information ▸ enrichment · interview information ▸ interviews.for_company(): The company page's interview section: prep points, the company's own word, then every
 def for_company(company_id: int) -> dict:
     """The company page's interview section: prep points, the company's own word, then every
     report newest first."""
@@ -186,6 +194,7 @@ def for_company(company_id: int) -> dict:
         rows = s.exec(select(InterviewNote).where(InterviewNote.company_id == company_id)
                       .order_by(col(InterviewNote.reported_at).desc().nulls_last(), InterviewNote.id)).all()
 
+    # ZONULY ▸ enrichment · interview information ▸ enrichment · interview information ▸ interviews.for_company.d(): Serialize one interview note row for the company page.
     def d(r: InterviewNote) -> dict:
         """Serialize one interview note row for the company page."""
         return {"id": r.id, "kind": r.kind, "source": r.source, "url": r.url, "role": r.role,

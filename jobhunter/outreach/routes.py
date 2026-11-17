@@ -38,6 +38,7 @@ from jobhunter.outreach import patterns
 router = APIRouter(prefix="/api/outreach", tags=["review"])
 
 
+# ZONULY ▸ api · outreach routes ▸ api · outreach routes ▸ routes._ok(): Return a result dict, or raise HTTP 400 when it carries an error.
 def _ok(result: dict) -> dict:
     """Return a result dict, or raise HTTP 400 when it carries an error."""
     if "error" in result:
@@ -45,17 +46,20 @@ def _ok(result: dict) -> dict:
     return result
 
 
+# ZONULY ▸ api · outreach routes ▸ api · outreach routes ▸ class routes.TextIn
 class TextIn(BaseModel):
     subject: str | None = None
     body: str | None = None
 
 
+# ZONULY ▸ api route GET /review/count · email verification · email drafting · review gate ▸ api · outreach routes ▸ routes.review_count(): Drafts waiting for the user, and approved mail he can still undo (the nav badge…
 @router.get("/review/count")
 def review_count() -> dict:
     """Drafts waiting for the user, and approved mail he can still undo (the nav badge)."""
     return patterns.review_counts()
 
 
+# ZONULY ▸ api route POST /proposals/{proposal_id}/draft · email verification · email drafting · review gate ▸ api · outreach routes ▸ routes.proposal_to_draft(): The proposal's exact email into the review queue as a dr…
 @router.post("/proposals/{proposal_id}/draft")
 def proposal_to_draft(proposal_id: int) -> dict:
     """The proposal's exact email into the review queue as a draft (never approved).
@@ -68,24 +72,28 @@ def proposal_to_draft(proposal_id: int) -> dict:
     return r
 
 
+# ZONULY ▸ api route POST /emails/{email_id}/save · email drafting ▸ api · outreach routes ▸ routes.save_draft(): POST /api/outreach/emails/{email_id}/save — save an edit to a draft without approving it.
 @router.post("/emails/{email_id}/save")
 def save_draft(email_id: int, payload: TextIn) -> dict:
     """POST /api/outreach/emails/{email_id}/save — save an edit to a draft without approving it."""
     return _ok(patterns.save(email_id, subject=payload.subject, body=payload.body))
 
 
+# ZONULY ▸ api route POST /emails/{email_id}/unapprove · email verification · review gate · email sending ▸ api · outreach routes ▸ routes.unapprove(): Back to review before the send agent takes it — a pattern's approva…
 @router.post("/emails/{email_id}/unapprove")
 def unapprove(email_id: int) -> dict:
     """Back to review before the send agent takes it — a pattern's approval or your own."""
     return _ok(patterns.unapprove(email_id))
 
 
+# ZONULY ▸ api route GET /patterns · email verification · email drafting ▸ api · outreach routes ▸ routes.list_patterns(): GET /api/outreach/patterns — list approved email patterns and drafts waiting per segment.
 @router.get("/patterns")
 def list_patterns() -> dict:
     """GET /api/outreach/patterns — list approved email patterns and drafts waiting per segment."""
     return patterns.list_patterns()
 
 
+# ZONULY ▸ api route POST /patterns/from-email/{email_id} · email verification · email drafting ▸ api · outreach routes ▸ routes.approve_pattern(): Approve this draft (with the edits sent) AND make it the pattern for it…
 @router.post("/patterns/from-email/{email_id}")
 def approve_pattern(email_id: int, payload: TextIn | None = None) -> dict:
     """Approve this draft (with the edits sent) AND make it the pattern for its kind."""
@@ -93,12 +101,14 @@ def approve_pattern(email_id: int, payload: TextIn | None = None) -> dict:
     return _ok(patterns.approve_from(email_id, subject=payload.subject, body=payload.body))
 
 
+# ZONULY ▸ api route POST /patterns/{pattern_id}/revoke · review gate ▸ api · outreach routes ▸ routes.revoke_pattern(): POST /api/outreach/patterns/{pattern_id}/revoke — stop a pattern; unsent mail returns to review.
 @router.post("/patterns/{pattern_id}/revoke")
 def revoke_pattern(pattern_id: int) -> dict:
     """POST /api/outreach/patterns/{pattern_id}/revoke — stop a pattern; unsent mail returns to review."""
     return _ok(patterns.revoke(pattern_id))
 
 
+# ZONULY ▸ api route POST /patterns/{pattern_id}/apply · email drafting · ai model call · llm ▸ api · outreach routes ▸ routes.apply_pattern(): Run the pattern over the drafts already waiting in its segment (no model ca…
 @router.post("/patterns/{pattern_id}/apply")
 def apply_pattern(pattern_id: int) -> dict:
     """Run the pattern over the drafts already waiting in its segment (no model call)."""

@@ -38,10 +38,12 @@ PROBES = {
 }
 
 
+# ZONULY ▸ scraping · data ingestion ▸ scraping · data ingestion · ats discovery ▸ discover.slug_candidates(): Plausible board tokens for a company, most likely first.
 def slug_candidates(name: str, website: str | None = None) -> list[str]:
     """Plausible board tokens for a company, most likely first."""
     out: list[str] = []
 
+    # ZONULY ▸ scraping · data ingestion ▸ scraping · data ingestion · ats discovery ▸ discover.slug_candidates.add(): Append a lowercased, hyphen-trimmed slug candidate unless empty or already listed.
     def add(s: str) -> None:
         """Append a lowercased, hyphen-trimmed slug candidate unless empty or already listed."""
         s = s.strip("-").lower()
@@ -77,6 +79,7 @@ def slug_candidates(name: str, website: str | None = None) -> list[str]:
 HIT, MISS, ERROR = "hit", "miss", "error"
 
 
+# ZONULY ▸ scraping · data ingestion ▸ scraping · data ingestion · ats discovery ▸ discover.probe_status(): (HIT|MISS|ERROR, (ats, slug, job_count) on a hit, the error on an ERROR).
 async def probe_status(http: httpx.AsyncClient, ats: str, slug: str) -> tuple[str, tuple[str, str, int] | None, str | None]:
     """(HIT|MISS|ERROR, (ats, slug, job_count) on a hit, the error on an ERROR)."""
     url = PROBES[ats].format(slug=slug)
@@ -103,12 +106,14 @@ async def probe_status(http: httpx.AsyncClient, ats: str, slug: str) -> tuple[st
     return HIT, (ats, slug, len(jobs)), None
 
 
+# ZONULY ▸ scraping · data ingestion ▸ scraping · data ingestion · ats discovery ▸ discover.probe(): Return (ats, slug, job_count) if this board exists and has postings.
 async def probe(http: httpx.AsyncClient, ats: str, slug: str) -> tuple[str, str, int] | None:
     """Return (ats, slug, job_count) if this board exists and has postings."""
     _, hit, _ = await probe_status(http, ats, slug)
     return hit
 
 
+# ZONULY ▸ scraping · data ingestion ▸ scraping · data ingestion · ats discovery ▸ discover.find_ats_status(): (the board with the most jobs or None, how many probes errored). A None with
 async def find_ats_status(
     http: httpx.AsyncClient,
     name: str,
@@ -132,6 +137,7 @@ async def find_ats_status(
     return max(hits, key=lambda h: h[2]), errors
 
 
+# ZONULY ▸ scraping · data ingestion ▸ scraping · data ingestion · ats discovery ▸ discover.find_ats(): Probe every (ats, slug) combination; return the board with the most jobs.
 async def find_ats(
     http: httpx.AsyncClient,
     name: str,

@@ -100,6 +100,7 @@ _DRAFTED = ("draft", "incomplete", "approved", "sent", "replied")
 
 # ------------------------------------------------------------------ per-company facts
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap._obj(): Parse a JSON text into a dict; empty dict when missing, invalid or not an object.
 def _obj(raw: str | None) -> dict:
     """Parse a JSON text into a dict; empty dict when missing, invalid or not an object."""
     try:
@@ -109,6 +110,7 @@ def _obj(raw: str | None) -> dict:
     return v if isinstance(v, dict) else {}
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap._list(): Parse a JSON text into a list; empty list when missing, invalid or not an array.
 def _list(raw: str | None) -> list:
     """Parse a JSON text into a list; empty list when missing, invalid or not an array."""
     try:
@@ -118,6 +120,7 @@ def _list(raw: str | None) -> list:
     return v if isinstance(v, list) else []
 
 
+# ZONULY ▸ scraping · enrichment · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.active(): The companies the dashboard counts (network.filling's rule): a ★-list row unless it
 def active(c: Company) -> bool:
     """The companies the dashboard counts (network.filling's rule): a ★-list row unless it
     is under the pay bar; otherwise active, not overrated, not rejected."""
@@ -126,6 +129,7 @@ def active(c: Company) -> bool:
     return c.status is None and not c.overrated and (c.tier or "unknown") != "reject"
 
 
+# ZONULY ▸ remote from india · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.market(): india (Bengaluru / Hyderabad or India HQ) | remote (remote HQ or a remote-anywhere
 def market(c: Company, *, anywhere_roles: int = 0) -> str:
     """india (Bengaluru / Hyderabad or India HQ) | remote (remote HQ or a remote-anywhere
     posting) | abroad (everything else)."""
@@ -136,6 +140,7 @@ def market(c: Company, *, anywhere_roles: int = 0) -> str:
     return "abroad"
 
 
+# ZONULY ▸ validation · guardrails · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.missing_parts(): guardrails.complete_bar's list, in SHOWN_PARTS order. A row the bar has never
 def missing_parts(c: Company) -> list[str]:
     """guardrails.complete_bar's list, in SHOWN_PARTS order. A row the bar has never
     judged (complete is None and no list) is treated as missing everything it lacks."""
@@ -148,6 +153,7 @@ def missing_parts(c: Company) -> list[str]:
     return [p for p in guardrails.SHOWN_PARTS if p in got]
 
 
+# ZONULY ▸ enrichment · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.reasons(): part -> why it is still missing, from the fill pass and the re-check; never guessed.
 def reasons(c: Company, missing: list[str]) -> dict[str, str | None]:
     """part -> why it is still missing, from the fill pass and the re-check; never guessed.
     None = no reason recorded (the leaf's `filled_at` says whether the pass has run)."""
@@ -159,12 +165,14 @@ def reasons(c: Company, missing: list[str]) -> dict[str, str | None]:
     return out
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap._compact(): Drop null / empty / false values — 4,000 leaves, so every repeated key is weight.
 def _compact(d: dict) -> dict:
     """Drop null / empty / false values — 4,000 leaves, so every repeated key is weight.
     The client reads an absent key as its empty value."""
     return {k: v for k, v in d.items() if v not in (None, False, "", [], {})}
 
 
+# ZONULY ▸ enrichment · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.company_leaf(): Build the graph-map leaf for one company: market, fill status, missing parts and counts.
 def company_leaf(c: Company, *, roles: int, anywhere: int, ready: tuple[int, int], drafted: bool) -> dict:
     """Build the graph-map leaf for one company: market, fill status, missing parts and counts.
 
@@ -192,6 +200,7 @@ def company_leaf(c: Company, *, roles: int, anywhere: int, ready: tuple[int, int
 
 # ------------------------------------------------------------------ the world, read once
 
+# ZONULY ▸ remote from india · people search · referrers · email drafting · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap._load(): Load every active company with its role, remote-role, draft and rea…
 def _load() -> dict:
     """Load every active company with its role, remote-role, draft and ready-referrer counts as leaves."""
     init_db()
@@ -209,6 +218,7 @@ def _load() -> dict:
     return {"companies": rows, "leaves": leaves}
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap._kg(): Read-only query against the graph tables; an absent graph is an empty answer.
 def _kg(sql: str, args: tuple = ()) -> list[sqlite3.Row]:
     """Read-only query against the graph tables; an absent graph is an empty answer."""
     try:
@@ -224,6 +234,7 @@ def _kg(sql: str, args: tuple = ()) -> list[sqlite3.Row]:
         conn.close()
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.investor_links(): Two companies sharing an investor, from the graph's company -FUNDED_BY-> investor edges.
 def investor_links(company_ids: set[int], *, max_share: int = 12) -> tuple[list[dict], list[dict]]:
     """Two companies sharing an investor, from the graph's company -FUNDED_BY-> investor edges.
     Drawn as a star from the investor's first company (n-1 links, not n²); an investor in
@@ -253,12 +264,14 @@ def investor_links(company_ids: set[int], *, max_share: int = 12) -> tuple[list[
 
 # ------------------------------------------------------------------ roll-ups
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap._bucket(): Create an empty graph-map bucket (hub or cluster) with zeroed pending counters.
 def _bucket(id: str, label: str, **kw) -> dict:
     """Create an empty graph-map bucket (hub or cluster) with zeroed pending counters."""
     return {"id": id, "label": label, "count": 0, "complete": 0, "pending": 0, "star_pending": 0,
             "india_pending": 0, "missing": Counter(), **kw}
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap._add(): Add one leaf to a bucket: bump count, complete or pending, and tally its missing parts.
 def _add(b: dict, leaf: dict) -> None:
     """Add one leaf to a bucket: bump count, complete or pending, and tally its missing parts."""
     b["count"] += 1
@@ -272,11 +285,13 @@ def _add(b: dict, leaf: dict) -> None:
         b["missing"][p] += 1
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap._done(): Finish buckets for JSON: turn each missing-parts Counter into a plain dict.
 def _done(buckets) -> list[dict]:
     """Finish buckets for JSON: turn each missing-parts Counter into a plain dict."""
     return [{**b, "missing": dict(b["missing"])} for b in buckets]
 
 
+# ZONULY ▸ enrichment · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.counts(): Summarise leaves: total, complete, still filling, missing parts and pending by market.
 def counts(leaves: list[dict]) -> dict:
     """Summarise leaves: total, complete, still filling, missing parts and pending by market."""
     pend = [l for l in leaves if l["status"] != "complete"]
@@ -294,6 +309,7 @@ def counts(leaves: list[dict]) -> dict:
 
 # ------------------------------------------------------------------ views
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.market_view(): Industry layers → segments → companies; segment co-membership and shared investors.
 def market_view(world: dict) -> dict:
     """Industry layers → segments → companies; segment co-membership and shared investors."""
     hubs = {L["key"]: _bucket(f"layer:{L['key']}", L["label"], code=L["code"], blurb=L["blurb"], order=i, row=0)
@@ -327,6 +343,7 @@ def market_view(world: dict) -> dict:
     }
 
 
+# ZONULY ▸ review gate · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.pipeline_stage(): The furthest stage a company has reached in order — a gate it has not passed stops it
 def pipeline_stage(leaf: dict) -> int:
     """The furthest stage a company has reached in order — a gate it has not passed stops it
     there, whatever lies beyond (a referrer at a company with no description is still at
@@ -347,6 +364,7 @@ def pipeline_stage(leaf: dict) -> int:
     return stage
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.pipeline_view(): Stages left → right; each company sits at the furthest stage it reached.
 def pipeline_view(world: dict) -> dict:
     """Stages left → right; each company sits at the furthest stage it reached."""
     hubs = [_bucket(f"stage:{s['key']}", s["label"], code=f"P{i + 1}", blurb=s["blurb"], order=i, row=0,
@@ -365,6 +383,7 @@ def pipeline_view(world: dict) -> dict:
     return {"hubs": _done(hubs), "subs": [], "leaves": leaves, "links": links, "investors": []}
 
 
+# ZONULY ▸ decision · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.project_view(): The context layer: stages as the chain; features, gaps and decisions as leaves;
 def project_view() -> dict:
     """The context layer: stages as the chain; features, gaps and decisions as leaves;
     constraints and guarantees as a second row the features serve."""
@@ -433,6 +452,7 @@ _cache: dict[str, tuple[tuple, float, dict]] = {}
 _lock = threading.Lock()
 
 
+# ZONULY ▸ enrichment · review gate · scheduler · tick · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.signature(): Changes whenever a tick or a fill lands: cheap aggregates, no row loads.
 def signature() -> tuple:
     """Changes whenever a tick or a fill lands: cheap aggregates, no row loads."""
     init_db()
@@ -447,12 +467,14 @@ def signature() -> tuple:
     return (n, done, str(last_fill), str(last_complete), str(ticks)[:60], emails, kg_sig)
 
 
+# ZONULY ▸ scraping · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap._scraped_all(): Count every scraped company row, active or not.
 def _scraped_all() -> int:
     """Count every scraped company row, active or not."""
     with get_session() as s:
         return s.exec(select(func.count(Company.id))).one()
 
 
+# ZONULY ▸ scraping · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.build(): Build one graph-map view (market, pipeline or project) for the dashboard /graph page.
 def build(view: str = "market") -> dict:
     """Build one graph-map view (market, pipeline or project) for the dashboard /graph page.
 
@@ -478,6 +500,7 @@ def build(view: str = "market") -> dict:
     }
 
 
+# ZONULY ▸ cache · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.cached(): Return a graph-map view from the in-memory cache, rebuilding it when the data changed or it aged.
 def cached(view: str = "market") -> dict:
     """Return a graph-map view from the in-memory cache, rebuilding it when the data changed or it aged."""
     view = view if view in VIEWS else "market"
@@ -493,6 +516,7 @@ def cached(view: str = "market") -> dict:
     return out
 
 
+# ZONULY ▸ validation · guardrails · cache · knowledge graph ▸ knowledge graph · dashboard graph map ▸ graphmap.invalidate(): Clear the graph-map cache so the next request rebuilds it.
 def invalidate() -> None:
     """Clear the graph-map cache so the next request rebuilds it."""
     with _lock:

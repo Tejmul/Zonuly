@@ -160,6 +160,7 @@ _VOWELS = set("aeiouy")
 _ALPHA = re.compile(r"^[a-z]+$")
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ class names.Derived
 @dataclass
 class Derived:
     name: str
@@ -168,11 +169,13 @@ class Derived:
     why: str
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ names._has_vowel(): Return True when the token contains a vowel.
 def _has_vowel(t: str) -> bool:
     """Return True when the token contains a vowel."""
     return any(ch in _VOWELS for ch in t)
 
 
+# ZONULY ▸ filtering · people search · referrers ▸ people · contact discovery · email proof ▸ names._company_words(): Return the words of a company's name and domain label (plus each joined up), to reject as names.
 def _company_words(company: Company | None) -> set[str]:
     """Return the words of a company's name and domain label (plus each joined up), to reject as names."""
     words: set[str] = set()
@@ -188,12 +191,14 @@ def _company_words(company: Company | None) -> set[str]:
     return words
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ names._word_ok(): A token that can be part of a name: letters, a vowel, not an inbox word, not the company.
 def _word_ok(t: str, company_words: set[str], *, min_len: int = 2) -> bool:
     """A token that can be part of a name: letters, a vowel, not an inbox word, not the company."""
     return bool(_ALPHA.match(t) and min_len <= len(t) <= 20 and _has_vowel(t) and t not in _STOP
                 and t not in company_words and not re.search(r"[^aeiouy]{5,}", t))
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ names._initial_surname(): "npatel", "kbysani", "akumar": a first initial and a surname, not a first name.
 def _initial_surname(t: str) -> bool:
     """"npatel", "kbysani", "akumar": a first initial and a surname, not a first name."""
     if t[1:] in SURNAMES:
@@ -201,34 +206,40 @@ def _initial_surname(t: str) -> bool:
     return t[0] not in _VOWELS and t[1] not in _VOWELS and t[:2] not in _ONSETS
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ names._given_shaped(): Return True when a token looks like a given name: valid word, 3 to 12 chars, not a surname.
 def _given_shaped(t: str, company_words: set[str]) -> bool:
     """Return True when a token looks like a given name: valid word, 3 to 12 chars, not a surname."""
     return (_word_ok(t, company_words, min_len=3) and len(t) <= 12 and not _initial_surname(t)
             and t not in SURNAMES)
 
 
+# ZONULY ▸ people search · referrers · sign-in · auth ▸ people · contact discovery · email proof ▸ names._login_tokens(): Split a login or address local part into its lower-case letter runs.
 def _login_tokens(login: str | None) -> list[str]:
     """Split a login or address local part into its lower-case letter runs."""
     return [t for t in re.split(r"[^a-z]+", (login or "").lower()) if t]
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ names._title(): Upper-case the first letter of a token.
 def _title(t: str) -> str:
     """Upper-case the first letter of a token."""
     return t[:1].upper() + t[1:]
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ people · contact discovery · email proof ▸ names._full(): Return a full name Derived from first + last when the person-name guardrail accepts it, else Non…
 def _full(first: str, last: str, why: str, conf: str = "medium") -> Derived | None:
     """Return a full name Derived from first + last when the person-name guardrail accepts it, else None."""
     chk = guardrails.person_name(f"{_title(first)} {_title(last)}")
     return Derived(chk.value, "address", conf, why) if chk else None
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ people · contact discovery · email proof ▸ names._first(): Return a first-name-only Derived when the first-name guardrail accepts it, else None.
 def _first(first: str, why: str, conf: str = "medium") -> Derived | None:
     """Return a first-name-only Derived when the first-name guardrail accepts it, else None."""
     chk = guardrails.first_name_only(_title(first))
     return Derived(chk.value, "address-first", conf, why) if chk else None
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ names.from_address(): The name an address says, or None when it does not say one with confidence.
 def from_address(addr: str | None, *, login: str | None = None, company: Company | None = None,
                  pattern: str | None = None) -> Derived | None:
     """The name an address says, or None when it does not say one with confidence."""
@@ -289,6 +300,7 @@ def from_address(addr: str | None, *, login: str | None = None, company: Company
 
 # ------------------------------------------------------------------ the save path
 
+# ZONULY ▸ validation · guardrails · enrichment · people search · referrers ▸ people · contact discovery · email proof ▸ names.fill_vetted(): guardrails.vet_contact's output, with a name from the address when it has non…
 def fill_vetted(g: dict | None, company: Company | None, *, login: str | None = None) -> dict | None:
     """guardrails.vet_contact's output, with a name from the address when it has none."""
     if not g or g.get("name") or not g.get("email") or g.get("email_kind") == "generic":
@@ -300,6 +312,7 @@ def fill_vetted(g: dict | None, company: Company | None, *, login: str | None = 
     return g
 
 
+# ZONULY ▸ github scraping · people search · referrers · sign-in · auth ▸ people · contact discovery · email proof ▸ names._login(): Return the contact's GitHub login: the handle, else parsed from the github URL, else N…
 def _login(p: Contact) -> str | None:
     """Return the contact's GitHub login: the handle, else parsed from the github URL, else None."""
     if p.handle:
@@ -308,6 +321,7 @@ def _login(p: Contact) -> str | None:
     return m.group(1) if m else None
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ names.name_contact(): Give one stored contact its address name (never over an existing one). A name this
 def name_contact(session, p: Contact, company: Company | None) -> Derived | None:
     """Give one stored contact its address name (never over an existing one). A name this
     module read off the address earlier is read again, so a rule that tightens takes back
@@ -338,6 +352,7 @@ def name_contact(session, p: Contact, company: Company | None) -> Derived | None
     return d
 
 
+# ZONULY ▸ people search · referrers · retry · backoff · sign-in · auth ▸ people · contact discovery · email proof ▸ names._commit(): Commit the session, retrying up to six times with backoff while SQLite says the datab…
 def _commit(session) -> None:
     """Commit the session, retrying up to six times with backoff while SQLite says the database is locked."""
     for attempt in range(6):
@@ -350,6 +365,7 @@ def _commit(session) -> None:
             time.sleep(1 + attempt)
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ people · contact discovery · email proof ▸ names.demote_junk(): An address the guardrails now read as an inbox (or refuse) is a company contact.
 def demote_junk(session, p: Contact) -> str | None:
     """An address the guardrails now read as an inbox (or refuse) is a company contact."""
     if not p.email or (p.email_kind == "generic" and p.affiliation == "generic"):
@@ -371,6 +387,7 @@ def demote_junk(session, p: Contact) -> str | None:
     return why
 
 
+# ZONULY ▸ scraping · people search · referrers ▸ people · contact discovery · email proof ▸ names.repair_escaped(): "u003ejenn.priske@redspace.com" is jenn.priske@redspace.com with a scraper's escaped
 def repair_escaped(session, p: Contact, company: Company | None) -> str | None:
     """"u003ejenn.priske@redspace.com" is jenn.priske@redspace.com with a scraper's escaped
     ">" in front: store the address it is, and judge the row again on it (an inbox stays
@@ -408,6 +425,7 @@ def repair_escaped(session, p: Contact, company: Company | None) -> str | None:
     return fixed
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ people · contact discovery · email proof ▸ names.backfill(): Every contact with an address and no name: a name from the address where it says
 def backfill(*, batch: int = 200, limit: int | None = None, sessions=None) -> dict:
     """Every contact with an address and no name: a name from the address where it says
     one; every address that is an inbox or garbage: generic. Small committed batches."""
@@ -450,6 +468,7 @@ def backfill(*, batch: int = 200, limit: int | None = None, sessions=None) -> di
 _NAME_SPAN = re.compile(r'itemprop="name"[^>]*>\s*([^<]*?)\s*<', re.S)
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ names._cooling(): Return True while the GitHub name lookup cooldown stored in the settings table is in the future.
 def _cooling(session) -> bool:
     """Return True while the GitHub name lookup cooldown stored in the settings table is in the future."""
     row = session.get(Setting, COOLDOWN_KEY)
@@ -459,6 +478,7 @@ def _cooling(session) -> bool:
         return False
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ names._cool(): Pause GitHub name lookups for `minutes` by writing the cooldown time to the settings table.
 def _cool(session, minutes: int) -> None:
     """Pause GitHub name lookups for `minutes` by writing the cooldown time to the settings table."""
     until = (utcnow() + timedelta(minutes=minutes)).isoformat(timespec="seconds")
@@ -468,6 +488,7 @@ def _cool(session, minutes: int) -> None:
     _commit(session)
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ names.profile_name(): ("ok", display name or None) | ("missing", None) | ("limited", why) | ("error", why).
 def profile_name(client, login: str) -> tuple[str, str | None]:
     """("ok", display name or None) | ("missing", None) | ("limited", why) | ("error", why)."""
     try:
@@ -484,6 +505,7 @@ def profile_name(client, login: str) -> tuple[str, str | None]:
     return "ok", (m.group(1).strip() if m and m.group(1).strip() else None)
 
 
+# ZONULY ▸ github scraping · people search · referrers · sign-in · auth ▸ people · contact discovery · email proof ▸ names.candidates(): Current contacts with a GitHub login and no name (or a first name from the address…
 def candidates(session, limit: int) -> list[int]:
     """Current contacts with a GitHub login and no name (or a first name from the address),
     not tried in the last RETRY_DAYS — Sarvam and the ★ / Bengaluru companies first."""
@@ -494,6 +516,7 @@ def candidates(session, limit: int) -> list[int]:
         col(Contact.github).is_not(None), col(Contact.affiliation).in_(guardrails.READY),
         (col(Contact.name).is_(None)) | (Contact.name == "") | (Contact.name_source == "address-first"))).all()
 
+    # ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ names.candidates.rank(): Sort key for name candidates: one pinned company, then India/Bengaluru, no email, referral rank.
     def rank(pc):
         """Sort key for name candidates: one pinned company, then India/Bengaluru, no email, referral rank."""
         p, c = pc
@@ -510,6 +533,7 @@ def candidates(session, limit: int) -> list[int]:
     return out
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ names._one_word_first(): A one-word display name ("Shivesh", "Dhruv") is a first name when it is a given name
 def _one_word_first(value: str | None, p: Contact, login: str) -> str | None:
     """A one-word display name ("Shivesh", "Dhruv") is a first name when it is a given name
     in the list, or the address / login begins with it — not "Pandey", not "Zenitzzu"."""
@@ -524,6 +548,7 @@ def _one_word_first(value: str | None, p: Contact, login: str) -> str | None:
     return None
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ names.apply_profile_name(): Store what their GitHub profile calls them. Returns named | upgraded | first_only | kept |…
 def apply_profile_name(session, p: Contact, login: str, value: str | None, status: str = "ok") -> str:
     """Store what their GitHub profile calls them. Returns named | upgraded | first_only | kept | no_name."""
     src = f"https://github.com/{login}"
@@ -555,6 +580,7 @@ def apply_profile_name(session, p: Contact, login: str, value: str | None, statu
     return outcome or "no_name"
 
 
+# ZONULY ▸ filtering · people search · referrers ▸ people · contact discovery · email proof ▸ names.reuse_one_word_rejects(): Display names an earlier pass refused as one word, read again under the first-name
 def reuse_one_word_rejects(*, sessions=None) -> int:
     """Display names an earlier pass refused as one word, read again under the first-name
     rule — from the reject rows, no request."""
@@ -582,6 +608,7 @@ def reuse_one_word_rejects(*, sessions=None) -> int:
     return n
 
 
+# ZONULY ▸ github scraping · people search · referrers · budget · cost ▸ people · contact discovery · email proof ▸ names.github_pass(): Up to `budget` public profile pages read for a display name. A 403/429 stops the
 def github_pass(budget: int = GITHUB_PER_CYCLE, *, client=None, pause_s: float = GITHUB_PAUSE_S,
                 sessions=None) -> dict:
     """Up to `budget` public profile pages read for a display name. A 403/429 stops the
@@ -627,6 +654,7 @@ def github_pass(budget: int = GITHUB_PER_CYCLE, *, client=None, pause_s: float =
     return out
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ people · contact discovery · email proof ▸ names.step(): The referral job's naming step: the address backfill (cheap, local), then a
 def step(github_budget: int = GITHUB_PER_CYCLE, *, sessions=None) -> dict:
     """The referral job's naming step: the address backfill (cheap, local), then a
     budgeted GitHub pass. Never raises."""

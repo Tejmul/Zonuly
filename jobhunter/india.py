@@ -125,6 +125,7 @@ LIST_KEY = "india-star"
 
 # ================================================================== the pay floor
 
+# ZONULY ▸ validation · guardrails ▸ enrichment · pay floor · india discovery ▸ class india.PayEvidence
 @dataclass
 class PayEvidence:
     lpa: float
@@ -136,6 +137,7 @@ _CTC_RANGE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:L|lpa|lakhs?)?\s*(?:–|-|—|to)
 _CTC_ONE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:L\b|lpa|lakhs?)", re.I)
 
 
+# ZONULY ▸ pay · salary ▸ enrichment · pay floor · india discovery ▸ india.ctc_upper(): The upper bound of a list's CTC text, in LPA: "₹6–18L+" -> 18, "₹30–60L (lead AI
 def ctc_upper(ctc: str | None) -> float | None:
     """The upper bound of a list's CTC text, in LPA: "₹6–18L+" -> 18, "₹30–60L (lead AI
     role)" -> 60, "₹12L" -> 12, "verify on the live JD" -> None."""
@@ -160,6 +162,7 @@ _ABROAD = re.compile(r"\b(us|usa|united states|remote - us|uk|united kingdom|can
                      r"mountain view|austin|boston|toronto|dubai|emea|americas)\b", re.I)
 
 
+# ZONULY ▸ pay · salary ▸ enrichment · pay floor · india discovery ▸ india.paid_in_india(): False only when the posting plainly is not India pay: a non-rupee currency, a figure
 def paid_in_india(j) -> bool:
     """False only when the posting plainly is not India pay: a non-rupee currency, a figure
     in $/€/£, or a location outside India. A posting that says nothing about either counts.
@@ -175,6 +178,7 @@ def paid_in_india(j) -> bool:
     return not where.strip() or bool(_INDIA_PLACE.search(where)) or not _ABROAD.search(where)
 
 
+# ZONULY ▸ validation · guardrails · pay · salary ▸ enrichment · pay floor · india discovery ▸ india.pay_evidence(): Every piece of full-time pay evidence for one company. `jobs` are Job rows (or any
 def pay_evidence(*, company_ppo: float | None, company_ppo_evidence: str | None,
                  jobs: list, list_ctc: str | None = None) -> list[PayEvidence]:
     """Every piece of full-time pay evidence for one company. `jobs` are Job rows (or any
@@ -182,6 +186,7 @@ def pay_evidence(*, company_ppo: float | None, company_ppo_evidence: str | None,
     salary_raw, ppo_lpa). A stipend is never here: it is not full-time pay."""
     out: list[PayEvidence] = []
 
+    # ZONULY ▸ validation · guardrails · pay · salary ▸ enrichment · pay floor · india discovery ▸ india.pay_evidence.add(): Append one pay figure as PayEvidence when it is present and at least the plausibility floor.
     def add(v: float | None, quote: str, kind: str) -> None:
         """Append one pay figure as PayEvidence when it is present and at least the plausibility floor."""
         if v is not None and float(v) >= IMPLAUSIBLE_LPA:
@@ -216,6 +221,7 @@ def pay_evidence(*, company_ppo: float | None, company_ppo_evidence: str | None,
     return out
 
 
+# ZONULY ▸ validation · guardrails · decision ▸ enrichment · pay floor · india discovery ▸ india.pay_verdict(): ('ok' | 'below' | 'unknown', the deciding evidence, the sentence). Any evidence at or
 def pay_verdict(evidence: list[PayEvidence], *, floor: float = MIN_LPA) -> tuple[str, PayEvidence | None, str]:
     """('ok' | 'below' | 'unknown', the deciding evidence, the sentence). Any evidence at or
     above the floor keeps the company. With none at all the pay is unknown, and since
@@ -233,12 +239,14 @@ def pay_verdict(evidence: list[PayEvidence], *, floor: float = MIN_LPA) -> tuple
     return "below", best, f"below the ₹{floor:g}L bar: {best.quote}{more}"
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india.in_scope(): An India company the floor applies to: a Bengaluru / Hyderabad presence, an India HQ
 def in_scope(c: Company) -> bool:
     """An India company the floor applies to: a Bengaluru / Hyderabad presence, an India HQ
     (India means those two cities), or the ★ India list."""
     return bool(c.city) or (c.hq_region or "") == "india" or c.list_key == LIST_KEY
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india._list_ctc(): Return the CTC string from a listed company's list_meta JSON, or None.
 def _list_ctc(c: Company) -> str | None:
     """Return the CTC string from a listed company's list_meta JSON, or None."""
     if not c.list_meta:
@@ -249,6 +257,7 @@ def _list_ctc(c: Company) -> str | None:
         return None
 
 
+# ZONULY ▸ pay · salary ▸ enrichment · pay floor · india discovery ▸ india.apply_pay_floor(): Hide (or bring back) every India company by the pay floor. Never touches a
 def apply_pay_floor(*, dry_run: bool = False) -> dict:
     """Hide (or bring back) every India company by the pay floor. Never touches a
     quarantined or merged row; never deletes anything. Idempotent — the tick runs it."""
@@ -308,6 +317,7 @@ def apply_pay_floor(*, dry_run: bool = False) -> dict:
     return out
 
 
+# ZONULY ▸ email verification · review gate · email sending · csv export ▸ enrichment · pay floor · india discovery ▸ india.pay_proved(): THE CSV GATE (2026-11-02, Tejmul: "i was sending cold dms now i see the companies…
 def pay_proved(c: Company) -> tuple[bool, str]:
     """THE CSV GATE (2026-11-02, Tejmul: "i was sending cold dms now i see the companies are
     not even paying that much" — OrbitAID Aerospace and CynLr had no pay figure at all).
@@ -330,6 +340,7 @@ def pay_proved(c: Company) -> tuple[bool, str]:
     return False, f"no proof of ₹{MIN_LPA:g} LPA early-career pay"
 
 
+# ZONULY ▸ scraping ▸ enrichment · pay floor · india discovery ▸ india.pay_label(): What the dashboard shows beside an India company: ok / below / unknown + the quote.
 def pay_label(c: Company) -> dict:
     """What the dashboard shows beside an India company: ok / below / unknown + the quote."""
     m = guardrails.meta_of(c, "pay_floor")
@@ -397,6 +408,7 @@ _SOFTWARE_STRONG = re.compile(
 SOFTWARE_ONLY = bool(_I.get("software_only", True))
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india.hardware_domain(): The hardware / deep-tech word that puts a company outside software, or None.
 def hardware_domain(text: str | None) -> str | None:
     """The hardware / deep-tech word that puts a company outside software, or None.
 
@@ -412,12 +424,14 @@ def hardware_domain(text: str | None) -> str | None:
     return m.group(0).lower()
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india.non_tech(): A consumer-goods brand with nothing technical said about it.
 def non_tech(text: str | None) -> bool:
     """A consumer-goods brand with nothing technical said about it."""
     t = text or ""
     return bool(_NON_TECH.search(t)) and not _TECH.search(t)
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india.amount_usd_m(): The round's size in $M from "$5M", "$1.3 Mn", "USD 7.5 million", "₹32 Cr", "Rs 3.61 crore".
 def amount_usd_m(text: str | None) -> float | None:
     """The round's size in $M from "$5M", "$1.3 Mn", "USD 7.5 million", "₹32 Cr", "Rs 3.61 crore"."""
     t = text or ""
@@ -441,12 +455,14 @@ def amount_usd_m(text: str | None) -> float | None:
     return None
 
 
+# ZONULY ▸ enrichment ▸ enrichment · pay floor · india discovery ▸ india.stage_of(): Find a funding stage (Seed, Series A...) named in text and normalise it; None if absent.
 def stage_of(text: str | None) -> str | None:
     """Find a funding stage (Seed, Series A...) named in text and normalise it; None if absent."""
     m = _STAGE_TXT.search(text or "")
     return admission.normalize_stage(m.group(1)) if m else None
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india.date_of(): 'YYYY-MM' from "March 10, 2026", "21st January 2026", "Sep 2026" or a /2026/08/ URL.
 def date_of(text: str | None, url: str | None = None) -> str | None:
     """'YYYY-MM' from "March 10, 2026", "21st January 2026", "Sep 2026" or a /2026/08/ URL."""
     for rx in (_DATE_MY, _DATE_DMY):
@@ -459,6 +475,7 @@ def date_of(text: str | None, url: str | None = None) -> str | None:
     return None
 
 
+# ZONULY ▸ decision ▸ enrichment · pay floor · india discovery ▸ india.too_old(): A dated round older than the window. Undated: the newest year in the text decides,
 def too_old(announced: str | None, text: str | None = None) -> bool:
     """A dated round older than the window. Undated: the newest year in the text decides,
     and with no year at all the candidate is kept (preferred, not required)."""
@@ -471,6 +488,7 @@ def too_old(announced: str | None, text: str | None = None) -> bool:
     return age is not None and age > FRESH_MONTHS
 
 
+# ZONULY ▸ enrichment ▸ enrichment · pay floor · india discovery ▸ india.investors_of(): Extract up to six investor names from a 'led by ...' phrase in funding news text.
 def investors_of(text: str | None) -> list[str]:
     """Extract up to six investor names from a 'led by ...' phrase in funding news text."""
     m = _LEDBY.search(text or "")
@@ -489,6 +507,7 @@ def investors_of(text: str | None) -> list[str]:
 _SENT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'“])|\s+\|\s+|\n+")
 
 
+# ZONULY ▸ validation · guardrails ▸ enrichment · pay floor · india discovery ▸ india.city_quote(): The first sentence that names the company AND Bengaluru / Hyderabad — the evidence
 def city_quote(text: str | None, name: str, domain: str | None = None) -> str | None:
     """The first sentence that names the company AND Bengaluru / Hyderabad — the evidence
     quote. None when no single sentence does both."""
@@ -499,6 +518,7 @@ def city_quote(text: str | None, name: str, domain: str | None = None) -> str | 
     return None
 
 
+# ZONULY ▸ admission gate · filtering · review gate ▸ enrichment · pay floor · india discovery ▸ india.headline_name(): 'Bengaluru-based Vecton AI raises ₹6 Cr…' -> 'Vecton AI' (cleaned by the admission gate).
 def headline_name(title: str | None) -> str | None:
     """'Bengaluru-based Vecton AI raises ₹6 Cr…' -> 'Vecton AI' (cleaned by the admission gate)."""
     t = re.sub(r"^(exclusive|breaking|funding alert|startup funding)\s*[:\-|]\s*", "", (title or "").strip(), flags=re.I)
@@ -521,6 +541,7 @@ _GENERIC_WORDS = set(admission.INDIA_CITIES) | {
 
 # ================================================================== discovery: admitting one candidate
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ class india.Cand
 @dataclass
 class Cand:
     name: str
@@ -547,10 +568,12 @@ _CHANNEL = {"rss": "feed", "search": "jina-ddg", "directory": "jina", "yc": "yc"
 _NOT_A_HIRING_CLAIM = {"yc", "github", "portfolio"}
 
 
+# ZONULY ▸ data ingestion ▸ enrichment · pay floor · india discovery ▸ class india.Run: One discovery pass: counts per source, names already handled in this pass, and
 class Run:
     """One discovery pass: counts per source, names already handled in this pass, and
     the ids of the companies it admitted."""
 
+    # ZONULY ▸ data ingestion · admission gate · filtering ▸ enrichment · pay floor · india discovery ▸ india.Run.__init__(): Start an India discovery pass that admits at most `limit` new companies.
     def __init__(self, limit: int):
         """Start an India discovery pass that admits at most `limit` new companies."""
         self.limit = limit
@@ -559,21 +582,25 @@ class Run:
         self.updated_ids: list[int] = []
         self.done: set[str] = set()
 
+    # ZONULY ▸ admission gate · filtering ▸ enrichment · pay floor · india discovery ▸ india.Run.stat(): Return (creating if needed) the seen/admitted/updated/skipped counters for one source.
     def stat(self, kind: str) -> dict:
         """Return (creating if needed) the seen/admitted/updated/skipped counters for one source."""
         return self.by_source.setdefault(kind, {"seen": 0, "admitted": 0, "updated": 0, "skipped": {}})
 
+    # ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india.Run.skip(): Count one skipped candidate under its source and reason.
     def skip(self, kind: str, why: str) -> None:
         """Count one skipped candidate under its source and reason."""
         s = self.stat(kind)["skipped"]
         s[why] = s.get(why, 0) + 1
 
+    # ZONULY ▸ admission gate · filtering ▸ enrichment · pay floor · india discovery ▸ india.Run.full(): True once this pass has admitted its limit of new companies.
     @property
     def full(self) -> bool:
         """True once this pass has admitted its limit of new companies."""
         return len(self.new_ids) >= self.limit
 
 
+# ZONULY ▸ data ingestion · admission gate · filtering · filtering ▸ enrichment · pay floor · india discovery ▸ india._admit(): Admission for India discovery: filter one candidate and upsert it as a company.
 def _admit(session, run: Run, c: Cand) -> Company | None:
     """Admission for India discovery: filter one candidate and upsert it as a company.
 
@@ -659,6 +686,7 @@ def _admit(session, run: Run, c: Cand) -> Company | None:
     return company
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india._money_in(): True when text mentions a USD or INR money amount.
 def _money_in(text: str | None) -> bool:
     """True when text mentions a USD or INR money amount."""
     return bool(_USD.search(text or "") or _INR.search(text or ""))
@@ -685,6 +713,7 @@ _SEEN_KEY = "india:seen"
 _RSS_AT = "india:rss_at"
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india._seen(): Return the set of India RSS item keys already processed (from the india:seen setting).
 def _seen(session) -> set[str]:
     """Return the set of India RSS item keys already processed (from the india:seen setting)."""
     try:
@@ -693,12 +722,14 @@ def _seen(session) -> set[str]:
         return set()
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india._save_seen(): Save processed India RSS item keys to the india:seen setting, keeping the last 6,000.
 def _save_seen(session, seen: set[str], new: list[str]) -> None:
     """Save processed India RSS item keys to the india:seen setting, keeping the last 6,000."""
     keep = (list(seen) + new)[-6000:]
     set_setting(session, _SEEN_KEY, json.dumps(keep))
 
 
+# ZONULY ▸ scraping ▸ enrichment · pay floor · india discovery ▸ india._feed_items(): Fetch and parse one RSS feed into items (title, text, url, announced date); network call.
 def _feed_items(url: str) -> list[dict]:
     """Fetch and parse one RSS feed into items (title, text, url, announced date); network call.
 
@@ -731,6 +762,7 @@ def _feed_items(url: str) -> list[dict]:
     return out
 
 
+# ZONULY ▸ enrichment · decision ▸ enrichment · pay floor · india discovery ▸ india.from_rss(): Funding headlines from the Indian feeds. An item whose feed text names no target
 def from_rss(session, run: Run, *, pages: int = 1, reads: int = 10, force: bool = False) -> None:
     """Funding headlines from the Indian feeds. An item whose feed text names no target
     city has its article read (up to `reads` a run) — the quote must come from the article."""
@@ -791,6 +823,7 @@ _TEMPLATES = ["{city}-based {sector} startup raises {stage} funding",
 _SEARCH_CURSOR = "india:search_cursor"
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india.search_queries(): The rotating pool: every city × sector × stage, three phrasings, this year and last.
 def search_queries() -> list[str]:
     """The rotating pool: every city × sector × stage, three phrasings, this year and last."""
     year = datetime.now().year
@@ -803,6 +836,7 @@ def search_queries() -> list[str]:
     return out
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india.from_search(): DuckDuckGo via Jina (web.KEYLESS). Each hit's title must be a raise headline; its
 def from_search(session, run: Run, *, queries: int = 6) -> int:
     """DuckDuckGo via Jina (web.KEYLESS). Each hit's title must be a raise headline; its
     title + snippet must name the company and Bengaluru / Hyderabad in one sentence."""
@@ -853,11 +887,13 @@ _DIR_INDUSTRY = re.compile(r"\((https://fundediq\.co/funded-startups-[a-z0-9-]+-
 _TLD2 = ("co-in", "org-in", "net-in", "co-uk", "com-au", "com-sg")
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india._slug(): Turn text into a lowercase ASCII hyphenated slug.
 def _slug(text: str) -> str:
     """Turn text into a lowercase ASCII hyphenated slug."""
     return re.sub(r"[^a-z0-9]+", "-", admission._ascii(text).lower()).strip("-")
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india.domain_from_slug(): FundedIQ's row slug is '<name>-<domain with dots as dashes>':
 def domain_from_slug(name: str, slug: str) -> str | None:
     """FundedIQ's row slug is '<name>-<domain with dots as dashes>':
     'august-ai-meetaugust-ai' -> 'meetaugust.ai'. None when it does not split cleanly."""
@@ -875,6 +911,7 @@ def domain_from_slug(name: str, slug: str) -> str | None:
     return f"{base}.{tld}" if base and 2 <= len(tld) <= 6 else None
 
 
+# ZONULY ▸ enrichment · pay floor · india discovery ▸ enrichment · pay floor · india discovery ▸ india.parse_directory(): Rows of a directory page: name, city text, industries + what they do, stage, month, amount.
 def parse_directory(text: str) -> list[dict]:
     """Rows of a directory page: name, city text, industries + what they do, stage, month, amount."""
     out = []
@@ -897,6 +934,7 @@ def parse_directory(text: str) -> list[dict]:
     return out
 
 
+# ZONULY ▸ enrichment · cache ▸ enrichment · pay floor · india discovery ▸ india._dir_pages(): Return the funding-directory pages to walk (city pages plus their industry links), cached daily.
 def _dir_pages(session) -> list[str]:
     """Return the funding-directory pages to walk (city pages plus their industry links), cached daily."""
     from jobhunter.research import web
@@ -917,6 +955,7 @@ def _dir_pages(session) -> list[str]:
     return pages
 
 
+# ZONULY ▸ data ingestion · admission gate · filtering · enrichment ▸ enrichment · pay floor · india discovery ▸ india.from_directory(): India discovery from funding directory pages: read the next pages and admit their…
 def from_directory(session, run: Run, *, pages: int = 1) -> int:
     """India discovery from funding directory pages: read the next pages and admit their companies.
 
@@ -964,6 +1003,7 @@ _YC_AT = "india:yc_day"
 YC_MIN_BATCH = "2019-01-01"
 
 
+# ZONULY ▸ yc scraping ▸ enrichment · pay floor · india discovery ▸ india.from_yc(): Active, private YC companies located in Bengaluru / Hyderabad (the yc-oss mirror).
 def from_yc(session, run: Run, *, force: bool = False) -> None:
     """Active, private YC companies located in Bengaluru / Hyderabad (the yc-oss mirror)."""
     import httpx
@@ -1036,6 +1076,7 @@ _ATS_TITLE_NOISE = re.compile(r"(?i)\b(careers?|jobs?|openings|hiring|work with 
                               r"at|in|keka|darwinbox|zoho recruit|cutshort|instahyre|wellfound|page)\b|[|:–—\-]")
 
 
+# ZONULY ▸ scraping · data ingestion · admission gate · filtering ▸ enrichment · pay floor · india discovery ▸ india.from_ats(): India discovery from ATS boards: web-search hosted boards in Bengaluru/Hyderabad and admit…
 def from_ats(session, run: Run, *, queries: int = 1) -> int:
     """India discovery from ATS boards: web-search hosted boards in Bengaluru/Hyderabad and admit them.
 
@@ -1089,6 +1130,7 @@ SOURCES = tuple(_SRC.get("order") or ("rss", "directory", "yc", "github", "cutsh
                                       "wellfound", "ats"))
 
 
+# ZONULY ▸ data ingestion ▸ enrichment · pay floor · india discovery ▸ india.discover(): One India discovery pass: up to `limit` NEW Bengaluru / Hyderabad companies, in
 def discover(limit: int | None = None, *, searches: int = 6, dir_pages: int = 1, rss_reads: int = 10,
              rss_pages: int = 1, ats_queries: int = 1, budget_s: int = 420, force: bool = False,
              sources: tuple[str, ...] = SOURCES, github_orgs: int | None = None,
@@ -1104,6 +1146,7 @@ def discover(limit: int | None = None, *, searches: int = 6, dir_pages: int = 1,
     run = Run(limit)
     t0 = time.time()
 
+    # ZONULY ▸ data ingestion ▸ enrichment · pay floor · india discovery ▸ india.discover._n(): Return a per-source count from the argument, else from the sources config default.
     def _n(v, key, default):
         """Return a per-source count from the argument, else from the sources config default."""
         return int(v if v is not None else _SRC.get(key, default))

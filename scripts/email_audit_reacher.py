@@ -34,6 +34,7 @@ from jobhunter.contacts import reacher  # noqa: E402
 from jobhunter.db import EmailCheck, get_session, init_db  # noqa: E402
 
 
+# ZONULY ▸ people search · referrers · email verification · monitoring ▸ people · email proof audit ▸ email_audit_reacher.main(): CLI: run Reacher email proof over the audit's unproved addresses, referrers first.
 def main() -> int:
     """CLI: run Reacher email proof over the audit's unproved addresses, referrers first.
 
@@ -60,6 +61,7 @@ def main() -> int:
     todo = [r["email"] for r in rows if r["group"] != "REAL" and r["email"] not in known]
     domains = {a.split("@")[1] for a in todo}
 
+    # ZONULY ▸ email verification · monitoring ▸ people · email proof audit ▸ email_audit_reacher.main.worth_probing(): Return True when a domain can be probed from here (or with --all), or has no MX record at all.
     def worth_probing(d: str) -> bool:
         """Return True when a domain can be probed from here (or with --all), or has no MX record at all."""
         # 2026-10-31: 8 lookups at a time, not 32 (32 overloaded the resolver), and a lookup
@@ -82,6 +84,7 @@ def main() -> int:
     print(f"checking {len(todo)} · skipped {skipped} Google-hosted · log {log_path}", flush=True)
     tally: Counter = Counter()
 
+    # ZONULY ▸ decision · email verification · monitoring ▸ people · email proof audit ▸ email_audit_reacher.main.progress(): Progress callback: count the verdict and log one checked address.
     def progress(n, addr, row):
         """Progress callback: count the verdict and log one checked address."""
         tally[row.verdict] += 1

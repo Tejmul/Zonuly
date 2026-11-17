@@ -35,6 +35,7 @@ from jobhunter.db import Company, get_session, init_db  # noqa: E402
 from jobhunter.fill import backfill_linkedin  # noqa: E402
 
 
+# ZONULY ▸ linkedin scraping · enrichment · decision · remote from india ▸ enrichment · remote target fill ▸ remote_fill.main(): Find websites, then LinkedIn pages, for remote targets that lack a LinkedIn page (enrichme…
 def main() -> int:
     """Find websites, then LinkedIn pages, for remote targets that lack a LinkedIn page (enrichment).
     Prints progress and a before/after JSON summary; free, network calls only."""

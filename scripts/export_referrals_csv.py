@@ -93,6 +93,7 @@ OPEN_ASK = [
 ]
 
 
+# ZONULY ▸ enrichment · people search · referrers · csv export ▸ outreach · csv export ▸ export_referrals_csv.page_role(): A fresher tech title from the company's own careers page (company.hiring_roles), if any.
 def page_role(c: Company) -> str | None:
     """A fresher tech title from the company's own careers page (company.hiring_roles), if any."""
     try:
@@ -106,6 +107,7 @@ def page_role(c: Company) -> str | None:
     return None
 
 
+# ZONULY ▸ pay · salary · people search · referrers · csv export ▸ outreach · csv export ▸ export_referrals_csv.pays_24(): Can they pay a fresher 24+ LPA? A stated number says so, else deep pockets / a stated pay band.
 def pays_24(c: Company, job: Job | None) -> bool:
     """Can they pay a fresher 24+ LPA? A stated number says so, else deep pockets / a stated pay band."""
     stated = [x for x in (c.ppo_lpa, job and job.ppo_lpa, job and job.salary_min_lpa) if x]
@@ -114,6 +116,7 @@ def pays_24(c: Company, job: Job | None) -> bool:
     return (c.pay_power or 0) >= 85
 
 
+# ZONULY ▸ pay · salary · remote from india · people search · referrers · csv export ▸ outreach · csv export ▸ export_referrals_csv.tier(): Ordering tier for a lead's company: 0 best bet, 1 BLR/HYD paying 24+ LPA, 2 oth…
 def tier(c: Company, job: Job | None, bets: dict[int, int]) -> int:
     """Ordering tier for a lead's company: 0 best bet, 1 BLR/HYD paying 24+ LPA, 2 other BLR/HYD, 3 remote."""
     india = (c.city or "").lower() in INDIA or any(k in ((job and job.location) or "").lower() for k in INDIA)
@@ -126,6 +129,7 @@ def tier(c: Company, job: Job | None, bets: dict[int, int]) -> int:
     return 3
 
 
+# ZONULY ▸ people search · referrers · csv export ▸ outreach · csv export ▸ export_referrals_csv.addresses_in(): Every e-mail address in a CSV, whatever the sheet's column names. Reads the `email`
 def addresses_in(path: Path) -> list[str]:
     """Every e-mail address in a CSV, whatever the sheet's column names. Reads the `email`
     column when there is one, otherwise any cell that looks like an address — so a sheet
@@ -142,6 +146,7 @@ def addresses_in(path: Path) -> list[str]:
     return out
 
 
+# ZONULY ▸ people search · referrers · csv export ▸ outreach · csv export ▸ export_referrals_csv.mark_sent(): File a sheet of people already written to, and mark them mailed forever.
 def mark_sent(session, path: Path) -> dict:
     """File a sheet of people already written to, and mark them mailed forever.
 
@@ -175,6 +180,7 @@ def mark_sent(session, path: Path) -> dict:
     return out
 
 
+# ZONULY ▸ people search · referrers · review gate · csv export ▸ outreach · csv export ▸ export_referrals_csv.print_segregation(): THE SEGREGATION (2026-11-02, Tejmul: "segregate them and whenever i ask for a new verif…
 def print_segregation(session) -> dict:
     """THE SEGREGATION (2026-11-02, Tejmul: "segregate them and whenever i ask for a new verified
     list of csv dont send me this emails again which were sent").
@@ -227,6 +233,7 @@ def print_segregation(session) -> dict:
     return out
 
 
+# ZONULY ▸ dedup · people search · referrers · email verification · csv export ▸ outreach · csv export ▸ export_referrals_csv.main(): CLI: write the referral mail-merge CSV of proved addresses, or a numbered --batch.
 def main() -> int:
     """CLI: write the referral mail-merge CSV of proved addresses, or a numbered --batch.
     Also handles --sent (import sheets already mailed), --done CSVn and --sent-list.

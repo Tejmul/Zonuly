@@ -56,6 +56,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 
 
+# ZONULY ▸ config · loads config.yaml ▸ config · loads config.yaml ▸ __init__.load_config(): Load config.yaml from the repo root and return it as a dict.
 def load_config() -> dict:
     """Load config.yaml from the repo root and return it as a dict."""
     with open(ROOT / "config.yaml") as f:
@@ -70,6 +71,7 @@ CONFIG = load_config()
 _DOTENV_LOADED = False
 
 
+# ZONULY ▸ config · loads config.yaml ▸ config · loads config.yaml ▸ __init__._load_dotenv(): Fold a local, gitignored .env into os.environ. Values already set win.
 def _load_dotenv() -> None:
     """Fold a local, gitignored .env into os.environ. Values already set win.
 
@@ -99,6 +101,7 @@ def _load_dotenv() -> None:
         pass
 
 
+# ZONULY ▸ config · loads config.yaml ▸ config · loads config.yaml ▸ __init__.secret(): First non-empty environment value among `names`, else "".
 def secret(*names: str) -> str:
     """First non-empty environment value among `names`, else "".
 
@@ -116,6 +119,7 @@ def secret(*names: str) -> str:
     return ""
 
 
+# ZONULY ▸ config · loads config.yaml ▸ config · loads config.yaml ▸ __init__.has_secret(): Return True when any of the named secrets is set (env or .env).
 def has_secret(*names: str) -> bool:
     """Return True when any of the named secrets is set (env or .env)."""
     return bool(secret(*names))

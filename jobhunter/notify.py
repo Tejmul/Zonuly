@@ -36,11 +36,13 @@ log = logging.getLogger(__name__)
 ENABLED = bool((CONFIG.get("notifications") or {}).get("macos", True))
 
 
+# ZONULY ▸ monitoring · notifications ▸ monitoring · notifications ▸ notify._escape(): Escape backslashes and double quotes for AppleScript and cut to 200 chars.
 def _escape(text: str) -> str:
     """Escape backslashes and double quotes for AppleScript and cut to 200 chars."""
     return (text or "").replace("\\", "\\\\").replace('"', '\\"')[:200]
 
 
+# ZONULY ▸ email sending ▸ monitoring · notifications ▸ notify.send(): Fire a native notification. Silently no-ops off macOS or when disabled.
 def send(title: str, message: str, subtitle: str = "") -> bool:
     """Fire a native notification. Silently no-ops off macOS or when disabled."""
     if not ENABLED or not shutil.which("osascript"):
@@ -58,6 +60,7 @@ def send(title: str, message: str, subtitle: str = "") -> bool:
         return False
 
 
+# ZONULY ▸ scoring ▸ monitoring · notifications ▸ notify.notify_high_matches(): Announce newly-scored high matches, once each.
 def notify_high_matches(limit: int = 5) -> int:
     """Announce newly-scored high matches, once each."""
     init_db()
@@ -88,6 +91,7 @@ def notify_high_matches(limit: int = 5) -> int:
         return len(jobs)
 
 
+# ZONULY ▸ replies · follow-up ▸ monitoring · notifications ▸ notify.notify_replies(): Announce new replies, leading with the positive ones.
 def notify_replies(limit: int = 5) -> int:
     """Announce new replies, leading with the positive ones."""
     init_db()
@@ -112,6 +116,7 @@ def notify_replies(limit: int = 5) -> int:
         return len(replies)
 
 
+# ZONULY ▸ email drafting · review gate ▸ monitoring · notifications ▸ notify.notify_queue(): Remind the user that drafts are waiting for review.
 def notify_queue(threshold: int = 1) -> int:
     """Remind the user that drafts are waiting for review."""
     init_db()
@@ -126,6 +131,7 @@ def notify_queue(threshold: int = 1) -> int:
     return n
 
 
+# ZONULY ▸ dedup ▸ monitoring · notifications ▸ notify.urgent(): An emergency: this macOS notification plus an URGENT mail (notify_bot), at most one
 def urgent(key: str, title: str, detail: str) -> dict:
     """An emergency: this macOS notification plus an URGENT mail (notify_bot), at most one
     per `key` per notify.urgent_dedup_hours. Mail only when notify.email is on."""

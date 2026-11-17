@@ -199,6 +199,7 @@ log = logging.getLogger(__name__)
 _API = CONFIG.get("api") or {}
 
 
+# ZONULY ▸ scheduler · tick · access control ▸ api · fastapi controllers ▸ api.lifespan(): API startup/shutdown: init the DB, start the scheduler (not on a public instance),
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """API startup/shutdown: init the DB, start the scheduler (not on a public instance),
@@ -223,6 +224,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="JobHunter API", version="1.0", lifespan=lifespan)
 
 
+# ZONULY ▸ review gate ▸ api · fastapi controllers ▸ api._access_guard(): One gate in front of every route, present and future.
 async def _access_guard(request, call_next):
     """One gate in front of every route, present and future.
 
@@ -294,6 +296,7 @@ _tasks: dict[str, dict] = {}
 _lock = threading.Lock()
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ api._run_task(): Run fn in a background thread as a tracked task and return its task id.
 def _run_task(name: str, fn, *args, **kwargs) -> str:
     """Run fn in a background thread as a tracked task and return its task id.
     The result or error is kept in the in-memory task list served at /api/tasks."""
@@ -301,6 +304,7 @@ def _run_task(name: str, fn, *args, **kwargs) -> str:
     with _lock:
         _tasks[task_id] = {"id": task_id, "name": name, "status": "running", "started": _now(), "result": None}
 
+    # ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ api._run_task.runner(): Run the task function and record its result or error on the task entry.
     def runner() -> None:
         """Run the task function and record its result or error on the task entry."""
         try:
@@ -316,11 +320,13 @@ def _run_task(name: str, fn, *args, **kwargs) -> str:
     return task_id
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ api._now(): Return the local time as an ISO string (seconds precision).
 def _now() -> str:
     """Return the local time as an ISO string (seconds precision)."""
     return datetime.now().isoformat(timespec="seconds")
 
 
+# ZONULY ▸ api route GET /api/tasks ▸ api · fastapi controllers ▸ api.list_tasks(): GET /api/tasks — list the 25 most recent background tasks, newest first.
 @app.get("/api/tasks")
 def list_tasks() -> list[dict]:
     """GET /api/tasks — list the 25 most recent background tasks, newest first."""
@@ -328,6 +334,7 @@ def list_tasks() -> list[dict]:
         return sorted(_tasks.values(), key=lambda t: t["started"], reverse=True)[:25]
 
 
+# ZONULY ▸ api route GET /api/tasks/{task_id} ▸ api · fastapi controllers ▸ api.get_task(): GET /api/tasks/{task_id} — one background task's status and result; 404 if unknown.
 @app.get("/api/tasks/{task_id}")
 def get_task(task_id: str) -> dict:
     """GET /api/tasks/{task_id} — one background task's status and result; 404 if unknown."""
@@ -340,6 +347,7 @@ def get_task(task_id: str) -> dict:
 
 # ---------------------------------------------------------------- serializers
 
+# ZONULY ▸ pay · salary · scoring · decision ▸ api · fastapi controllers ▸ api._job_dict(): Turn a Job row into the API JSON: fields, salary, match score, reasons, verdict and gaps.
 def _job_dict(job: Job, *, full: bool = False) -> dict:
     """Turn a Job row into the API JSON: fields, salary, match score, reasons, verdict and gaps.
     With full=True the description is included."""
@@ -387,6 +395,7 @@ def _job_dict(job: Job, *, full: bool = False) -> dict:
     return d
 
 
+# ZONULY ▸ people search · referrers ▸ api · fastapi controllers ▸ api._contact_dict(): Turn a Contact row into the API JSON (redacted by access rules): links, confidence,
 def _contact_dict(c: Contact, company_name: str | None = None) -> dict:
     """Turn a Contact row into the API JSON (redacted by access rules): links, confidence,
     affiliation, mailed lock and research notes."""
@@ -425,6 +434,7 @@ def _contact_dict(c: Contact, company_name: str | None = None) -> dict:
     })
 
 
+# ZONULY ▸ review gate ▸ api · fastapi controllers ▸ api._email_dict(): Turn an Email row into the API JSON (redacted): recipient, body, status, review flags,
 def _email_dict(e: Email, *, contact: Contact | None = None, company: Company | None = None) -> dict:
     """Turn an Email row into the API JSON (redacted): recipient, body, status, review flags,
     evidence, composer record and pattern approval."""
@@ -474,6 +484,7 @@ def _email_dict(e: Email, *, contact: Contact | None = None, company: Company | 
     })
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ api._json_or(): Parse a JSON string, returning default when it is empty or invalid.
 def _json_or(raw: str | None, default):
     """Parse a JSON string, returning default when it is empty or invalid."""
     if not raw:
@@ -487,6 +498,7 @@ def _json_or(raw: str | None, default):
 # ---------------------------------------------------------------- health & overview
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ api._sending_setup(): The mailbox set-up as a public visitor may see it: addresses masked, hints dropped.
 def _sending_setup(block):
     """The mailbox set-up as a public visitor may see it: addresses masked, hints dropped.
 
@@ -506,6 +518,7 @@ def _sending_setup(block):
         return [_sending_setup(v) for v in block]
     return block
 
+# ZONULY ▸ api route GET /api/health · github scraping · hunter.io · email sending · ai model call · llm · monitoring ▸ api · fastapi controllers ▸ api.health(): GET /api/health — status of the model, Gmail, n8n, send q…
 @app.get("/api/health")
 def health() -> dict:
     """GET /api/health — status of the model, Gmail, n8n, send quota, Hunter, GitHub token,
@@ -516,6 +529,7 @@ def health() -> dict:
     from jobhunter.outreach import gmail, sender
 
     profile_path = ROOT / CONFIG["profile_path"]
+    # ZONULY ▸ monitoring ▸ api · fastapi controllers ▸ api.health.part(): Call one health check part, returning an error dict instead of raising.
     def part(fn):
         """Call one health check part, returning an error dict instead of raising."""
         # 2026-10-24: one unreadable part (the deployed copy's send ledger) returned 500 for the
@@ -545,6 +559,7 @@ def health() -> dict:
     }
 
 
+# ZONULY ▸ deployment · snapshot ▸ api · fastapi controllers ▸ api._snapshot_status(): Return the snapshot status, or an error dict when it cannot be read.
 def _snapshot_status() -> dict | None:
     """Return the snapshot status, or an error dict when it cannot be read."""
     from jobhunter import snapshot
@@ -556,6 +571,7 @@ def _snapshot_status() -> dict | None:
         return {"schema_ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
+# ZONULY ▸ api route GET /api/models · ai model call · llm · budget · cost ▸ api · fastapi controllers ▸ api.models_status(): OpenRouter: key presence, aliases, caps and today's spend. Never the key.
 @app.get("/api/models")
 def models_status() -> dict:
     """OpenRouter: key presence, aliases, caps and today's spend. Never the key."""
@@ -564,6 +580,7 @@ def models_status() -> dict:
     return llm.health()
 
 
+# ZONULY ▸ api route GET /api/models/costs · ai model call · llm · budget · cost ▸ api · fastapi controllers ▸ api.models_costs(): What the model layer has cost, by alias and by stage.
 @app.get("/api/models/costs")
 def models_costs(days: int = Query(1, ge=1, le=90), month: bool = False) -> dict:
     """What the model layer has cost, by alias and by stage."""
@@ -572,6 +589,7 @@ def models_costs(days: int = Query(1, ge=1, le=90), month: bool = False) -> dict
     return {"spend": openrouter.spend(days=days, month=month), "budget": openrouter.budget_status()}
 
 
+# ZONULY ▸ api route GET /api/overview · scraping · people search · referrers ▸ api · fastapi controllers ▸ api.overview(): GET /api/overview — dashboard overview: counts by source, companies, contacts, top
 @app.get("/api/overview")
 def overview() -> dict:
     """GET /api/overview — dashboard overview: counts by source, companies, contacts, top
@@ -631,6 +649,7 @@ def overview() -> dict:
         monday = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
         week_starts = [monday - timedelta(weeks=i) for i in range(7, -1, -1)]
 
+        # ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ api.overview.per_week(): Bucket timestamps into counts per week over the last eight ISO weeks.
         def per_week(stamps: list[datetime | None]) -> list[int]:
             """Bucket timestamps into counts per week over the last eight ISO weeks."""
             out = [0] * len(week_starts)
@@ -650,6 +669,7 @@ def overview() -> dict:
         }
         two_weeks_ago = week_ago - timedelta(days=7)
 
+        # ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ api.overview.window(): Count rows of a table whose timestamp column falls in [start, end).
         def window(model, column, start, end=None) -> int:
             """Count rows of a table whose timestamp column falls in [start, end)."""
             stmt = select(func.count()).select_from(model).where(col(column) >= start)
@@ -737,6 +757,7 @@ def overview() -> dict:
 
 # ---------------------------------------------------------------- jobs
 
+# ZONULY ▸ api route GET /api/jobs · filtering · pay · salary · scoring · remote from india ▸ api · fastapi controllers ▸ api.list_jobs(): GET /api/jobs — list jobs with filters (text, status, source, score, pay, remote…
 @app.get("/api/jobs")
 def list_jobs(
     q: str | None = None,
@@ -779,6 +800,7 @@ def list_jobs(
         return {"total": total, "items": [_job_dict(j) for j in rows]}
 
 
+# ZONULY ▸ api route GET /api/jobs/{job_id} · enrichment · people search · referrers ▸ api · fastapi controllers ▸ api.get_job(): GET /api/jobs/{job_id} — one job with its description, company and contacts; 404 if missi…
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: int) -> dict:
     """GET /api/jobs/{job_id} — one job with its description, company and contacts; 404 if missing."""
@@ -812,10 +834,12 @@ def get_job(job_id: int) -> dict:
         return data
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ class api.JobStatusIn
 class JobStatusIn(BaseModel):
     status: Literal["new", "scored", "high_match", "ignored", "applied"]
 
 
+# ZONULY ▸ api route PATCH /api/jobs/{job_id} ▸ api · fastapi controllers ▸ api.update_job(): PATCH /api/jobs/{job_id} — set a job's status. Writes to the job table.
 @app.patch("/api/jobs/{job_id}")
 def update_job(job_id: int, payload: JobStatusIn) -> dict:
     """PATCH /api/jobs/{job_id} — set a job's status. Writes to the job table."""
@@ -831,6 +855,7 @@ def update_job(job_id: int, payload: JobStatusIn) -> dict:
 
 # ---------------------------------------------------------------- the decision brain (decide.py)
 
+# ZONULY ▸ api route GET /api/decide · decision ▸ api · fastapi controllers ▸ api.decide_shortlist(): The ranked Bengaluru / Hyderabad shortlist by P(offer), or the rows parked under one verdict.
 @app.get("/api/decide")
 def decide_shortlist(pool: str = "all", verdict: str | None = None, limit: int = Query(200, le=2000)) -> dict:
     """The ranked Bengaluru / Hyderabad shortlist by P(offer), or the rows parked under one verdict."""
@@ -839,6 +864,7 @@ def decide_shortlist(pool: str = "all", verdict: str | None = None, limit: int =
     return decide.shortlist(pool=pool, verdict=verdict, limit=limit)
 
 
+# ZONULY ▸ api route GET /api/decide/today · enrichment · decision · people search · referrers ▸ api · fastapi controllers ▸ api.decide_today(): Today's one company — fill it or ask its referrer. Picked on first read of…
 @app.get("/api/decide/today")
 def decide_today() -> dict:
     """Today's one company — fill it or ask its referrer. Picked on first read of the day."""
@@ -847,6 +873,7 @@ def decide_today() -> dict:
     return decide.today()
 
 
+# ZONULY ▸ api route POST /api/decide/today/{status} · decision ▸ api · fastapi controllers ▸ api.decide_mark(): Mark today's company; a skip picks the next one on the shortlist.
 @app.post("/api/decide/today/{status}")
 def decide_mark(status: Literal["asked", "skipped", "filled"], note: str | None = None) -> dict:
     """Mark today's company; a skip picks the next one on the shortlist."""
@@ -858,6 +885,7 @@ def decide_mark(status: Literal["asked", "skipped", "filled"], note: str | None 
         raise HTTPException(404, str(e))
 
 
+# ZONULY ▸ api route GET /api/decide/company/{company_id} · validation · guardrails · decision ▸ api · fastapi controllers ▸ api.decide_company(): Every question, its probability and evidence, for one company.
 @app.get("/api/decide/company/{company_id}")
 def decide_company(company_id: int) -> dict:
     """Every question, its probability and evidence, for one company."""
@@ -869,6 +897,7 @@ def decide_company(company_id: int) -> dict:
     return d
 
 
+# ZONULY ▸ api route POST /api/decide/run · decision ▸ api · fastapi controllers ▸ api.decide_run(): POST /api/decide/run — decide every Bengaluru/Hyderabad company (offer odds) as a background task.
 @app.post("/api/decide/run")
 def decide_run() -> dict:
     """POST /api/decide/run — decide every Bengaluru/Hyderabad company (offer odds) as a background task."""
@@ -877,6 +906,7 @@ def decide_run() -> dict:
     return {"task_id": _run_task("decide", decide.run)}
 
 
+# ZONULY ▸ api route POST /api/decide/outcome · scoring · decision ▸ api · fastapi controllers ▸ api.decide_outcome(): What actually happened at a company — scored against the brain by /api/decide/calibration.
 @app.post("/api/decide/outcome")
 def decide_outcome(company_id: int, stage: str, note: str | None = None) -> dict:
     """What actually happened at a company — scored against the brain by /api/decide/calibration."""
@@ -888,6 +918,7 @@ def decide_outcome(company_id: int, stage: str, note: str | None = None) -> dict
         raise HTTPException(400, str(e))
 
 
+# ZONULY ▸ api route GET /api/decide/calibration · decision · ai model call · llm ▸ api · fastapi controllers ▸ api.decide_calibration(): GET /api/decide/calibration — the decision model's calibration report.
 @app.get("/api/decide/calibration")
 def decide_calibration() -> dict:
     """GET /api/decide/calibration — the decision model's calibration report."""
@@ -898,6 +929,7 @@ def decide_calibration() -> dict:
 
 # ---------------------------------------------------------------- the mixer (mixer.py): decide, then scrape
 
+# ZONULY ▸ api route GET /api/mixer/plan · apify scraping · apify people search · budget · cost ▸ api · fastapi controllers ▸ api.mixer_plan(): The free funnel and who would be bought next, with today's Apify spend. Spe…
 @app.get("/api/mixer/plan")
 def mixer_plan() -> dict:
     """The free funnel and who would be bought next, with today's Apify spend. Spends nothing."""
@@ -906,6 +938,7 @@ def mixer_plan() -> dict:
     return mixer.plan()
 
 
+# ZONULY ▸ api route POST /api/mixer/run · people search · referrers ▸ api · fastapi controllers ▸ api.mixer_run(): Buy the plan's next companies inside the mixer's share and the referral reserve — a task.
 @app.post("/api/mixer/run")
 def mixer_run(limit: int | None = None) -> dict:
     """Buy the plan's next companies inside the mixer's share and the referral reserve — a task."""
@@ -914,6 +947,7 @@ def mixer_run(limit: int | None = None) -> dict:
     return {"task_id": _run_task("mixer", mixer.run, limit or mixer.PER_RUN)}
 
 
+# ZONULY ▸ api route GET /api/mixer/history · scraping · decision ▸ api · fastapi controllers ▸ api.mixer_history(): GET /api/mixer/history — recent mixer scrape decisions (which companies it chose), newest first.
 @app.get("/api/mixer/history")
 def mixer_history(limit: int = Query(50, le=500)) -> list[dict]:
     """GET /api/mixer/history — recent mixer scrape decisions (which companies it chose), newest first."""
@@ -924,6 +958,7 @@ def mixer_history(limit: int = Query(50, le=500)) -> list[dict]:
 
 # ---------------------------------------------------------------- the shortlist job (shortlist.py)
 
+# ZONULY ▸ api route GET /api/shortlist/progress · enrichment · decision ▸ api · fastapi controllers ▸ api.shortlist_progress(): Per pool, how far the one-company-at-a-time fill has got, and what each company still lack…
 @app.get("/api/shortlist/progress")
 def shortlist_progress() -> dict:
     """Per pool, how far the one-company-at-a-time fill has got, and what each company still lacks."""
@@ -932,6 +967,7 @@ def shortlist_progress() -> dict:
     return shortlist.progress()
 
 
+# ZONULY ▸ api route GET /api/shortlist/referrals · decision · people search · referrers · csv export ▸ api · fastapi controllers ▸ api.shortlist_referrals(): Every person at every shortlisted company, Best bets order,…
 @app.get("/api/shortlist/referrals")
 def shortlist_referrals(pool: str = "all", tech_only: bool = False, format: Literal["json", "csv"] = "json"):
     """Every person at every shortlisted company, Best bets order, tech team first; CSV on request."""
@@ -957,6 +993,7 @@ def shortlist_referrals(pool: str = "all", tech_only: bool = False, format: Lite
                              headers={"Content-Disposition": 'attachment; filename="shortlist-referrals.csv"'})
 
 
+# ZONULY ▸ api route POST /api/shortlist/company/{company_id} · enrichment · decision ▸ api · fastapi controllers ▸ api.shortlist_company(): Fill one company completely now — a task.
 @app.post("/api/shortlist/company/{company_id}")
 def shortlist_company(company_id: int) -> dict:
     """Fill one company completely now — a task."""
@@ -967,6 +1004,7 @@ def shortlist_company(company_id: int) -> dict:
 
 # ---------------------------------------------------------------- upskill (upskill.py)
 
+# ZONULY ▸ api route GET /api/upskill · decision ▸ api · fastapi controllers ▸ api.upskill_view(): What is missing from the profile, ranked by expected offers gained across the shortlist.
 @app.get("/api/upskill")
 def upskill_view(refresh: bool = False) -> dict:
     """What is missing from the profile, ranked by expected offers gained across the shortlist."""
@@ -975,12 +1013,14 @@ def upskill_view(refresh: bool = False) -> dict:
     return upskill.analyse(refresh=refresh)
 
 
+# ZONULY ▸ ai model call · llm ▸ api · fastapi controllers ▸ class api.UpskillMark
 class UpskillMark(BaseModel):
     status: Literal["todo", "learning", "done"]
     proof_url: str | None = None
     proof_note: str | None = None
 
 
+# ZONULY ▸ api route POST /api/upskill/{skill} · email verification ▸ api · fastapi controllers ▸ api.upskill_mark(): POST /api/upskill/{skill} — set an upskill item's status and proof; 400 on invalid input.
 @app.post("/api/upskill/{skill}")
 def upskill_mark(skill: str, body: UpskillMark) -> dict:
     """POST /api/upskill/{skill} — set an upskill item's status and proof; 400 on invalid input."""
@@ -992,6 +1032,7 @@ def upskill_mark(skill: str, body: UpskillMark) -> dict:
         raise HTTPException(400, str(e))
 
 
+# ZONULY ▸ api route POST /api/upskill/{skill}/add-to-profile · scoring · email verification ▸ api · fastapi controllers ▸ api.upskill_add(): Add a done skill (with proof) to profile.json, then re-score — a task (a full…
 @app.post("/api/upskill/{skill}/add-to-profile")
 def upskill_add(skill: str) -> dict:
     """Add a done skill (with proof) to profile.json, then re-score — a task (a full re-score takes a while)."""
@@ -1002,6 +1043,7 @@ def upskill_add(skill: str) -> dict:
 
 # ---------------------------------------------------------------- roles by selection confidence
 
+# ZONULY ▸ api route GET /api/roles · scoring ▸ api · fastapi controllers ▸ api.list_roles(): Roles by the odds of getting selected (confidence.py): score, band, the top three
 @app.get("/api/roles")
 def list_roles(
     sort: Literal["selection", "recent", "match"] = "selection",
@@ -1040,6 +1082,7 @@ def list_roles(
                 "items": [confidence.role_row(j, comps.get(j.company_id)) for j in rows]}
 
 
+# ZONULY ▸ api route GET /api/roles/{job_id}/brief ▸ api · fastapi controllers ▸ api.role_brief(): The full selection breakdown and the needs brief for one role. A role with no stored
 @app.get("/api/roles/{job_id}/brief")
 def role_brief(job_id: int) -> dict:
     """The full selection breakdown and the needs brief for one role. A role with no stored
@@ -1062,10 +1105,12 @@ def role_brief(job_id: int) -> dict:
                 "brief_at": job.needs_brief_at.isoformat() if job.needs_brief_at else None}
 
 
+# ZONULY ▸ api route POST /api/roles/{job_id}/brief · ai model call · llm ▸ api · fastapi controllers ▸ api.rebuild_role_brief(): (Re)build one role's needs brief in the background: public context + model synthesis
 @app.post("/api/roles/{job_id}/brief")
 def rebuild_role_brief(job_id: int, synth: bool = True, web: bool = True) -> dict:
     """(Re)build one role's needs brief in the background: public context + model synthesis
     within the model budget; falls back to the deterministic brief at the ceiling."""
+    # ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ api.rebuild_role_brief.run(): Rebuild and store the job's needs brief, then recompute its confidence.
     def run() -> dict:
         """Rebuild and store the job's needs brief, then recompute its confidence."""
         from jobhunter import confidence, needs
@@ -1085,10 +1130,12 @@ def rebuild_role_brief(job_id: int, synth: bool = True, web: bool = True) -> dic
     return {"task_id": _run_task(f"brief-{job_id}", run)}
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ class api.CompanyUpdateIn
 class CompanyUpdateIn(BaseModel):
     notes: str | None = None
 
 
+# ZONULY ▸ api route PATCH /api/companies/{company_id} ▸ api · fastapi controllers ▸ api.update_company(): PATCH /api/companies/{company_id} — update a company's notes. Writes to the company table.
 @app.patch("/api/companies/{company_id}")
 def update_company(company_id: int, payload: CompanyUpdateIn) -> dict:
     """PATCH /api/companies/{company_id} — update a company's notes. Writes to the company table."""
@@ -1103,6 +1150,7 @@ def update_company(company_id: int, payload: CompanyUpdateIn) -> dict:
         return {"ok": True, "id": company_id, "notes": company.notes}
 
 
+# ZONULY ▸ api route GET /api/sources · scraping ▸ api · fastapi controllers ▸ api.sources(): GET /api/sources — job counts per scraping source and which sources are enabled.
 @app.get("/api/sources")
 def sources() -> dict:
     """GET /api/sources — job counts per scraping source and which sources are enabled."""
@@ -1113,6 +1161,7 @@ def sources() -> dict:
 
 # ---------------------------------------------------------------- companies & contacts
 
+# ZONULY ▸ scraping · enrichment ▸ api · fastapi controllers ▸ api._funding_dict(): The round as the dashboard shows it: stage in the one vocabulary, amount, total,
 def _funding_dict(c: Company) -> dict:
     """The round as the dashboard shows it: stage in the one vocabulary, amount, total,
     date, valuation, and the sentence it came from."""
@@ -1128,6 +1177,7 @@ def _funding_dict(c: Company) -> dict:
     }
 
 
+# ZONULY ▸ dedup · pay · salary ▸ api · fastapi controllers ▸ api._hidden(): Hidden by default: overrated, quarantined, merged and below-the-India-pay-bar rows.
 def _hidden(c: Company, include_overrated: bool) -> bool:
     """Hidden by default: overrated, quarantined, merged and below-the-India-pay-bar rows.
     A hand-picked list row is never hidden for being overrated — the list is the decision —
@@ -1142,6 +1192,7 @@ def _hidden(c: Company, include_overrated: bool) -> bool:
     return bool(c.overrated) and not include_overrated
 
 
+# ZONULY ▸ api route GET /api/companies · pay · salary · people search · referrers ▸ api · fastapi controllers ▸ api.list_companies(): GET /api/companies — list visible companies with job/contact counts, tier, pay bar
 @app.get("/api/companies")
 def list_companies(
     has_contacts: bool | None = None,
@@ -1235,6 +1286,7 @@ def list_companies(
         return sorted(out, key=sorters.get(sort, sorters["priority"]))[:limit]
 
 
+# ZONULY ▸ api route GET /api/network · knowledge graph ▸ api · fastapi controllers ▸ api.company_network(): The company atlas: layers, nodes, dependencies, chokepoints, bottlenecks — complete
 @app.get("/api/network")
 def company_network(include_rejects: bool = False, include_incomplete: bool = False) -> dict:
     """The company atlas: layers, nodes, dependencies, chokepoints, bottlenecks — complete
@@ -1244,6 +1296,7 @@ def company_network(include_rejects: bool = False, include_incomplete: bool = Fa
     return network.build(include_rejects=include_rejects, include_incomplete=include_incomplete)
 
 
+# ZONULY ▸ api route GET /api/companies/filling · enrichment ▸ api · fastapi controllers ▸ api.companies_filling(): The companies still being filled — not yet complete — each with the parts it is
 @app.get("/api/companies/filling")
 def companies_filling(limit: int = Query(2000, le=10000)) -> dict:
     """The companies still being filled — not yet complete — each with the parts it is
@@ -1254,6 +1307,7 @@ def companies_filling(limit: int = Query(2000, le=10000)) -> dict:
     return network.filling(limit=limit)
 
 
+# ZONULY ▸ api route GET /api/graph/map · knowledge graph ▸ api · fastapi controllers ▸ api.graph_map(): The /graph page: the knowledge graph pre-shaped as hubs → subs → leaves (graphmap.py).
 @app.get("/api/graph/map")
 def graph_map(view: Literal["market", "pipeline", "project"] = "market") -> dict:
     """The /graph page: the knowledge graph pre-shaped as hubs → subs → leaves (graphmap.py).
@@ -1267,6 +1321,7 @@ def graph_map(view: Literal["market", "pipeline", "project"] = "market") -> dict
 AUTO_FILL_HOURS = 6
 
 
+# ZONULY ▸ api route POST /api/companies/{company_id}/fill · linkedin scraping · enrichment · people search · referrers · email verification ▸ api · fastapi controllers ▸ api.fill_company(): Fill one company now — descr…
 @app.post("/api/companies/{company_id}/fill")
 def fill_company(company_id: int, auto: bool = False) -> dict:
     """Fill one company now — description, LinkedIn, hiring proof, funding, referrers
@@ -1294,6 +1349,7 @@ def fill_company(company_id: int, auto: bool = False) -> dict:
     return {"task_id": task_id, "already_running": False, "company": name}
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ class api.NewCompany
 class NewCompany(BaseModel):
     name: str
     website: str | None = None
@@ -1302,6 +1358,7 @@ class NewCompany(BaseModel):
     scrape_now: bool = True
 
 
+# ZONULY ▸ api route POST /api/companies · scraping ▸ api · fastapi controllers ▸ api.add_company(): Add one company by name: find its public job board, record it, seed it into
 @app.post("/api/companies")
 def add_company(body: NewCompany) -> dict:
     """Add one company by name: find its public job board, record it, seed it into
@@ -1329,6 +1386,7 @@ def add_company(body: NewCompany) -> dict:
     }
 
 
+# ZONULY ▸ api route GET /api/companies/grouped · people search · referrers ▸ api · fastapi controllers ▸ api.companies_grouped(): One row per company, with its roles grouped by family and its referrers attached.
 @app.get("/api/companies/grouped")
 def companies_grouped(include_rejects: bool = False, include_overrated: bool = False,
                       include_incomplete: bool = False) -> dict:
@@ -1343,6 +1401,7 @@ def companies_grouped(include_rejects: bool = False, include_overrated: bool = F
                                 include_incomplete=include_incomplete)
 
 
+# ZONULY ▸ api route POST /api/companies/{company_id}/channels ▸ api · fastapi controllers ▸ api.company_channels_collect(): Find every public way into this company — Slack, Discord, repos, docs, forum.
 @app.post("/api/companies/{company_id}/channels")
 def company_channels_collect(company_id: int, read_site: bool = True) -> dict:
     """Find every public way into this company — Slack, Discord, repos, docs, forum."""
@@ -1357,6 +1416,7 @@ def company_channels_collect(company_id: int, read_site: bool = True) -> dict:
 
 # ---------------------------------------------------------------- communities
 
+# ZONULY ▸ api route GET /api/communities ▸ api · fastapi controllers ▸ api.communities_index(): Every Slack / Discord room found in the public directories, best first.
 @app.get("/api/communities")
 def communities_index(
     platform: str | None = None,
@@ -1377,6 +1437,7 @@ def communities_index(
                                joined=joined, q=q, limit=limit)
 
 
+# ZONULY ▸ api route POST /api/communities/{community_id}/joined ▸ api · fastapi controllers ▸ api.community_joined(): Mark a room joined, by hand. Code never joins a workspace.
 @app.post("/api/communities/{community_id}/joined")
 def community_joined(community_id: int, joined: bool = True) -> dict:
     """Mark a room joined, by hand. Code never joins a workspace."""
@@ -1388,11 +1449,13 @@ def community_joined(community_id: int, joined: bool = True) -> dict:
         raise HTTPException(404, str(e))
 
 
+# ZONULY ▸ api route POST /api/communities/harvest · scraping ▸ api · fastapi controllers ▸ api.communities_harvest(): Walk more directory pages, then read each new room's own page for its join link.
 @app.post("/api/communities/harvest")
 def communities_harvest(pages: int = Query(8, ge=1, le=40), enrich: bool = True) -> dict:
     """Walk more directory pages, then read each new room's own page for its join link."""
     from jobhunter import communities
 
+    # ZONULY ▸ scraping · enrichment ▸ api · fastapi controllers ▸ api.communities_harvest._work(): Harvest community directory pages, then optionally enrich new rooms with join links.
     def _work() -> dict:
         """Harvest community directory pages, then optionally enrich new rooms with join links."""
         found = communities.harvest(pages=pages)
@@ -1403,6 +1466,7 @@ def communities_harvest(pages: int = Query(8, ge=1, le=40), enrich: bool = True)
 
 # ---------------------------------------------------------------- hand-picked lists
 
+# ZONULY ▸ api route GET /api/lists ▸ api · fastapi controllers ▸ api.lists_index(): Every hand-picked list on disk (data/lists/*.yaml) and how much of it is attached.
 @app.get("/api/lists")
 def lists_index() -> list[dict]:
     """Every hand-picked list on disk (data/lists/*.yaml) and how much of it is attached."""
@@ -1411,6 +1475,7 @@ def lists_index() -> list[dict]:
     return lists.available()
 
 
+# ZONULY ▸ api route GET /api/lists/{key} ▸ api · fastapi controllers ▸ api.list_rows(): One list, in its own order: the list's claims next to what the pipeline found.
 @app.get("/api/lists/{key}")
 def list_rows(key: str) -> dict:
     """One list, in its own order: the list's claims next to what the pipeline found."""
@@ -1422,6 +1487,7 @@ def list_rows(key: str) -> dict:
         raise HTTPException(404, str(e))
 
 
+# ZONULY ▸ api route POST /api/lists/{key}/sync · enrichment ▸ api · fastapi controllers ▸ api.list_sync(): Re-read the YAML: attach new names, fill blanks, verify guessed websites.
 @app.post("/api/lists/{key}/sync")
 def list_sync(key: str, verify_sites: bool = True) -> dict:
     """Re-read the YAML: attach new names, fill blanks, verify guessed websites."""
@@ -1432,6 +1498,7 @@ def list_sync(key: str, verify_sites: bool = True) -> dict:
     return {"task_id": _run_task(f"list-sync:{key}", lists.sync, key, verify_sites=verify_sites)}
 
 
+# ZONULY ▸ api route POST /api/lists/{key}/find-people · scraping · people search · referrers ▸ api · fastapi controllers ▸ api.list_find_people(): Boards, roles and referrers for every company on the list — minutes, so…
 @app.post("/api/lists/{key}/find-people")
 def list_find_people(key: str, linkedin: bool = True, refresh_days: int = 0,
                      limit: int | None = None, emails_only: bool = False) -> dict:
@@ -1446,6 +1513,7 @@ def list_find_people(key: str, linkedin: bool = True, refresh_days: int = 0,
                                  emails_only=emails_only)}
 
 
+# ZONULY ▸ api route POST /api/companies/{company_id}/x-handles · people search · referrers ▸ api · fastapi controllers ▸ api.find_x_handles(): X handles for the company's best people — a DM route, found never sent.
 @app.post("/api/companies/{company_id}/x-handles")
 def find_x_handles(company_id: int, limit: int = 5) -> dict:
     """X handles for the company's best people — a DM route, found never sent."""
@@ -1454,11 +1522,13 @@ def find_x_handles(company_id: int, limit: int = 5) -> dict:
     return {"task_id": _run_task(f"x-handles:{company_id}", x_handles.find_for_company, company_id, limit=limit)}
 
 
+# ZONULY ▸ api route POST /api/companies/{company_id}/find-emails ▸ api · fastapi controllers ▸ api.find_emails(): Any real address at one company from the open web, then everyone by pattern.
 @app.post("/api/companies/{company_id}/find-emails")
 def find_emails(company_id: int) -> dict:
     """Any real address at one company from the open web, then everyone by pattern."""
     from jobhunter.contacts import fill_by_pattern, web_emails
 
+    # ZONULY ▸ enrichment ▸ api · fastapi controllers ▸ api.find_emails.run(): Find real addresses for the company on the open web, then run fill_by_pattern.
     def run() -> dict:
         """Find real addresses for the company on the open web, then run fill_by_pattern."""
         out = web_emails.find(company_id)
@@ -1468,6 +1538,7 @@ def find_emails(company_id: int) -> dict:
     return {"task_id": _run_task(f"find-emails:{company_id}", run)}
 
 
+# ZONULY ▸ api route GET /api/companies/{company_id}/detail · decision · knowledge graph ▸ api · fastapi controllers ▸ api.company_detail(): Everything known about one company, with the graph's verdict attached.
 @app.get("/api/companies/{company_id}/detail")
 def company_detail(company_id: int) -> dict:
     """Everything known about one company, with the graph's verdict attached."""
@@ -1481,6 +1552,7 @@ def company_detail(company_id: int) -> dict:
     return out
 
 
+# ZONULY ▸ api route GET /api/companies/{company_id}/interviews ▸ api · fastapi controllers ▸ api.company_interviews(): What their interviews are like: prep points, their own word on the process, and every
 @app.get("/api/companies/{company_id}/interviews")
 def company_interviews(company_id: int) -> dict:
     """What their interviews are like: prep points, their own word on the process, and every
@@ -1490,6 +1562,7 @@ def company_interviews(company_id: int) -> dict:
     return interviews.for_company(company_id)
 
 
+# ZONULY ▸ api route POST /api/companies/{company_id}/interviews/scrape · apify scraping · apify people search · reddit · scraping ▸ api · fastapi controllers ▸ api.company_interviews_scrape(): Glassdoor reports and Red…
 @app.post("/api/companies/{company_id}/interviews/scrape")
 def company_interviews_scrape(company_id: int) -> dict:
     """Glassdoor reports and Reddit threads through Apify, inside the daily Apify cap."""
@@ -1498,6 +1571,7 @@ def company_interviews_scrape(company_id: int) -> dict:
     return {"task_id": _run_task(f"interviews:{company_id}", interviews.scrape, company_id)}
 
 
+# ZONULY ▸ replies · follow-up ▸ api · fastapi controllers ▸ api._company_outreach(): Cold mail to this company at a glance — the page's "waiting for reply" corner (2026-10-26):
 def _company_outreach(company_id: int) -> dict:
     """Cold mail to this company at a glance — the page's "waiting for reply" corner (2026-10-26):
     how many went, when the last one did, how many were answered, and the send day it is a
@@ -1519,6 +1593,7 @@ def _company_outreach(company_id: int) -> dict:
             "last_sent_at": last.isoformat() if last else None, "target_day": target}
 
 
+# ZONULY ▸ api route GET /api/companies/{company_id}/dossier ▸ api · fastapi controllers ▸ api.company_dossier(): The research dossier for a company (reports/<name>-dossier.md), when one has been written:
 @app.get("/api/companies/{company_id}/dossier")
 def company_dossier(company_id: int) -> dict:
     """The research dossier for a company (reports/<name>-dossier.md), when one has been written:
@@ -1545,6 +1620,7 @@ def company_dossier(company_id: int) -> dict:
     raise HTTPException(404, "no dossier written for this company yet")
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ api._best_role(): The company's best role by selection confidence (confidence.rollup), with its reasons.
 def _best_role(company_id: int) -> dict | None:
     """The company's best role by selection confidence (confidence.rollup), with its reasons."""
     from jobhunter import confidence
@@ -1557,6 +1633,7 @@ def _best_role(company_id: int) -> dict | None:
         return confidence.role_row(job, company) if job else None
 
 
+# ZONULY ▸ api route GET /api/contacts · filtering · people search · referrers ▸ api · fastapi controllers ▸ api.list_contacts(): GET /api/contacts — list contacts (leads), filtered by company, confidence or affiliation,
 @app.get("/api/contacts")
 def list_contacts(
     company_id: int | None = None,
@@ -1592,6 +1669,7 @@ _LEAD_SOURCES = ("linkedin", "github", "team", "talks", "web")
 _LEAD_CITIES = {"bengaluru": 0, "hyderabad": 1, "india": 2, "remote": 3}
 
 
+# ZONULY ▸ api route GET /api/leads · linkedin scraping · github scraping · people search · referrers ▸ api · fastapi controllers ▸ api.list_leads(): The People page: referrers with where they came from (LinkedIn / GitH…
 @app.get("/api/leads")
 def list_leads(
     source: str = Query("all", description="all | linkedin | github | team | talks | web"),
@@ -1658,6 +1736,7 @@ def list_leads(
             "source": source, "city": city, "who": who}
 
 
+# ZONULY ▸ api route POST /api/companies/{company_id}/find-contacts · people search · referrers ▸ api · fastapi controllers ▸ api.find_contacts(): POST /api/companies/{company_id}/find-contacts — start people search for…
 @app.post("/api/companies/{company_id}/find-contacts")
 def find_contacts(company_id: int) -> dict:
     """POST /api/companies/{company_id}/find-contacts — start people search for one company (task)."""
@@ -1666,6 +1745,7 @@ def find_contacts(company_id: int) -> dict:
     return {"task_id": _run_task(f"find-contacts:{company_id}", contacts_mod.discover, company_id)}
 
 
+# ZONULY ▸ api route POST /api/companies/{company_id}/verify-hiring · scraping · enrichment · hiring verification ▸ api · fastapi controllers ▸ api.verify_hiring(): Re-check the hiring claim against the company's own bo…
 @app.post("/api/companies/{company_id}/verify-hiring")
 def verify_hiring(company_id: int, fresh: bool = False) -> dict:
     """Re-check the hiring claim against the company's own board / careers page."""
@@ -1674,6 +1754,7 @@ def verify_hiring(company_id: int, fresh: bool = False) -> dict:
     return {"task_id": _run_task(f"verify:{company_id}", hiring_verify.verify_company, company_id, fresh=fresh)}
 
 
+# ZONULY ▸ api route POST /api/companies/{company_id}/enrich · enrichment ▸ api · fastapi controllers ▸ api.enrich_company(): Read the company's own site for a description and funding, then re-grade.
 @app.post("/api/companies/{company_id}/enrich")
 def enrich_company(company_id: int, fresh: bool = False) -> dict:
     """Read the company's own site for a description and funding, then re-grade."""
@@ -1682,6 +1763,7 @@ def enrich_company(company_id: int, fresh: bool = False) -> dict:
     return {"task_id": _run_task(f"enrich:{company_id}", enrich.enrich_company, company_id, fresh=fresh)}
 
 
+# ZONULY ▸ api route POST /api/contacts/{contact_id}/research · people search · referrers ▸ api · fastapi controllers ▸ api.research(): POST /api/contacts/{contact_id}/research — research a contact (optionally for a job…
 @app.post("/api/contacts/{contact_id}/research")
 def research(contact_id: int, job_id: int | None = None) -> dict:
     """POST /api/contacts/{contact_id}/research — research a contact (optionally for a job) as a task."""
@@ -1698,6 +1780,7 @@ def research(contact_id: int, job_id: int | None = None) -> dict:
 
 # ---------------------------------------------------------------- scraping health (the hourly audit)
 
+# ZONULY ▸ api route GET /api/audit · filtering · enrichment · monitoring ▸ api · fastapi controllers ▸ api.audit_report(): The last hourly audit (fill rates and their 1h/24h deltas, throughput, rejects,
 @app.get("/api/audit")
 def audit_report() -> dict:
     """The last hourly audit (fill rates and their 1h/24h deltas, throughput, rejects,
@@ -1711,6 +1794,7 @@ def audit_report() -> dict:
 
 # ---------------------------------------------------------------- review queue & emails
 
+# ZONULY ▸ api route GET /api/emails · filtering · email drafting ▸ api · fastapi controllers ▸ api.list_emails(): GET /api/emails — list emails (drafts, sent, ...) filtered by status and kind, newest first.
 @app.get("/api/emails")
 def list_emails(
     status: str | None = None,
@@ -1735,6 +1819,7 @@ def list_emails(
         ]
 
 
+# ZONULY ▸ api route GET /api/emails/{email_id} · people search · referrers · replies · follow-up ▸ api · fastapi controllers ▸ api.get_email(): GET /api/emails/{email_id} — one email with its contact, company, job and…
 @app.get("/api/emails/{email_id}")
 def get_email(email_id: int) -> dict:
     """GET /api/emails/{email_id} — one email with its contact, company, job and replies; 404 if missing."""
@@ -1763,16 +1848,19 @@ def get_email(email_id: int) -> dict:
         return data
 
 
+# ZONULY ▸ email drafting ▸ api · fastapi controllers ▸ class api.DraftIn
 class DraftIn(BaseModel):
     contact_id: int
     job_id: int | None = None
 
 
+# ZONULY ▸ api route POST /api/emails/draft · people search · referrers · email drafting ▸ api · fastapi controllers ▸ api.create_draft(): POST /api/emails/draft — draft a referral email for a contact (and job) as a bac…
 @app.post("/api/emails/draft")
 def create_draft(payload: DraftIn) -> dict:
     """POST /api/emails/draft — draft a referral email for a contact (and job) as a background task."""
     from jobhunter.outreach import drafter
 
+    # ZONULY ▸ people search · referrers · email drafting ▸ api · fastapi controllers ▸ api.create_draft._go(): Ensure the job's needs brief exists, then draft the email for the contact.
     def _go():
         """Ensure the job's needs brief exists, then draft the email for the contact."""
         from jobhunter import proposals
@@ -1784,6 +1872,7 @@ def create_draft(payload: DraftIn) -> dict:
     return {"task_id": _run_task(f"draft:{payload.contact_id}", _go)}
 
 
+# ZONULY ▸ api route POST /api/emails/draft-batch · scoring · email drafting ▸ api · fastapi controllers ▸ api.draft_batch(): POST /api/emails/draft-batch — draft emails for high-match jobs as a background task.
 @app.post("/api/emails/draft-batch")
 def draft_batch(limit: int = 5, per_company: int = 2) -> dict:
     """POST /api/emails/draft-batch — draft emails for high-match jobs as a background task."""
@@ -1796,11 +1885,13 @@ def draft_batch(limit: int = 5, per_company: int = 2) -> dict:
     }
 
 
+# ZONULY ▸ email verification ▸ api · fastapi controllers ▸ class api.ApproveIn
 class ApproveIn(BaseModel):
     subject: str | None = None
     body: str | None = None
 
 
+# ZONULY ▸ api route POST /api/emails/{email_id}/approve · email verification · email drafting · email sending ▸ api · fastapi controllers ▸ api.approve_email(): POST /api/emails/{email_id}/approve — approve a draft for…
 @app.post("/api/emails/{email_id}/approve")
 def approve_email(email_id: int, payload: ApproveIn | None = None) -> dict:
     """POST /api/emails/{email_id}/approve — approve a draft for sending, with optional edits."""
@@ -1813,6 +1904,7 @@ def approve_email(email_id: int, payload: ApproveIn | None = None) -> dict:
     return result
 
 
+# ZONULY ▸ api route POST /api/emails/{email_id}/reject · filtering · email drafting · review gate ▸ api · fastapi controllers ▸ api.reject_email(): POST /api/emails/{email_id}/reject — reject a draft at review; 400 on…
 @app.post("/api/emails/{email_id}/reject")
 def reject_email(email_id: int) -> dict:
     """POST /api/emails/{email_id}/reject — reject a draft at review; 400 on error."""
@@ -1824,6 +1916,7 @@ def reject_email(email_id: int) -> dict:
     return result
 
 
+# ZONULY ▸ api route POST /api/emails/{email_id}/send · email verification · email sending ▸ api · fastapi controllers ▸ api.send_one(): POST /api/emails/{email_id}/send — send one approved email now; 400 on error.
 @app.post("/api/emails/{email_id}/send")
 def send_one(email_id: int, ignore_window: bool = False) -> dict:
     """POST /api/emails/{email_id}/send — send one approved email now; 400 on error."""
@@ -1835,6 +1928,7 @@ def send_one(email_id: int, ignore_window: bool = False) -> dict:
     return result
 
 
+# ZONULY ▸ api route POST /api/emails/send-approved · email verification · email sending ▸ api · fastapi controllers ▸ api.send_all(): POST /api/emails/send-approved — send approved emails as a task, capped at one run's…
 @app.post("/api/emails/send-approved")
 def send_all(limit: int | None = None, ignore_window: bool = False) -> dict:
     """POST /api/emails/send-approved — send approved emails as a task, capped at one run's max."""
@@ -1850,6 +1944,7 @@ def send_all(limit: int | None = None, ignore_window: bool = False) -> dict:
     }
 
 
+# ZONULY ▸ api route POST /api/emails/{email_id}/followup · email drafting · replies · follow-up ▸ api · fastapi controllers ▸ api.followup(): POST /api/emails/{email_id}/followup — draft a follow-up to a sent email as…
 @app.post("/api/emails/{email_id}/followup")
 def followup(email_id: int) -> dict:
     """POST /api/emails/{email_id}/followup — draft a follow-up to a sent email as a task."""
@@ -1858,6 +1953,7 @@ def followup(email_id: int) -> dict:
     return {"task_id": _run_task(f"followup:{email_id}", drafter.draft_followup, email_id)}
 
 
+# ZONULY ▸ api route POST /api/emails/draft-bets · email drafting · review gate ▸ api · fastapi controllers ▸ api.draft_bets(): One gated draft per company that is ready to ask (the Atlas's bets), best lead, best role.
 @app.post("/api/emails/draft-bets")
 def draft_bets(limit: int = 10) -> dict:
     """One gated draft per company that is ready to ask (the Atlas's bets), best lead, best role."""
@@ -1866,6 +1962,7 @@ def draft_bets(limit: int = 10) -> dict:
     return {"task_id": _run_task("draft-bets", drafter.draft_for_bets, limit)}
 
 
+# ZONULY ▸ api route GET /api/outreach/ledger · email sending · knowledge graph ▸ api · fastapi controllers ▸ api.outreach_ledger(): GET /api/outreach/ledger — the send ledger status (caps, sent counts) and send mode.
 @app.get("/api/outreach/ledger")
 def outreach_ledger(candidate_id: int = 1) -> dict:
     """GET /api/outreach/ledger — the send ledger status (caps, sent counts) and send mode."""
@@ -1874,11 +1971,13 @@ def outreach_ledger(candidate_id: int = 1) -> dict:
     return {"send_mode": sender.SEND_MODE, **ledger.status(candidate_id)}
 
 
+# ZONULY ▸ replies · follow-up ▸ api · fastapi controllers ▸ class api.ReplyIn
 class ReplyIn(BaseModel):
     body: str
     sender: str | None = None
 
 
+# ZONULY ▸ api route POST /api/emails/{email_id}/record-reply · email sending · replies · follow-up ▸ api · fastapi controllers ▸ api.record_reply(): Record a reply by hand — one that arrived outside Gmail polling, or a…
 @app.post("/api/emails/{email_id}/record-reply")
 def record_reply(email_id: int, payload: ReplyIn) -> dict:
     """Record a reply by hand — one that arrived outside Gmail polling, or a rehearsal in
@@ -1895,6 +1994,7 @@ def record_reply(email_id: int, payload: ReplyIn) -> dict:
 
 # ---------------------------------------------------------------- calendar & events
 
+# ZONULY ▸ api route GET /api/events · replies · follow-up · calendar ▸ api · fastapi controllers ▸ api.list_events(): GET /api/events — list events read from replies (proposed times, links, deadlines).
 @app.get("/api/events")
 def list_events(upcoming: bool = False) -> list[dict]:
     """GET /api/events — list events read from replies (proposed times, links, deadlines)."""
@@ -1903,6 +2003,7 @@ def list_events(upcoming: bool = False) -> list[dict]:
     return schedule.list_events(upcoming_only=upcoming)
 
 
+# ZONULY ▸ api route POST /api/events/{event_id}/confirm · calendar ▸ api · fastapi controllers ▸ api.confirm_event(): POST /api/events/{event_id}/confirm — confirm a proposed time; it goes on the calendar if wired.
 @app.post("/api/events/{event_id}/confirm")
 def confirm_event(event_id: int) -> dict:
     """POST /api/events/{event_id}/confirm — confirm a proposed time; it goes on the calendar if wired."""
@@ -1911,6 +2012,7 @@ def confirm_event(event_id: int) -> dict:
     return schedule.confirm(event_id)
 
 
+# ZONULY ▸ api route POST /api/events/{event_id}/reschedule · email drafting · review gate · calendar · scheduler · tick ▸ api · fastapi controllers ▸ api.reschedule_event(): POST /api/events/{event_id}/reschedule — dra…
 @app.post("/api/events/{event_id}/reschedule")
 def reschedule_event(event_id: int) -> dict:
     """POST /api/events/{event_id}/reschedule — draft a reschedule email into the review queue."""
@@ -1919,6 +2021,7 @@ def reschedule_event(event_id: int) -> dict:
     return schedule.draft_reschedule(event_id)
 
 
+# ZONULY ▸ api route POST /api/events/{event_id}/status · calendar ▸ api · fastapi controllers ▸ api.set_event_status(): POST /api/events/{event_id}/status — set an event's status. Writes to the event table.
 @app.post("/api/events/{event_id}/status")
 def set_event_status(event_id: int, status: Literal["proposed", "confirmed", "done", "cancelled"]) -> dict:
     """POST /api/events/{event_id}/status — set an event's status. Writes to the event table."""
@@ -1934,6 +2037,7 @@ def set_event_status(event_id: int, status: Literal["proposed", "confirmed", "do
     return {"event_id": event_id, "status": status}
 
 
+# ZONULY ▸ api route GET /api/calendar/status · calendar · sign-in · auth ▸ api · fastapi controllers ▸ api.calendar_status(): GET /api/calendar/status — Google Calendar status: enabled, OAuth set up/authorized, calenda…
 @app.get("/api/calendar/status")
 def calendar_status() -> dict:
     """GET /api/calendar/status — Google Calendar status: enabled, OAuth set up/authorized, calendar id."""
@@ -1942,6 +2046,7 @@ def calendar_status() -> dict:
     return calendar.status()
 
 
+# ZONULY ▸ api route GET /api/learn · lever scraping · replies · follow-up ▸ api · fastapi controllers ▸ api.learn_report(): The funnel with numbers: reply and yes rates by every lever we control.
 @app.get("/api/learn")
 def learn_report(days: int | None = None) -> dict:
     """The funnel with numbers: reply and yes rates by every lever we control."""
@@ -1952,6 +2057,7 @@ def learn_report(days: int | None = None) -> dict:
 
 # ---------------------------------------------------------------- tracker & replies
 
+# ZONULY ▸ api route GET /api/tracker · people search · referrers · replies · follow-up ▸ api · fastapi controllers ▸ api.tracker_matrix(): The sent matrix: company x contacted x when x status.
 @app.get("/api/tracker")
 def tracker_matrix() -> list[dict]:
     """The sent matrix: company x contacted x when x status."""
@@ -1987,6 +2093,7 @@ def tracker_matrix() -> list[dict]:
         return sorted(rows, key=lambda r: (r["sent_at"] is None, r["sent_at"] or ""), reverse=True)
 
 
+# ZONULY ▸ api route GET /api/replies · people search · referrers · replies · follow-up ▸ api · fastapi controllers ▸ api.list_replies(): GET /api/replies — list received replies with sentiment, company, contact and sub…
 @app.get("/api/replies")
 def list_replies(sentiment: str | None = None, limit: int = Query(200, le=1000)) -> list[dict]:
     """GET /api/replies — list received replies with sentiment, company, contact and subject."""
@@ -2017,6 +2124,7 @@ def list_replies(sentiment: str | None = None, limit: int = Query(200, le=1000))
         return out
 
 
+# ZONULY ▸ api route POST /api/replies/poll · replies · follow-up ▸ api · fastapi controllers ▸ api.poll_replies(): POST /api/replies/poll — poll the mailbox for new replies as a background task.
 @app.post("/api/replies/poll")
 def poll_replies() -> dict:
     """POST /api/replies/poll — poll the mailbox for new replies as a background task."""
@@ -2025,6 +2133,7 @@ def poll_replies() -> dict:
     return {"task_id": _run_task("poll-replies", tracker.poll)}
 
 
+# ZONULY ▸ api route GET /api/outreach/preflight ▸ api · fastapi controllers ▸ api.outreach_preflight(): The launch checklist: every check red / amber / green with its fix, the warm-up
 @app.get("/api/outreach/preflight")
 def outreach_preflight(sign_in: bool = True) -> dict:
     """The launch checklist: every check red / amber / green with its fix, the warm-up
@@ -2034,12 +2143,14 @@ def outreach_preflight(sign_in: bool = True) -> dict:
     return preflight.run(sign_in=sign_in)
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ class api.BatchRequest
 class BatchRequest(BaseModel):
     n: int | None = None
     dry_run: bool = False
     research: bool = True
 
 
+# ZONULY ▸ api route POST /api/outreach/batch · email verification · email drafting · review gate ▸ api · fastapi controllers ▸ api.outreach_batch(): Build the week's drafts into the review queue (never approved). A tas…
 @app.post("/api/outreach/batch")
 def outreach_batch(payload: BatchRequest) -> dict:
     """Build the week's drafts into the review queue (never approved). A task: drafting
@@ -2048,6 +2159,7 @@ def outreach_batch(payload: BatchRequest) -> dict:
 
     if payload.dry_run:
         return batch.build(payload.n, dry_run=True)
+    # ZONULY ▸ decision · email drafting ▸ api · fastapi controllers ▸ api.outreach_batch._go(): Ensure needs briefs for the planned targets, then build the outreach batch drafts.
     def _go():
         """Ensure needs briefs for the planned targets, then build the outreach batch drafts."""
         from jobhunter import proposals
@@ -2058,6 +2170,7 @@ def outreach_batch(payload: BatchRequest) -> dict:
     return {"task_id": _run_task("outreach-batch", _go)}
 
 
+# ZONULY ▸ api route GET /api/outreach/track · email verification · email drafting ▸ api · fastapi controllers ▸ api.outreach_track(): Every cold email with its lifecycle (draft → approved → sent → waiting → replied /
 @app.get("/api/outreach/track")
 def outreach_track(status: str | None = None, sentiment: str | None = None) -> dict:
     """Every cold email with its lifecycle (draft → approved → sent → waiting → replied /
@@ -2067,6 +2180,7 @@ def outreach_track(status: str | None = None, sentiment: str | None = None) -> d
     return tracker.track(status=status, sentiment=sentiment)
 
 
+# ZONULY ▸ api route GET /api/outreach/thread/{email_id} · replies · follow-up ▸ api · fastapi controllers ▸ api.outreach_thread(): One conversation: our email exactly as sent, the follow-ups, their replies with
 @app.get("/api/outreach/thread/{email_id}")
 def outreach_thread(email_id: int) -> dict:
     """One conversation: our email exactly as sent, the follow-ups, their replies with
@@ -2079,6 +2193,7 @@ def outreach_thread(email_id: int) -> dict:
     return t
 
 
+# ZONULY ▸ api route GET /api/outreach/proposals · decision · email drafting ▸ api · fastapi controllers ▸ api.outreach_proposals(): How the pipeline would write to the best targets — proposals, not drafts: nothing
 @app.get("/api/outreach/proposals")
 def outreach_proposals() -> dict:
     """How the pipeline would write to the best targets — proposals, not drafts: nothing
@@ -2088,11 +2203,13 @@ def outreach_proposals() -> dict:
     return proposals.latest()
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ class api.ProposalRequest
 class ProposalRequest(BaseModel):
     n: int = 10
     use_model: bool = True
 
 
+# ZONULY ▸ api route POST /api/outreach/proposals · email verification · email drafting · email sending ▸ api · fastapi controllers ▸ api.outreach_proposals_build(): Regenerate the proposals (replaces the previous run).…
 @app.post("/api/outreach/proposals")
 def outreach_proposals_build(payload: ProposalRequest | None = None) -> dict:
     """Regenerate the proposals (replaces the previous run). Never drafts, approves or sends."""
@@ -2102,6 +2219,7 @@ def outreach_proposals_build(payload: ProposalRequest | None = None) -> dict:
     return {"task_id": _run_task("outreach-proposals", proposals.build, payload.n, use_model=payload.use_model)}
 
 
+# ZONULY ▸ api route POST /api/outreach/polish · email drafting · ai model call · llm ▸ api · fastapi controllers ▸ api.outreach_polish(): Re-write template drafts with the model now that it is available (still drafts).
 @app.post("/api/outreach/polish")
 def outreach_polish(limit: int = 10) -> dict:
     """Re-write template drafts with the model now that it is available (still drafts)."""
@@ -2110,6 +2228,7 @@ def outreach_polish(limit: int = 10) -> dict:
     return {"task_id": _run_task("outreach-polish", drafter.polish_pending, limit)}
 
 
+# ZONULY ▸ api route GET /api/outreach/plan · email verification · email sending ▸ api · fastapi controllers ▸ api.outreach_plan(): The next send day (or `day`): which approved mail goes when, what waits and why, and
 @app.get("/api/outreach/plan")
 def outreach_plan(day: str | None = None) -> dict:
     """The next send day (or `day`): which approved mail goes when, what waits and why, and
@@ -2126,6 +2245,7 @@ def outreach_plan(day: str | None = None) -> dict:
     return p
 
 
+# ZONULY ▸ api route GET /api/outreach/pipeline · email sending · replies · follow-up ▸ api · fastapi controllers ▸ api.outreach_pipeline(): The send pipeline in one read: every stage's count, reply sentiment, today's c…
 @app.get("/api/outreach/pipeline")
 def outreach_pipeline() -> dict:
     """The send pipeline in one read: every stage's count, reply sentiment, today's cap,
@@ -2204,6 +2324,7 @@ def outreach_pipeline() -> dict:
 
 # ---------------------------------------------------------------- pipeline actions
 
+# ZONULY ▸ api route POST /api/pipeline/scrape · scraping · data ingestion ▸ api · fastapi controllers ▸ api.run_scrape(): POST /api/pipeline/scrape — run job scraping/ingestion (optionally named sources) as a task.
 @app.post("/api/pipeline/scrape")
 def run_scrape(sources: str | None = None) -> dict:
     """POST /api/pipeline/scrape — run job scraping/ingestion (optionally named sources) as a task."""
@@ -2213,11 +2334,13 @@ def run_scrape(sources: str | None = None) -> dict:
     return {"task_id": _run_task("scrape", lambda: pipeline.scrape(names).as_dict())}
 
 
+# ZONULY ▸ api route POST /api/pipeline/score · filtering · scoring ▸ api · fastapi controllers ▸ api.run_score(): POST /api/pipeline/score — prefilter and score pending jobs as a background task.
 @app.post("/api/pipeline/score")
 def run_score(limit: int = 40) -> dict:
     """POST /api/pipeline/score — prefilter and score pending jobs as a background task."""
     from jobhunter import matcher
 
+    # ZONULY ▸ filtering · scoring ▸ api · fastapi controllers ▸ api.run_score.job(): Embed-prefilter jobs, then score pending ones; return both counts.
     def job() -> dict:
         """Embed-prefilter jobs, then score pending ones; return both counts."""
         embedded = matcher.prefilter(limit=1000)
@@ -2227,6 +2350,7 @@ def run_score(limit: int = 40) -> dict:
     return {"task_id": _run_task("score", job)}
 
 
+# ZONULY ▸ api route POST /api/pipeline/salaries ▸ api · fastapi controllers ▸ api.run_salaries(): POST /api/pipeline/salaries — extract salaries from job postings as a background task.
 @app.post("/api/pipeline/salaries")
 def run_salaries(limit: int = 40) -> dict:
     """POST /api/pipeline/salaries — extract salaries from job postings as a background task."""
@@ -2235,6 +2359,7 @@ def run_salaries(limit: int = 40) -> dict:
     return {"task_id": _run_task("salaries", pipeline.extract_salaries, limit)}
 
 
+# ZONULY ▸ api route POST /api/pipeline/rescore · scoring ▸ api · fastapi controllers ▸ api.run_rescore(): POST /api/pipeline/rescore — rescore every job as a background task.
 @app.post("/api/pipeline/rescore")
 def run_rescore() -> dict:
     """POST /api/pipeline/rescore — rescore every job as a background task."""
@@ -2243,6 +2368,7 @@ def run_rescore() -> dict:
     return {"task_id": _run_task("rescore", matcher.rescore_all)}
 
 
+# ZONULY ▸ api route POST /api/pipeline/reparse-resume ▸ api · fastapi controllers ▸ api.reparse_resume(): POST /api/pipeline/reparse-resume — rebuild the profile from the resume as a task.
 @app.post("/api/pipeline/reparse-resume")
 def reparse_resume() -> dict:
     """POST /api/pipeline/reparse-resume — rebuild the profile from the resume as a task."""
@@ -2251,6 +2377,7 @@ def reparse_resume() -> dict:
     return {"task_id": _run_task("reparse-resume", lambda: {"name": resume.build_profile().get("name")})}
 
 
+# ZONULY ▸ api route POST /api/pipeline/daily ▸ api · fastapi controllers ▸ api.run_daily(): POST /api/pipeline/daily — run the full daily pipeline cycle as a background task.
 @app.post("/api/pipeline/daily")
 def run_daily() -> dict:
     """POST /api/pipeline/daily — run the full daily pipeline cycle as a background task."""
@@ -2261,6 +2388,7 @@ def run_daily() -> dict:
 
 # ---------------------------------------------------------------- profile & settings
 
+# ZONULY ▸ api route GET /api/profile ▸ api · fastapi controllers ▸ api.get_profile(): GET /api/profile — the parsed resume profile (without raw text); 404 if none yet.
 @app.get("/api/profile")
 def get_profile() -> dict:
     """GET /api/profile — the parsed resume profile (without raw text); 404 if none yet."""
@@ -2273,6 +2401,7 @@ def get_profile() -> dict:
     return {k: v for k, v in profile.items() if k != "_resume_text"}
 
 
+# ZONULY ▸ api route GET /api/config ▸ api · fastapi controllers ▸ api.get_config(): GET /api/config — config.yaml as JSON, with secret keys removed.
 @app.get("/api/config")
 def get_config() -> dict:
     """GET /api/config — config.yaml as JSON, with secret keys removed."""
@@ -2283,6 +2412,7 @@ def get_config() -> dict:
     return cfg
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ class api.ConfigPatch
 class ConfigPatch(BaseModel):
     search: dict[str, Any] | None = None
     matching: dict[str, Any] | None = None
@@ -2291,6 +2421,7 @@ class ConfigPatch(BaseModel):
     notifications: dict[str, Any] | None = None
 
 
+# ZONULY ▸ api route PATCH /api/config ▸ api · fastapi controllers ▸ api.patch_config(): Write settings back to config.yaml. Secrets are only editable in the file itself.
 @app.patch("/api/config")
 def patch_config(payload: ConfigPatch) -> dict:
     """Write settings back to config.yaml. Secrets are only editable in the file itself."""
@@ -2324,6 +2455,7 @@ def patch_config(payload: ConfigPatch) -> dict:
     return {"ok": True, "restart_required": restart_required, "config": current}
 
 
+# ZONULY ▸ api route POST /api/gmail/authorize · email sending ▸ api · fastapi controllers ▸ api.gmail_authorize(): Kick off the OAuth consent flow. Opens a browser on the machine running the API.
 @app.post("/api/gmail/authorize")
 def gmail_authorize() -> dict:
     """Kick off the OAuth consent flow. Opens a browser on the machine running the API."""
@@ -2332,6 +2464,7 @@ def gmail_authorize() -> dict:
     return {"task_id": _run_task("gmail-auth", gmail.authorize)}
 
 
+# ZONULY ▸ api route GET /api/gmail/status · email sending ▸ api · fastapi controllers ▸ api.gmail_status(): The whole setup flow for Settings → Email: each step, what is done, what is next.
 @app.get("/api/gmail/status")
 def gmail_status() -> dict:
     """The whole setup flow for Settings → Email: each step, what is done, what is next."""
@@ -2340,12 +2473,14 @@ def gmail_status() -> dict:
     return gmail.setup_status()
 
 
+# ZONULY ▸ email sending ▸ api · fastapi controllers ▸ class api.GmailClientUpload: The OAuth *desktop app* client JSON downloaded from Google Cloud Console.
 class GmailClientUpload(BaseModel):
     """The OAuth *desktop app* client JSON downloaded from Google Cloud Console."""
 
     client: dict[str, Any]
 
 
+# ZONULY ▸ api route POST /api/gmail/credentials · email sending ▸ api · fastapi controllers ▸ api.gmail_install_credentials(): Store the uploaded client JSON at gmail.credentials_file. Never echoed back.
 @app.post("/api/gmail/credentials")
 def gmail_install_credentials(payload: GmailClientUpload) -> dict:
     """Store the uploaded client JSON at gmail.credentials_file. Never echoed back."""
@@ -2357,10 +2492,12 @@ def gmail_install_credentials(payload: GmailClientUpload) -> dict:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
 
+# ZONULY ▸ email sending ▸ api · fastapi controllers ▸ class api.GmailAppPasswordIn
 class GmailAppPasswordIn(BaseModel):
     password: str
 
 
+# ZONULY ▸ api route POST /api/gmail/app-password · email sending ▸ api · fastapi controllers ▸ api.gmail_install_app_password(): Store the app password in .env (mode 600). Never echoed back.
 @app.post("/api/gmail/app-password")
 def gmail_install_app_password(payload: GmailAppPasswordIn) -> dict:
     """Store the app password in .env (mode 600). Never echoed back."""
@@ -2372,6 +2509,7 @@ def gmail_install_app_password(payload: GmailAppPasswordIn) -> dict:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
 
+# ZONULY ▸ api route POST /api/gmail/verify · email verification · email sending · sign-in · auth ▸ api · fastapi controllers ▸ api.gmail_verify(): Sign in over IMAP and SMTP now and report whether Google accepted it.
 @app.post("/api/gmail/verify")
 def gmail_verify() -> dict:
     """Sign in over IMAP and SMTP now and report whether Google accepted it."""
@@ -2380,6 +2518,7 @@ def gmail_verify() -> dict:
     return {**gmail.verify(force=True), "setup": gmail.setup_status()}
 
 
+# ZONULY ▸ api route POST /api/gmail/disconnect · email sending ▸ api · fastapi controllers ▸ api.gmail_disconnect(): Forget the token (and optionally the client) so a different account can be connected.
 @app.post("/api/gmail/disconnect")
 def gmail_disconnect(remove_client: bool = False) -> dict:
     """Forget the token (and optionally the client) so a different account can be connected."""
@@ -2390,6 +2529,7 @@ def gmail_disconnect(remove_client: bool = False) -> dict:
 
 # ---------------------------------------------------------------- knowledge graph
 
+# ZONULY ▸ api route GET /api/kg/stats · knowledge graph ▸ api · fastapi controllers ▸ api.kg_stats(): GET /api/kg/stats — knowledge graph node and edge counts.
 @app.get("/api/kg/stats")
 def kg_stats() -> dict:
     """GET /api/kg/stats — knowledge graph node and edge counts."""
@@ -2399,6 +2539,7 @@ def kg_stats() -> dict:
         return g.stats()
 
 
+# ZONULY ▸ api route GET /api/kg/search · knowledge graph ▸ api · fastapi controllers ▸ api.kg_search(): GET /api/kg/search — full-text search over the knowledge graph, optionally by kind.
 @app.get("/api/kg/search")
 def kg_search(q: str, kind: str | None = None, limit: int = Query(20, le=200), any: bool = False) -> list[dict]:
     """GET /api/kg/search — full-text search over the knowledge graph, optionally by kind."""
@@ -2409,6 +2550,7 @@ def kg_search(q: str, kind: str | None = None, limit: int = Query(20, le=200), a
         return g.search(q, kinds=kinds, limit=limit, mode="or" if any else "and")
 
 
+# ZONULY ▸ api route GET /api/kg/nodes/{node_id} · knowledge graph ▸ api · fastapi controllers ▸ api.kg_node(): GET /api/kg/nodes/{node_id} — a knowledge graph node and its neighbours; 404 if unknown.
 @app.get("/api/kg/nodes/{node_id}")
 def kg_node(node_id: str, depth: int = Query(1, le=3)) -> dict:
     """GET /api/kg/nodes/{node_id} — a knowledge graph node and its neighbours; 404 if unknown."""
@@ -2421,6 +2563,7 @@ def kg_node(node_id: str, depth: int = Query(1, le=3)) -> dict:
         return {"node": node, **g.neighbors(node_id, depth=depth)}
 
 
+# ZONULY ▸ api route GET /api/kg/path · knowledge graph ▸ api · fastapi controllers ▸ api.kg_path(): GET /api/kg/path — the shortest path between two knowledge graph nodes.
 @app.get("/api/kg/path")
 def kg_path(a: str, b: str, max_depth: int = Query(6, le=10)) -> list[dict]:
     """GET /api/kg/path — the shortest path between two knowledge graph nodes."""
@@ -2430,6 +2573,7 @@ def kg_path(a: str, b: str, max_depth: int = Query(6, le=10)) -> list[dict]:
         return g.path(a, b, max_depth=max_depth)
 
 
+# ZONULY ▸ api route GET /api/kg/graph · filtering · scoring · knowledge graph ▸ api · fastapi controllers ▸ api.kg_graph(): The whole graph for a viewer. Unscored jobs are excluded unless asked for.
 @app.get("/api/kg/graph")
 def kg_graph(layer: str | None = None, all_jobs: bool = False) -> dict:
     """The whole graph for a viewer. Unscored jobs are excluded unless asked for."""
@@ -2438,6 +2582,7 @@ def kg_graph(layer: str | None = None, all_jobs: bool = False) -> dict:
     return export.to_dict(include_all_jobs=all_jobs, layer=layer)
 
 
+# ZONULY ▸ api route GET /api/kg/hubs · knowledge graph ▸ api · fastapi controllers ▸ api.kg_hubs(): GET /api/kg/hubs — the most central (load-bearing) knowledge graph nodes.
 @app.get("/api/kg/hubs")
 def kg_hubs(layer: str = "context", kind: str | None = None, top: int = Query(15, le=100)) -> list[dict]:
     """GET /api/kg/hubs — the most central (load-bearing) knowledge graph nodes."""
@@ -2447,6 +2592,7 @@ def kg_hubs(layer: str = "context", kind: str | None = None, top: int = Query(15
     return analyze.hubs(layer=None if layer == "all" else layer, kinds=kinds, top=top)
 
 
+# ZONULY ▸ api route GET /api/kg/brief · knowledge graph ▸ api · fastapi controllers ▸ api.kg_brief(): GET /api/kg/brief — the BRIEF.md text rendered from the knowledge graph.
 @app.get("/api/kg/brief", response_class=PlainTextResponse)
 def kg_brief() -> str:
     """GET /api/kg/brief — the BRIEF.md text rendered from the knowledge graph."""
@@ -2455,6 +2601,7 @@ def kg_brief() -> str:
     return brief.render()
 
 
+# ZONULY ▸ email drafting ▸ api · fastapi controllers ▸ class api.ComposeIn
 class ComposeIn(BaseModel):
     statement: str | None = None
     constraints: list[str] | None = None
@@ -2462,6 +2609,7 @@ class ComposeIn(BaseModel):
     include_dropped: bool = False
 
 
+# ZONULY ▸ api route POST /api/kg/compose · email drafting · knowledge graph ▸ api · fastapi controllers ▸ api.kg_compose(): POST /api/kg/compose — best feature per stage for a problem statement, from the graph.
 @app.post("/api/kg/compose")
 def kg_compose(payload: ComposeIn) -> dict:
     """POST /api/kg/compose — best feature per stage for a problem statement, from the graph."""
@@ -2472,6 +2620,7 @@ def kg_compose(payload: ComposeIn) -> dict:
     )
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ class api.NoteIn
 class NoteIn(BaseModel):
     text: str
     about: list[str] = []
@@ -2479,6 +2628,7 @@ class NoteIn(BaseModel):
     title: str | None = None
 
 
+# ZONULY ▸ api route POST /api/kg/notes · knowledge graph · sign-in · auth ▸ api · fastapi controllers ▸ api.kg_note(): POST /api/kg/notes — record a session note in the knowledge graph and rewrite BRIEF.md.
 @app.post("/api/kg/notes")
 def kg_note(payload: NoteIn) -> dict:
     """POST /api/kg/notes — record a session note in the knowledge graph and rewrite BRIEF.md."""
@@ -2491,12 +2641,14 @@ def kg_note(payload: NoteIn) -> dict:
     return result
 
 
+# ZONULY ▸ api route POST /api/kg/build ▸ api · fastapi controllers ▸ api.kg_build(): Reload context.yaml, re-sync every table, rewrite BRIEF.md and the viewer. Background task.
 @app.post("/api/kg/build")
 def kg_build() -> dict:
     """Reload context.yaml, re-sync every table, rewrite BRIEF.md and the viewer. Background task."""
     from jobhunter.kg import brief, context, export, sync
     from jobhunter.kg.store import Graph
 
+    # ZONULY ▸ knowledge graph ▸ api · fastapi controllers ▸ api.kg_build.job(): Reload context.yaml, sync the data layer, and rewrite BRIEF.md and the graph viewer.
     def job() -> dict:
         """Reload context.yaml, sync the data layer, and rewrite BRIEF.md and the graph viewer."""
         with Graph() as g:
@@ -2506,6 +2658,7 @@ def kg_build() -> dict:
     return {"task_id": _run_task("kg-build", job)}
 
 
+# ZONULY ▸ api · fastapi controllers ▸ api · fastapi controllers ▸ api.serve(): Run the FastAPI app with uvicorn; host and port from args, env (PORT) or config.
 def serve(host: str | None = None, port: int | None = None, reload: bool = False) -> None:
     """Run the FastAPI app with uvicorn; host and port from args, env (PORT) or config."""
     import uvicorn

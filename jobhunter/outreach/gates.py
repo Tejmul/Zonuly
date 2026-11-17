@@ -95,6 +95,7 @@ _COMMON = {
 }
 
 
+# ZONULY ▸ review gate ▸ outreach · email ▸ class gates.GateResult
 @dataclass
 class GateResult:
     flags: list[dict] = field(default_factory=list)
@@ -102,21 +103,25 @@ class GateResult:
     forbidden_hits: list[str] = field(default_factory=list)
     words: int = 0
 
+    # ZONULY ▸ review gate · email sending ▸ outreach · email ▸ gates.GateResult.blocked(): Blocked means "read this before approving", not "cannot send".
     @property
     def blocked(self) -> bool:
         """Blocked means "read this before approving", not "cannot send"."""
         return any(f["kind"] in ("faithfulness", "affiliation", "uncovered_claim") for f in self.flags)
 
+    # ZONULY ▸ review gate ▸ outreach · email ▸ gates.GateResult.as_list(): Return the review flags as a plain list of dicts.
     def as_list(self) -> list[dict]:
         """Return the review flags as a plain list of dicts."""
         return self.flags
 
 
+# ZONULY ▸ scoring · review gate ▸ outreach · email ▸ gates._normalise(): Lowercase text and turn every run of non-alphanumerics into one space, for phrase matching.
 def _normalise(text: str) -> str:
     """Lowercase text and turn every run of non-alphanumerics into one space, for phrase matching."""
     return re.sub(r"[^a-z0-9]+", " ", (text or "").lower())
 
 
+# ZONULY ▸ review gate ▸ outreach · email ▸ gates._body_only(): Return the email body with the signature (and anything after it) cut off.
 def _body_only(body: str, signature: str | None) -> str:
     """Return the email body with the signature (and anything after it) cut off."""
     if signature and signature in body:
@@ -124,6 +129,7 @@ def _body_only(body: str, signature: str | None) -> str:
     return body
 
 
+# ZONULY ▸ enrichment · review gate ▸ outreach · email ▸ gates.check(): Run every gate over `body` against the facts in `corpus`.
 def check(body: str, *, corpus: str, signature: str | None = None,
           address_confidence: str | None = None, affiliation: str | None = None,
           affiliation_evidence: str | None = None, forbidden: list[str] | None = None,
@@ -277,12 +283,14 @@ _BARE_GREETING = re.compile(r"^\s*(hi|hello|hey|dear)(\s+(there|team|all|sir|mad
 _MOJIBAKE = re.compile(r"â€|Ã.|Â |\ufffd")
 
 
+# ZONULY ▸ review gate ▸ outreach · email ▸ gates._host(): Return the bare lowercase host of a URL, without scheme, query or www.
 def _host(url: str) -> str:
     """Return the bare lowercase host of a URL, without scheme, query or www."""
     u = re.sub(r"^https?://", "", url.strip(), flags=re.I)
     return u.split("/")[0].split("?")[0].lower().removeprefix("www.")
 
 
+# ZONULY ▸ review gate ▸ outreach · email ▸ gates.links_in(): (text, url) for every link: "[words](url)" and bare URLs.
 def links_in(body: str) -> list[tuple[str, str]]:
     """(text, url) for every link: "[words](url)" and bare URLs."""
     out = [(m.group(1), m.group(2)) for m in _MDLINK.finditer(body or "")]
@@ -291,17 +299,20 @@ def links_in(body: str) -> list[tuple[str, str]]:
     return out
 
 
+# ZONULY ▸ dedup · review gate ▸ outreach · email ▸ gates.shingles(): Return the set of k-word shingles of the text, for near-duplicate detection.
 def shingles(text: str, k: int = 3) -> set[tuple[str, ...]]:
     """Return the set of k-word shingles of the text, for near-duplicate detection."""
     toks = re.findall(r"[a-z0-9']+", (text or "").lower())
     return {tuple(toks[i:i + k]) for i in range(max(0, len(toks) - k + 1))}
 
 
+# ZONULY ▸ review gate ▸ outreach · email ▸ gates.jaccard(): Return the Jaccard similarity of two sets (0.0 when either is empty).
 def jaccard(a: set, b: set) -> float:
     """Return the Jaccard similarity of two sets (0.0 when either is empty)."""
     return len(a & b) / len(a | b) if a and b else 0.0
 
 
+# ZONULY ▸ email verification · review gate · email sending ▸ outreach · email ▸ gates.deliverability(): What makes a one-to-one cold mail look like bulk to Gmail / Google Workspace:
 def deliverability(subject: str, body: str, *, first_name: str | None = None, signature: str | None = None,
                    sent: list[dict] | None = None, to_email: str | None = None, attachments: int = 0) -> list[dict]:
     """What makes a one-to-one cold mail look like bulk to Gmail / Google Workspace:
@@ -311,6 +322,7 @@ def deliverability(subject: str, body: str, *, first_name: str | None = None, si
     the same domain. Each flag is {"kind": "deliverability", "detail": <plain English>}."""
     flags: list[dict] = []
 
+    # ZONULY ▸ email verification · review gate ▸ outreach · email ▸ gates.deliverability.flag(): Add one deliverability flag with a plain-English detail.
     def flag(detail: str) -> None:
         """Add one deliverability flag with a plain-English detail."""
         flags.append({"kind": "deliverability", "detail": detail})
@@ -383,11 +395,13 @@ _SENT = re.compile(r"(?<=[.!?:])\s+|\n+")
 _SPAM = re.compile(r"\b(free|guarantee[d]?|urgent|act now|limited time|winner|click here|100%|risk[- ]free|earn|\$\$)\b", re.I)
 
 
+# ZONULY ▸ review gate ▸ outreach · email ▸ gates.sentences(): Sentences (and bullet lines) of a plain-text body, greeting and sign-off included.
 def sentences(text: str) -> list[str]:
     """Sentences (and bullet lines) of a plain-text body, greeting and sign-off included."""
     return [s.strip(" -•\t") for s in _SENT.split(text or "") if len(_WORD.findall(s)) >= 2]
 
 
+# ZONULY ▸ review gate ▸ outreach · email ▸ gates.readability(): (sentences over 30 words, average words per sentence).
 def readability(text: str) -> tuple[int, float]:
     """(sentences over 30 words, average words per sentence)."""
     lens = [len(_WORD.findall(s)) for s in sentences(text)]
@@ -396,6 +410,7 @@ def readability(text: str) -> tuple[int, float]:
     return sum(1 for n in lens if n > 30), sum(lens) / len(lens)
 
 
+# ZONULY ▸ review gate · replies · follow-up ▸ outreach · email ▸ gates.subject_problems(): What breaks the researched subject rules (playbook §1): 2–8 words / ≤60 chars, no fake reply/forward prefix on a cold
 def subject_problems(subject: str) -> list[str]:
     """What breaks the researched subject rules (playbook §1): 2–8 words / ≤60 chars, no fake reply/forward prefix on a cold
     mail, no spam words, no exclamation marks, no shouting."""

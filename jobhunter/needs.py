@@ -178,6 +178,7 @@ _FRESHER = re.compile(
     r"campus hir|university grad|junior)", re.I)
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ class needs.Experience
 @dataclass
 class Experience:
     min_years: float | None = None     # the smallest years figure the posting asks for, None = not stated
@@ -186,11 +187,13 @@ class Experience:
     quote: str | None = None
     fresher_quote: str | None = None
 
+    # ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs.Experience.as_dict(): Return this experience requirement as a plain dict.
     def as_dict(self) -> dict:
         """Return this experience requirement as a plain dict."""
         return asdict(self)
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs.parse_experience(): The experience bar a posting sets, read from its own sentences.
 def parse_experience(text: str | None) -> Experience:
     """The experience bar a posting sets, read from its own sentences.
 
@@ -223,6 +226,7 @@ def parse_experience(text: str | None) -> Experience:
     return out
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs._num(): Parse a years token (digits or a number word like 'two') into a float, or None.
 def _num(tok: str | None) -> float | None:
     """Parse a years token (digits or a number word like 'two') into a float, or None."""
     if tok is None:
@@ -236,6 +240,7 @@ def _num(tok: str | None) -> float | None:
         return None
 
 
+# ZONULY ▸ scoring ▸ enrichment · needs and gap analysis ▸ needs._sentence_around(): Return the sentence (bounded by . newline or ;) around a match span, trimmed to a limit.
 def _sentence_around(text: str, start: int, end: int, limit: int = 240) -> str:
     """Return the sentence (bounded by . newline or ;) around a match span, trimmed to a limit."""
     left = max(text.rfind(".", 0, start), text.rfind("\n", 0, start), text.rfind(";", 0, start))
@@ -249,6 +254,7 @@ def _sentence_around(text: str, start: int, end: int, limit: int = 240) -> str:
 
 # ------------------------------------------------------------------ the resume as evidence
 
+# ZONULY ▸ validation · guardrails ▸ enrichment · needs and gap analysis ▸ class needs.Evidence
 @dataclass
 class Evidence:
     id: str
@@ -258,6 +264,7 @@ class Evidence:
     skills: list[str] = field(default_factory=list)
 
 
+# ZONULY ▸ validation · guardrails ▸ enrichment · needs and gap analysis ▸ needs.resume_evidence(): Every resume line that can cover a need: experience bullets, projects, the skills list.
 def resume_evidence(profile: dict | None = None) -> list[Evidence]:
     """Every resume line that can cover a need: experience bullets, projects, the skills list."""
     if profile is None:
@@ -284,12 +291,14 @@ def resume_evidence(profile: dict | None = None) -> list[Evidence]:
     return out
 
 
+# ZONULY ▸ validation · guardrails · cache ▸ enrichment · needs and gap analysis ▸ needs._default_evidence(): Resume evidence lines for the default profile, computed once and cached.
 @lru_cache(maxsize=1)
 def _default_evidence() -> tuple[Evidence, ...]:
     """Resume evidence lines for the default profile, computed once and cached."""
     return tuple(resume_evidence())
 
 
+# ZONULY ▸ validation · guardrails · cache ▸ enrichment · needs and gap analysis ▸ needs._evidence(): Resume evidence lines for the given profile, or the cached default profile's.
 def _evidence(profile: dict | None) -> list[Evidence]:
     """Resume evidence lines for the given profile, or the cached default profile's."""
     return resume_evidence(profile) if profile is not None else list(_default_evidence())
@@ -298,6 +307,7 @@ def _evidence(profile: dict | None) -> list[Evidence]:
 _RANK = {"bullet": 0, "project": 1, "header": 1, "skills": 2}
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs.cover_skill(): The strongest resume line for this skill: a shipped bullet over a project over the
 def cover_skill(skill: str, ev: list[Evidence]) -> Evidence | None:
     """The strongest resume line for this skill: a shipped bullet over a project over the
     skills list; for a generic ask ("backend") a line naming concrete work that answers it."""
@@ -308,6 +318,7 @@ def cover_skill(skill: str, ev: list[Evidence]) -> Evidence | None:
     return min(hits, key=lambda e: _RANK[e.kind]) if hits else None
 
 
+# ZONULY ▸ validation · guardrails · email verification ▸ enrichment · needs and gap analysis ▸ needs.resume_skills(): Return the set of skills the resume evidence lines prove.
 def resume_skills(profile: dict | None = None) -> set[str]:
     """Return the set of skills the resume evidence lines prove."""
     return {s for e in _evidence(profile) for s in e.skills}
@@ -315,6 +326,7 @@ def resume_skills(profile: dict | None = None) -> set[str]:
 
 # ------------------------------------------------------------------ reading a JD
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ class needs.Need
 @dataclass
 class Need:
     text: str
@@ -336,11 +348,13 @@ class Need:
     evidence_skills: list[str] = field(default_factory=list)   # what the quoted line itself answers
     more_evidence: list[dict] = field(default_factory=list)     # other lines covering the rest
 
+    # ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs.Need.as_dict(): Return this job need as a plain dict.
     def as_dict(self) -> dict:
         """Return this job need as a plain dict."""
         return asdict(self)
 
 
+# ZONULY ▸ enrichment ▸ enrichment · needs and gap analysis ▸ needs._clean_lines(): Split a job description into stripped, non-empty lines, dropping boilerplate lines.
 def _clean_lines(text: str) -> list[str]:
     """Split a job description into stripped, non-empty lines, dropping boilerplate lines."""
     lines = []
@@ -352,6 +366,7 @@ def _clean_lines(text: str) -> list[str]:
     return lines
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs._heading(): The section a heading line opens, or None when the line is content.
 def _heading(line: str) -> str | None:
     """The section a heading line opens, or None when the line is content."""
     bare = re.sub(r"^[#*\s]+|[*:\s]+$", "", line).strip()
@@ -367,6 +382,7 @@ def _heading(line: str) -> str | None:
     return None
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs.sections(): (section, item) for every bullet or sentence of a JD, in order.
 def sections(text: str) -> list[tuple[str, str]]:
     """(section, item) for every bullet or sentence of a JD, in order.
 
@@ -400,12 +416,14 @@ def sections(text: str) -> list[tuple[str, str]]:
     return out
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs._short(): Collapse whitespace and shorten text to n characters at a word boundary with an ellipsis.
 def _short(text: str, n: int = 160) -> str:
     """Collapse whitespace and shorten text to n characters at a word boundary with an ellipsis."""
     text = re.sub(r"\s+", " ", text).strip()
     return text if len(text) <= n else text[: n - 1].rsplit(" ", 1)[0] + "…"
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs.jd_needs(): (needs, building signals) read from the posting itself.
 def jd_needs(job: Job) -> tuple[list[Need], list[dict]]:
     """(needs, building signals) read from the posting itself."""
     text = job.description or ""
@@ -452,6 +470,7 @@ def jd_needs(job: Job) -> tuple[list[Need], list[dict]]:
     return needs, _dedupe(building)
 
 
+# ZONULY ▸ dedup ▸ enrichment · needs and gap analysis ▸ needs._dedupe(): Dedup quote/text items by their normalised first 80 characters, keeping order.
 def _dedupe(items: list[dict]) -> list[dict]:
     """Dedup quote/text items by their normalised first 80 characters, keeping order."""
     out, seen = [], set()
@@ -468,6 +487,7 @@ def _dedupe(items: list[dict]) -> list[dict]:
 _ALTERNATIVES = re.compile(r"\b(or|such as|e\.g\.?|like|similar|any of|one of|and/or)\b", re.I)
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs.map_gaps(): Each need → the resume line that covers it, or UNCOVERED. Deterministic.
 def map_gaps(needs: list[Need], profile: dict | None = None) -> list[Need]:
     """Each need → the resume line that covers it, or UNCOVERED. Deterministic.
 
@@ -513,6 +533,7 @@ def map_gaps(needs: list[Need], profile: dict | None = None) -> list[Need]:
     return needs
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs.coverage(): Weighted share of the needs the resume covers (partial counts half).
 def coverage(needs: list[Need]) -> dict:
     """Weighted share of the needs the resume covers (partial counts half)."""
     total = sum(n.weight for n in needs)
@@ -528,6 +549,7 @@ def coverage(needs: list[Need]) -> dict:
 
 # ------------------------------------------------------------------ the company's own words
 
+# ZONULY ▸ cache ▸ enrichment · needs and gap analysis ▸ needs.company_signals(): (implied needs, building signals) from the company row and its cached web context.
 def company_signals(company: Company | None, context: dict | None = None) -> tuple[list[Need], list[dict]]:
     """(implied needs, building signals) from the company row and its cached web context."""
     if company is None:
@@ -566,6 +588,7 @@ def company_signals(company: Company | None, context: dict | None = None) -> tup
     return needs, _dedupe(building)
 
 
+# ZONULY ▸ github scraping · scraping ▸ enrichment · needs and gap analysis ▸ needs.fetch_context(): Public context for one company: keyless web results and its GitHub org's repos.
 def fetch_context(company: Company, *, web_search: bool = True, github: bool = True) -> dict:
     """Public context for one company: keyless web results and its GitHub org's repos.
 
@@ -621,6 +644,7 @@ def fetch_context(company: Company, *, web_search: bool = True, github: bool = T
     return out
 
 
+# ZONULY ▸ scraping · cache ▸ enrichment · needs and gap analysis ▸ needs.context_for(): The company's cached public context, fetched when missing or stale (and allowed).
 def context_for(session, company: Company, *, refresh: bool = False, network: bool = True) -> dict:
     """The company's cached public context, fetched when missing or stale (and allowed)."""
     cached = None
@@ -647,6 +671,7 @@ def context_for(session, company: Company, *, refresh: bool = False, network: bo
 
 # ------------------------------------------------------------------ the brief
 
+# ZONULY ▸ cache ▸ enrichment · needs and gap analysis ▸ needs._default_first_name(): First name of the candidate from the default resume profile, cached.
 @lru_cache(maxsize=1)
 def _default_first_name() -> str:
     """First name of the candidate from the default resume profile, cached."""
@@ -655,6 +680,7 @@ def _default_first_name() -> str:
     return ((resume.load_profile().get("name") or "the candidate").split() or ["the candidate"])[0]
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs.candidate_first_name(): First name of the candidate from a profile, or the default profile's.
 def candidate_first_name(profile: dict | None = None) -> str:
     """First name of the candidate from a profile, or the default profile's."""
     if profile is None:
@@ -662,6 +688,7 @@ def candidate_first_name(profile: dict | None = None) -> str:
     return ((profile.get("name") or "the candidate").split() or ["the candidate"])[0]
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs.deterministic_helps(): 2–3 sentences built ONLY from covered needs: their words, then the resume line.
 def deterministic_helps(needs: list[Need], company: str, who: str) -> str | None:
     """2–3 sentences built ONLY from covered needs: their words, then the resume line."""
     covered = sorted((n for n in needs if n.status == "covered" and n.evidence),
@@ -680,6 +707,7 @@ def deterministic_helps(needs: list[Need], company: str, who: str) -> str | None
     return " ".join(parts)
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs.deterministic_angles(): Build up to 3 outreach angles from covered needs and what the company is building.
 def deterministic_angles(needs: list[Need], building: list[dict]) -> list[str]:
     """Build up to 3 outreach angles from covered needs and what the company is building.
     No model: uses the hidden need, the top stated need and a recent launch quote."""
@@ -726,6 +754,7 @@ Reply with exactly:
 {{"building": "...", "implied": [{{"need": "...", "quote": <number>}}], "helps": "...", "angles": ["..."]}}"""
 
 
+# ZONULY ▸ ai model call · llm ▸ enrichment · needs and gap analysis ▸ needs._corpus(): Build the source text the model's synthesis is checked against (company, resume, needs, quotes).
 def _corpus(company: str, who: str, needs: list[Need], building: list[dict], profile: dict | None) -> str:
     """Build the source text the model's synthesis is checked against (company, resume, needs, quotes)."""
     from jobhunter import resume
@@ -738,6 +767,7 @@ def _corpus(company: str, who: str, needs: list[Need], building: list[dict], pro
     return "\n".join(bits)
 
 
+# ZONULY ▸ filtering · ai model call · llm ▸ enrichment · needs and gap analysis ▸ needs.synthesize(): (model synthesis or None, status). Status: done | pending | rejected | skipped.
 def synthesize(title: str, company: str, who: str, needs: list[Need], building: list[dict],
                profile: dict | None = None) -> tuple[dict | None, str]:
     """(model synthesis or None, status). Status: done | pending | rejected | skipped.
@@ -808,6 +838,7 @@ def synthesize(title: str, company: str, who: str, needs: list[Need], building: 
     return out, "done"
 
 
+# ZONULY ▸ email drafting ▸ enrichment · needs and gap analysis ▸ needs.forbidden_terms(): Skills a brief or a draft must never claim: named by an uncovered need, absent from the resume.
 def forbidden_terms(needs: list[Need], profile: dict | None = None) -> list[str]:
     """Skills a brief or a draft must never claim: named by an uncovered need, absent from the resume."""
     have = resume_skills(profile)
@@ -821,6 +852,7 @@ def forbidden_terms(needs: list[Need], profile: dict | None = None) -> list[str]
     return out
 
 
+# ZONULY ▸ ai model call · llm ▸ enrichment · needs and gap analysis ▸ needs.build_brief(): The needs brief for one role. Deterministic unless `synth`; never raises on a dead model.
 def build_brief(job: Job, company: Company | None, *, context: dict | None = None, synth: bool = False,
                 profile: dict | None = None) -> dict:
     """The needs brief for one role. Deterministic unless `synth`; never raises on a dead model."""
@@ -860,6 +892,7 @@ def build_brief(job: Job, company: Company | None, *, context: dict | None = Non
     return brief
 
 
+# ZONULY ▸ ai model call · llm ▸ enrichment · needs and gap analysis ▸ needs.brief_for(): The stored brief if there is one, else a deterministic one built now (no network, no model).
 def brief_for(job: Job, company: Company | None) -> dict:
     """The stored brief if there is one, else a deterministic one built now (no network, no model)."""
     if job.needs_brief:
@@ -878,6 +911,7 @@ def brief_for(job: Job, company: Company | None) -> dict:
     return b
 
 
+# ZONULY ▸ enrichment · needs and gap analysis ▸ enrichment · needs and gap analysis ▸ needs.store_brief(): Store a job's needs brief (JSON), its time and synthesis on the job row (not committed).
 def store_brief(session, job: Job, brief: dict) -> None:
     """Store a job's needs brief (JSON), its time and synthesis on the job row (not committed)."""
     job.needs_brief = json.dumps(brief, default=str)[:60000]
@@ -886,6 +920,7 @@ def store_brief(session, job: Job, brief: dict) -> None:
     session.add(job)
 
 
+# ZONULY ▸ enrichment ▸ enrichment · needs and gap analysis ▸ needs.jd_hash(): Return a short SHA-1 hash of a job's title and description, to detect JD changes.
 def jd_hash(job: Job) -> str:
     """Return a short SHA-1 hash of a job's title and description, to detect JD changes."""
     return hashlib.sha1(f"{job.title}|{(job.description or '')[:8000]}".encode()).hexdigest()[:12]

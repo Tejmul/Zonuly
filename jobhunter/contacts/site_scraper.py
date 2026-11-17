@@ -41,6 +41,7 @@ _ASSET = re.compile(r"\.(png|jpe?g|gif|svg|webp|css|js|woff2?|ico)$", re.I)
 _RECRUIT = re.compile(r"^(careers?|jobs|recruit(ing|ment)?|hiring|talent|hr|people)@", re.I)
 
 
+# ZONULY ▸ scraping · people search · referrers ▸ people · contact discovery · email proof ▸ class site_scraper.SiteContact
 @dataclass
 class SiteContact:
     email: str
@@ -51,11 +52,13 @@ class SiteContact:
     is_recruiter: bool = False
 
 
+# ZONULY ▸ scraping · people search · referrers ▸ people · contact discovery · email proof ▸ site_scraper._same_domain(): True when the email address belongs to the given domain (or a subdomain of it).
 def _same_domain(email: str, domain: str) -> bool:
     """True when the email address belongs to the given domain (or a subdomain of it)."""
     return email.split("@")[-1].lower().endswith(domain.lower())
 
 
+# ZONULY ▸ scraping · people search · referrers ▸ people · contact discovery · email proof ▸ site_scraper.scrape(): Walk a handful of likely pages and pull same-domain email addresses.
 async def scrape(http: httpx.AsyncClient, website: str, domain: str | None = None) -> list[SiteContact]:
     """Walk a handful of likely pages and pull same-domain email addresses."""
     if not website:
@@ -95,6 +98,7 @@ async def scrape(http: httpx.AsyncClient, website: str, domain: str | None = Non
 _NAME_RE = re.compile(r"\b([A-Z][a-z]{1,15})\s+([A-Z][a-z]{1,20})\b")
 
 
+# ZONULY ▸ scraping · people search · referrers ▸ people · contact discovery · email proof ▸ site_scraper._name_near(): Best-effort: a Firstname Lastname appearing just before the address.
 def _name_near(html: str, email: str, window: int = 300) -> str | None:
     """Best-effort: a Firstname Lastname appearing just before the address."""
     idx = html.find(email)
@@ -113,6 +117,7 @@ def _name_near(html: str, email: str, window: int = 300) -> str | None:
 TEAM_PATHS = ["/team", "/about", "/about-us", "/people", "/company"]
 
 
+# ZONULY ▸ scraping · people search · referrers ▸ people · contact discovery · email proof ▸ site_scraper.team_from_jina(): The team / about pages read through Jina Reader (the research layer's page read —
 def team_from_jina(website: str, domain: str | None = None, *, max_pages: int = 3) -> list[tuple[SiteContact, str]]:
     """The team / about pages read through Jina Reader (the research layer's page read —
     a JS-rendered page the direct fetch sees empty). (contact, page url) for every named

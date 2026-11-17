@@ -34,6 +34,7 @@ FEEDS = [
 _TITLE_RE = re.compile(r"^\s*(?P<company>[^:]{2,60}?)\s*:\s*(?P<title>.+)$")
 
 
+# ZONULY ▸ wwr scraping · scraping · remote from india ▸ scraping · data ingestion ▸ wwr._fetch_feed(): Fetch one We Work Remotely RSS feed and parse its entries into remote RawJob rows.
 async def _fetch_feed(http: httpx.AsyncClient, url: str) -> list[RawJob]:
     """Fetch one We Work Remotely RSS feed and parse its entries into remote RawJob rows."""
     text = await get_text(http, url)
@@ -68,6 +69,7 @@ async def _fetch_feed(http: httpx.AsyncClient, url: str) -> list[RawJob]:
     return out
 
 
+# ZONULY ▸ wwr scraping · scraping · dedup · remote from india ▸ scraping · data ingestion ▸ wwr.fetch(): Scrape every We Work Remotely feed concurrently, deduplicating jobs by URL.
 async def fetch(http: httpx.AsyncClient, companies: list[dict] | None = None) -> list[RawJob]:
     """Scrape every We Work Remotely feed concurrently, deduplicating jobs by URL."""
     results = await gather_limited([_fetch_feed(http, u) for u in FEEDS], limit=4)

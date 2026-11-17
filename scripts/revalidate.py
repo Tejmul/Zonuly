@@ -72,6 +72,7 @@ OWN_BOARD_SOURCES = {"greenhouse", "lever", "ashby", "careers", "workable", "sma
 _JUNK_NAME = ("a job-list phrase", "too long to be a name", "a placeholder", "a place, not")
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · revalidation script ▸ revalidate.backup(): Back up the live database to data/backups before revalidation writes; returns the path.
 def backup() -> Path:
     """Back up the live database to data/backups before revalidation writes; returns the path."""
     dest = ROOT / "data" / "backups" / f"jobhunter-{datetime.now():%Y-%m-%d-%H%M}-pre-revalidate.db"
@@ -87,6 +88,7 @@ def backup() -> Path:
 
 # ------------------------------------------------------------------ companies
 
+# ZONULY ▸ filtering · validation · guardrails ▸ filtering · revalidation script ▸ revalidate.company_actions(): [(field, new value, reject reason or None, old value)] — what the validators say.
 def company_actions(c: Company, *, roles_on_board: list[str],
                     known: dict[str, int] | None = None) -> list[tuple[str, object, str | None, object]]:
     """[(field, new value, reject reason or None, old value)] — what the validators say."""
@@ -161,6 +163,7 @@ def company_actions(c: Company, *, roles_on_board: list[str],
     return acts
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · revalidation script ▸ revalidate.name_check(): Return why a company's name fails the guardrails name check, or None when it passes.
 def name_check(c: Company, index: dict[str, int]) -> str | None:
     """Return why a company's name fails the guardrails name check, or None when it passes."""
     chk = guardrails.company_name(c.name, others=index, self_id=c.id)
@@ -169,6 +172,7 @@ def name_check(c: Company, index: dict[str, int]) -> str | None:
 
 # ------------------------------------------------------------------ contacts
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ filtering · revalidation script ▸ revalidate.contact_plan(): Return the guardrails relabel plan for one contact (name, address kind, affiliation).
 def contact_plan(p: Contact, company: Company | None) -> dict:
     """Return the guardrails relabel plan for one contact (name, address kind, affiliation)."""
     return guardrails.relabel_contact(p, company)
@@ -176,8 +180,10 @@ def contact_plan(p: Contact, company: Company | None) -> dict:
 
 # ------------------------------------------------------------------ the run
 
+# ZONULY ▸ validation · guardrails · enrichment · people search · referrers ▸ filtering · revalidation script ▸ revalidate.counts(): Count active companies and their field fill rates, plus contacts by confidence, affili…
 def counts(session) -> dict:
     """Count active companies and their field fill rates, plus contacts by confidence, affiliation, kind."""
+    # ZONULY ▸ validation · guardrails ▸ filtering · revalidation script ▸ revalidate.counts.grp(): Count rows grouped by one column.
     def grp(column) -> dict:
         """Count rows grouped by one column."""
         return {str(k): v for k, v in session.exec(select(column, func.count()).group_by(column)).all()}
@@ -197,6 +203,7 @@ def counts(session) -> dict:
             "contacts_email_kind": grp(Contact.email_kind)}
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ filtering · revalidation script ▸ revalidate.run(): Re-run the guardrails over stored companies and contacts; dry run unless apply is set.
 def run(apply: bool, *, github: int, reserve: int, samples: int) -> dict:
     """Re-run the guardrails over stored companies and contacts; dry run unless apply is set.
 
@@ -324,6 +331,7 @@ def run(apply: bool, *, github: int, reserve: int, samples: int) -> dict:
     return out
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · revalidation script ▸ revalidate.main(): CLI entry: parse flags, run the revalidation and print the report as JSON.
 def main() -> int:
     """CLI entry: parse flags, run the revalidation and print the report as JSON."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

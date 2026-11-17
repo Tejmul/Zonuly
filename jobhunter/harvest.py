@@ -108,6 +108,7 @@ _NOT_A_SITE = re.compile(
 _TITLE_NOISE = re.compile(r"\s*[\(\[]\s*YC\s+[A-Z]+\d{2}\s*[\)\]]\s*|\s*[|–—-]\s.*$|\s*:\s.*$", re.I)
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ class harvest.HarvestStats
 @dataclass
 class HarvestStats:
     source: str
@@ -117,10 +118,12 @@ class HarvestStats:
     updated: int = 0
     skipped: dict[str, int] = field(default_factory=dict)
 
+    # ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ harvest.HarvestStats.skip(): Count one skipped candidate under its reason.
     def skip(self, why: str) -> None:
         """Count one skipped candidate under its reason."""
         self.skipped[why] = self.skipped.get(why, 0) + 1
 
+    # ZONULY ▸ scraping · admission gate · filtering ▸ data ingestion · company discovery ▸ harvest.HarvestStats.as_dict(): Return the harvest stats (seen, candidates, admitted, updated, skipped) as a dict.
     def as_dict(self) -> dict:
         """Return the harvest stats (seen, candidates, admitted, updated, skipped) as a dict."""
         return {"source": self.source, "seen": self.seen, "candidates": self.candidates,
@@ -132,6 +135,7 @@ class HarvestStats:
 _BATCH_MONTH = {"winter": 1, "spring": 3, "summer": 6, "fall": 9}
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ harvest.batch_date(): 'Winter 2025' -> '2025-01-01'. The batch start is the closest thing to a round date.
 def batch_date(batch: str | None) -> str | None:
     """'Winter 2025' -> '2025-01-01'. The batch start is the closest thing to a round date."""
     m = re.match(r"\s*(winter|spring|summer|fall)\s+(\d{4})", batch or "", re.I)
@@ -140,6 +144,7 @@ def batch_date(batch: str | None) -> str | None:
     return f"{m.group(2)}-{_BATCH_MONTH[m.group(1).lower()]:02d}-01"
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ harvest._months_since(): Return whole months between an ISO date and now, or None when missing or unparseable.
 def _months_since(iso: str | None) -> int | None:
     """Return whole months between an ISO date and now, or None when missing or unparseable."""
     if not iso:
@@ -152,6 +157,7 @@ def _months_since(iso: str | None) -> int | None:
     return (now.year - d.year) * 12 + (now.month - d.month)
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ harvest._clean_name(): Clean a page or post title into a company name, or None when it is too long to be one.
 def _clean_name(title: str) -> str | None:
     """Clean a page or post title into a company name, or None when it is too long to be one."""
     name = _TITLE_NOISE.sub("", (title or "").strip()).strip(" -–—|:")
@@ -161,6 +167,7 @@ def _clean_name(title: str) -> str | None:
     return name
 
 
+# ZONULY ▸ scraping · enrichment ▸ data ingestion · company discovery ▸ harvest._first_sentence(): Return the first real sentence of scraped page text as a company description, or None.
 def _first_sentence(text: str | None, limit: int = 300) -> str | None:
     """Return the first real sentence of scraped page text as a company description, or None."""
     # Exa hands back page text as Markdown: drop headings ("# Acme"), link lines and
@@ -176,22 +183,26 @@ def _first_sentence(text: str | None, limit: int = 300) -> str | None:
     return first[:limit] or None
 
 
+# ZONULY ▸ scraping · admission gate · filtering · dedup ▸ data ingestion · company discovery ▸ harvest._norm_name(): A company's identity key — admission.name_key, kept under its old name.
 def _norm_name(name: str) -> str:
     """A company's identity key — admission.name_key, kept under its old name."""
     return admission.name_key(name)
 
 
+# ZONULY ▸ scraping · dedup · review gate ▸ data ingestion · company discovery ▸ harvest._find_company(): Exact name, then the normalized name key — the anti-duplicate gate. The index
 def _find_company(session, name: str) -> Company | None:
     """Exact name, then the normalized name key — the anti-duplicate gate. The index
     lives on the session (admission._index), so threads never share a stale copy."""
     return admission.find_existing(session, name)
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ harvest._skip_key(): Reduce a skip reason to a short key for the harvest stats tally.
 def _skip_key(reason: str) -> str:
     """Reduce a skip reason to a short key for the harvest stats tally."""
     return "junk name" if reason.startswith("junk name") else reason.split(":")[0].split(" — ")[0]
 
 
+# ZONULY ▸ scraping · admission gate · filtering · enrichment · review gate ▸ data ingestion · company discovery ▸ harvest._upsert(): Create or fill-in-the-blanks through the admission gate. None when the gate says
 def _upsert(session, *, name: str, website: str | None, source: str, description: str | None,
             region: str | None, note: str, funding: dict | None = None,
             claim: dict | None = None, story: str | None = None, story_evidence: str | None = None,
@@ -257,6 +268,7 @@ _CHANNEL = {"funding-rss": "feed", "funding-news": "exa-api", "exa": "exa-api", 
             "yc": "yc", "x": "x", "scrapedo-dir": "scrapedo"}
 
 
+# ZONULY ▸ scraping · validation · guardrails · enrichment ▸ data ingestion · company discovery ▸ harvest._apply_funding(): Write a round onto a row through guardrails.set_funding: the stage in the one
 def _apply_funding(session, company: Company, funding: dict, *, source: str | None = None,
                    channel: str | None = None) -> None:
     """Write a round onto a row through guardrails.set_funding: the stage in the one
@@ -268,6 +280,7 @@ def _apply_funding(session, company: Company, funding: dict, *, source: str | No
 
 # ------------------------------------------------------------------ source: YC directory
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ harvest._yc_fits(): (region, reason-to-skip). Region is the configured key or None.
 def _yc_fits(c: dict, stats: HarvestStats) -> tuple[str | None, str | None]:
     """(region, reason-to-skip). Region is the configured key or None."""
     if not c.get("isHiring") or (c.get("status") or "").lower() != "active":
@@ -281,6 +294,7 @@ def _yc_fits(c: dict, stats: HarvestStats) -> tuple[str | None, str | None]:
     return region, None
 
 
+# ZONULY ▸ yc scraping · scraping · data ingestion · admission gate · filtering ▸ data ingestion · company discovery ▸ harvest.admit_yc(): Every YC company that fits, newest batch first, into the registry.
 def admit_yc(limit: int | None = None, *, timeout: int = 90) -> HarvestStats:
     """Every YC company that fits, newest batch first, into the registry."""
     init_db()
@@ -363,6 +377,7 @@ DEFAULT_EXA_QUERIES = _H.get("exa_queries") or [
 ]
 
 
+# ZONULY ▸ scraping · data ingestion · admission gate · filtering ▸ data ingestion · company discovery ▸ harvest.admit_exa(): Company sites from Exa's company index. One search per query, capped by exa_daily_cap.
 def admit_exa(queries: list[str] | None = None, *, per_query: int = 25, fresh: bool = False) -> HarvestStats:
     """Company sites from Exa's company index. One search per query, capped by exa_daily_cap."""
     init_db()
@@ -407,6 +422,7 @@ def admit_exa(queries: list[str] | None = None, *, per_query: int = 25, fresh: b
 _KEYLESS_CURSOR = "harvest:keyless_cursor"
 
 
+# ZONULY ▸ scraping · enrichment ▸ data ingestion · company discovery ▸ harvest._keyless_queries(): The company-search pool plus this month's funding questions — rotated by a cursor,
 def _keyless_queries() -> list[str]:
     """The company-search pool plus this month's funding questions — rotated by a cursor,
     so each hour asks the next ones and the pool is walked end to end."""
@@ -417,6 +433,7 @@ def _keyless_queries() -> list[str]:
     return list(DEFAULT_EXA_QUERIES) + funded
 
 
+# ZONULY ▸ scraping · data ingestion · admission gate · filtering ▸ data ingestion · company discovery ▸ harvest.admit_exa_keyless(): New companies through the hosted Exa MCP — free, no key, paced by web.search. A
 def admit_exa_keyless(queries: int = 4, *, per_query: int = 10, fresh: bool = False) -> HarvestStats:
     """New companies through the hosted Exa MCP — free, no key, paced by web.search. A
     result counts only when it is the company's OWN site (the host carries the name it
@@ -500,6 +517,7 @@ when the post says "we're hiring" and names none other. A recruiter reposting fo
 names the client. If you cannot tell which company, company is null."""
 
 
+# ZONULY ▸ scraping · ai model call · llm ▸ data ingestion · company discovery ▸ harvest._x_extract(): The `cheap` alias reads the post; None on any failure or a non-hiring post.
 def _x_extract(post: dict) -> dict | None:
     """The `cheap` alias reads the post; None on any failure or a non-hiring post."""
     from jobhunter import llm
@@ -523,6 +541,7 @@ def _x_extract(post: dict) -> dict | None:
     return data
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ harvest._x_published(): Parse an X post timestamp into a naive UTC datetime, or None.
 def _x_published(raw: str | None):
     """Parse an X post timestamp into a naive UTC datetime, or None."""
     if not raw:
@@ -535,6 +554,7 @@ def _x_published(raw: str | None):
         return None
 
 
+# ZONULY ▸ scraping · data ingestion · admission gate · filtering ▸ data ingestion · company discovery ▸ harvest.admit_x(): Hiring posts on X → companies, with the post itself as the hiring record.
 def admit_x(queries: list[str] | None = None, *, per_query: int = 20, fresh: bool = False) -> HarvestStats:
     """Hiring posts on X → companies, with the post itself as the hiring record.
 
@@ -606,12 +626,14 @@ _PROBED_NONE = "[ats] probed: no public board"
 _ROLES_READ = "[roles] board read"
 
 
+# ZONULY ▸ greenhouse scraping · lever scraping · ashby scraping · scraping ▸ data ingestion · company discovery ▸ harvest._probe_one(): Probe one company for a hosted ATS job board (Greenhouse, Lever, Ashby...); networ…
 async def _probe_one(http: httpx.AsyncClient, cid: int, name: str, website: str | None) -> tuple[int, tuple | None, int]:
     """Probe one company for a hosted ATS job board (Greenhouse, Lever, Ashby...); network call."""
     hit, errors = await discover.find_ats_status(http, name, website)
     return cid, hit, errors
 
 
+# ZONULY ▸ greenhouse scraping · lever scraping · ashby scraping · scraping ▸ data ingestion · company discovery ▸ harvest.probe_ats(): Which public board (Greenhouse / Lever / Ashby) each new company uses.
 def probe_ats(limit: int | None = None, *, concurrency: int = 6,
               company_ids: list[int] | None = None, list_key: str | None = None) -> dict:
     """Which public board (Greenhouse / Lever / Ashby) each new company uses.
@@ -641,6 +663,7 @@ def probe_ats(limit: int | None = None, *, concurrency: int = 6,
         if limit:
             pending = pending[:limit]
 
+    # ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ harvest.probe_ats.run(): Probe all pending companies for ATS boards concurrently with one shared HTTP client.
     async def run() -> list:
         """Probe all pending companies for ATS boards concurrently with one shared HTTP client."""
         async with make_client() as http:
@@ -688,6 +711,7 @@ def probe_ats(limit: int | None = None, *, concurrency: int = 6,
     return out
 
 
+# ZONULY ▸ scraping · data ingestion · review gate ▸ data ingestion · company discovery ▸ harvest.scrape_roles(): Every open role from each discovered board, through the normal persist gate —
 def scrape_roles(limit: int | None = None, *, only_without_jobs: bool = True, concurrency: int = 6,
                  company_ids: list[int] | None = None, list_key: str | None = None) -> dict:
     """Every open role from each discovered board, through the normal persist gate —
@@ -712,6 +736,7 @@ def scrape_roles(limit: int | None = None, *, only_without_jobs: bool = True, co
         if limit:
             targets = targets[:limit]
 
+    # ZONULY ▸ scraping · decision ▸ data ingestion · company discovery ▸ harvest.scrape_roles.run(): Fetch every target company's ATS board concurrently and return the scraped jobs.
     async def run() -> list:
         """Fetch every target company's ATS board concurrently and return the scraped jobs."""
         async with make_client() as http:
@@ -750,6 +775,7 @@ def scrape_roles(limit: int | None = None, *, only_without_jobs: bool = True, co
     return out
 
 
+# ZONULY ▸ scraping · enrichment ▸ data ingestion · company discovery ▸ harvest._board(): Read a company's job board through the careers_ats API fetcher; empty list on failure.
 async def _board(http, ats: str, slug: str, name: str) -> list[RawJob]:
     """Read a company's job board through the careers_ats API fetcher; empty list on failure."""
     _, jobs = await careers_ats.read_board(http, ats, slug, name)
@@ -758,6 +784,7 @@ async def _board(http, ats: str, slug: str, name: str) -> list[RawJob]:
 
 # ------------------------------------------------------------------ people
 
+# ZONULY ▸ scraping · enrichment · people search · referrers ▸ data ingestion · company discovery ▸ harvest.find_people(): Who could refer us, company by company — list rows first (db.fill_order).
 def find_people(limit: int = 200, *, tiers: tuple[str, ...] = ("tier1", "tier2", "prospect", "unknown"),
                 refresh_days: int = 30, require_roles: bool = True, list_key: str | None = None,
                 topup_days: int = 7) -> dict:
@@ -787,6 +814,7 @@ def find_people(limit: int = 200, *, tiers: tuple[str, ...] = ("tier1", "tier2",
         with_jobs = set(session.exec(select(Job.company_id).distinct()).all())
         good = roleclass.good_referrer_counts(session, [c.id for c in rows if c.list_key])
 
+        # ZONULY ▸ scraping · decision · people search · referrers ▸ data ingestion · company discovery ▸ harvest.find_people.short(): True for a listed company that still has fewer good referrers than the target.
         def short(c: Company) -> bool:
             """True for a listed company that still has fewer good referrers than the target."""
             return bool(c.list_key) and good.get(c.id, 0) < roleclass.GOOD_REFERRERS
@@ -847,6 +875,7 @@ def find_people(limit: int = 200, *, tiers: tuple[str, ...] = ("tier1", "tier2",
 
 # ------------------------------------------------------------------ the run
 
+# ZONULY ▸ scraping · scoring ▸ data ingestion · company discovery ▸ harvest.status(): How many different companies fit, and how far each has got.
 def status() -> dict:
     """How many different companies fit, and how far each has got."""
     init_db()
@@ -890,6 +919,7 @@ def status() -> dict:
         }
 
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ harvest._count(): Count values into a dict sorted by frequency, with None counted as ?.
 def _count(values) -> dict[str, int]:
     """Count values into a dict sorted by frequency, with None counted as ?."""
     out: dict[str, int] = {}
@@ -898,6 +928,7 @@ def _count(values) -> dict[str, int]:
     return dict(sorted(out.items(), key=lambda kv: -kv[1]))
 
 
+# ZONULY ▸ scraping · admission gate · filtering ▸ data ingestion · company discovery ▸ harvest.run(): The whole scrape, for every company it admits. Tejmul, 2026-09-03: a company is
 def run(target: int = 500, *, yc_limit: int | None = None, exa: bool = True,
         exa_queries: list[str] | None = None, x: bool = True,
         enrich_limit: int = 300, verify_limit: int = 300, people_limit: int = 200,
@@ -965,6 +996,7 @@ _SCRAPEDO_DIRECTORIES = [
 ]
 
 
+# ZONULY ▸ scraping · data ingestion · admission gate · filtering ▸ data ingestion · company discovery ▸ harvest.admit_scrapedo_directories(): New funded startups from directory/archive pages read through scrape.do (the…
 def admit_scrapedo_directories(*, pages: int = 3) -> HarvestStats:
     """New funded startups from directory/archive pages read through scrape.do (the pages
     block a plain fetch). Same headline parser as the RSS feeds; each round is admitted
@@ -1015,6 +1047,7 @@ def admit_scrapedo_directories(*, pages: int = 3) -> HarvestStats:
     return stats
 
 
+# ZONULY ▸ scraping · data ingestion · admission gate · filtering · enrichment ▸ data ingestion · company discovery ▸ harvest.admit_funding_rss(): Funded startups from the funding-news RSS feeds (TechCrunch, EU-Startups…
 def admit_funding_rss() -> HarvestStats:
     """Funded startups from the funding-news RSS feeds (TechCrunch, EU-Startups, Sifted,
     YourStory, Finsmes…) — the amount and the date, free, no Exa. Each fitting round is
@@ -1051,6 +1084,7 @@ def admit_funding_rss() -> HarvestStats:
     return stats
 
 
+# ZONULY ▸ scraping · data ingestion · admission gate · filtering · enrichment ▸ data ingestion · company discovery ▸ harvest.discover_funded(): Admit new companies that the existing funding-press scraper (research.find…
 def discover_funded(*, topics: list[str] | None = None, per_topic: int = 8, max_searches: int = 30) -> HarvestStats:
     """Admit new companies that the existing funding-press scraper (research.find_startups)
     turns up. That scraper searches TechCrunch / EU-Startups / Sifted / YourStory etc. via
@@ -1105,6 +1139,7 @@ def discover_funded(*, topics: list[str] | None = None, per_topic: int = 8, max_
 
 # ------------------------------------------------------------------ three discovery branches in parallel
 
+# ZONULY ▸ scraping · data ingestion ▸ data ingestion · company discovery ▸ harvest.discover_parallel(): Three independent discovery branches at once, each finding NEW companies from a
 def discover_parallel(minutes: int = 20) -> dict:
     """Three independent discovery branches at once, each finding NEW companies from a
     different source (Tejmul, 2026-09-04 — "run all three branches to 3x the outcome"):
@@ -1124,16 +1159,19 @@ def discover_parallel(minutes: int = 20) -> dict:
     before = status()["companies"]
     out: dict = {"minutes": minutes, "before": before, "branches": {}}
 
+    # ZONULY ▸ scraping · data ingestion · admission gate · filtering · budget · cost ▸ data ingestion · company discovery ▸ harvest.discover_parallel.exa_branch(): Discovery branch: admit funded companies from Exa search,…
     def exa_branch() -> dict:
         """Discovery branch: admit funded companies from Exa search, unless today's Exa budget is spent."""
         if web.exa_budget()["left"] <= 3:
             return {"skip": "exa budget spent for today"}
         return discover_funded(max_searches=20).as_dict()
 
+    # ZONULY ▸ scraping · data ingestion · admission gate · filtering · enrichment ▸ data ingestion · company discovery ▸ harvest.discover_parallel.agentreach_branch(): Discovery branch: admit companies from the funding-new…
     def agentreach_branch() -> dict:
         """Discovery branch: admit companies from the funding-news RSS feeds (free)."""
         return admit_funding_rss().as_dict()
 
+    # ZONULY ▸ scraping · data ingestion · admission gate · filtering · enrichment · budget · cost ▸ data ingestion · company discovery ▸ harvest.discover_parallel.scrapedo_branch(): Discovery branch: admit companies from f…
     def scrapedo_branch() -> dict:
         """Discovery branch: admit companies from funding directories via scrape.do, within its budget."""
         if web.scrapedo_budget()["daily_left"] <= 0:
@@ -1167,6 +1205,7 @@ def discover_parallel(minutes: int = 20) -> dict:
 
 # ------------------------------------------------------------------ four channels in parallel
 
+# ZONULY ▸ scraping ▸ data ingestion · company discovery ▸ harvest.parallel_run(): Run the four data channels at once, each on a different STAGE so they never
 def parallel_run(minutes: int = 30) -> dict:
     """Run the four data channels at once, each on a different STAGE so they never
     duplicate each other's work (Tejmul, 2026-09-04):
@@ -1189,6 +1228,7 @@ def parallel_run(minutes: int = 30) -> dict:
     deadline = _t.time() + minutes * 60
     out: dict = {"minutes": minutes, "channels": {}}
 
+    # ZONULY ▸ linkedin scraping · scraping · data ingestion · enrichment ▸ data ingestion · company discovery ▸ harvest.parallel_run.keyless(): Keyless channel (free): funding RSS discovery and public-LinkedIn leads first.
     def keyless() -> dict:
         """Keyless channel (free): funding RSS discovery and public-LinkedIn leads first.
 
@@ -1229,6 +1269,7 @@ def parallel_run(minutes: int = 30) -> dict:
                     break
         return s
 
+    # ZONULY ▸ scraping · data ingestion · enrichment ▸ data ingestion · company discovery ▸ harvest.parallel_run.exa(): Exa channel: discover funded companies, probe and scrape their boards, then enrich facts.
     def exa() -> dict:
         """Exa channel: discover funded companies, probe and scrape their boards, then enrich facts.
 
@@ -1253,6 +1294,7 @@ def parallel_run(minutes: int = 30) -> dict:
         s["exa_budget"] = web.exa_budget()
         return s
 
+    # ZONULY ▸ scraping · enrichment · ai model call · llm ▸ data ingestion · company discovery ▸ harvest.parallel_run.model(): Model channel: enrich origin stories, then descriptions, from company pages until the deadline.
     def model() -> dict:
         """Model channel: enrich origin stories, then descriptions, from company pages until the deadline."""
         s = {"story": 0, "described": 0}
@@ -1266,6 +1308,7 @@ def parallel_run(minutes: int = 30) -> dict:
                     break
         return s
 
+    # ZONULY ▸ scraping · pay · salary · budget · cost ▸ data ingestion · company discovery ▸ harvest.parallel_run.scrapedo(): Scrape.do channel: look up levels.fyi pay for pending companies until the deadline or budget end…
     def scrapedo() -> dict:
         """Scrape.do channel: look up levels.fyi pay for pending companies until the deadline or budget ends."""
         s = {"looked": 0, "found": 0}

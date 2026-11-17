@@ -73,6 +73,7 @@ LABEL = "mixer"
 
 # ------------------------------------------------------------------ the free layers
 
+# ZONULY ▸ filtering · pay · salary ▸ decision · mixer ▸ mixer._pay_ok(): Mixer pay-power filter: pass on a pay band, a stated PPO at the floor, or a role at the floor.
 def _pay_ok(c: Company, d: CompanyDecision) -> tuple[bool, str]:
     """Mixer pay-power filter: pass on a pay band, a stated PPO at the floor, or a role at the floor.
     Returns (passed, reason)."""
@@ -85,6 +86,7 @@ def _pay_ok(c: Company, d: CompanyDecision) -> tuple[bool, str]:
     return False, f"pay power {c.pay_power_band or 'unknown'}"
 
 
+# ZONULY ▸ decision · mixer ▸ decision · mixer ▸ mixer.plan(): The funnel, layer by layer, and the companies that would be bought now. Free: no network.
 def plan(limit: int = PER_RUN) -> dict:
     """The funnel, layer by layer, and the companies that would be bought now. Free: no network."""
     init_db()
@@ -98,6 +100,7 @@ def plan(limit: int = PER_RUN) -> dict:
     layers = []
     alive = [cid for cid in decs if cid in comps]
 
+    # ZONULY ▸ filtering ▸ decision · mixer ▸ mixer.plan.layer(): Apply one mixer filter layer to the surviving companies and record its in/out counts.
     def layer(name: str, test) -> None:
         """Apply one mixer filter layer to the surviving companies and record its in/out counts."""
         nonlocal alive
@@ -118,6 +121,7 @@ def plan(limit: int = PER_RUN) -> dict:
     layer("the brain", lambda c, d: (d.verdict in ("target", "fill_first"), f"{d.verdict}: {json.loads(d.why or '{}').get('reason', '')}"[:120]))
     layer(f"not bought in {REFRESH_DAYS} days", lambda c, d: (c.id not in bought, "bought recently"))
 
+    # ZONULY ▸ apify scraping · apify people search · pay · salary ▸ decision · mixer ▸ mixer.plan.needs(): Mixer layer test: does Apify have something to answer for this company (fresh ads, pay, culture)?
     def needs(c: Company, d: CompanyDecision):
         """Mixer layer test: does Apify have something to answer for this company (fresh ads, pay, culture)?"""
         # Apify only where it answers something we do not hold (2026-10-23: "use only where it needed")
@@ -152,6 +156,7 @@ def plan(limit: int = PER_RUN) -> dict:
 
 # ------------------------------------------------------------------ the paid layers
 
+# ZONULY ▸ scraping · dedup · scoring ▸ decision · mixer ▸ mixer._same(): True when a scraped employer name has the same name key as the company (dedup match).
 def _same(a: str | None, company: Company) -> bool:
     """True when a scraped employer name has the same name key as the company (dedup match)."""
     if not a:
@@ -160,6 +165,7 @@ def _same(a: str | None, company: Company) -> bool:
     return bool(k) and k in {company.name_key, admission.name_key(company.name)}
 
 
+# ZONULY ▸ apify scraping · apify people search ▸ decision · mixer ▸ mixer._when(): Parse an Apify date (epoch milliseconds or ISO string) into a naive UTC datetime, or None.
 def _when(v) -> datetime | None:
     """Parse an Apify date (epoch milliseconds or ISO string) into a naive UTC datetime, or None."""
     try:
@@ -172,6 +178,7 @@ def _when(v) -> datetime | None:
     return None
 
 
+# ZONULY ▸ apify scraping · apify people search · linkedin scraping ▸ decision · mixer ▸ mixer._linkedin_job(): Convert one Apify LinkedIn job item into a RawJob for the given company.
 def _linkedin_job(it: dict, company: Company):
     """Convert one Apify LinkedIn job item into a RawJob for the given company."""
     from jobhunter.scrapers.base import RawJob
@@ -184,6 +191,7 @@ def _linkedin_job(it: dict, company: Company):
                   extra={"linkedin_job_id": it.get("id"), "applicants": it.get("applicationsCount")})
 
 
+# ZONULY ▸ apify scraping · apify people search · pay · salary ▸ decision · mixer ▸ mixer._naukri_job(): Convert one Apify Naukri job item into a RawJob, formatting a disclosed salary as LPA.
 def _naukri_job(it: dict, company: Company):
     """Convert one Apify Naukri job item into a RawJob, formatting a disclosed salary as LPA."""
     from jobhunter.scrapers.base import RawJob
@@ -201,6 +209,7 @@ def _naukri_job(it: dict, company: Company):
                   posted_at=_when(it.get("createdDate")), salary_raw=raw, extra={"naukri_job_id": it.get("id")})
 
 
+# ZONULY ▸ review gate ▸ decision · mixer ▸ mixer._culture(): Return the first AmbitionBox (rating, review count) found in Naukri items, or (None, None).
 def _culture(items: list[dict]) -> tuple[float | None, int | None]:
     """Return the first AmbitionBox (rating, review count) found in Naukri items, or (None, None)."""
     for it in items:
@@ -212,6 +221,7 @@ def _culture(items: list[dict]) -> tuple[float | None, int | None]:
     return None, None
 
 
+# ZONULY ▸ scraping · review gate ▸ decision · mixer ▸ mixer._save(): Through the same gate and store as every scraper; the ids of the rows now holding them.
 def _save(raws: list) -> list[int]:
     """Through the same gate and store as every scraper; the ids of the rows now holding them."""
     from jobhunter.pipeline import ScrapeStats, persist
@@ -223,6 +233,7 @@ def _save(raws: list) -> list[int]:
         return [j.id for j in session.exec(select(Job).where(col(Job.url).in_([r.url for r in raws]))).all()]
 
 
+# ZONULY ▸ decision · mixer ▸ decision · mixer ▸ mixer._gaps(): What only a paid lookup would tell us about this company — empty means do not buy.
 def _gaps(c: Company, d: CompanyDecision, fresh_ads: bool, culture: tuple | None) -> list[str]:
     """What only a paid lookup would tell us about this company — empty means do not buy."""
     q = json.loads(d.why or "{}").get("questions") or {}
@@ -236,6 +247,7 @@ def _gaps(c: Company, d: CompanyDecision, fresh_ads: bool, culture: tuple | None
     return gaps
 
 
+# ZONULY ▸ linkedin scraping · filtering ▸ decision · mixer ▸ mixer._remember_linkedin(): Every LinkedIn ad names its company's page (companyUrl); keep the one their ads agree on.
 def _remember_linkedin(company_id: int, ads: list[dict]) -> None:
     """Every LinkedIn ad names its company's page (companyUrl); keep the one their ads agree on."""
     from collections import Counter
@@ -254,6 +266,7 @@ def _remember_linkedin(company_id: int, ads: list[dict]) -> None:
             session.commit()
 
 
+# ZONULY ▸ apify scraping · apify people search · linkedin scraping · scraping ▸ decision · mixer ▸ mixer._buy(): Buy job scraping for one company via Apify: LinkedIn ads, then Naukri for India if needed.
 def _buy(company: Company, pool: str) -> dict:
     """Buy job scraping for one company via Apify: LinkedIn ads, then Naukri for India if needed.
     Spends Apify credit (keeps the referral reserve), saves matched jobs, writes mixer_scrape rows."""
@@ -307,6 +320,7 @@ def _buy(company: Company, pool: str) -> dict:
     return out
 
 
+# ZONULY ▸ scoring · decision ▸ decision · mixer ▸ mixer.run(): Decide, then buy: the plan's next companies (or `company_ids`), then re-score and re-decide.
 def run(limit: int = PER_RUN, *, company_ids: list[int] | None = None) -> dict:
     """Decide, then buy: the plan's next companies (or `company_ids`), then re-score and re-decide."""
     from jobhunter import confidence
@@ -345,6 +359,7 @@ def run(limit: int = PER_RUN, *, company_ids: list[int] | None = None) -> dict:
             "spent_today_usd": apify_source.spent_today()}
 
 
+# ZONULY ▸ apify scraping · apify people search · scraping ▸ decision · mixer ▸ mixer.history(): Return the most recent mixer_scrape rows (Apify buys) with company names, newest first.
 def history(limit: int = 50) -> list[dict]:
     """Return the most recent mixer_scrape rows (Apify buys) with company names, newest first."""
     with get_session() as session:

@@ -45,20 +45,24 @@ from jobhunter import access, secret
 log = logging.getLogger(__name__)
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ class mail.MailError: The code could not be sent.
 class MailError(RuntimeError):
     """The code could not be sent."""
 
 
+# ZONULY ▸ email sending · replies · follow-up · sign-in · auth ▸ api · sign-in · accounts ▸ mail.sender(): Return the sign-in mail From address (ZONULY_MAIL_FROM, default no-reply@tejmul.in).
 def sender() -> str:
     """Return the sign-in mail From address (ZONULY_MAIL_FROM, default no-reply@tejmul.in)."""
     return secret("ZONULY_MAIL_FROM") or "no-reply@tejmul.in"
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ mail._subject(): Build the subject line of the sign-in code email.
 def _subject(code: str) -> str:
     """Build the subject line of the sign-in code email."""
     return f"{code} is your ZoNuLy code"
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ mail._text(): Build the plain-text body of the sign-in code email.
 def _text(code: str) -> str:
     """Build the plain-text body of the sign-in code email."""
     return (
@@ -68,6 +72,7 @@ def _text(code: str) -> str:
     )
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ mail._html(): Build the HTML body of the sign-in code email.
 def _html(code: str) -> str:
     """Build the HTML body of the sign-in code email."""
     return (
@@ -83,6 +88,7 @@ def _html(code: str) -> str:
     )
 
 
+# ZONULY ▸ email verification · sign-in · auth · deployment · snapshot ▸ api · sign-in · accounts ▸ mail.mode(): Which way a code would go right now: smtp | catalyst | dev | none.
 def mode(request=None) -> str:
     """Which way a code would go right now: smtp | catalyst | dev | none."""
     if secret("ZONULY_SMTP_HOST"):
@@ -94,6 +100,7 @@ def mode(request=None) -> str:
     return "none"
 
 
+# ZONULY ▸ email verification · email sending · sign-in · auth ▸ api · sign-in · accounts ▸ mail._smtp(): Send the sign-in code email over SMTP (SSL on 465, else STARTTLS).
 def _smtp(to: str, code: str) -> None:
     """Send the sign-in code email over SMTP (SSL on 465, else STARTTLS).
     Network call; raises MailError on any SMTP or socket failure."""
@@ -121,6 +128,7 @@ def _smtp(to: str, code: str) -> None:
         raise MailError(f"SMTP send failed: {e}") from e
 
 
+# ZONULY ▸ email sending · sign-in · auth · deployment · snapshot ▸ api · sign-in · accounts ▸ mail._catalyst(): Send the sign-in code email through Catalyst Mail (POST /email/send).
 def _catalyst(to: str, code: str, request) -> None:
     """Send the sign-in code email through Catalyst Mail (POST /email/send).
     Network call; raises MailError when Catalyst refuses or the request fails."""
@@ -142,6 +150,7 @@ def _catalyst(to: str, code: str, request) -> None:
         raise MailError(str(e)) from e
 
 
+# ZONULY ▸ email sending · sign-in · auth ▸ api · sign-in · accounts ▸ mail.send_code(): Send it; return the route taken. Raises MailError when it cannot go.
 def send_code(to: str, code: str, request=None) -> str:
     """Send it; return the route taken. Raises MailError when it cannot go."""
     how = mode(request)

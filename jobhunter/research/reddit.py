@@ -36,6 +36,7 @@ from jobhunter.research.models import RedditPost
 log = logging.getLogger(__name__)
 
 
+# ZONULY ▸ reddit ▸ enrichment · web research layer ▸ reddit._as_posts(): Map whatever the backend returned onto RedditPost.
 def _as_posts(data: Any) -> list[RedditPost]:
     """Map whatever the backend returned onto RedditPost.
 
@@ -85,6 +86,7 @@ def _as_posts(data: Any) -> list[RedditPost]:
     return posts
 
 
+# ZONULY ▸ reddit ▸ enrichment · web research layer ▸ reddit._parse(): Parse rdt CLI output (JSON, else YAML) into Reddit posts; empty list when unreadable.
 def _parse(payload: str) -> list[RedditPost]:
     """Parse rdt CLI output (JSON, else YAML) into Reddit posts; empty list when unreadable."""
     payload = (payload or "").strip()
@@ -103,6 +105,7 @@ def _parse(payload: str) -> list[RedditPost]:
         return []
 
 
+# ZONULY ▸ reddit ▸ enrichment · web research layer ▸ reddit.search(): Search Reddit posts. Returns {query, backend, results, error?, hint?}.
 def search(
     query: str,
     limit: int = 10,
@@ -175,6 +178,7 @@ def search(
     }
 
 
+# ZONULY ▸ reddit · sign-in · auth ▸ enrichment · web research layer ▸ reddit._reason(): One short line about why a backend gave nothing — auth is the usual answer.
 def _reason(payload: str, proc: backends.Proc) -> str:
     """One short line about why a backend gave nothing — auth is the usual answer."""
     blob = (payload or "")[:400].lower()
@@ -187,6 +191,7 @@ def _reason(payload: str, proc: backends.Proc) -> str:
     return (proc.err or "no results").strip().splitlines()[0][:120] if (proc.err or "").strip() else "no results"
 
 
+# ZONULY ▸ reddit ▸ enrichment · web research layer ▸ reddit.status(): Is a Reddit backend actually usable right now? Cheap, read-only.
 def status() -> dict:
     """Is a Reddit backend actually usable right now? Cheap, read-only."""
     if not backends.resolve("rdt"):

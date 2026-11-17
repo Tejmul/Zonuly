@@ -86,11 +86,13 @@ _SCRAPEDO_MONTH_KEY = "scrapedo_used"      # "YYYY-MM:count"
 _SCRAPEDO_DAY_KEY = "scrapedo_used_day"    # "YYYY-MM-DD:count"
 
 
+# ZONULY ▸ scraping ▸ enrichment · web research layer ▸ web._scrapedo_token(): Return the Scrape.do API token from the secrets, or an empty string.
 def _scrapedo_token() -> str:
     """Return the Scrape.do API token from the secrets, or an empty string."""
     return backends.secret("Scrape_dog", "SCRAPEDO_TOKEN", "SCRAPE_DO_TOKEN")
 
 
+# ZONULY ▸ scraping · budget · cost ▸ enrichment · web research layer ▸ web.scrapedo_budget(): {monthly_left, daily_left}. Everything 0 without a token.
 def scrapedo_budget() -> dict:
     """{monthly_left, daily_left}. Everything 0 without a token."""
     if not _scrapedo_token():
@@ -110,6 +112,7 @@ def scrapedo_budget() -> dict:
             "daily_cap": SCRAPEDO_DAILY, "daily_left": max(0, SCRAPEDO_DAILY - dused)}
 
 
+# ZONULY ▸ scraping · budget · cost ▸ enrichment · web research layer ▸ web._scrapedo_spend(): Count one Scrape.do request against this month's and today's budget (setting table).
 def _scrapedo_spend() -> None:
     """Count one Scrape.do request against this month's and today's budget (setting table)."""
     from jobhunter.db import get_session, get_setting, set_setting
@@ -127,6 +130,7 @@ def _scrapedo_spend() -> None:
         set_setting(s, _SCRAPEDO_DAY_KEY, f"{day}:{dused + 1}")
 
 
+# ZONULY ▸ scraping · budget · cost ▸ enrichment · web research layer ▸ web._read_scrapedo(): Fetch through scrape.do and reduce to text. Budget-checked before the call.
 def _read_scrapedo(url: str, timeout: int, *, render: bool = False) -> tuple[str | None, str | None]:
     """Fetch through scrape.do and reduce to text. Budget-checked before the call."""
     tok = _scrapedo_token()
@@ -162,6 +166,7 @@ def _read_scrapedo(url: str, timeout: int, *, render: bool = False) -> tuple[str
     return title, html_to_text(html, limit=MAX_CHARS)
 
 
+# ZONULY ▸ scraping · pay · salary ▸ enrichment · web research layer ▸ web.fetch_html_scrapedo(): Raw HTML through scrape.do (for parsers that need the markup, e.g. levels.fyi).
 def fetch_html_scrapedo(url: str, *, render: bool = False, timeout: int = 45) -> str | None:
     """Raw HTML through scrape.do (for parsers that need the markup, e.g. levels.fyi)."""
     tok = _scrapedo_token()
@@ -185,6 +190,7 @@ def fetch_html_scrapedo(url: str, *, render: bool = False, timeout: int = 45) ->
 # ------------------------------------------------------------------ url safety
 
 
+# ZONULY ▸ filtering ▸ enrichment · web research layer ▸ web.public_http_url(): Reject anything that is not a public http(s) URL.
 def public_http_url(url: str) -> str:
     """Reject anything that is not a public http(s) URL.
 
@@ -217,6 +223,7 @@ def public_http_url(url: str) -> str:
 _FIELD_RE = re.compile(r"^(Title|URL|Published|Author|Score|Highlights|Text):\s*(.*)$")
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._parse_exa_text(): Exa's MCP tool returns human-readable blocks separated by a `---` line.
 def _parse_exa_text(blob: str) -> list[SearchResult]:
     """Exa's MCP tool returns human-readable blocks separated by a `---` line."""
     results: list[SearchResult] = []
@@ -258,6 +265,7 @@ def _parse_exa_text(blob: str) -> list[SearchResult]:
     return results
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._mcp_text(): Pull the text blocks out of an MCP `--output json` envelope.
 def _mcp_text(payload: str) -> str:
     """Pull the text blocks out of an MCP `--output json` envelope."""
     try:
@@ -283,6 +291,7 @@ _TRANSIENT = re.compile(r"429|rate.?limit|too many requests|offline|fetch failed
 _mcp_state = {"last": 0.0, "fails": 0, "cool_until": 0.0}
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._mcp_error(): mcporter reports a dead server as {"server", "error", "issue"} — sometimes with exit 0.
 def _mcp_error(payload: str) -> str | None:
     """mcporter reports a dead server as {"server", "error", "issue"} — sometimes with exit 0."""
     try:
@@ -294,11 +303,13 @@ def _mcp_error(payload: str) -> str | None:
     return None
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web.mcp_cooling(): True while the hosted MCP is in its post-failure cooldown.
 def mcp_cooling() -> bool:
     """True while the hosted MCP is in its post-failure cooldown."""
     return time.monotonic() < _mcp_state["cool_until"]
 
 
+# ZONULY ▸ retry · backoff ▸ enrichment · web research layer ▸ web._exa_mcp_call(): Call an Exa tool through mcporter (keyless web search), paced, with retries.
 def _exa_mcp_call(tool: str, args: dict, timeout: int) -> str | None:
     """Call an Exa tool through mcporter (keyless web search), paced, with retries.
     Returns the result text or None; rate limits and repeated failures start a cooldown."""
@@ -374,16 +385,19 @@ _kl_state: dict[str, dict] = {"jina-ddg": {"fails": 0, "cool_until": 0.0},
                               "jina-startpage": {"fails": 0, "cool_until": 0.0}}
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._kl_cooling(): True while the named keyless search engine is in its cooldown window.
 def _kl_cooling(name: str) -> bool:
     """True while the named keyless search engine is in its cooldown window."""
     return time.monotonic() < _kl_state[name]["cool_until"]
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web.search_down(): True only while every keyless search backend is in its failure cooldown.
 def search_down() -> bool:
     """True only while every keyless search backend is in its failure cooldown."""
     return mcp_cooling() and all(_kl_cooling(n) for n in _kl_state)
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._kl_fail(): Record a keyless search engine failure; three in a row start a cooldown.
 def _kl_fail(name: str, why: str) -> None:
     """Record a keyless search engine failure; three in a row start a cooldown."""
     channels.record(name, False, why)
@@ -397,6 +411,7 @@ def _kl_fail(name: str, why: str) -> None:
         log.warning("%s failing repeatedly — cooling down %ss", name, int(_MCP_COOLDOWN_S))
 
 
+# ZONULY ▸ scraping ▸ enrichment · web research layer ▸ web._jina_read_engine(): Fetch a search-results page through Jina Reader, paced for Jina's keyless rate
 def _jina_read_engine(name: str, url: str, timeout: int) -> str | None:
     """Fetch a search-results page through Jina Reader, paced for Jina's keyless rate
     (shared by every engine read this way). None on failure, already recorded."""
@@ -421,6 +436,7 @@ def _jina_read_engine(name: str, url: str, timeout: int) -> str | None:
     return r.text
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._kl_ok(): Record a keyless search engine success (resets its failure count).
 def _kl_ok(name: str, results: list) -> None:
     """Record a keyless search engine success (resets its failure count)."""
     _kl_state[name]["fails"] = 0
@@ -432,6 +448,7 @@ def _kl_ok(name: str, results: list) -> None:
 _JDDG_HIT = re.compile(r"^## \[(?P<title>.+?)\]\((?P<href>[^)\s]+)\)\s*$", re.M)
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._jina_ddg_search(): Keyless web search: read DuckDuckGo HTML results through Jina Reader and parse them.
 def _jina_ddg_search(query: str, limit: int, timeout: int) -> list[SearchResult]:
     """Keyless web search: read DuckDuckGo HTML results through Jina Reader and parse them.
     Network call; a DuckDuckGo bot challenge counts as a failure and starts a long cooldown."""
@@ -461,6 +478,7 @@ STARTPAGE = "https://www.startpage.com/do/search"
 _SP_DATE = re.compile(r"^(?P<d>[A-Z][a-z]{2} \d{1,2}, \d{4})\s*(?:\*\*)?\.\.\.(?:\*\*)?\s*")
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._jina_startpage_search(): Keyless web search: read Startpage results through Jina Reader and parse them. Network call.
 def _jina_startpage_search(query: str, limit: int, timeout: int) -> list[SearchResult]:
     """Keyless web search: read Startpage results through Jina Reader and parse them. Network call."""
     from urllib.parse import quote_plus
@@ -473,6 +491,7 @@ def _jina_startpage_search(query: str, limit: int, timeout: int) -> list[SearchR
     return results
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._parse_jina_startpage(): Parse Jina's markdown of a Startpage results page into search results (title, URL, snippet, date).
 def _parse_jina_startpage(text: str, limit: int) -> list[SearchResult]:
     """Parse Jina's markdown of a Startpage results page into search results (title, URL, snippet, date)."""
     from datetime import datetime as _dt
@@ -506,6 +525,7 @@ def _parse_jina_startpage(text: str, limit: int) -> list[SearchResult]:
     return out
 
 
+# ZONULY ▸ scoring ▸ enrichment · web research layer ▸ web._unbold(): DDG bolds each matched word separately: `**developer****infrastructure**` is two
 def _unbold(text: str) -> str:
     """DDG bolds each matched word separately: `**developer****infrastructure**` is two
     words, so the seam between two bold runs is a space, not nothing."""
@@ -516,6 +536,7 @@ def _unbold(text: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(text)).strip()
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._parse_jina_ddg(): Parse Jina's markdown of a DuckDuckGo results page into search results, skipping DDG links.
 def _parse_jina_ddg(text: str, limit: int) -> list[SearchResult]:
     """Parse Jina's markdown of a DuckDuckGo results page into search results, skipping DDG links."""
     out: list[SearchResult] = []
@@ -541,6 +562,7 @@ def _parse_jina_ddg(text: str, limit: int) -> list[SearchResult]:
 # ------------------------------------------------------------------ search
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web.search(): Semantic web search. Returns {query, backend, results: [...], error?}.
 def search(
     query: str,
     limit: int = 8,
@@ -644,11 +666,13 @@ EXA_DAILY_CAP = int(RESEARCH.get("exa_daily_cap", 40))
 _EXA_USED_KEY = "exa_used"      # "YYYY-MM-DD:count"
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._today(): Return today's UTC date as YYYY-MM-DD.
 def _today() -> str:
     """Return today's UTC date as YYYY-MM-DD."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+# ZONULY ▸ budget · cost ▸ enrichment · web research layer ▸ web.exa_budget(): {cap, used, left} for today. No key -> everything 0.
 def exa_budget() -> dict:
     """{cap, used, left} for today. No key -> everything 0."""
     if not backends.secret("EXA_API_KEY"):
@@ -662,6 +686,7 @@ def exa_budget() -> dict:
     return {"cap": EXA_DAILY_CAP, "used": used, "left": max(0, EXA_DAILY_CAP - used)}
 
 
+# ZONULY ▸ budget · cost ▸ enrichment · web research layer ▸ web._spend_exa(): Count one Exa API search against today's daily cap (setting table).
 def _spend_exa() -> None:
     """Count one Exa API search against today's daily cap (setting table)."""
     from jobhunter.db import get_session, get_setting, set_setting
@@ -673,6 +698,7 @@ def _spend_exa() -> None:
         set_setting(session, _EXA_USED_KEY, f"{_today()}:{used + 1}")
 
 
+# ZONULY ▸ budget · cost ▸ enrichment · web research layer ▸ web._exa_api_search(): Web search through the paid Exa API, inside the daily cap (network call, spends Exa credit).
 def _exa_api_search(
     query: str, limit: int, timeout: int, *, category: str | None = None, days: int | None = None,
     include_domains: list[str] | None = None,
@@ -755,6 +781,7 @@ _X_HOST = re.compile(r"(^|\.)(x\.com|twitter\.com)$", re.I)
 _X_STATUS = re.compile(r"^/([A-Za-z0-9_]{1,15})/status/(\d+)", re.I)
 
 
+# ZONULY ▸ sign-in · auth ▸ enrichment · web research layer ▸ web._x_post(): (author handle, post id) if this URL is an X post, else None.
 def _x_post(url: str) -> tuple[str, str] | None:
     """(author handle, post id) if this URL is an X post, else None."""
     parsed = urlparse(url if "://" in url else "https://" + url)
@@ -782,6 +809,7 @@ _DDG_RESULT = re.compile(
 )
 
 
+# ZONULY ▸ decision ▸ enrichment · web research layer ▸ web._ddg_target(): DDG wraps every result in a redirect: /l/?uddg=<encoded target>.
 def _ddg_target(href: str) -> str:
     """DDG wraps every result in a redirect: /l/?uddg=<encoded target>."""
     from urllib.parse import parse_qs, unquote
@@ -791,6 +819,7 @@ def _ddg_target(href: str) -> str:
     return unquote(parse_qs(urlparse(href).query).get("uddg", [""])[0])
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._ddg_site_search(): ([{url, title, snippet}], error). One polite request; never raises.
 def _ddg_site_search(site: str, query: str, timeout: int) -> tuple[list[dict], str | None]:
     """([{url, title, snippet}], error). One polite request; never raises."""
     import time
@@ -824,6 +853,7 @@ def _ddg_site_search(site: str, query: str, timeout: int) -> tuple[list[dict], s
     return out, None
 
 
+# ZONULY ▸ sign-in · auth ▸ enrichment · web research layer ▸ web.search_x(): Posts on X that answer `query`. Records only — no X account, no cookies,
 def search_x(
     query: str,
     limit: int = 20,
@@ -901,6 +931,7 @@ def search_x(
 # ------------------------------------------------------------------ page read
 
 
+# ZONULY ▸ scraping ▸ enrichment · web research layer ▸ web.read(): Fetch one page as readable text. Returns a `Page` dict, or {error}.
 def read(
     url: str,
     *,
@@ -963,6 +994,7 @@ def read(
 _ANTIBOT = re.compile(r"(just a moment\.\.\.|performing security verification|attention required! \| cloudflare)", re.I)
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ web._read_jina(): Jina Reader returns Markdown with a `Title:` header. Public, no key needed.
 def _read_jina(url: str, timeout: int) -> tuple[str | None, str | None]:
     """Jina Reader returns Markdown with a `Title:` header. Public, no key needed.
 
@@ -1004,6 +1036,7 @@ def _read_jina(url: str, timeout: int) -> tuple[str | None, str | None]:
     return title, body
 
 
+# ZONULY ▸ scraping ▸ enrichment · web research layer ▸ web._read_direct(): Last resort: fetch it ourselves and reuse the scrapers' HTML-to-text.
 def _read_direct(url: str, timeout: int) -> tuple[str | None, str | None]:
     """Last resort: fetch it ourselves and reuse the scrapers' HTML-to-text."""
     try:

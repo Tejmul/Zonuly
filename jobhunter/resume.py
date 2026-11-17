@@ -70,6 +70,7 @@ RESUME TEXT:
 JSON only."""
 
 
+# ZONULY ▸ data ingestion · resume to profile ▸ data ingestion · resume to profile ▸ resume.read_resume_text(): Extract raw text from the resume file (PDF, Markdown, or plain text).
 def read_resume_text(path: Path | None = None) -> str:
     """Extract raw text from the resume file (PDF, Markdown, or plain text)."""
     path = Path(path) if path else ROOT / CONFIG.get("resume_path", "profile/resume.pdf")
@@ -108,6 +109,7 @@ def read_resume_text(path: Path | None = None) -> str:
     return _clean(path.read_text(encoding="utf-8", errors="replace"))
 
 
+# ZONULY ▸ data ingestion · resume to profile ▸ data ingestion · resume to profile ▸ resume._clean(): Clean resume text extracted from PDF: drop soft hyphens, fix ligatures, collapse whitespace.
 def _clean(text: str) -> str:
     """Clean resume text extracted from PDF: drop soft hyphens, fix ligatures, collapse whitespace."""
     # pypdf sprinkles soft hyphens / odd spacing; collapse the worst of it
@@ -116,6 +118,7 @@ def _clean(text: str) -> str:
     return "\n".join(ln for ln in lines if ln)
 
 
+# ZONULY ▸ data ingestion · resume to profile ▸ data ingestion · resume to profile ▸ resume.build_profile(): Parse the resume into structured profile.json.
 def build_profile(path: Path | None = None, *, save: bool = True) -> dict[str, Any]:
     """Parse the resume into structured profile.json."""
     from jobhunter import llm
@@ -147,6 +150,7 @@ def build_profile(path: Path | None = None, *, save: bool = True) -> dict[str, A
     return data
 
 
+# ZONULY ▸ data ingestion · resume to profile ▸ data ingestion · resume to profile ▸ resume.load_profile(): Load profile.json, building it on first use.
 def load_profile() -> dict[str, Any]:
     """Load profile.json, building it on first use."""
     if not PROFILE_PATH.exists():
@@ -154,6 +158,7 @@ def load_profile() -> dict[str, Any]:
     return json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
 
 
+# ZONULY ▸ scoring · email drafting ▸ data ingestion · resume to profile ▸ resume.profile_summary(): Compact plain-text rendering of the profile, for prompts that score/draft against it.
 def profile_summary(profile: dict[str, Any] | None = None, *, max_chars: int = 2200) -> str:
     """Compact plain-text rendering of the profile, for prompts that score/draft against it."""
     p = profile or load_profile()
@@ -193,6 +198,7 @@ def profile_summary(profile: dict[str, Any] | None = None, *, max_chars: int = 2
     return "\n".join(parts)[:max_chars]
 
 
+# ZONULY ▸ data ingestion · resume to profile ▸ data ingestion · resume to profile ▸ resume.embedding_text(): Denser, keyword-heavy rendering used for the resume<->JD embedding comparison.
 def embedding_text(profile: dict[str, Any] | None = None) -> str:
     """Denser, keyword-heavy rendering used for the resume<->JD embedding comparison."""
     p = profile or load_profile()

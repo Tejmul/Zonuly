@@ -71,16 +71,19 @@ QUERIES = [
 OWN_PATHS = ["/contact", "/contact-us", "/about", "/about-us", "/team", "/careers", "/press", "/privacy-policy", "/terms"]
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ web_emails._host(): Return the bare lowercase host of a URL, without scheme or www.
 def _host(url: str | None) -> str:
     """Return the bare lowercase host of a URL, without scheme or www."""
     return (url or "").replace("https://", "").replace("http://", "").split("/")[0].removeprefix("www.").lower()
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ web_emails._same_domain(): True when the email address is on exactly the given domain.
 def _same_domain(email: str, domain: str) -> bool:
     """True when the email address is on exactly the given domain."""
     return email.split("@")[-1].lower() == domain.lower()
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ web_emails._name_from_local(): rahul.sharma / rahul_sharma → Rahul Sharma. A single token is not a name.
 def _name_from_local(local: str) -> str | None:
     """rahul.sharma / rahul_sharma → Rahul Sharma. A single token is not a name."""
     parts = [p for p in re.split(r"[._\-]", local) if p.isalpha() and len(p) > 1]
@@ -89,6 +92,7 @@ def _name_from_local(local: str) -> str | None:
     return " ".join(p.capitalize() for p in parts)
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ web_emails._name_near(): Return the last plausible First Last name found just before the email in the text.
 def _name_near(text: str, email: str, window: int = 220) -> str | None:
     """Return the last plausible First Last name found just before the email in the text."""
     idx = text.find(email)
@@ -102,6 +106,7 @@ def _name_near(text: str, email: str, window: int = 220) -> str | None:
     return None
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ web_emails._person_name(): A name for the address only when the address is a person's and the name agrees
 def _person_name(text: str, raw: str, email: str) -> str | None:
     """A name for the address only when the address is a person's and the name agrees
     with it: "Rajeev Ranjan" next to hiring@ is the poster, not the mailbox, and
@@ -116,6 +121,7 @@ def _person_name(text: str, raw: str, email: str) -> str | None:
     return None
 
 
+# ZONULY ▸ scraping · people search · referrers ▸ people · contact discovery · email proof ▸ web_emails._harvest(): Collect same-domain email addresses from page text into found, with a nearby name.
 def _harvest(text: str, domain: str, where: str, found: dict[str, dict]) -> None:
     """Collect same-domain email addresses from page text into found, with a nearby name.
     Skips asset filenames and noise addresses; keeps the first page each was seen on."""
@@ -127,6 +133,7 @@ def _harvest(text: str, domain: str, where: str, found: dict[str, dict]) -> None
         entry["name"] = entry["name"] or _person_name(text, raw, email)
 
 
+# ZONULY ▸ scraping · people search · referrers ▸ people · contact discovery · email proof ▸ web_emails.find(): Search, read, harvest, attach, learn. Returns what was found and where.
 def find(company_id: int, *, max_pages: int = MAX_PAGES, fresh: bool = False) -> dict:
     """Search, read, harvest, attach, learn. Returns what was found and where."""
     from jobhunter.research import web
@@ -147,6 +154,7 @@ def find(company_id: int, *, max_pages: int = MAX_PAGES, fresh: bool = False) ->
     to_read: list[str] = []
     seen_urls: set[str] = set()
 
+    # ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ web_emails.find.queue(): Add a URL (fragment stripped) to the pages-to-read list unless already seen.
     def queue(url: str) -> None:
         """Add a URL (fragment stripped) to the pages-to-read list unless already seen."""
         url = (url or "").split("#")[0]

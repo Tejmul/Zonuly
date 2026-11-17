@@ -40,6 +40,7 @@ from jobhunter.outreach.inboxes import Inbox
 log = logging.getLogger(__name__)
 
 
+# ZONULY ▸ email sending · sign-in · auth ▸ outreach · email ▸ mailbox._imap(): Sign in to a domain inbox over IMAP SSL; raises GmailNotConfigured on no password or refusal.
 def _imap(inbox: Inbox) -> imaplib.IMAP4_SSL:
     """Sign in to a domain inbox over IMAP SSL; raises GmailNotConfigured on no password or refusal."""
     pw = inbox.password()
@@ -53,6 +54,7 @@ def _imap(inbox: Inbox) -> imaplib.IMAP4_SSL:
     return conn
 
 
+# ZONULY ▸ email verification · email sending · sign-in · auth ▸ outreach · email ▸ mailbox._smtp(): Sign in to a domain inbox over SMTP (SSL on 465, else STARTTLS) for sending.
 def _smtp(inbox: Inbox) -> smtplib.SMTP:
     """Sign in to a domain inbox over SMTP (SSL on 465, else STARTTLS) for sending.
 
@@ -74,6 +76,7 @@ def _smtp(inbox: Inbox) -> smtplib.SMTP:
     return conn
 
 
+# ZONULY ▸ email verification · sign-in · auth ▸ outreach · email ▸ mailbox.verify(): Sign in over SMTP and IMAP once: {ok, address, error}.
 def verify(inbox: Inbox) -> dict:
     """Sign in over SMTP and IMAP once: {ok, address, error}."""
     try:
@@ -87,6 +90,7 @@ def verify(inbox: Inbox) -> dict:
         return {"ok": False, "address": inbox.address, "error": str(e)[:300]}
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ mailbox.send(): Send one mail from this inbox. {"id": Message-ID, "threadId": Message-ID}: the thread is
 def send(inbox: Inbox, to: str, subject: str, body: str, *, in_reply_to: str | None = None) -> dict:
     """Send one mail from this inbox. {"id": Message-ID, "threadId": Message-ID}: the thread is
     named by our first mail's Message-ID, which every reply carries in its References."""
@@ -97,11 +101,13 @@ def send(inbox: Inbox, to: str, subject: str, body: str, *, in_reply_to: str | N
     return {"id": mid, "threadId": in_reply_to or mid}
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ mailbox._date(): Format a datetime as an IMAP SINCE date (DD-Mon-YYYY).
 def _date(since: datetime) -> str:
     """Format a datetime as an IMAP SINCE date (DD-Mon-YYYY)."""
     return since.strftime("%d-%b-%Y")
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ mailbox._search(): Run an IMAP SEARCH and return the message numbers; empty list on error.
 def _search(conn, *criteria: str) -> list[bytes]:
     """Run an IMAP SEARCH and return the message numbers; empty list on error."""
     try:
@@ -112,6 +118,7 @@ def _search(conn, *criteria: str) -> list[bytes]:
     return (data[0] or b"").split() if typ == "OK" and data else []
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ mailbox._boxes(): The mailboxes in `names` this server has (Zoho calls it Spam, others Junk).
 def _boxes(conn, names) -> list[str]:
     """The mailboxes in `names` this server has (Zoho calls it Spam, others Junk)."""
     out = []
@@ -125,6 +132,7 @@ def _boxes(conn, names) -> list[str]:
     return out
 
 
+# ZONULY ▸ retry · backoff ▸ outreach · email ▸ mailbox.sent_already(): Our mail to `to` with this subject in the Sent folder since `since` — a retry asks here
 def sent_already(inbox: Inbox, to: str, subject: str, since: datetime) -> dict | None:
     """Our mail to `to` with this subject in the Sent folder since `since` — a retry asks here
     first, so a mail the server took before the connection dropped never goes twice."""
@@ -149,6 +157,7 @@ def sent_already(inbox: Inbox, to: str, subject: str, since: datetime) -> dict |
     return None
 
 
+# ZONULY ▸ scraping · email sending · suppression · bounces · replies · follow-up ▸ outreach · email ▸ mailbox._read(): Fetch one IMAP message and return it as a tracker dict (sender, text, bounce/auto flags, refs).
 def _read(conn, num: bytes, inbox: Inbox, **extra) -> dict | None:
     """Fetch one IMAP message and return it as a tracker dict (sender, text, bounce/auto flags, refs)."""
     _, fetched = conn.fetch(num, "(BODY.PEEK[])")
@@ -163,6 +172,7 @@ def _read(conn, num: bytes, inbox: Inbox, **extra) -> dict | None:
             **extra}
 
 
+# ZONULY ▸ suppression · bounces · replies · follow-up ▸ outreach · email ▸ mailbox.thread_messages(): Replies to our mail (In-Reply-To or References name its Message-ID) and bounces of it
 def thread_messages(inbox: Inbox, message_id: str, to: str, since: datetime) -> list[dict]:
     """Replies to our mail (In-Reply-To or References name its Message-ID) and bounces of it
     (a mailer-daemon / postmaster message that names the address or the Message-ID), in the
@@ -193,6 +203,7 @@ def thread_messages(inbox: Inbox, message_id: str, to: str, since: datetime) -> 
 _HEADS = "(BODY.PEEK[HEADER.FIELDS (FROM IN-REPLY-TO REFERENCES CONTENT-TYPE X-FAILED-RECIPIENTS)])"
 
 
+# ZONULY ▸ suppression · bounces · replies · follow-up ▸ outreach · email ▸ mailbox._candidates(): (num, "reply" | "bounce?") for the mail since `since` that answers `mid` or may be a
 def _candidates(conn, since: datetime, mid: str) -> list[tuple[bytes, str]]:
     """(num, "reply" | "bounce?") for the mail since `since` that answers `mid` or may be a
     bounce. Matched here on the headers, not with an IMAP HEADER search: Zoho answers every
@@ -216,6 +227,7 @@ def _candidates(conn, since: datetime, mid: str) -> list[tuple[bytes, str]]:
     return out
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ mailbox.messages_from(): Mail from `who` (a domain, or one address) since `since`, in the inbox and spam.
 def messages_from(inbox: Inbox, who: str, since: datetime) -> list[dict]:
     """Mail from `who` (a domain, or one address) since `since`, in the inbox and spam."""
     who = re.sub(r"[^a-z0-9@._+-]", "", (who or "").lower())

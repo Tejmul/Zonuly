@@ -107,6 +107,7 @@ REMOTE_REGIONS = ("us", "uk", "de", "eu", "nl", "remote")
 
 # ------------------------------------------------------------------ description candidates
 
+# ZONULY ▸ enrichment ▸ enrichment · company fill ▸ class fill.Cand
 @dataclass
 class Cand:
     text: str
@@ -125,12 +126,14 @@ _ORG_TYPES = {"organization", "corporation", "localbusiness", "onlinebusiness", 
 _META_KINDS = {"description": "meta", "og:description": "og", "twitter:description": "twitter"}
 
 
+# ZONULY ▸ scraping · enrichment ▸ enrichment · company fill ▸ fill._clean(): Strip HTML tags, unescape entities and collapse whitespace in scraped text.
 def _clean(text: str | None) -> str:
     """Strip HTML tags, unescape entities and collapse whitespace in scraped text."""
     t = _html.unescape(_TAG.sub(" ", text or ""))
     return re.sub(r"\s+", " ", t).strip()
 
 
+# ZONULY ▸ x search · enrichment ▸ enrichment · company fill ▸ fill.meta_candidates(): <meta name=description>, og:description, twitter:description — the site's own summary.
 def meta_candidates(page: str, url: str) -> list[Cand]:
     """<meta name=description>, og:description, twitter:description — the site's own summary."""
     out: list[Cand] = []
@@ -147,6 +150,7 @@ def meta_candidates(page: str, url: str) -> list[Cand]:
     return sorted(out, key=lambda c: order[c.kind])
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company fill ▸ fill._walk(): Yield every dict nested anywhere inside a parsed JSON-LD value (depth-first).
 def _walk(node):
     """Yield every dict nested anywhere inside a parsed JSON-LD value (depth-first)."""
     if isinstance(node, dict):
@@ -158,6 +162,7 @@ def _walk(node):
             yield from _walk(v)
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company fill ▸ fill.jsonld_candidates(): The description an Organization declares in its JSON-LD.
 def jsonld_candidates(page: str, url: str) -> list[Cand]:
     """The description an Organization declares in its JSON-LD."""
     out: list[Cand] = []
@@ -177,6 +182,7 @@ def jsonld_candidates(page: str, url: str) -> list[Cand]:
     return out
 
 
+# ZONULY ▸ enrichment · knowledge graph ▸ enrichment · company fill ▸ fill.paragraph_candidates(): The first substantial paragraphs of the page body (nav, header, footer, scripts out).
 def paragraph_candidates(page: str, url: str, limit: int = 4) -> list[Cand]:
     """The first substantial paragraphs of the page body (nav, header, footer, scripts out)."""
     body = _STRIP_BLOCKS.sub(" ", page or "")
@@ -190,6 +196,7 @@ def paragraph_candidates(page: str, url: str, limit: int = 4) -> list[Cand]:
     return out
 
 
+# ZONULY ▸ enrichment · knowledge graph ▸ enrichment · company fill ▸ fill.page_candidates(): Collect all description candidates from a page: JSON-LD, then meta tags, then paragraphs.
 def page_candidates(page: str, url: str) -> list[Cand]:
     """Collect all description candidates from a page: JSON-LD, then meta tags, then paragraphs."""
     return jsonld_candidates(page, url) + meta_candidates(page, url) + paragraph_candidates(page, url)
@@ -198,6 +205,7 @@ def page_candidates(page: str, url: str) -> list[Cand]:
 _ABOUT_PATH = re.compile(r"^/(?:about(?:-us)?|company|who-we-are|our-story|story|mission)/?$", re.I)
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company fill ▸ fill.about_url(): Their own About page, read off the homepage's links.
 def about_url(page: str, base: str) -> str | None:
     """Their own About page, read off the homepage's links."""
     from jobhunter.scrapers import careers_ats as ca
@@ -213,6 +221,7 @@ def about_url(page: str, base: str) -> str | None:
 _LI_SLUG = re.compile(r"linkedin\.com/company/([A-Za-z0-9][A-Za-z0-9_%.-]{1,80})", re.I)
 
 
+# ZONULY ▸ linkedin scraping · enrichment ▸ enrichment · company fill ▸ fill.linkedin_slug(): The LinkedIn company page their own site links to (the most-linked one).
 def linkedin_slug(page: str) -> str | None:
     """The LinkedIn company page their own site links to (the most-linked one)."""
     slugs = Counter(s.rstrip("/.").lower() for s in _LI_SLUG.findall(page or "")
@@ -220,6 +229,7 @@ def linkedin_slug(page: str) -> str | None:
     return slugs.most_common(1)[0][0] if slugs else None
 
 
+# ZONULY ▸ linkedin scraping · enrichment ▸ enrichment · company fill ▸ fill._first_sentences(): Whole sentences up to `limit` characters (a LinkedIn About runs to 2,000).
 def _first_sentences(text: str, limit: int = 380) -> str:
     """Whole sentences up to `limit` characters (a LinkedIn About runs to 2,000)."""
     parts = re.split(r"(?<=[.!?])\s+", text.strip())
@@ -231,6 +241,7 @@ def _first_sentences(text: str, limit: int = 380) -> str:
     return out or text[:limit]
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company fill ▸ fill.combine(): The list's `what` and a short line quoted from their site, as one sentence naming
 def combine(name: str, what: str | None, line: str | None) -> str | None:
     """The list's `what` and a short line quoted from their site, as one sentence naming
     the company. Used only when no single candidate passes on its own."""
@@ -241,6 +252,7 @@ def combine(name: str, what: str | None, line: str | None) -> str | None:
     return f"{name} — {what}. {line if line.endswith(('.', '!', '?')) else line + '.'}"
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company fill ▸ fill._rank(): Sort key for a passing description candidate: names the company first, then source kind,
 def _rank(c: Cand, ok: guardrails.Check, name: str, domain: str | None) -> tuple:
     """Sort key for a passing description candidate: names the company first, then source kind,
     then closeness to about 200 characters."""
@@ -250,6 +262,7 @@ def _rank(c: Cand, ok: guardrails.Check, name: str, domain: str | None) -> tuple
     return (0 if named else 1, kind, abs(len(ok.value) - 200) // 80)
 
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ enrichment · company fill ▸ fill.best_description(): (the best candidate that passes the guardrails, the reasons the others were refused).
 def best_description(cands: list[Cand], *, name: str, domain: str | None,
                      what: str | None = None, what_source: str | None = None) -> tuple[Cand | None, list[str]]:
     """(the best candidate that passes the guardrails, the reasons the others were refused).
@@ -284,6 +297,7 @@ def best_description(cands: list[Cand], *, name: str, domain: str | None,
 
 # ------------------------------------------------------------------ fetching
 
+# ZONULY ▸ scraping · enrichment ▸ enrichment · company fill ▸ fill._get(): (html, final url, problem) — a direct fetch, then Jina's rendered HTML for a JS shell
 def _get(url: str) -> tuple[str, str | None, str]:
     """(html, final url, problem) — a direct fetch, then Jina's rendered HTML for a JS shell
     or a bot wall."""
@@ -313,6 +327,7 @@ def _get(url: str) -> tuple[str, str | None, str]:
     return "", None, problem
 
 
+# ZONULY ▸ linkedin scraping · enrichment ▸ enrichment · company fill ▸ fill.linkedin_company_url(): Any LinkedIn company link — in.linkedin.com/company/scalioapp?trk=…, a bare slug — as
 def linkedin_company_url(url_or_slug: str | None) -> str | None:
     """Any LinkedIn company link — in.linkedin.com/company/scalioapp?trk=…, a bare slug — as
     https://www.linkedin.com/company/<slug>, or None when it is not a company page."""
@@ -326,6 +341,7 @@ def linkedin_company_url(url_or_slug: str | None) -> str | None:
     return f"https://www.linkedin.com/company/{slug}"
 
 
+# ZONULY ▸ linkedin scraping · scraping · enrichment ▸ enrichment · company fill ▸ fill.set_linkedin(): Store the company's LinkedIn page wherever a scrape hands us one (2026-10-23, Tejmul:
 def set_linkedin(session, c: Company, url_or_slug: str | None, *, source: str, channel: str,
                  evidence: str | None = None) -> str | None:
     """Store the company's LinkedIn page wherever a scrape hands us one (2026-10-23, Tejmul:
@@ -337,6 +353,7 @@ def set_linkedin(session, c: Company, url_or_slug: str | None, *, source: str, c
     return guardrails.put(session, c, "linkedin_url", url, evidence=evidence, source=source, channel=channel)
 
 
+# ZONULY ▸ linkedin scraping · enrichment ▸ enrichment · company fill ▸ fill.backfill_linkedin(): The LinkedIn company page each company's own homepage links to, stored as linkedin_url
 def backfill_linkedin(limit: int | None = None, *, concurrency: int = 8, cohorts: tuple[int, ...] = (0, 1, 2),
                       ids: list[int] | None = None) -> dict:
     """The LinkedIn company page each company's own homepage links to, stored as linkedin_url
@@ -353,6 +370,7 @@ def backfill_linkedin(limit: int | None = None, *, concurrency: int = 8, cohorts
         rows = s.exec(q).all()
         todo = [(c.id, c.website) for c in rows if ids or cohort(c) in cohorts][: limit or None]
 
+    # ZONULY ▸ linkedin scraping · scraping · enrichment ▸ enrichment · company fill ▸ fill.backfill_linkedin.one(): Fetch one company homepage and return (company id, LinkedIn slug found, fetch problem).
     def one(item):
         """Fetch one company homepage and return (company id, LinkedIn slug found, fetch problem)."""
         cid, site = item
@@ -385,6 +403,7 @@ _OPEN_ROLES = re.compile(r"\((\d[\d,]*) Open Roles?\)", re.I)
 _LOGIN = re.compile(r"^Title:\s*LinkedIn: Log In or Sign Up", re.M)
 
 
+# ZONULY ▸ linkedin scraping · enrichment ▸ enrichment · company fill ▸ fill.parse_linkedin_extra(): What parse_company_page does not read: founded year, LinkedIn's company id, the
 def parse_linkedin_extra(text: str | None) -> dict:
     """What parse_company_page does not read: founded year, LinkedIn's company id, the
     number of members who list it as their employer."""
@@ -402,6 +421,7 @@ def parse_linkedin_extra(text: str | None) -> dict:
     return out
 
 
+# ZONULY ▸ linkedin scraping · enrichment ▸ enrichment · company fill ▸ fill.parse_jobs_page(): Open roles on the company's public LinkedIn jobs page: the "(25 Open Roles)" in its
 def parse_jobs_page(text: str | None, name: str) -> int | None:
     """Open roles on the company's public LinkedIn jobs page: the "(25 Open Roles)" in its
     title, else the cards for this company. None for a login wall (not an answer)."""
@@ -416,9 +436,11 @@ def parse_jobs_page(text: str | None, name: str) -> int | None:
     return sum(1 for c in ij.parse_cards(text) if admission.name_key(c.company) == key)
 
 
+# ZONULY ▸ linkedin scraping · enrichment · retry · backoff ▸ enrichment · company fill ▸ class fill._LI: One run's LinkedIn reads, through india_jobs' paced reader and its 12-hour backoff.
 class _LI:
     """One run's LinkedIn reads, through india_jobs' paced reader and its 12-hour backoff."""
 
+    # ZONULY ▸ linkedin scraping · enrichment · budget · cost ▸ enrichment · company fill ▸ fill._LI.__init__(): Set up a LinkedIn reader with a read budget; marks it blocked if india_jobs is backing off.
     def __init__(self, budget: int):
         """Set up a LinkedIn reader with a read budget; marks it blocked if india_jobs is backing off."""
         from jobhunter import india_jobs
@@ -430,6 +452,7 @@ class _LI:
         if until:
             self.blocked = f"LinkedIn backing off until {until:%Y-%m-%d %H:%M}"
 
+    # ZONULY ▸ linkedin scraping · enrichment · budget · cost ▸ enrichment · company fill ▸ fill._LI.read(): Read one public LinkedIn page through india_jobs' paced reader, spending one budget unit.
     def read(self, url: str, kind: str) -> str | None:
         """Read one public LinkedIn page through india_jobs' paced reader, spending one budget unit.
         Waits out one Jina 429 and retries; on a block, stops all further reads. Network call."""
@@ -451,6 +474,7 @@ class _LI:
         return None
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company fill ▸ fill._same_domain(): True when two URLs share the same registrable domain.
 def _same_domain(a: str | None, b: str | None) -> bool:
     """True when two URLs share the same registrable domain."""
     ra = admission.registrable(admission.host_of(a) or "") if a else None
@@ -458,6 +482,7 @@ def _same_domain(a: str | None, b: str | None) -> bool:
     return bool(ra and rb and ra == rb)
 
 
+# ZONULY ▸ linkedin scraping · enrichment ▸ enrichment · company fill ▸ fill.ij_url(): Return the public LinkedIn company page URL for a company slug.
 def ij_url(slug: str) -> str:
     """Return the public LinkedIn company page URL for a company slug."""
     from jobhunter.scrapers import india_jobs as ij
@@ -465,12 +490,14 @@ def ij_url(slug: str) -> str:
     return ij.company_url(slug)
 
 
+# ZONULY ▸ linkedin scraping · enrichment ▸ enrichment · company fill ▸ fill.guess_slug(): 'Equal AI' -> 'equal-ai' — LinkedIn's usual vanity slug. Only ever used with the
 def guess_slug(name: str) -> str:
     """'Equal AI' -> 'equal-ai' — LinkedIn's usual vanity slug. Only ever used with the
     page's own Website matching theirs."""
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
+# ZONULY ▸ linkedin scraping · enrichment ▸ enrichment · company fill ▸ fill.linkedin_company(): The guest company page. `vouched`: their own site links it, so the page is theirs
 def linkedin_company(li: _LI, slug: str, website: str | None, *, vouched: bool = True) -> dict:
     """The guest company page. `vouched`: their own site links it, so the page is theirs
     even when its Website is a redirect or a sister domain; a guessed slug must show their
@@ -491,6 +518,7 @@ def linkedin_company(li: _LI, slug: str, website: str | None, *, vouched: bool =
     return info
 
 
+# ZONULY ▸ linkedin scraping · enrichment ▸ enrichment · company fill ▸ fill.linkedin_jobs(): Postings on the company's public LinkedIn jobs page ("See jobs" on its company page).
 def linkedin_jobs(li: _LI, jobs_url: str, name: str) -> int | None:
     """Postings on the company's public LinkedIn jobs page ("See jobs" on its company page)."""
     text = li.read(jobs_url, "jobs")
@@ -499,6 +527,7 @@ def linkedin_jobs(li: _LI, jobs_url: str, name: str) -> int | None:
 
 # ------------------------------------------------------------------ one company
 
+# ZONULY ▸ enrichment ▸ enrichment · company fill ▸ fill._list_what(): Return the 'what' blurb stored in a company's list_meta JSON, or None.
 def _list_what(c: Company) -> str | None:
     """Return the 'what' blurb stored in a company's list_meta JSON, or None."""
     try:
@@ -507,12 +536,14 @@ def _list_what(c: Company) -> str | None:
         return None
 
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ enrichment · company fill ▸ fill._desc_ok(): True when the company has a description that passes the (non-strict) description guardrail.
 def _desc_ok(c: Company) -> bool:
     """True when the company has a description that passes the (non-strict) description guardrail."""
     return bool(c.description) and bool(guardrails.description(c.description, name=c.name, domain=c.domain,
                                                                 strict=False))
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ enrichment · company fill ▸ fill._ready_with_email(): Count a company's ready referrer contacts that have an email address.
 def _ready_with_email(cid: int) -> int:
     """Count a company's ready referrer contacts that have an email address."""
     with get_session() as s:
@@ -521,6 +552,7 @@ def _ready_with_email(cid: int) -> int:
         return sum(1 for p in rows if guardrails.is_ready(p) and p.email)
 
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ enrichment · company fill ▸ fill.company(): Fill one company as far as the evidence goes; record why each missing part is missing.
 def company(cid: int, *, li: _LI | None = None, people: bool = True, facts: bool = True,
             careers: bool = True) -> dict:
     """Fill one company as far as the evidence goes; record why each missing part is missing."""
@@ -709,6 +741,7 @@ def company(cid: int, *, li: _LI | None = None, people: bool = True, facts: bool
 
 # ------------------------------------------------------------------ the queue
 
+# ZONULY ▸ enrichment · decision · remote from india ▸ enrichment · company fill ▸ fill.cohort(): 0 = the ★ list, 1 = Bengaluru / Hyderabad, 2 = a remote target; None = not in the pass.
 def cohort(c: Company) -> int | None:
     """0 = the ★ list, 1 = Bengaluru / Hyderabad, 2 = a remote target; None = not in the pass."""
     if c.status is not None:
@@ -722,6 +755,7 @@ def cohort(c: Company) -> int | None:
     return None
 
 
+# ZONULY ▸ enrichment · decision · remote from india ▸ enrichment · company fill ▸ fill.queue(): ★ list (list order) → India (priority) → the top `remote_top` remote targets (priority).
 def queue(limit: int | None = None, *, only: int | None = None, force: bool = False,
           remote_top: int = REMOTE_TOP) -> list[int]:
     """★ list (list order) → India (priority) → the top `remote_top` remote targets (priority).
@@ -742,6 +776,7 @@ def queue(limit: int | None = None, *, only: int | None = None, force: bool = Fa
     groups[2].sort(key=lambda c: (-(c.priority_score or 0), c.id))
     groups[2] = groups[2][:remote_top]
 
+    # ZONULY ▸ enrichment ▸ enrichment · company fill ▸ fill.queue.due(): True when a company is due for a fill (enrichment) pass: forced, never filled, or stale.
     def due(c: Company) -> bool:
         """True when a company is due for a fill (enrichment) pass: forced, never filled, or stale."""
         if force or c.filled_at is None:
@@ -752,6 +787,7 @@ def queue(limit: int | None = None, *, only: int | None = None, force: bool = Fa
     return ids[:limit] if limit else ids
 
 
+# ZONULY ▸ enrichment · people search · referrers · scheduler · tick ▸ enrichment · company fill ▸ fill.run(): The pass over `queue()` — what the tick runs (people left to its own people step).
 def run(limit: int = 6, *, budget_s: int = 240, linkedin_reads: int = 12, people: bool = False,
         only: int | None = None, force: bool = False, ids: list[int] | None = None) -> dict:
     """The pass over `queue()` — what the tick runs (people left to its own people step)."""
@@ -789,6 +825,7 @@ def run(limit: int = 6, *, budget_s: int = 240, linkedin_reads: int = 12, people
 
 # ------------------------------------------------------------------ the measure
 
+# ZONULY ▸ enrichment · remote from india ▸ enrichment · company fill ▸ fill.measure(): Per-field counts for one cohort (0 ★, 1 India, 2 top remote).
 def measure(only: int, *, remote_top: int = REMOTE_TOP) -> dict:
     """Per-field counts for one cohort (0 ★, 1 India, 2 top remote)."""
     init_db()

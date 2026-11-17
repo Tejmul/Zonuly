@@ -34,6 +34,7 @@ KEEP_TAGS = {
 KEEP_TITLE = ("engineer", "developer", "sde", "scientist", "architect", "programmer", "ml", "ai ")
 
 
+# ZONULY ▸ remoteok scraping · scraping · pay · salary · remote from india ▸ scraping · data ingestion ▸ remoteok._salary(): Format RemoteOK's min/max salary fields as a USD range string, or None.
 def _salary(j: dict) -> str | None:
     """Format RemoteOK's min/max salary fields as a USD range string, or None."""
     lo, hi = j.get("salary_min"), j.get("salary_max")
@@ -42,6 +43,7 @@ def _salary(j: dict) -> str | None:
     return None
 
 
+# ZONULY ▸ remoteok scraping · scraping · remote from india ▸ scraping · data ingestion ▸ remoteok.fetch(): Scrape the RemoteOK API and return engineering jobs (by tag or title) as remote RawJobs.
 async def fetch(http: httpx.AsyncClient, companies: list[dict] | None = None) -> list[RawJob]:
     """Scrape the RemoteOK API and return engineering jobs (by tag or title) as remote RawJobs.
     Network call."""

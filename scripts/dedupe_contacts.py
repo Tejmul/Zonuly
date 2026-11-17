@@ -68,12 +68,14 @@ INHERIT = ["github", "linkedin", "x_handle", "handle", "role", "role_evidence", 
            "last_commit_at", "seniority", "role_class"]
 
 
+# ZONULY ▸ github scraping · dedup · people search · referrers ▸ filtering · dedup script ▸ dedupe_contacts.handle_of(): Return the contact's lowercase GitHub handle, or None.
 def handle_of(c: Contact) -> str | None:
     """Return the contact's lowercase GitHub handle, or None."""
     g = (c.github or "").rstrip("/").strip()
     return g.rsplit("/", 1)[-1].lower() or None if g else None
 
 
+# ZONULY ▸ dedup · people search · referrers ▸ filtering · dedup script ▸ dedupe_contacts.key_of(): What makes this row a person. None means 'cannot tell' — such a row is never merged.
 def key_of(c: Contact) -> str | None:
     """What makes this row a person. None means 'cannot tell' — such a row is never merged."""
     h = handle_of(c)
@@ -89,6 +91,7 @@ def key_of(c: Contact) -> str | None:
     return None
 
 
+# ZONULY ▸ dedup · scoring · people search · referrers ▸ filtering · dedup script ▸ dedupe_contacts.score(): Who should survive. Higher wins; the id breaks ties so a rerun is stable.
 def score(c: Contact) -> tuple:
     """Who should survive. Higher wins; the id breaks ties so a rerun is stable."""
     return (
@@ -102,6 +105,7 @@ def score(c: Contact) -> tuple:
     )
 
 
+# ZONULY ▸ dedup · scoring · people search · referrers ▸ filtering · dedup script ▸ dedupe_contacts.merge_group(): Dedup: fold duplicate contact rows of one person into the best-scored survivor.
 def merge_group(session, rows: list[Contact], *, dry: bool) -> dict:
     """Dedup: fold duplicate contact rows of one person into the best-scored survivor.
     Carries over the mailed lock, do-not-contact, a proved address and empty fields; re-points
@@ -142,6 +146,7 @@ def merge_group(session, rows: list[Contact], *, dry: bool) -> dict:
     return {"kept": keep.id, "dropped": loser_ids, "moved": sorted(set(moved))}
 
 
+# ZONULY ▸ github scraping · dedup · people search · referrers ▸ filtering · dedup script ▸ dedupe_contacts.run(): Dedup contacts per company by person key (GitHub, address, name); returns counts.
 def run(*, company_id: int | None = None, dry: bool = False) -> dict:
     """Dedup contacts per company by person key (GitHub, address, name); returns counts.
     Writes to the contact table unless dry."""
@@ -179,6 +184,7 @@ def run(*, company_id: int | None = None, dry: bool = False) -> dict:
     return out
 
 
+# ZONULY ▸ dedup · people search · referrers ▸ filtering · dedup script ▸ dedupe_contacts.main(): CLI entry: dedupe contacts (one company or all, --dry-run to only report) and print a summary.
 def main() -> int:
     """CLI entry: dedupe contacts (one company or all, --dry-run to only report) and print a summary."""
     ap = argparse.ArgumentParser(description=__doc__)

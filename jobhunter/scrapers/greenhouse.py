@@ -28,6 +28,7 @@ SOURCE = "greenhouse"
 API = "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
 
 
+# ZONULY ▸ greenhouse scraping · scraping ▸ scraping · data ingestion ▸ greenhouse.fetch_board(): Scrape a company's public Greenhouse job board API and return its postings as RawJobs.
 async def fetch_board(http: httpx.AsyncClient, slug: str, company_name: str | None = None) -> list[RawJob]:
     """Scrape a company's public Greenhouse job board API and return its postings as RawJobs.
 
@@ -64,6 +65,7 @@ async def fetch_board(http: httpx.AsyncClient, slug: str, company_name: str | No
     return out
 
 
+# ZONULY ▸ greenhouse scraping · scraping ▸ scraping · data ingestion ▸ greenhouse.fetch(): `companies` are entries from companies.yaml with ats == 'greenhouse'.
 async def fetch(http: httpx.AsyncClient, companies: list[dict]) -> list[RawJob]:
     """`companies` are entries from companies.yaml with ats == 'greenhouse'."""
     targets = [c for c in companies if c.get("ats") == "greenhouse" and c.get("ats_slug")]

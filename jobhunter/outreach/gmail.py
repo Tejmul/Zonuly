@@ -89,22 +89,26 @@ SCOPES = [
 ]
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ class gmail.GmailNotConfigured: No credentials yet, or Google refused them.
 class GmailNotConfigured(RuntimeError):
     """No credentials yet, or Google refused them."""
 
 
 # ================================================================ app password
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.app_password(): The Gmail app password from the environment/secrets, with spaces removed.
 def app_password() -> str:
     """The Gmail app password from the environment/secrets, with spaces removed."""
     return secret(PASSWORD_ENV).replace(" ", "")   # Google shows it in groups of four
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.from_header(): The From header for outgoing mail: display name plus sending address.
 def from_header() -> str:
     """The From header for outgoing mail: display name plus sending address."""
     return formataddr((DISPLAY_NAME, ADDRESS)) if DISPLAY_NAME else ADDRESS
 
 
+# ZONULY ▸ email sending · sign-in · auth ▸ outreach · email ▸ gmail._imap(): Open and sign in to a Gmail IMAP connection (network call); raises GmailNotConfigured on failure.
 def _imap() -> imaplib.IMAP4_SSL:
     """Open and sign in to a Gmail IMAP connection (network call); raises GmailNotConfigured on failure."""
     pw = app_password()
@@ -118,6 +122,7 @@ def _imap() -> imaplib.IMAP4_SSL:
     return conn
 
 
+# ZONULY ▸ email verification · email sending · sign-in · auth ▸ outreach · email ▸ gmail._smtp(): Open and sign in to a Gmail SMTP connection for sending (network call); raises GmailNotConfigured.
 def _smtp() -> smtplib.SMTP_SSL:
     """Open and sign in to a Gmail SMTP connection for sending (network call); raises GmailNotConfigured."""
     pw = app_password()
@@ -135,6 +140,7 @@ def _smtp() -> smtplib.SMTP_SSL:
 _verified: dict = {"at": 0.0, "ok": False, "error": None}
 
 
+# ZONULY ▸ email verification · email sending · sign-in · auth ▸ outreach · email ▸ gmail.verify(): Sign in over IMAP and SMTP once, and remember the answer for ten minutes so the
 def verify(*, force: bool = False) -> dict:
     """Sign in over IMAP and SMTP once, and remember the answer for ten minutes so the
     Settings page and the sidebar do not log in on every render."""
@@ -152,6 +158,7 @@ def verify(*, force: bool = False) -> dict:
         return {"ok": False, "address": None, "error": str(e)[:300]}
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.install_app_password(): Write GMAIL_APP_PASSWORD into the gitignored .env (mode 600) and into this process.
 def install_app_password(password: str) -> dict:
     """Write GMAIL_APP_PASSWORD into the gitignored .env (mode 600) and into this process."""
     import os
@@ -172,6 +179,7 @@ def install_app_password(password: str) -> dict:
     return setup_status()
 
 
+# ZONULY ▸ email sending · cache · sign-in · auth ▸ outreach · email ▸ gmail._forget_app_password(): Remove the Gmail app password from .env and the environment and clear the cached sign-in check.
 def _forget_app_password() -> None:
     """Remove the Gmail app password from .env and the environment and clear the cached sign-in check."""
     import os
@@ -183,6 +191,7 @@ def _forget_app_password() -> None:
     _verified.update(at=0.0, ok=False, error=None)
 
 
+# ZONULY ▸ email verification · email sending ▸ outreach · email ▸ gmail.build_message(): The exact message send() hands to Gmail, built and never sent (deliverability checks,
 def build_message(to: str, subject: str, body: str, *, in_reply_to: str | None = None,
                   sender: tuple[str, str] | None = None) -> EmailMessage:
     """The exact message send() hands to Gmail, built and never sent (deliverability checks,
@@ -221,6 +230,7 @@ def build_message(to: str, subject: str, body: str, *, in_reply_to: str | None =
     return msg
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.send(): Send one mail as Tejmul (build_message) and return where Gmail filed it.
 def send(to: str, subject: str, body: str, *, in_reply_to: str | None = None) -> dict:
     """Send one mail as Tejmul (build_message) and return where Gmail filed it.
 
@@ -236,6 +246,7 @@ def send(to: str, subject: str, body: str, *, in_reply_to: str | None = None) ->
     return {"id": message_id, "threadId": thread_id}
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.sent_already(): The mail to `to` with this exact subject in Sent Mail since `since`, as send() returns
 def sent_already(to: str, subject: str, since: datetime) -> dict | None:
     """The mail to `to` with this exact subject in Sent Mail since `since`, as send() returns
     it — or None. A connection that drops after Gmail took the mail looks like a failure; the
@@ -260,6 +271,7 @@ def sent_already(to: str, subject: str, since: datetime) -> dict | None:
     return None
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail._thread_of(): Gmail's thread id for a message we just sent, from the Sent Mail copy.
 def _thread_of(message_id: str, attempts: int = 4) -> str | None:
     """Gmail's thread id for a message we just sent, from the Sent Mail copy."""
     for i in range(attempts):
@@ -280,6 +292,7 @@ def _thread_of(message_id: str, attempts: int = 4) -> str | None:
     return None
 
 
+# ZONULY ▸ scraping · email sending · suppression · bounces ▸ outreach · email ▸ gmail._read(): Fetch one IMAP message and parse it into a dict: id, sender, date, text, bounce/ours/auto flags.
 def _read(conn, num: bytes, **extra) -> dict | None:
     """Fetch one IMAP message and parse it into a dict: id, sender, date, text, bounce/ours/auto flags."""
     _, fetched = conn.fetch(num, "(X-GM-MSGID BODY.PEEK[])")
@@ -295,6 +308,7 @@ def _read(conn, num: bytes, **extra) -> dict | None:
             "refs": f"{msg.get('In-Reply-To') or ''} {msg.get('References') or ''}", **extra}
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.thread_messages(): Every message Gmail files under a thread, oldest first, as
 def thread_messages(thread_id: str, *, message_id: str | None = None) -> list[dict]:
     """Every message Gmail files under a thread, oldest first, as
     {id, from, date, text, is_bounce, is_ours, is_auto, refs}. `id` is Gmail's X-GM-MSGID,
@@ -324,6 +338,7 @@ def thread_messages(thread_id: str, *, message_id: str | None = None) -> list[di
     return out
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.messages_from(): Mail from `who` (a domain, or one address) since `since`, in All Mail and in Spam,
 def messages_from(who: str, since: datetime) -> list[dict]:
     """Mail from `who` (a domain, or one address) since `since`, in All Mail and in Spam,
     oldest first — the same dicts as thread_messages. 2026-10-26: the engineer at CynLr
@@ -353,6 +368,7 @@ def messages_from(who: str, since: datetime) -> list[dict]:
     return out
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail._when(): Timestamp of a parsed message's Date header, used to sort messages; 0 when missing.
 def _when(m: dict) -> float:
     """Timestamp of a parsed message's Date header, used to sort messages; 0 when missing."""
     try:
@@ -361,6 +377,7 @@ def _when(m: dict) -> float:
         return 0.0
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail._text_of(): The decoded text of one part, whichever email policy built it.
 def _text_of(part) -> str:
     """The decoded text of one part, whichever email policy built it."""
     try:
@@ -374,6 +391,7 @@ def _text_of(part) -> str:
         return ""
 
 
+# ZONULY ▸ people search · referrers · email sending ▸ outreach · email ▸ gmail._plain_text(): The text a person wrote: text/plain first, text/html as a fallback, never attachments.
 def _plain_text(msg) -> str:
     """The text a person wrote: text/plain first, text/html as a fallback, never attachments."""
     parts = list(msg.walk()) if msg.is_multipart() else [msg]
@@ -392,6 +410,7 @@ _ROBOT = re.compile(r"^(no-?reply|do-?not-?reply|donotreply|notifications?|newsl
                     r"updates|alerts?|digest|mailer|bounces?)\b", re.I)
 
 
+# ZONULY ▸ people search · referrers · email sending · knowledge graph ▸ outreach · email ▸ gmail._is_auto(): Sent by a machine, not a person: a newsletter, a job alert, an ATS acknowledgement,
 def _is_auto(msg) -> bool:
     """Sent by a machine, not a person: a newsletter, a job alert, an ATS acknowledgement,
     an out-of-office. Never a reply to a referral ask."""
@@ -402,6 +421,7 @@ def _is_auto(msg) -> bool:
             or bool(msg.get("List-Id")) or bool(_ROBOT.match(local)))
 
 
+# ZONULY ▸ email sending · suppression · bounces ▸ outreach · email ▸ gmail._is_bounce(): True when a message is a delivery-failure bounce (report type, mailer-daemon, failed-recipients).
 def _is_bounce(msg) -> bool:
     """True when a message is a delivery-failure bounce (report type, mailer-daemon, failed-recipients)."""
     sender = parseaddr(msg.get("From") or "")[1].lower()
@@ -415,6 +435,7 @@ def _is_bounce(msg) -> bool:
 
 # ======================================================================= oauth
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.configured(): True when Gmail sending is set up: an app password, or the OAuth client file in OAuth mode.
 def configured() -> bool:
     """True when Gmail sending is set up: an app password, or the OAuth client file in OAuth mode."""
     if AUTH == "app_password":
@@ -422,6 +443,7 @@ def configured() -> bool:
     return CREDENTIALS_FILE.exists()
 
 
+# ZONULY ▸ email sending · sign-in · auth ▸ outreach · email ▸ gmail.authorized(): True when Gmail sign-in works: the app password verifies, or an OAuth token exists.
 def authorized() -> bool:
     """True when Gmail sign-in works: the app password verifies, or an OAuth token exists."""
     if AUTH == "app_password":
@@ -429,6 +451,7 @@ def authorized() -> bool:
     return TOKEN_FILE.exists()
 
 
+# ZONULY ▸ scraping · email sending · sign-in · auth ▸ outreach · email ▸ gmail.status(): Report the Gmail connection state (configured, authorized, address, setup hint) for the dashboard.
 def status() -> dict:
     """Report the Gmail connection state (configured, authorized, address, setup hint) for the dashboard."""
     if AUTH == "app_password":
@@ -456,6 +479,7 @@ def status() -> dict:
     }
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail._load_credentials(): Load Gmail OAuth credentials from the token file, refreshing or running the consent flow if allowed.
 def _load_credentials(*, interactive: bool):
     """Load Gmail OAuth credentials from the token file, refreshing or running the consent flow if allowed."""
     from google.auth.transport.requests import Request
@@ -490,6 +514,7 @@ def _load_credentials(*, interactive: bool):
     return creds
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail._save(): Write the Gmail OAuth token to the token file with owner-only permissions.
 def _save(creds) -> None:
     """Write the Gmail OAuth token to the token file with owner-only permissions."""
     TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -498,6 +523,7 @@ def _save(creds) -> None:
     log.info("saved Gmail token to %s", TOKEN_FILE)
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.service(): The Gmail API client (OAuth mode only). Set interactive=True only from a terminal.
 def service(*, interactive: bool = False):
     """The Gmail API client (OAuth mode only). Set interactive=True only from a terminal."""
     from googleapiclient.discovery import build
@@ -506,6 +532,7 @@ def service(*, interactive: bool = False):
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
+# ZONULY ▸ email sending · sign-in · auth ▸ outreach · email ▸ gmail.authorize(): Run the one-time OAuth consent flow (opens a browser).
 def authorize() -> dict:
     """Run the one-time OAuth consent flow (opens a browser)."""
     svc = service(interactive=True)
@@ -513,6 +540,7 @@ def authorize() -> dict:
     return {"email": profile.get("emailAddress"), "messages_total": profile.get("messagesTotal")}
 
 
+# ZONULY ▸ email sending · sign-in · auth ▸ outreach · email ▸ gmail.my_address(): The signed-in Gmail address, or None when not authorized (OAuth reads the profile, network call).
 def my_address() -> str | None:
     """The signed-in Gmail address, or None when not authorized (OAuth reads the profile, network call)."""
     if AUTH == "app_password":
@@ -526,6 +554,7 @@ def my_address() -> str | None:
 
 # ---------------------------------------------------------------- setup flow (Settings → Email)
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail._client_json(): Read the Google OAuth client JSON file, or None when missing or unreadable.
 def _client_json() -> dict | None:
     """Read the Google OAuth client JSON file, or None when missing or unreadable."""
     import json
@@ -538,6 +567,7 @@ def _client_json() -> dict | None:
         return None
 
 
+# ZONULY ▸ validation · guardrails · email sending ▸ outreach · email ▸ gmail.validate_client_json(): Why this is not a usable *desktop app* OAuth client — None when it is.
 def validate_client_json(data: object) -> str | None:
     """Why this is not a usable *desktop app* OAuth client — None when it is."""
     if not isinstance(data, dict):
@@ -553,6 +583,7 @@ def validate_client_json(data: object) -> str | None:
     return None
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.install_credentials(): Write the uploaded OAuth client JSON to CREDENTIALS_FILE (mode 600).
 def install_credentials(data: dict) -> dict:
     """Write the uploaded OAuth client JSON to CREDENTIALS_FILE (mode 600)."""
     import json
@@ -569,6 +600,7 @@ def install_credentials(data: dict) -> dict:
     return setup_status()
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.disconnect(): Forget the credentials so a different account can be used.
 def disconnect(*, remove_client: bool = False) -> dict:
     """Forget the credentials so a different account can be used."""
     if AUTH == "app_password":
@@ -581,6 +613,7 @@ def disconnect(*, remove_client: bool = False) -> dict:
     return setup_status()
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.setup_status(): Everything the Settings → Email panel shows: each step, what is done, what is next.
 def setup_status() -> dict:
     """Everything the Settings → Email panel shows: each step, what is done, what is next."""
     from jobhunter.outreach import sender
@@ -659,18 +692,21 @@ _MD_LINK = re.compile(r"\[([^\]\n]{1,80})\]\((https?://[^)\s]+)\)")
 _BARE_URL = re.compile(r"(?<![\"'>(])(https?://[^\s<]+)")
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ gmail.as_plain(): The text part, written the way Gmail writes a link on words: "[my resume](url)"
 def as_plain(body: str) -> str:
     """The text part, written the way Gmail writes a link on words: "[my resume](url)"
     becomes "my resume <url>"."""
     return _MD_LINK.sub(lambda m: f"{m.group(1)} <{m.group(2)}>", body or "")
 
 
+# ZONULY ▸ email drafting · email sending ▸ outreach · email ▸ gmail.as_gmail_html(): The HTML part the way Gmail's compose writes it: one <div> per line, an empty
 def as_gmail_html(body: str) -> str:
     """The HTML part the way Gmail's compose writes it: one <div> per line, an empty
     <div><br></div> between paragraphs, links on their words, nothing else — no styles,
     no images, no tracking."""
     import html as _h
 
+    # ZONULY ▸ email sending ▸ outreach · email ▸ gmail.as_gmail_html.line(): Render one body line as a Gmail-style HTML div, escaping text and turning links into anchors.
     def line(t: str) -> str:
         """Render one body line as a Gmail-style HTML div, escaping text and turning links into anchors."""
         t = _h.escape(t, quote=False)

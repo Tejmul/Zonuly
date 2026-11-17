@@ -50,6 +50,7 @@ COMMON_PATTERNS = [
 ALL_PATTERNS = COMMON_PATTERNS + ["{last}", "{f}{l}", "{first}-{last}", "{last}.{first}", "{first}.{l}"]
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ patterns.normalize_name(): 'José García-López' -> ('jose', 'garcialopez'). Returns None if unusable.
 def normalize_name(name: str | None) -> tuple[str, str] | None:
     """'José García-López' -> ('jose', 'garcialopez'). Returns None if unusable."""
     if not name:
@@ -69,6 +70,7 @@ def normalize_name(name: str | None) -> tuple[str, str] | None:
     return first, last
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ people · contact discovery · email proof ▸ patterns.render(): Fill an address pattern ({first}, {last}, {f}, {l}) with a name and domain.
 def render(pattern: str, first: str, last: str, domain: str) -> str:
     """Fill an address pattern ({first}, {last}, {f}, {l}) with a name and domain."""
     local = (
@@ -80,6 +82,7 @@ def render(pattern: str, first: str, last: str, domain: str) -> str:
     return f"{local}@{domain}"
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ patterns.infer_pattern(): Given a real address and the person's name, work out the company's pattern.
 def infer_pattern(known_email: str, name: str | None) -> str | None:
     """Given a real address and the person's name, work out the company's pattern."""
     parsed = normalize_name(name)
@@ -99,6 +102,7 @@ def infer_pattern(known_email: str, name: str | None) -> str | None:
     return None
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ patterns.learn_from_contacts(): Vote on the pattern across every known (name, email) pair at this domain.
 def learn_from_contacts(people: list[dict], domain: str) -> str | None:
     """Vote on the pattern across every known (name, email) pair at this domain."""
     votes: dict[str, int] = {}
@@ -116,6 +120,7 @@ def learn_from_contacts(people: list[dict], domain: str) -> str | None:
     return best[0]
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ patterns.candidates(): Candidate addresses for a person, best guess first.
 def candidates(name: str, domain: str, pattern: str | None = None, *, limit: int = 4) -> list[str]:
     """Candidate addresses for a person, best guess first."""
     parsed = normalize_name(name)
@@ -154,6 +159,7 @@ MIN_SHARE = 0.5
 MIN_LEAD = 2
 
 
+# ZONULY ▸ decision · people search · referrers ▸ people · contact discovery · email proof ▸ class patterns.PatternVerdict
 @dataclass
 class PatternVerdict:
     pattern: str | None                 # the confirmed pattern, or None
@@ -167,6 +173,7 @@ class PatternVerdict:
     candidate: str | None = None        # the leading pattern even when not confirmed
     reason: str = ""
 
+    # ZONULY ▸ decision · people search · referrers ▸ people · contact discovery · email proof ▸ patterns.PatternVerdict.as_dict(): Return the pattern verdict as a plain dict (examples capped at six).
     def as_dict(self) -> dict:
         """Return the pattern verdict as a plain dict (examples capped at six)."""
         return {"pattern": self.pattern, "status": self.status, "agree": self.agree, "matched": self.matched,
@@ -174,6 +181,7 @@ class PatternVerdict:
                 "stated": self.stated, "candidate": self.candidate, "reason": self.reason}
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ patterns.infer_all(): Every pattern that renders this address from this name (usually one).
 def infer_all(known_email: str, name: str | None) -> list[str]:
     """Every pattern that renders this address from this name (usually one)."""
     parsed = normalize_name(name)
@@ -200,6 +208,7 @@ _STATED = [
 ]
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ patterns.stated_pattern(): 'firstname.lastname@acme.com' on a page → '{first}.{last}'. None when it is not a
 def stated_pattern(example_address: str | None) -> str | None:
     """'firstname.lastname@acme.com' on a page → '{first}.{last}'. None when it is not a
     format example (a real address, john.doe@, your.name@)."""
@@ -212,6 +221,7 @@ def stated_pattern(example_address: str | None) -> str | None:
     return None
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ people · contact discovery · email proof ▸ patterns.learn_with_evidence(): Vote over (name, address) pairs already confirmed on the company's domain.
 def learn_with_evidence(examples: list[tuple[str | None, str]], *, stated: tuple[str, str] | None = None,
                         min_agree: int = MIN_AGREE) -> PatternVerdict:
     """Vote over (name, address) pairs already confirmed on the company's domain.
@@ -266,11 +276,13 @@ def learn_with_evidence(examples: list[tuple[str | None, str]], *, stated: tuple
     return v
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ patterns.patternable(): A real first + last name the pattern can be rendered from.
 def patternable(name: str | None) -> bool:
     """A real first + last name the pattern can be rendered from."""
     return normalize_name(name) is not None
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ people · contact discovery · email proof ▸ patterns.confirmed(): The company's pattern when its evidence confirms it, else None — every writer that
 def confirmed(company) -> str | None:
     """The company's pattern when its evidence confirms it, else None — every writer that
     renders an address from a pattern reads this, never company.email_pattern directly."""

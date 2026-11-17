@@ -118,6 +118,7 @@ _GRADE_LABEL = {
 }
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · company atlas ▸ class network.Node
 @dataclass
 class Node:
     id: str
@@ -126,6 +127,7 @@ class Node:
     companies: set[int] = field(default_factory=set)
     note: str | None = None
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph · company atlas ▸ network.Node.as_dict(): Serialize an atlas node with its company count, ready/blocked split and crowded/stuck flags.
     def as_dict(self, *, ready: set[int], stage_total: int) -> dict:
         """Serialize an atlas node with its company count, ready/blocked split and crowded/stuck flags."""
         can_go = self.companies & ready
@@ -143,12 +145,14 @@ class Node:
         }
 
 
+# ZONULY ▸ filtering · scoring ▸ knowledge graph · company atlas ▸ network._families(): Classify a job title into role families; non-matching relevant titles count as Other engineering.
 def _families(title: str) -> list[str]:
     """Classify a job title into role families; non-matching relevant titles count as Other engineering."""
     hits = [name for name, pattern in _ROLE_FAMILIES if pattern.search(title or "")]
     return hits or (["Other engineering"] if norm.title_relevant(title or "") else [])
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · company atlas ▸ network._build_funnel(): The old atlas: pipeline stages as columns, buckets as nodes. Kept for reference —
 def _build_funnel(*, include_rejects: bool = False) -> dict:
     """The old atlas: pipeline stages as columns, buckets as nodes. Kept for reference —
     it answered "where does the pipeline pile up", which is a report, not a map."""
@@ -175,6 +179,7 @@ def _build_funnel(*, include_rejects: bool = False) -> dict:
 
     nodes: dict[str, Node] = {}
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph · company atlas ▸ network._build_funnel.put(): Add a company to the atlas node for (layer, key), creating the node on first use.
     def put(layer: str, key: str, label: str, cid: int, note: str | None = None) -> None:
         """Add a company to the atlas node for (layer, key), creating the node on first use."""
         nid = f"{layer}:{key}"
@@ -317,6 +322,7 @@ def _build_funnel(*, include_rejects: bool = False) -> dict:
 _MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
 
 
+# ZONULY ▸ linkedin scraping · scraping ▸ knowledge graph · company atlas ▸ network._clean_role(): A role as scraped from a LinkedIn page can arrive as markdown — "### Co-Founder -
 def _clean_role(role: str | None) -> str | None:
     """A role as scraped from a LinkedIn page can arrive as markdown — "### Co-Founder -
     [Scalio](https://…) (Current)". Show the words, not the markup."""
@@ -329,6 +335,7 @@ def _clean_role(role: str | None) -> str | None:
     return t[:160] + ("…" if len(t) > 160 else "")
 
 
+# ZONULY ▸ knowledge graph · company atlas ▸ knowledge graph · company atlas ▸ network._as_list(): A JSON list column, read defensively.
 def _as_list(raw: str | None) -> list[str]:
     """A JSON list column, read defensively.
 
@@ -347,6 +354,7 @@ def _as_list(raw: str | None) -> list[str]:
     return [str(val)]
 
 
+# ZONULY ▸ knowledge graph · company atlas ▸ knowledge graph · company atlas ▸ network._channels(): The ways in (jobhunter/ways_in.py). Never fails a company page: a missing table or a
 def _channels(company_id: int | None) -> list[dict]:
     """The ways in (jobhunter/ways_in.py). Never fails a company page: a missing table or a
     first run before the stage has ever run returns an empty list, not a 500."""
@@ -364,6 +372,7 @@ def _channels(company_id: int | None) -> list[dict]:
         return []
 
 
+# ZONULY ▸ knowledge graph · company atlas ▸ knowledge graph · company atlas ▸ network.company_detail(): Everything known about one company, for the detail page.
 def company_detail(company_id: int) -> dict:
     """Everything known about one company, for the detail page."""
     init_db()
@@ -511,6 +520,7 @@ def company_detail(company_id: int) -> dict:
 
 # ------------------------------------------------------------------ company-first
 
+# ZONULY ▸ knowledge graph · company atlas ▸ knowledge graph · company atlas ▸ network._missing(): Parse the company's `complete_missing` JSON list of missing fields; empty on bad data.
 def _missing(c: Company) -> list[str]:
     """Parse the company's `complete_missing` JSON list of missing fields; empty on bad data."""
     try:
@@ -520,6 +530,7 @@ def _missing(c: Company) -> list[str]:
     return val if isinstance(val, list) else []
 
 
+# ZONULY ▸ knowledge graph · company atlas ▸ knowledge graph · company atlas ▸ network.company_list(): One row per company — never one per role.
 def company_list(*, include_rejects: bool = False, include_overrated: bool = False,
                  include_incomplete: bool = False) -> dict:
     """One row per company — never one per role.
@@ -698,6 +709,7 @@ def company_list(*, include_rejects: bool = False, include_overrated: bool = Fal
     }
 
 
+# ZONULY ▸ enrichment ▸ knowledge graph · company atlas ▸ network.filling(): The companies not yet complete — what each is missing, best first: the ★ list, then
 def filling(*, limit: int = 2000) -> dict:
     """The companies not yet complete — what each is missing, best first: the ★ list, then
     the ones only a referrer short, then by priority (db.people_order)."""
@@ -734,6 +746,7 @@ def filling(*, limit: int = 2000) -> dict:
 _TRUST_ORDER = {"complete": 0, "partial": 1, "bare": 2}
 
 
+# ZONULY ▸ knowledge graph · company atlas ▸ knowledge graph · company atlas ▸ network._trust(): How much of this company have we actually read, and from where.
 def _trust(c: Company, jobs: list[Job]) -> tuple[dict, str]:
     """How much of this company have we actually read, and from where.
 
@@ -768,6 +781,7 @@ def _trust(c: Company, jobs: list[Job]) -> tuple[dict, str]:
 
 # ------------------------------------------------------------------ the market map
 
+# ZONULY ▸ people search · referrers ▸ knowledge graph · company atlas ▸ network._reachable(): Leads we could actually write to: an address, a referring role, and a domain that
 def _reachable(c: Company, people: list[Contact]) -> list[Contact]:
     """Leads we could actually write to: an address, a referring role, and a domain that
     does not contradict working there.
@@ -808,6 +822,7 @@ def _reachable(c: Company, people: list[Contact]) -> list[Contact]:
     return out
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph · company atlas ▸ network.build(): The atlas as a market map: industry-chain layers, segments as nodes.
 def build(*, include_rejects: bool = False, include_incomplete: bool = False) -> dict:
     """The atlas as a market map: industry-chain layers, segments as nodes.
 
@@ -909,6 +924,7 @@ def build(*, include_rejects: bool = False, include_incomplete: bool = False) ->
     edges = [{"source": a, "target": b, "weight": w} for (a, b), w in pair.items() if w >= 2]
 
     # ---- companies for the panel, best first
+    # ZONULY ▸ knowledge graph · company atlas ▸ knowledge graph · company atlas ▸ network.build.rank(): Sort key for the company panel: best bets, then near misses, tier, anywhere/fresher roles, leads.
     def rank(c: Company) -> tuple:
         """Sort key for the company panel: best bets, then near misses, tier, anywhere/fresher roles, leads."""
         f = facts[c.id]

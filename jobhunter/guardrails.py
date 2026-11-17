@@ -135,6 +135,7 @@ READY = ("verified-current", "likely-current")
 AFFILIATIONS = ("verified-current", "likely-current", "unconfirmed", "generic")
 
 
+# ZONULY ▸ validation · guardrails · decision ▸ filtering · validation ▸ class guardrails.Check: One validator's verdict. `value` is what to store (cleaned) when ok.
 @dataclass
 class Check:
     """One validator's verdict. `value` is what to store (cleaned) when ok."""
@@ -145,16 +146,19 @@ class Check:
     confidence: str = "medium"        # low | medium | high
     flags: list[str] = field(default_factory=list)
 
+    # ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails.Check.__bool__(): A Check is truthy when it passed.
     def __bool__(self) -> bool:
         """A Check is truthy when it passed."""
         return self.ok
 
 
+# ZONULY ▸ filtering · validation · guardrails ▸ filtering · validation ▸ guardrails._no(): Return a failed Check carrying the rejection reason and the offending value.
 def _no(reason: str, value: Any = None) -> Check:
     """Return a failed Check carrying the rejection reason and the offending value."""
     return Check(False, value, reason)
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails._alnum(): Return the text ASCII-folded, lower-cased, with only letters and digits kept.
 def _alnum(text: str | None) -> str:
     """Return the text ASCII-folded, lower-cased, with only letters and digits kept."""
     return re.sub(r"[^a-z0-9]", "", admission._ascii(text or "").lower())
@@ -162,6 +166,7 @@ def _alnum(text: str | None) -> str:
 
 # ------------------------------------------------------------------ "does this text name the company?"
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails.names_company(): The name (its key, or its first distinctive word) or the domain label appears in
 def names_company(text: str | None, name: str, domain: str | None = None) -> bool:
     """The name (its key, or its first distinctive word) or the domain label appears in
     the text. "RevenueCat" is named by "revenuecat.com" and by "RevenueCat, Inc.".
@@ -187,6 +192,7 @@ def names_company(text: str | None, name: str, domain: str | None = None) -> boo
 
 # ------------------------------------------------------------------ company name
 
+# ZONULY ▸ admission gate · filtering · dedup · validation · guardrails ▸ filtering · validation ▸ guardrails.company_name(): admission.clean_name, plus: not another company's name (`others` maps name_key ->
 def company_name(raw: str | None, *, source: str | None = None, headline: bool = False,
                  others: dict[str, int] | None = None, self_id: int | None = None) -> Check:
     """admission.clean_name, plus: not another company's name (`others` maps name_key ->
@@ -244,6 +250,7 @@ _EN_WORDS = {"the", "and", "of", "to", "for", "a", "an", "is", "with", "that", "
              "on", "your", "by", "from", "it", "their", "you", "are", "platform", "helps", "build"}
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails._english(): Return True when text reads as English: mostly ASCII letters and enough common English words.
 def _english(text: str) -> bool:
     """Return True when text reads as English: mostly ASCII letters and enough common English words."""
     letters = [ch for ch in text if ch.isalpha()]
@@ -255,6 +262,7 @@ def _english(text: str) -> bool:
     return True
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails._trim(): Cut text to `limit` chars, ending at a sentence end when one is far enough in, else at a word.
 def _trim(text: str, limit: int) -> str:
     """Cut text to `limit` chars, ending at a sentence end when one is far enough in, else at a word."""
     if len(text) <= limit:
@@ -264,6 +272,7 @@ def _trim(text: str, limit: int) -> str:
     return (cut[: end + 1] if end >= DESC_MIN else cut.rsplit(" ", 1)[0] + "…").strip()
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails.bot_wall(): Is this page text a bot wall / error shell rather than the company's own words?
 def bot_wall(text: str | None) -> bool:
     """Is this page text a bot wall / error shell rather than the company's own words?"""
     if not text:
@@ -271,6 +280,7 @@ def bot_wall(text: str | None) -> bool:
     return bool(BOT_WALL.search(text[:1500])) and len(text) < 4000
 
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.description(): A description of THIS company in its own or a reader's words.
 def description(text: str | None, *, name: str, domain: str | None = None, own_site: bool = False,
                 strict: bool = True, known: dict[str, int] | None = None, self_id: int | None = None) -> Check:
     """A description of THIS company in its own or a reader's words.
@@ -324,6 +334,7 @@ def description(text: str | None, *, name: str, domain: str | None = None, own_s
 
 # ------------------------------------------------------------------ funding
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.funding_stage(): Validate a funding stage against the stage vocabulary; the Check carries the normalised stage.
 def funding_stage(text: str | None) -> Check:
     """Validate a funding stage against the stage vocabulary; the Check carries the normalised stage."""
     stage = admission.normalize_stage(text)
@@ -338,6 +349,7 @@ _REVENUE = re.compile(r"\b(revenue|arr|run[- ]rate|gmv|turnover|sales of|booking
                       r"transaction volume|processed)\b", re.I)
 
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.funding_amount(): $M raised in one round: 0.05–5,000, and the quote reads as an equity raise.
 def funding_amount(amount: Any, evidence: str | None, *, labelled_debt: bool = False) -> Check:
     """$M raised in one round: 0.05–5,000, and the quote reads as an equity raise."""
     try:
@@ -356,6 +368,7 @@ def funding_amount(amount: Any, evidence: str | None, *, labelled_debt: bool = F
     return Check(True, round(amt, 3))
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails._parse_date(): (datetime, normalised text) for 'YYYY', 'YYYY-MM', 'YYYY-MM-DD', an ISO stamp or
 def _parse_date(raw: Any) -> tuple[datetime | None, str | None]:
     """(datetime, normalised text) for 'YYYY', 'YYYY-MM', 'YYYY-MM-DD', an ISO stamp or
     an RFC-822 feed date. (None, None) when unreadable."""
@@ -380,6 +393,7 @@ def _parse_date(raw: Any) -> tuple[datetime | None, str | None]:
         return None, None
 
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.funding_date(): Validate a funding date: readable, not in the future, not before 1990 or the founding year.
 def funding_date(raw: Any, *, founded_year: int | None = None, now: datetime | None = None) -> Check:
     """Validate a funding date: readable, not in the future, not before 1990 or the founding year."""
     dt, text = _parse_date(raw)
@@ -404,6 +418,7 @@ _INVESTOR_GENERIC = {"others", "and others", "angel investors", "angels", "exist
                      "strategic investors", "family offices", "unnamed investors", "n/a", "none"}
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails.investors(): A clean list of investor names from a JSON list, a list, or 'A, B and C'.
 def investors(value: Any) -> Check:
     """A clean list of investor names from a JSON list, a list, or 'A, B and C'."""
     items: list[str] = []
@@ -450,6 +465,7 @@ _VAL_CEILING = {"Pre-seed": 150, "Seed": 600, "Series A": 3000, "Series B": 1200
                 "Series D+": 1_000_000, "Public": 5_000_000, "Bootstrapped": 20000}
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails.valuation(): Validate a valuation in $M: a number, above the money raised, plausible for the stage.
 def valuation(val: Any, *, amount: float | None = None, total: float | None = None,
               stage: str | None = None, evidence: str | None = None, name: str | None = None,
               domain: str | None = None) -> Check:
@@ -478,6 +494,7 @@ _STRUCTURED = re.compile(r"^(?:YC \w+ \d{4} \(yc-oss|- (?:Total Funding|Annual R
                          r"\[list\]|hand-picked)", re.I)
 
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.funding_evidence(): The quote a round was read from must name the company — unless it is a structured
 def funding_evidence(evidence: str | None, *, name: str, domain: str | None = None,
                      channel: str | None = None) -> Check:
     """The quote a round was read from must name the company — unless it is a structured
@@ -513,6 +530,7 @@ _AGGREGATOR = re.compile(r"(^|\.)(linkedin\.com|indeed\.\w+|glassdoor\.\w+|naukr
                          r"cutshort\.io|internshala\.com|foundit\.in|monster\.\w+)$", re.I)
 
 
+# ZONULY ▸ scraping · validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.own_careers_url(): Their own domain, or a hosted ATS board — never an aggregator.
 def own_careers_url(url: str | None, *, domain: str | None = None) -> bool:
     """Their own domain, or a hosted ATS board — never an aggregator."""
     host = admission.host_of(url)
@@ -526,6 +544,7 @@ def own_careers_url(url: str | None, *, domain: str | None = None) -> bool:
     return False
 
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.careers_page(): Validate a careers page URL: a real URL, not a job aggregator; off-domain pages get low confidence.
 def careers_page(url: str | None, *, domain: str | None = None) -> Check:
     """Validate a careers page URL: a real URL, not a job aggregator; off-domain pages get low confidence."""
     if not url or not re.match(r"^https?://", str(url)):
@@ -538,6 +557,7 @@ def careers_page(url: str | None, *, domain: str | None = None) -> Check:
     return Check(True, url, confidence="high")
 
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.hiring(): 'verified' only with a role title read off their own careers page or ATS, with the
 def hiring(status: str | None, *, roles: list[str] | None = None, careers_url: str | None = None,
            checked_at: datetime | None = None, domain: str | None = None,
            now: datetime | None = None) -> Check:
@@ -579,6 +599,7 @@ _PLACEHOLDER_NAME = re.compile(
     r"your\s+name|full\s+name|first\s*name\s+surname)$", re.I)
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers · sign-in · auth ▸ filtering · validation ▸ guardrails.person_name(): A person's name — two or more words of letters (or a CJK name) — not a login.
 def person_name(raw: str | None) -> Check:
     """A person's name — two or more words of letters (or a CJK name) — not a login."""
     if not raw or not str(raw).strip():
@@ -616,6 +637,7 @@ def person_name(raw: str | None) -> Check:
 _FIRST_ONLY = re.compile(r"^[A-Z][a-z]{1,19}$")
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails.first_name_only(): One given name — capitalised letters, 2–20 long, not an inbox or team word.
 def first_name_only(raw: str | None) -> Check:
     """One given name — capitalised letters, 2–20 long, not an inbox or team word."""
     if not raw or not str(raw).strip():
@@ -631,6 +653,7 @@ def first_name_only(raw: str | None) -> Check:
     return Check(True, n, confidence="medium", flags=["first-only"])
 
 
+# ZONULY ▸ github scraping · validation · guardrails · people search · referrers ▸ filtering · validation ▸ guardrails.is_first_only(): A contact named by a first name only (from the address, or a one-word GitHub display
 def is_first_only(contact: Contact) -> bool:
     """A contact named by a first name only (from the address, or a one-word GitHub display
     name that the address or login agrees with) — a person, not a handle."""
@@ -672,6 +695,7 @@ ROLE_TOKENS = (GENERIC_LOCAL - {
       "datadeletion", "dataprotection", "datarequest", "datarequests", "dsar", "optout", "unsubscribe"}
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails._role_mailbox(): Return True when an address local part contains a role token (e.g. hr, jobs, info).
 def _role_mailbox(local: str) -> bool:
     """Return True when an address local part contains a role token (e.g. hr, jobs, info)."""
     return any(t in ROLE_TOKENS for t in re.split(r"[-._+0-9]+", local) if t)
@@ -706,6 +730,7 @@ FREEMAIL = {
 }
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ filtering · validation ▸ guardrails.email(): Syntax and noise; value = (address, kind) where kind is company | personal | generic | other.
 def email(raw: str | None, *, domain: str | None = None) -> Check:
     """Syntax and noise; value = (address, kind) where kind is company | personal | generic | other."""
     if not raw:
@@ -747,6 +772,7 @@ def email(raw: str | None, *, domain: str | None = None) -> Check:
 _EX = re.compile(r"\b(?:ex\s*[-–]\s*(?=\w)|ex\s+(?=\w)|(?:former(?:ly)?|previously|alum(?:ni|nus)?|past)\b)", re.I)
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ class guardrails.Affiliation
 @dataclass
 class Affiliation:
     label: str                 # verified-current | likely-current | unconfirmed | generic
@@ -754,6 +780,7 @@ class Affiliation:
     evidence: str
 
 
+# ZONULY ▸ validation · guardrails · scoring ▸ filtering · validation ▸ guardrails.employer_matches(): Their own words ("@acme", "Acme Inc.", "acme.com") name this company — and do
 def employer_matches(claim: str | None, name: str, domain: str | None = None) -> bool:
     """Their own words ("@acme", "Acme Inc.", "acme.com") name this company — and do
     not say they used to."""
@@ -762,6 +789,7 @@ def employer_matches(claim: str | None, name: str, domain: str | None = None) ->
     return names_company(claim.lstrip("@"), name, domain)
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ filtering · validation ▸ guardrails.affiliation(): Does the evidence place this person at this company NOW?
 def affiliation(*, company_name: str, domain: str | None = None, email_kind: str | None = None,
                 email_addr: str | None = None, org_member: bool = False,
                 employer_claim: str | None = None, last_commit_at: datetime | None = None,
@@ -823,6 +851,7 @@ def affiliation(*, company_name: str, domain: str | None = None, email_kind: str
     return Affiliation("unconfirmed", "none", "; ".join(why) or "no evidence they work there now")
 
 
+# ZONULY ▸ scraping · validation · guardrails · suppression · bounces ▸ filtering · validation ▸ guardrails.address_confidence(): The ADDRESS tier (will it bounce?): verified | pattern-guessed | scraped.
 def address_confidence(*, source: str, email_kind: str | None, last_commit_at: datetime | None = None,
                        smtp: str | None = None, profile_email: bool = False, now: datetime | None = None) -> str:
     """The ADDRESS tier (will it bounce?): verified | pattern-guessed | scraped.
@@ -846,6 +875,7 @@ def address_confidence(*, source: str, email_kind: str | None, last_commit_at: d
 
 # ------------------------------------------------------------------ writing: provenance and rejects
 
+# ZONULY ▸ filtering · validation · guardrails ▸ filtering · validation ▸ guardrails.reject(): Keep a refused value. Never raises past the caller's own transaction.
 def reject(session, *, field: str, value: Any, reason: str, company_id: int | None = None,
            contact_id: int | None = None, source: str | None = None, channel: str | None = None) -> None:
     """Keep a refused value. Never raises past the caller's own transaction."""
@@ -855,6 +885,7 @@ def reject(session, *, field: str, value: Any, reason: str, company_id: int | No
         reason=reason[:240], source=(source or "")[:400] or None, channel=channel))
 
 
+# ZONULY ▸ validation · guardrails · email verification ▸ filtering · validation ▸ guardrails._meta(): Return the company's per-field provenance metadata (field_meta JSON) as a dict; {} when bad.
 def _meta(company: Company) -> dict:
     """Return the company's per-field provenance metadata (field_meta JSON) as a dict; {} when bad."""
     try:
@@ -864,17 +895,20 @@ def _meta(company: Company) -> dict:
         return {}
 
 
+# ZONULY ▸ validation · guardrails · email verification ▸ filtering · validation ▸ guardrails.meta_of(): Return the provenance metadata recorded for one company field, or {}.
 def meta_of(company: Company, name: str) -> dict:
     """Return the provenance metadata recorded for one company field, or {}."""
     return _meta(company).get(name) or {}
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails._rank(): How well-evidenced a value is: confidence, then how many sources agree, then newer.
 def _rank(entry: dict) -> tuple:
     """How well-evidenced a value is: confidence, then how many sources agree, then newer."""
     conf = {"high": 2, "medium": 1, "low": 0}.get(entry.get("confidence") or "medium", 1)
     return (conf, int(entry.get("sources") or 1), str(entry.get("at") or ""))
 
 
+# ZONULY ▸ validation · guardrails · email verification ▸ filtering · validation ▸ guardrails.record(): Note a written value's provenance on the row and in extraction_write.
 def record(session, company: Company, name: str, value: Any, *, evidence: str | None = None,
            source: str | None = None, channel: str | None = None, confidence: str = "medium",
            flags: list[str] | None = None, contact_id: int | None = None) -> None:
@@ -891,6 +925,7 @@ def record(session, company: Company, name: str, value: Any, *, evidence: str | 
         source=(source or "")[:400] or None, channel=channel, confidence=confidence))
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails._agree(): Return True when two values agree: numbers within 10 percent, else equal ignoring case and space.
 def _agree(a: Any, b: Any) -> bool:
     """Return True when two values agree: numbers within 10 percent, else equal ignoring case and space."""
     if a is None or b is None:
@@ -900,6 +935,7 @@ def _agree(a: Any, b: Any) -> bool:
     return str(a).strip().lower() == str(b).strip().lower()
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails.put(): Write one validated value with cross-source reconciliation.
 def put(session, company: Company, name: str, value: Any, *, attr: str | None = None,
         evidence: str | None = None, source: str | None = None, channel: str | None = None,
         confidence: str = "medium", flags: list[str] | None = None, replace: bool = False) -> str:
@@ -946,6 +982,7 @@ def put(session, company: Company, name: str, value: Any, *, attr: str | None = 
 
 # ------------------------------------------------------------------ field writers the scrapers call
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.set_description(): Validate and write a description. True when it was written (or agreed).
 def set_description(session, company: Company, text: str | None, *, source: str | None = None,
                     channel: str | None = None, own_site: bool = False, strict: bool = True,
                     replace: bool = False) -> bool:
@@ -972,6 +1009,7 @@ def set_description(session, company: Company, text: str | None, *, source: str 
     return out in ("written", "replaced")
 
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.set_funding(): Validate a round {stage, amount_usd_m, total_usd_m, announced, investors,
 def set_funding(session, company: Company, fund: dict, *, source: str | None = None,
                 channel: str | None = None, fill_only: bool = False) -> dict:
     """Validate a round {stage, amount_usd_m, total_usd_m, announced, investors,
@@ -992,6 +1030,7 @@ def set_funding(session, company: Company, fund: dict, *, source: str | None = N
         return out
     conf = ev.confidence
 
+    # ZONULY ▸ filtering · validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.set_funding.bad(): Record a rejected funding field as an extraction reject and note it in the result.
     def bad(name: str, value: Any, reason: str) -> None:
         """Record a rejected funding field as an extraction reject and note it in the result."""
         reject(session, company_id=company.id, field=name, value=value, reason=reason, source=source, channel=channel)
@@ -1025,6 +1064,7 @@ def set_funding(session, company: Company, fund: dict, *, source: str | None = N
         else:
             bad("funding_amount_usd_m", fund["amount_usd_m"], a.reason)
 
+    # ZONULY ▸ filtering · validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.set_funding.write(): Write one funding field through put() unless fill-only rules keep the value on record.
     def write(name: str, value: Any, attr: str | None = None, *, round_field: bool = False) -> None:
         """Write one funding field through put() unless fill-only rules keep the value on record."""
         if value is None:
@@ -1077,6 +1117,7 @@ def set_funding(session, company: Company, fund: dict, *, source: str | None = N
     return out
 
 
+# ZONULY ▸ filtering · validation · guardrails · enrichment ▸ filtering · validation ▸ guardrails.set_valuation(): Validate and write a company's valuation (enrichment); a failure is logged as an extraction reject.
 def set_valuation(session, company: Company, value: Any, evidence: str | None, *, source: str | None = None,
                   channel: str | None = None) -> bool:
     """Validate and write a company's valuation (enrichment); a failure is logged as an extraction reject.
@@ -1096,6 +1137,7 @@ def set_valuation(session, company: Company, value: Any, evidence: str | None, *
     return r in ("written", "replaced", "agreed")
 
 
+# ZONULY ▸ validation · guardrails · decision ▸ filtering · validation ▸ guardrails.set_hiring(): Write a hiring verdict through the hiring validator. Returns the status stored.
 def set_hiring(session, company: Company, status: str, *, roles: list[str] | None, careers_url: str | None,
                evidence: str | None, source: str | None = None, channel: str | None = None) -> str:
     """Write a hiring verdict through the hiring validator. Returns the status stored."""
@@ -1125,6 +1167,7 @@ def set_hiring(session, company: Company, status: str, *, roles: list[str] | Non
 _BASED = r"(?:{c})[\s-]*(?:based|headquartered|hq)|(?:based|headquartered|hq|offices?|located|office)\s+(?:out\s+)?(?:in|at)\s+(?:{c})"
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails.india_city(): Does this quote place the company in Bengaluru or Hyderabad? Only those two count
 def india_city(text: str | None, *, name: str, domain: str | None = None, own_page: bool = False) -> Check:
     """Does this quote place the company in Bengaluru or Hyderabad? Only those two count
     (targeting.india). The quote must name the company unless it was read off the
@@ -1147,6 +1190,7 @@ def india_city(text: str | None, *, name: str, domain: str | None = None, own_pa
     return Check(True, city, confidence="high" if based else "medium")
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails.set_city(): Write company.city from a quote that places it in Bengaluru / Hyderabad. A row
 def set_city(session, company: Company, text: str | None, *, source: str | None = None,
              channel: str | None = None, own_page: bool = False) -> str | None:
     """Write company.city from a quote that places it in Bengaluru / Hyderabad. A row
@@ -1166,6 +1210,7 @@ def set_city(session, company: Company, text: str | None, *, source: str | None 
 
 # ------------------------------------------------------------------ contacts
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ filtering · validation ▸ guardrails.vet_contact(): The guarded fields for a new Contact, or None when nothing usable is left (no
 def vet_contact(session, *, company: Company, name: str | None, email_addr: str | None, source: str,
                 channel: str | None = None, url: str | None = None, handle: str | None = None,
                 name_source: str | None = None, org_member: bool = False, employer_claim: str | None = None,
@@ -1221,6 +1266,7 @@ def vet_contact(session, *, company: Company, name: str | None, email_addr: str 
     return out
 
 
+# ZONULY ▸ validation · guardrails · suppression · bounces ▸ filtering · validation ▸ guardrails._dead(): Has this address bounced (outreach/suppress.mark_bounced)?
 def _dead(session, addr: str) -> bool:
     """Has this address bounced (outreach/suppress.mark_bounced)?"""
     from sqlmodel import col, select
@@ -1235,6 +1281,7 @@ _GH_LOGIN = re.compile(r"github\.com/([A-Za-z0-9][A-Za-z0-9\-]{0,38})/?$")
 _PUBLISHED_AT = re.compile(r"address published at (\S+)")
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ filtering · validation ▸ guardrails.relabel_contact(): The guarded labels for a stored contact, from the evidence already on the row.
 def relabel_contact(p: Contact, company: Company | None) -> dict:
     """The guarded labels for a stored contact, from the evidence already on the row."""
     out: dict = {}
@@ -1301,6 +1348,7 @@ def relabel_contact(p: Contact, company: Company | None) -> dict:
     return out
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ filtering · validation ▸ guardrails.is_ready(): May this person be offered as a referrer? Confirmed current, not an inbox.
 def is_ready(contact: Contact) -> bool:
     """May this person be offered as a referrer? Confirmed current, not an inbox.
 
@@ -1331,6 +1379,7 @@ PARTS = ("description", "funding_stage", "funding_amount", "funding_date", "inve
          "hiring_verified", "careers_url", "referrers", "referrer_email")
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails.completeness(): (0–100, the parts still missing). Every part weighs the same.
 def completeness(c: Company, *, referrers: int = 0, referrers_with_email: int = 0) -> tuple[int, list[str]]:
     """(0–100, the parts still missing). Every part weighs the same."""
     have = {
@@ -1349,6 +1398,7 @@ def completeness(c: Company, *, referrers: int = 0, referrers_with_email: int = 
     return round(100 * (len(PARTS) - len(missing)) / len(PARTS)), missing
 
 
+# ZONULY ▸ validation · guardrails · decision · people search · referrers ▸ filtering · validation ▸ guardrails._can_refer_classes(): Return the people role classes that can refer, from config targeting.people.roles, or…
 def _can_refer_classes() -> list[str]:
     """Return the people role classes that can refer, from config targeting.people.roles, or a default set."""
     roles = ((CONFIG.get("targeting") or {}).get("people") or {}).get("roles") or []
@@ -1356,6 +1406,7 @@ def _can_refer_classes() -> list[str]:
     return keys or ["founder", "senior_engineer", "engineer", "eng_manager", "tech_recruiter", "recruiter"]
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ filtering · validation ▸ guardrails.referrer_counts(): company_id -> (confirmed-current referrers, of them with an address).
 def referrer_counts(session) -> dict[int, tuple[int, int]]:
     """company_id -> (confirmed-current referrers, of them with an address)."""
     from sqlmodel import col, func, select
@@ -1373,6 +1424,7 @@ def referrer_counts(session) -> dict[int, tuple[int, int]]:
     return {k: (v[0], v[1]) for k, v in out.items()}
 
 
+# ZONULY ▸ validation · guardrails · review gate ▸ filtering · validation ▸ guardrails.refresh_completeness(): Recompute completeness for every active company. Cheap: one pass, one aggregate.
 def refresh_completeness(session=None) -> dict:
     """Recompute completeness for every active company. Cheap: one pass, one aggregate."""
     from sqlmodel import col, select
@@ -1411,6 +1463,7 @@ def refresh_completeness(session=None) -> dict:
 SHOWN_PARTS = ("website", "description", "hiring", "referrer_email")
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails._json_obj(): Parse JSON text and return it when it has the default's type, else return the default.
 def _json_obj(raw: str | None, default):
     """Parse JSON text and return it when it has the default's type, else return the default."""
     try:
@@ -1420,6 +1473,7 @@ def _json_obj(raw: str | None, default):
     return val if isinstance(val, type(default)) else default
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails.complete_bar(): (complete, the parts missing) for one company.
 def complete_bar(c: Company, *, has_roles: bool, ready_with_email: int) -> tuple[bool, list[str]]:
     """(complete, the parts missing) for one company."""
     failed = _json_obj(c.recheck_failed, {})
@@ -1434,6 +1488,7 @@ def complete_bar(c: Company, *, has_roles: bool, ready_with_email: int) -> tuple
     return not missing, missing
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ filtering · validation ▸ guardrails.ready_counts(): company_id -> (ready referrers, of them with an address) — is_ready, any role.
 def ready_counts(session) -> dict[int, tuple[int, int]]:
     """company_id -> (ready referrers, of them with an address) — is_ready, any role."""
     from sqlmodel import col, select
@@ -1448,6 +1503,7 @@ def ready_counts(session) -> dict[int, tuple[int, int]]:
     return {k: (v[0], v[1]) for k, v in out.items()}
 
 
+# ZONULY ▸ validation · guardrails · ai model call · llm ▸ filtering · validation ▸ guardrails.refresh_complete(): Recompute company.complete / complete_missing for every active company.
 def refresh_complete(session) -> dict:
     """Recompute company.complete / complete_missing for every active company."""
     from sqlmodel import col, select
@@ -1477,6 +1533,7 @@ def refresh_complete(session) -> dict:
 
 # ------------------------------------------------------------------ referrer addresses and re-checks
 
+# ZONULY ▸ validation · guardrails · decision ▸ filtering · validation ▸ guardrails.set_email_pattern(): Store a learned pattern with its evidence. Only a `confirmed` verdict sets
 def set_email_pattern(session, company: Company, verdict: dict, *, channel: str = "pattern-learn") -> str:
     """Store a learned pattern with its evidence. Only a `confirmed` verdict sets
     company.email_pattern; a pattern on record that the evidence no longer confirms is
@@ -1502,6 +1559,7 @@ def set_email_pattern(session, company: Company, verdict: dict, *, channel: str 
     return "unchanged"
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ filtering · validation ▸ guardrails.set_pattern_address(): Give a ready referrer with a real name and no address its pattern address —
 def set_pattern_address(session, contact: Contact, company: Company, address: str, *,
                         evidence: str, mx_ok: bool) -> bool:
     """Give a ready referrer with a real name and no address its pattern address —
@@ -1528,6 +1586,7 @@ def set_pattern_address(session, contact: Contact, company: Company, address: st
     return True
 
 
+# ZONULY ▸ validation · guardrails ▸ filtering · validation ▸ guardrails.downgrade_affiliation(): A re-check that no longer places them there: unconfirmed, with the reason kept.
 def downgrade_affiliation(session, contact: Contact, *, reason: str, source: str | None = None,
                           channel: str = "reverify") -> None:
     """A re-check that no longer places them there: unconfirmed, with the reason kept."""
@@ -1539,6 +1598,7 @@ def downgrade_affiliation(session, contact: Contact, *, reason: str, source: str
     session.add(contact)
 
 
+# ZONULY ▸ filtering · validation · guardrails · decision ▸ filtering · validation ▸ guardrails.set_recheck(): Store the rolling re-check's verdict: the parts that failed (each kept as a reject
 def set_recheck(session, company: Company, failed: dict[str, str], *, channel: str = "revalidate") -> dict:
     """Store the rolling re-check's verdict: the parts that failed (each kept as a reject
     with its reason) and validated_at. A failed part drops the company out of complete
@@ -1554,6 +1614,7 @@ def set_recheck(session, company: Company, failed: dict[str, str], *, channel: s
     return {"newly_failed": sorted(set(failed) - set(before)), "recovered": sorted(set(before) - set(failed))}
 
 
+# ZONULY ▸ validation · guardrails · hiring verification ▸ filtering · validation ▸ guardrails.sweep_stale_hiring(): 'verified' older than HIRING_STALE_DAYS → needs_recheck (hiring_verify re-reads it).
 def sweep_stale_hiring(session) -> int:
     """'verified' older than HIRING_STALE_DAYS → needs_recheck (hiring_verify re-reads it)."""
     from sqlmodel import col, select
@@ -1572,6 +1633,7 @@ def sweep_stale_hiring(session) -> int:
     return n
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ filtering · validation ▸ guardrails.label_unlabelled(): Any contact a writer saved without the guardrails' labels (an old process, a manual
 def label_unlabelled(session, limit: int = 2000) -> int:
     """Any contact a writer saved without the guardrails' labels (an old process, a manual
     insert) gets them from the evidence on its row — never left unjudged."""
@@ -1595,6 +1657,7 @@ def label_unlabelled(session, limit: int = 2000) -> int:
     return len(rows)
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers · scheduler · tick ▸ filtering · validation ▸ guardrails.sweep(): The guard step each tick runs first: stale hiring downgraded, unlabelled contacts
 def sweep() -> dict:
     """The guard step each tick runs first: stale hiring downgraded, unlabelled contacts
     labelled, completeness fresh — so every fill queue orders by what is missing now."""
