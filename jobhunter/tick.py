@@ -165,6 +165,7 @@ HYGIENE_HOURLY = bool(_T.get("company_hygiene", False))
 
 # ------------------------------------------------------------------ bookkeeping
 
+# ZONULY ▸ scoring · scheduler · tick ▸ orchestration · scheduler ▸ tick._record(): Store a scheduler tick's summary as setting tick:last:<kind>, trimmed to fit 4000 characters.
 def _record(kind: str, summary: dict) -> None:
     """Store a scheduler tick's summary as setting tick:last:<kind>, trimmed to fit 4000 characters."""
     from jobhunter.db import get_session, set_setting
@@ -183,6 +184,7 @@ def _record(kind: str, summary: dict) -> None:
         set_setting(s, f"tick:last:{kind}", raw)
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick.last(): Return the last recorded summary of a scheduler tick kind, or None.
 def last(kind: str) -> dict | None:
     """Return the last recorded summary of a scheduler tick kind, or None."""
     from jobhunter.db import get_session, get_setting
@@ -195,12 +197,15 @@ def last(kind: str) -> dict | None:
         return None
 
 
+# ZONULY ▸ scheduler · tick · lock ▸ orchestration · scheduler ▸ class tick._Lock
 class _Lock:
+    # ZONULY ▸ scheduler · tick · lock ▸ orchestration · scheduler ▸ tick._Lock.__init__(): Set up a non-blocking file lock at the given path, named for error messages.
     def __init__(self, path: Path = LOCK, what: str = "tick"):
         """Set up a non-blocking file lock at the given path, named for error messages."""
         self.path = path
         self.what = what
 
+    # ZONULY ▸ scheduler · tick · lock ▸ orchestration · scheduler ▸ tick._Lock.__enter__(): Take the exclusive file lock or raise RuntimeError if another run holds it; writes pid and time.
     def __enter__(self):
         """Take the exclusive file lock or raise RuntimeError if another run holds it; writes pid and time."""
         self.path.parent.mkdir(exist_ok=True)
@@ -216,6 +221,7 @@ class _Lock:
         self.fh.flush()
         return self
 
+    # ZONULY ▸ scheduler · tick · lock ▸ orchestration · scheduler ▸ tick._Lock.__exit__(): Release the file lock and close the lock file.
     def __exit__(self, *a):
         """Release the file lock and close the lock file."""
         fcntl.flock(self.fh, fcntl.LOCK_UN)
@@ -224,6 +230,7 @@ class _Lock:
 
 # ------------------------------------------------------------------ the slices
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick._step(): Run one scheduler tick step, storing its result (or error) and duration in the summary.
 def _step(summary: dict, name: str, fn, *args, **kw) -> None:
     """Run one scheduler tick step, storing its result (or error) and duration in the summary.
     A failing step is logged and recorded, never raised, so the tick keeps going."""
@@ -240,6 +247,7 @@ def _step(summary: dict, name: str, fn, *args, **kw) -> None:
 FULL_SCRAPE_KEY = "tick.full_scrape_day"
 
 
+# ZONULY ▸ scraping · scheduler · tick ▸ orchestration · scheduler ▸ tick.full_scrape_if_due(): The once-a-day refresh of every known board, owned by the tick rather than by the
 def full_scrape_if_due() -> dict:
     """The once-a-day refresh of every known board, owned by the tick rather than by the
     API's 08:00 cron.
@@ -270,6 +278,7 @@ def full_scrape_if_due() -> dict:
     return out
 
 
+# ZONULY ▸ email sending · replies · follow-up · scheduler · tick ▸ orchestration · scheduler ▸ tick.poll_replies(): Read Gmail for replies — hourly, so replies land even when the API (and its
 def poll_replies() -> dict:
     """Read Gmail for replies — hourly, so replies land even when the API (and its
     APScheduler) is not running. A no-op with an error dict when Gmail is not configured;
@@ -303,6 +312,7 @@ def poll_replies() -> dict:
     return out
 
 
+# ZONULY ▸ email verification · email sending · scheduler · tick ▸ orchestration · scheduler ▸ tick.run_send(): The send agent's run (launchd every SEND_INTERVAL_S): send the approved mail today's
 def run_send() -> dict:
     """The send agent's run (launchd every SEND_INTERVAL_S): send the approved mail today's
     warm-up slots say is due — one or two, minutes apart — and nothing else. Its own lock,
@@ -325,6 +335,7 @@ PLAN_NOTICE_HOUR = int((CONFIG.get("outreach") or {}).get("plan_notice_hour", 20
 PLAN_NOTICE_FILE = ROOT / "data" / "plan-notice.txt"
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick.plan_notice(): Once an evening (outreach.plan_notice_hour): a Mac notification saying what goes out on
 def plan_notice() -> dict | None:
     """Once an evening (outreach.plan_notice_hour): a Mac notification saying what goes out on
     the next send day and how many more approvals would fill it, so the next day is settled
@@ -346,6 +357,7 @@ def plan_notice() -> dict | None:
     return {"day": p["day"], "planned": planned, "open_slots": open_, "drafts_sendable": p["drafts_sendable"]}
 
 
+# ZONULY ▸ dedup · review gate · scheduler · tick ▸ orchestration · scheduler ▸ tick.hygiene_step(): The dedup gate, hourly: name keys for new rows always; the full merge/quarantine
 def hygiene_step() -> dict:
     """The dedup gate, hourly: name keys for new rows always; the full merge/quarantine
     pass only once `tick.company_hygiene` is switched on."""
@@ -358,6 +370,7 @@ def hygiene_step() -> dict:
     return out
 
 
+# ZONULY ▸ validation · guardrails · ai model call · llm · scheduler · tick ▸ orchestration · scheduler ▸ tick._complete(): Tick step: refresh each company's completeness flag via guardrails.
 def _complete() -> dict:
     """Tick step: refresh each company's completeness flag via guardrails."""
     from jobhunter import guardrails
@@ -368,6 +381,7 @@ def _complete() -> dict:
     return {k: v for k, v in out.items() if k != "became_ids"}
 
 
+# ZONULY ▸ scraping · scheduler · tick ▸ orchestration · scheduler ▸ tick._mark_empty(): Tick step: mark companies with nothing left to scrape as empty (hygiene).
 def _mark_empty() -> dict:
     """Tick step: mark companies with nothing left to scrape as empty (hygiene)."""
     from jobhunter import hygiene
@@ -375,6 +389,7 @@ def _mark_empty() -> dict:
     return hygiene.mark_empty()
 
 
+# ZONULY ▸ validation · guardrails · scheduler · tick ▸ orchestration · scheduler ▸ tick._guard(): Tick step: run the guardrails sweep over stored data.
 def _guard() -> dict:
     """Tick step: run the guardrails sweep over stored data."""
     from jobhunter import guardrails
@@ -382,6 +397,7 @@ def _guard() -> dict:
     return guardrails.sweep()
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick._work(): How many companies a step actually took on, from its summary.
 def _work(v) -> int:
     """How many companies a step actually took on, from its summary."""
     if isinstance(v, int):
@@ -394,6 +410,7 @@ def _work(v) -> int:
     return 0
 
 
+# ZONULY ▸ enrichment · scheduler · tick ▸ orchestration · scheduler ▸ tick._saturated(): True when this tick's fill steps found (almost) nothing left to do: every gap is in
 def _saturated(s: dict) -> bool:
     """True when this tick's fill steps found (almost) nothing left to do: every gap is in
     backoff or filled, so the hour is better spent finding new companies."""
@@ -404,6 +421,7 @@ def _saturated(s: dict) -> bool:
 CURSOR_KEY = "tick:company_cursor"
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick._company_steps(): The company work, as (name, callable) — run in rotation inside the companies share.
 def _company_steps() -> list[tuple[str, object]]:
     """The company work, as (name, callable) — run in rotation inside the companies share."""
     from jobhunter import enrich, harvest, hiring_verify
@@ -416,6 +434,7 @@ def _company_steps() -> list[tuple[str, object]]:
         steps.append(("facts_keyless", lambda: _count(enrich.facts_pending(limit=L["facts_keyless"], keyless=True))))
     steps.append(("boards", lambda: {"probe": harvest.probe_ats(), "roles": harvest.scrape_roles()}))
     if L["careers"]:
+        # ZONULY ▸ scraping · enrichment · scheduler · tick ▸ orchestration · scheduler ▸ tick._company_steps._careers(): Tick step: scrape company careers pages for roles (summary without per-line output).
         def _careers():
             """Tick step: scrape company careers pages for roles (summary without per-line output)."""
             from jobhunter import careers
@@ -433,6 +452,7 @@ def _company_steps() -> list[tuple[str, object]]:
         steps.append(("yc", lambda: {"yc": _as(harvest.admit_yc()), "probe": harvest.probe_ats(),
                                      "roles": harvest.scrape_roles()}))
     if L["india"]:
+        # ZONULY ▸ data ingestion · scheduler · tick ▸ orchestration · scheduler ▸ tick._company_steps._india(): Tick step: discover new India companies (summary without the new ids).
         def _india():
             """Tick step: discover new India companies (summary without the new ids)."""
             from jobhunter import india
@@ -440,6 +460,7 @@ def _company_steps() -> list[tuple[str, object]]:
             return {k: v for k, v in india.discover(L["india"]).items() if k != "new_ids"}
         steps.append(("india_discovery", _india))
 
+    # ZONULY ▸ scraping · scheduler · tick ▸ orchestration · scheduler ▸ tick._company_steps._india_jobs(): Tick step: scrape India job boards for roles and companies (trimmed summary).
     def _india_jobs():
         """Tick step: scrape India job boards for roles and companies (trimmed summary)."""
         from jobhunter import india_jobs
@@ -449,6 +470,7 @@ def _company_steps() -> list[tuple[str, object]]:
     return steps
 
 
+# ZONULY ▸ data ingestion · people search · referrers · scheduler · tick ▸ orchestration · scheduler ▸ tick._ref(): Import and return the referrals module lazily.
 def _ref():
     """Import and return the referrals module lazily."""
     from jobhunter import referrals
@@ -456,11 +478,13 @@ def _ref():
     return referrals
 
 
+# ZONULY ▸ filtering · scheduler · tick ▸ orchestration · scheduler ▸ tick._as(): Make a step result storable: keep dict/int/str, else use its as_dict() when it has one.
 def _as(v):
     """Make a step result storable: keep dict/int/str, else use its as_dict() when it has one."""
     return v if isinstance(v, (dict, int, str)) else (v.as_dict() if hasattr(v, "as_dict") else v)
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick._cursor(): Read the rotating company-step cursor from settings, wrapped to n; 0 on any error.
 def _cursor(n: int) -> int:
     """Read the rotating company-step cursor from settings, wrapped to n; 0 on any error."""
     from jobhunter.db import get_session, get_setting
@@ -472,6 +496,7 @@ def _cursor(n: int) -> int:
         return 0
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick._set_cursor(): Save the rotating company-step cursor to settings.
 def _set_cursor(i: int) -> None:
     """Save the rotating company-step cursor to settings."""
     from jobhunter.db import get_session, set_setting
@@ -483,6 +508,7 @@ def _set_cursor(i: int) -> None:
 RECOMPUTE_KEY = "tick:recompute_at"
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick._recompute_due(): True when the periodic recompute is due (never run, or RECOMPUTE_MINUTES have passed).
 def _recompute_due() -> bool:
     """True when the periodic recompute is due (never run, or RECOMPUTE_MINUTES have passed)."""
     from jobhunter.db import get_session, get_setting
@@ -495,6 +521,7 @@ def _recompute_due() -> bool:
         return True
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick._recomputed(): Stamp the time of the last recompute in settings.
 def _recomputed() -> None:
     """Stamp the time of the last recompute in settings."""
     from jobhunter.db import get_session, set_setting
@@ -503,6 +530,7 @@ def _recomputed() -> None:
         set_setting(s, RECOMPUTE_KEY, datetime.now().isoformat(timespec="seconds"))
 
 
+# ZONULY ▸ people search · referrers · scheduler · tick ▸ orchestration · scheduler ▸ tick._addresses_step(): Address resolution right after the people step: the pattern learned from every
 def _addresses_step(touched: list[int], limit: int = 400) -> dict:
     """Address resolution right after the people step: the pattern learned from every
     company's own confirmed addresses, applied to the ready referrers without one — the
@@ -519,6 +547,7 @@ def _addresses_step(touched: list[int], limit: int = 400) -> dict:
     return {k: v for k, v in out.items() if k not in ("samples", "skipped")}
 
 
+# ZONULY ▸ replies · follow-up · scheduler · tick ▸ orchestration · scheduler ▸ tick.run_free(): Keyless work, LEADS FIRST (2026-10-14): replies and follow-ups, the guard, then the
 def run_free(budget_s: int | None = None) -> dict:
     """Keyless work, LEADS FIRST (2026-10-14): replies and follow-ups, the guard, then the
     people step + address resolution + re-verification inside `share.leads` of the budget,
@@ -554,6 +583,7 @@ def run_free(budget_s: int | None = None) -> dict:
     # confirmed pattern. They run in their own thread while the fill and the company steps run
     # here: different sites, so neither waits on the other (2026-10-29: one after the other, a
     # tick took ~40 min)
+    # ZONULY ▸ apify scraping · apify people search · people search · referrers · email verification · hunter.io · scheduler · tick ▸ orchestration · scheduler ▸ tick.run_free._leads(): Run the tick's leads share: people se…
     def _leads() -> None:
         """Run the tick's leads share: people search, address finding and email proof, Hunter, Apify.
         Then re-verifies referrers and checks affiliation while time remains; yields to the referral job."""
@@ -657,6 +687,7 @@ def run_free(budget_s: int | None = None) -> dict:
 PACE_KEY = "tick:paid_used"
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick.paced(): How much of a daily cap may be spent now: by hour h, at most cap × (h+1)/24 in
 def paced(cap: int, used: int, *, hour: int | None = None) -> int:
     """How much of a daily cap may be spent now: by hour h, at most cap × (h+1)/24 in
     total. A tick that missed hours catches up; nothing ever exceeds the daily cap."""
@@ -666,6 +697,7 @@ def paced(cap: int, used: int, *, hour: int | None = None) -> int:
     return max(0, min(cap, math.ceil(cap * (h + 1) / 24)) - used)
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick._used_today(): Return today's paid-step usage counts from settings, reset when the day has changed.
 def _used_today() -> dict:
     """Return today's paid-step usage counts from settings, reset when the day has changed."""
     from jobhunter.db import get_session, get_setting
@@ -680,6 +712,7 @@ def _used_today() -> dict:
     return data if data.get("day") == today else {"day": today}
 
 
+# ZONULY ▸ budget · cost · scheduler · tick ▸ orchestration · scheduler ▸ tick._spend(): Add n to today's paid-step usage count for a key in settings.
 def _spend(key: str, n: int) -> None:
     """Add n to today's paid-step usage count for a key in settings."""
     from jobhunter.db import get_session, set_setting
@@ -690,6 +723,7 @@ def _spend(key: str, n: int) -> None:
         set_setting(s, PACE_KEY, json.dumps(data))
 
 
+# ZONULY ▸ budget · cost · scheduler · tick ▸ orchestration · scheduler ▸ tick.run_paid(): The capped channels, each reading its budget first and spending only its paced share.
 def run_paid(hourly: bool = False) -> dict:
     """The capped channels, each reading its budget first and spending only its paced share.
 
@@ -753,6 +787,7 @@ def run_paid(hourly: bool = False) -> dict:
     return s
 
 
+# ZONULY ▸ enrichment · scheduler · tick ▸ orchestration · scheduler ▸ tick._count(): Summarise enrichment results: companies, described, story, funding and error counts.
 def _count(res: list[dict]) -> dict:
     """Summarise enrichment results: companies, described, story, funding and error counts."""
     return {"companies": len(res), "described": sum(1 for r in res if r.get("description")),
@@ -760,6 +795,7 @@ def _count(res: list[dict]) -> dict:
             "errors": sum(1 for r in res if r.get("error"))}
 
 
+# ZONULY ▸ scheduler · tick · knowledge graph ▸ orchestration · scheduler ▸ tick._kg_sync(): Tick step: sync the knowledge graph data layer and rewrite BRIEF.md.
 def _kg_sync() -> dict:
     """Tick step: sync the knowledge graph data layer and rewrite BRIEF.md."""
     from jobhunter.kg import brief, sync
@@ -769,6 +805,7 @@ def _kg_sync() -> dict:
     return {"synced": True, **({k: v for k, v in out.items() if isinstance(v, int)} if isinstance(out, dict) else {})}
 
 
+# ZONULY ▸ people search · referrers · scheduler · tick ▸ orchestration · scheduler ▸ tick.run_referrals(): The referral job's entry point (launchd com.zonuly.referrals and `referrals run`):
 def run_referrals(**kw) -> dict:
     """The referral job's entry point (launchd com.zonuly.referrals and `referrals run`):
     its own lock, data/referrals.lock — parallel to the tick, never overlapping itself."""
@@ -786,6 +823,7 @@ def run_referrals(**kw) -> dict:
     return summary
 
 
+# ZONULY ▸ decision · scheduler · tick ▸ orchestration · scheduler ▸ tick.run_shortlist(): The shortlist job (launchd com.zonuly.shortlist): the next shortlisted company, completely.
 def run_shortlist() -> dict:
     """The shortlist job (launchd com.zonuly.shortlist): the next shortlisted company, completely."""
     LOGS.mkdir(exist_ok=True)
@@ -802,6 +840,7 @@ def run_shortlist() -> dict:
     return summary
 
 
+# ZONULY ▸ apify scraping · apify people search · people search · referrers · scheduler · tick ▸ orchestration · scheduler ▸ tick.run_apify(): The Apify job (launchd com.zonuly.apify): People tabs for the next companies…
 def run_apify() -> dict:
     """The Apify job (launchd com.zonuly.apify): People tabs for the next companies in
     referrals.apify_queue, inside the daily cap, then the complete bar refreshed."""
@@ -823,10 +862,12 @@ def run_apify() -> dict:
     return summary
 
 
+# ZONULY ▸ email sending · scheduler · tick · lock ▸ orchestration · scheduler ▸ class tick._UseSendLock: The send agent has its own lock: it must never wait behind a long free tick.
 class _UseSendLock(Exception):
     """The send agent has its own lock: it must never wait behind a long free tick."""
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick._net_timeout(): A safety net for any socket opened without a timeout (2026-10-15: a job hung for
 def _net_timeout() -> None:
     """A safety net for any socket opened without a timeout (2026-10-15: a job hung for
     hours). httpx already defaults to 5 s; this covers raw sockets and libraries that block."""
@@ -839,6 +880,7 @@ def _net_timeout() -> None:
 NOTIFY_LOCK = ROOT / "data" / "notify.lock"
 
 
+# ZONULY ▸ email sending · scheduler · tick · lock ▸ orchestration · scheduler ▸ tick._notify_cycle(): The notification bot (notify_bot.cycle) after each send run, under its own lock, so
 def _notify_cycle() -> dict:
     """The notification bot (notify_bot.cycle) after each send run, under its own lock, so
     a stuck free tick or referral job cannot silence it. Never raises."""
@@ -857,6 +899,7 @@ def _notify_cycle() -> dict:
         return {"error": f"{type(e).__name__}: {str(e)[:200]}"}
 
 
+# ZONULY ▸ scheduler · tick · lock ▸ orchestration · scheduler ▸ tick.run(): Entry point for launchd and the CLI. Takes the lock, runs one slice, records it.
 def run(kind: str = "free") -> dict:
     """Entry point for launchd and the CLI. Takes the lock, runs one slice, records it."""
     LOGS.mkdir(exist_ok=True)
@@ -892,11 +935,13 @@ def run(kind: str = "free") -> dict:
 
 # ------------------------------------------------------------------ launchd
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick._agents_dir(): Return the macOS LaunchAgents directory in the user's home.
 def _agents_dir() -> Path:
     """Return the macOS LaunchAgents directory in the user's home."""
     return Path.home() / "Library" / "LaunchAgents"
 
 
+# ZONULY ▸ email sending · scheduler · tick ▸ orchestration · scheduler ▸ tick._plist(): Build the launchd plist for a scheduler tick kind (free every few minutes, send, or daily paid).
 def _plist(kind: str) -> dict:
     """Build the launchd plist for a scheduler tick kind (free every few minutes, send, or daily paid)."""
     base = {
@@ -922,6 +967,7 @@ def _plist(kind: str) -> dict:
     return base
 
 
+# ZONULY ▸ people search · referrers · scheduler · tick ▸ orchestration · scheduler ▸ tick._refer_plist(): com.zonuly.referrals: one referral cycle every REFER_INTERVAL_S (15 min) and at load,
 def _refer_plist() -> dict:
     """com.zonuly.referrals: one referral cycle every REFER_INTERVAL_S (15 min) and at load,
     the same PATH / env as the tick's agents; data/referrals.lock keeps it from overlapping
@@ -938,6 +984,7 @@ def _refer_plist() -> dict:
     return base
 
 
+# ZONULY ▸ apify scraping · apify people search · scheduler · tick ▸ orchestration · scheduler ▸ tick._apify_plist(): Build the launchd plist for the Apify tick (runs `tick run --kind apify` on its interval).
 def _apify_plist() -> dict:
     """Build the launchd plist for the Apify tick (runs `tick run --kind apify` on its interval)."""
     base = _plist("free")
@@ -952,6 +999,7 @@ def _apify_plist() -> dict:
     return base
 
 
+# ZONULY ▸ decision · scheduler · tick ▸ orchestration · scheduler ▸ tick._shortlist_plist(): Build the launchd plist for the shortlist tick (runs `tick run --kind shortlist`).
 def _shortlist_plist() -> dict:
     """Build the launchd plist for the shortlist tick (runs `tick run --kind shortlist`)."""
     base = _plist("free")
@@ -966,12 +1014,14 @@ def _shortlist_plist() -> dict:
     return base
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick._unload(): Unload a LaunchAgent plist with launchctl; reports whether it unloaded.
 def _unload(path: Path) -> dict:
     """Unload a LaunchAgent plist with launchctl; reports whether it unloaded."""
     r = subprocess.run(["launchctl", "unload", str(path)], capture_output=True, text=True)
     return {"plist": str(path), "unloaded": r.returncode == 0}
 
 
+# ZONULY ▸ scheduler · tick ▸ orchestration · scheduler ▸ tick._load(): Write a LaunchAgent plist and (re)load it with launchctl; reports whether it loaded.
 def _load(path: Path, plist: dict) -> dict:
     """Write a LaunchAgent plist and (re)load it with launchctl; reports whether it loaded."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -981,6 +1031,7 @@ def _load(path: Path, plist: dict) -> dict:
     return {"plist": str(path), "loaded": r.returncode == 0, "stderr": r.stderr.strip()[:200]}
 
 
+# ZONULY ▸ people search · referrers · email sending · scheduler · tick ▸ orchestration · scheduler ▸ tick.install(): Write the LaunchAgents and load them — the tick (free, paid, send), the referral
 def install() -> dict:
     """Write the LaunchAgents and load them — the tick (free, paid, send), the referral
     job, and the hourly audit beside them. Idempotent."""
@@ -1006,6 +1057,7 @@ def install() -> dict:
     return out
 
 
+# ZONULY ▸ people search · referrers · email sending · scheduler · tick ▸ orchestration · scheduler ▸ tick.uninstall(): Unload and delete the free, paid, send and referrals scheduler LaunchAgents.
 def uninstall() -> dict:
     """Unload and delete the free, paid, send and referrals scheduler LaunchAgents."""
     out = {}
@@ -1023,6 +1075,7 @@ def uninstall() -> dict:
     return out
 
 
+# ZONULY ▸ scheduler · tick · lock ▸ orchestration · scheduler ▸ tick.status(): Report scheduler state: lock, pacing, and each LaunchAgent's load state, schedule and last run.
 def status() -> dict:
     """Report scheduler state: lock, pacing, and each LaunchAgent's load state, schedule and last run."""
     out = {"lock": LOCK.read_text().strip() if LOCK.exists() else None, "python": PYTHON}
