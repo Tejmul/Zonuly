@@ -94,6 +94,7 @@ BACKEND_SECRET: dict[str, str] = {"exa-api": "EXA_API_KEY", "scrapedo": "Scrape_
 _DOTENV_LOADED = False
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ backends._load_dotenv(): Fold a local, gitignored .env into os.environ. Values already set win.
 def _load_dotenv() -> None:
     """Fold a local, gitignored .env into os.environ. Values already set win.
 
@@ -121,6 +122,7 @@ def _load_dotenv() -> None:
         log.debug("could not read .env: %s", e)
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ backends.secret(): First non-empty environment value among `names`. Never logged, never echoed.
 def secret(*names: str) -> str:
     """First non-empty environment value among `names`. Never logged, never echoed."""
     _load_dotenv()
@@ -131,11 +133,13 @@ def secret(*names: str) -> str:
     return ""
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ backends.has_secret(): True when any of the named secrets (environment variables) is set.
 def has_secret(*names: str) -> bool:
     """True when any of the named secrets (environment variables) is set."""
     return bool(secret(*names))
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ enrichment · web research layer ▸ backends.github_token(): GH token from the environment, falling back to the existing contacts config.
 def github_token() -> str:
     """GH token from the environment, falling back to the existing contacts config."""
     token = secret("GITHUB_TOKEN", "GH_TOKEN")
@@ -147,6 +151,7 @@ def github_token() -> str:
 # ------------------------------------------------------------------ subprocess
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ class backends.Proc
 @dataclass
 class Proc:
     ok: bool
@@ -156,6 +161,7 @@ class Proc:
     reason: str = ""          # missing | timeout | failed | broken
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ backends.resolve(): Absolute path to a CLI, or None.
 @lru_cache(maxsize=64)
 def resolve(name: str) -> str | None:
     """Absolute path to a CLI, or None.
@@ -167,6 +173,7 @@ def resolve(name: str) -> str | None:
     return shutil.which(name)
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ backends._child_env(): A child environment that survives Windows consoles.
 def _child_env(extra: dict[str, str] | None = None) -> dict[str, str]:
     """A child environment that survives Windows consoles.
 
@@ -184,6 +191,7 @@ def _child_env(extra: dict[str, str] | None = None) -> dict[str, str]:
     return env
 
 
+# ZONULY ▸ github scraping · sign-in · auth ▸ enrichment · web research layer ▸ backends._gh_env(): gh prefers GITHUB_TOKEN / GH_TOKEN over its own login. When gh holds a login of its
 def _gh_env(env: dict[str, str]) -> dict[str, str]:
     """gh prefers GITHUB_TOKEN / GH_TOKEN over its own login. When gh holds a login of its
     own (`gh auth login` wrote hosts.yml), that login is the credential the user set up for
@@ -196,6 +204,7 @@ def _gh_env(env: dict[str, str]) -> dict[str, str]:
     return env
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ backends.run(): Run a CLI and capture its output. Never raises; failures come back as Proc.
 def run(
     exe: str,
     args: list[str],
@@ -244,6 +253,7 @@ def run(
 # ------------------------------------------------------------------ routing
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ backends.routes(): The ordered research backends for a capability: from config, else the defaults.
 def routes(capability: str) -> list[str]:
     """The ordered research backends for a capability: from config, else the defaults."""
     configured = (RESEARCH.get("backends") or {}).get(capability)
@@ -252,6 +262,7 @@ def routes(capability: str) -> list[str]:
     return list(DEFAULT_ROUTES.get(capability, []))
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ backends.plausible(): Cheap candidacy test: the tool is on PATH and any secret it needs exists.
 def plausible(backend: str) -> bool:
     """Cheap candidacy test: the tool is on PATH and any secret it needs exists.
 
@@ -270,6 +281,7 @@ def plausible(backend: str) -> bool:
     return True
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ backends.candidates(): Backends worth attempting for a capability, best first.
 def candidates(capability: str) -> list[str]:
     """Backends worth attempting for a capability, best first."""
     return [b for b in routes(capability) if plausible(b)]
@@ -287,6 +299,7 @@ _PROBES: dict[str, tuple[str, list[str]]] = {
 }
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ backends.probe(): (status, detail) for one CLI.
 def probe(exe: str, timeout: int = 25) -> tuple[str, str]:
     """(status, detail) for one CLI.
 
@@ -322,6 +335,7 @@ HINTS = {
 }
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ backends.doctor(): What this machine can actually do right now, and what would fix the rest.
 def doctor() -> dict:
     """What this machine can actually do right now, and what would fix the rest."""
     tools = {exe: dict(zip(("status", "detail"), probe(exe))) for exe in _PROBES}

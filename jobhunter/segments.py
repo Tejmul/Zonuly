@@ -43,6 +43,7 @@ LAYERS: list[dict] = [
 ]
 
 
+# ZONULY ▸ enrichment · market segments ▸ enrichment · market segments ▸ class segments.Segment
 @dataclass(frozen=True)
 class Segment:
     id: str
@@ -52,6 +53,7 @@ class Segment:
     blurb: str
 
 
+# ZONULY ▸ scoring ▸ enrichment · market segments ▸ segments._rx(): Compile a case-insensitive whole-word regex matching any of the given alternatives.
 def _rx(*alts: str) -> re.Pattern[str]:
     """Compile a case-insensitive whole-word regex matching any of the given alternatives."""
     return re.compile(r"\b(?:" + "|".join(alts) + r")\b", re.I)
@@ -219,6 +221,7 @@ UNCLASSIFIED = Segment("other:unclassified", "other", "Unclassified", re.compile
                        "No description yet — nothing is inferred.")
 
 
+# ZONULY ▸ scoring ▸ enrichment · market segments ▸ segments.classify(): (primary, all matching). Primary is the first match in priority order.
 def classify(*texts: str | None) -> tuple[Segment, list[Segment]]:
     """(primary, all matching). Primary is the first match in priority order."""
     blob = " ".join(t for t in texts if t).strip()
@@ -230,6 +233,7 @@ def classify(*texts: str | None) -> tuple[Segment, list[Segment]]:
     return hits[0], hits
 
 
+# ZONULY ▸ enrichment · market segments ▸ enrichment · market segments ▸ segments.segment(): Return the Segment with this id, or the unclassified segment.
 def segment(seg_id: str) -> Segment:
     """Return the Segment with this id, or the unclassified segment."""
     return _BY_ID.get(seg_id, UNCLASSIFIED)

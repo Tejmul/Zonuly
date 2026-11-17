@@ -75,6 +75,7 @@ from jobhunter.research.youtube import search as search_youtube
 from jobhunter.research.youtube import transcript as youtube_transcript
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ __init__.doctor(): Which research channels work on this machine right now, and how to fix the rest.
 def doctor() -> dict:
     """Which research channels work on this machine right now, and how to fix the rest."""
     report = backends.doctor()

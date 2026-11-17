@@ -30,11 +30,13 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ models._clean(): Drop keys whose value is empty (None, empty string, list or dict).
 def _clean(d: dict) -> dict:
     """Drop keys whose value is empty (None, empty string, list or dict)."""
     return {k: v for k, v in d.items() if v not in (None, "", [], {})}
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ class models.SearchResult: One hit from a web search backend.
 @dataclass
 class SearchResult:
     """One hit from a web search backend."""
@@ -47,11 +49,13 @@ class SearchResult:
     source: str = "web"          # which backend produced it
     score: float | None = None
 
+    # ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ models.SearchResult.as_dict(): Return the search result as a dict without empty fields.
     def as_dict(self) -> dict:
         """Return the search result as a dict without empty fields."""
         return _clean(asdict(self))
 
 
+# ZONULY ▸ scraping ▸ enrichment · web research layer ▸ class models.Page: A fetched page, reduced to readable text.
 @dataclass
 class Page:
     """A fetched page, reduced to readable text."""
@@ -63,6 +67,7 @@ class Page:
     fetched_at: datetime | None = None
     truncated: bool = False
 
+    # ZONULY ▸ scraping ▸ enrichment · web research layer ▸ models.Page.as_dict(): Return the page as a dict with fetched_at as ISO text and its text length, empty fields dropped.
     def as_dict(self) -> dict:
         """Return the page as a dict with fetched_at as ISO text and its text length, empty fields dropped."""
         d = asdict(self)
@@ -71,6 +76,7 @@ class Page:
         return _clean(d)
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ class models.RepoHit
 @dataclass
 class RepoHit:
     full_name: str
@@ -81,11 +87,13 @@ class RepoHit:
     pushed_at: str | None = None
     owner: str | None = None
 
+    # ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ models.RepoHit.as_dict(): Return the repo hit as a dict without empty fields.
     def as_dict(self) -> dict:
         """Return the repo hit as a dict without empty fields."""
         return _clean(asdict(self))
 
 
+# ZONULY ▸ reddit ▸ enrichment · web research layer ▸ class models.RedditPost
 @dataclass
 class RedditPost:
     title: str
@@ -97,11 +105,13 @@ class RedditPost:
     created: str | None = None
     text: str | None = None
 
+    # ZONULY ▸ reddit ▸ enrichment · web research layer ▸ models.RedditPost.as_dict(): Return the Reddit post as a dict without empty fields.
     def as_dict(self) -> dict:
         """Return the Reddit post as a dict without empty fields."""
         return _clean(asdict(self))
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ class models.Video
 @dataclass
 class Video:
     title: str
@@ -112,11 +122,13 @@ class Video:
     views: int | None = None
     transcript: str | None = None
 
+    # ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ models.Video.as_dict(): Return the video as a dict without empty fields.
     def as_dict(self) -> dict:
         """Return the video as a dict without empty fields."""
         return _clean(asdict(self))
 
 
+# ZONULY ▸ enrichment ▸ enrichment · web research layer ▸ class models.FundingSignal: What a news snippet says about money raised. Extracted, never invented.
 @dataclass
 class FundingSignal:
     """What a news snippet says about money raised. Extracted, never invented."""
@@ -129,11 +141,13 @@ class FundingSignal:
     evidence_url: str | None = None
     evidence_quote: str | None = None
 
+    # ZONULY ▸ enrichment ▸ enrichment · web research layer ▸ models.FundingSignal.as_dict(): Return the funding signal as a dict without empty fields.
     def as_dict(self) -> dict:
         """Return the funding signal as a dict without empty fields."""
         return _clean(asdict(self))
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ class models.CompanyResearch: Everything the acquisition layer could find about one company.
 @dataclass
 class CompanyResearch:
     """Everything the acquisition layer could find about one company.
@@ -160,6 +174,7 @@ class CompanyResearch:
     confidence: str = "scraped"   # verified | scraped | inferred
     researched_at: datetime | None = None
 
+    # ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ models.CompanyResearch.as_dict(): Return the company research record as a dict, nested records included, empty fields dropped.
     def as_dict(self) -> dict:
         """Return the company research record as a dict, nested records included, empty fields dropped."""
         d = asdict(self)

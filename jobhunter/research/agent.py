@@ -100,6 +100,7 @@ _WIRE_PREFIX = re.compile(r"^[A-Za-z][A-Za-z ]{0,14}:\s+")
 _POSSESSIVE = re.compile(r"^[A-Z][\w.&-]*['’]s\s+")
 
 
+# ZONULY ▸ enrichment ▸ enrichment · web research layer ▸ agent.extract_funding(): Pull a funding claim out of prose. Returns None when the text does not say.
 def extract_funding(text: str, *, url: str | None = None) -> FundingSignal | None:
     """Pull a funding claim out of prose. Returns None when the text does not say."""
     if not text:
@@ -150,6 +151,7 @@ def extract_funding(text: str, *, url: str | None = None) -> FundingSignal | Non
     )
 
 
+# ZONULY ▸ enrichment ▸ enrichment · web research layer ▸ agent.extract_company_name(): The company out of a funding headline, or None if it does not read like one.
 def extract_company_name(headline: str) -> str | None:
     """The company out of a funding headline, or None if it does not read like one."""
     if not headline:
@@ -181,6 +183,7 @@ _ATS = {
 }
 
 
+# ZONULY ▸ scraping ▸ enrichment · web research layer ▸ agent.detect_ats(): (ats, slug) if this URL is a known board — the hand-off to Zonuly's scrapers.
 def detect_ats(url: str) -> tuple[str | None, str | None]:
     """(ats, slug) if this URL is a known board — the hand-off to Zonuly's scrapers."""
     try:
@@ -211,6 +214,7 @@ _ROLE_RE = re.compile(
 )
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ agent.hiring_signals(): (quoted hiring sentences, role titles mentioned). Both quoted from the text.
 def hiring_signals(text: str, *, limit: int = 6) -> tuple[list[str], list[str]]:
     """(quoted hiring sentences, role titles mentioned). Both quoted from the text."""
     if not text:
@@ -244,6 +248,7 @@ _NOT_A_SITE = re.compile(
 )
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ agent.looks_official(): Is this URL plausibly the company's own site rather than press coverage?
 def looks_official(url: str, company: str) -> bool:
     """Is this URL plausibly the company's own site rather than press coverage?"""
     host = (urlparse(url if "://" in url else "https://" + url).hostname or "").lower()
@@ -256,6 +261,7 @@ def looks_official(url: str, company: str) -> bool:
 # ------------------------------------------------------------------ company
 
 
+# ZONULY ▸ enrichment · web research layer ▸ enrichment · web research layer ▸ agent.company(): Everything the acquisition layer can find about one company.
 def company(
     name: str,
     *,
@@ -364,6 +370,7 @@ def company(
     return payload
 
 
+# ZONULY ▸ enrichment ▸ enrichment · web research layer ▸ agent._careers_page(): Try the usual careers paths on the company's own domain.
 def _careers_page(out: CompanyResearch, *, fresh: bool) -> bool:
     """Try the usual careers paths on the company's own domain."""
     if not out.website:
@@ -395,6 +402,7 @@ _QUERY_TEMPLATES = [
 ]
 
 
+# ZONULY ▸ enrichment ▸ enrichment · web research layer ▸ agent.startups(): Recently funded startups, with funding and hiring signals attached.
 def startups(
     topic: str = "AI",
     *,

@@ -60,6 +60,7 @@ UA = (CONFIG.get("sources") or {}).get(
 _LOGIN_WALL = re.compile(r"(log in|sign up|suspended|something went wrong)", re.I)
 
 
+# ZONULY ▸ x search · sign-in · auth · access control ▸ enrichment · web research layer ▸ x_search.session_present(): A logged-in X session is used only when the operator has switched it on in
 def session_present() -> bool:
     """A logged-in X session is used only when the operator has switched it on in
     config (research.x_session_enabled) AND put a throwaway account's cookies in .env.
@@ -70,11 +71,13 @@ def session_present() -> bool:
     return bool(secret("X_AUTH_TOKEN") and secret("X_CT0"))
 
 
+# ZONULY ▸ x search ▸ enrichment · web research layer ▸ x_search._today(): Return today's UTC date as YYYY-MM-DD, the key of the daily X search counter.
 def _today() -> str:
     """Return today's UTC date as YYYY-MM-DD, the key of the daily X search counter."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+# ZONULY ▸ x search · budget · cost · sign-in · auth ▸ enrichment · web research layer ▸ x_search.budget(): {cap, used, left} for today; everything 0 without a session.
 def budget() -> dict:
     """{cap, used, left} for today; everything 0 without a session."""
     if not session_present():
@@ -88,6 +91,7 @@ def budget() -> dict:
     return {"cap": DAILY_CAP, "used": used, "left": max(0, DAILY_CAP - used)}
 
 
+# ZONULY ▸ x search · budget · cost ▸ enrichment · web research layer ▸ x_search._spend(): Count one X search against today's cap in the settings counter.
 def _spend() -> None:
     """Count one X search against today's cap in the settings counter."""
     from jobhunter.db import get_session, get_setting, set_setting
@@ -99,6 +103,7 @@ def _spend() -> None:
         set_setting(s, _USED_KEY, f"{_today()}:{used + 1}")
 
 
+# ZONULY ▸ x search ▸ enrichment · web research layer ▸ x_search._walk_tweets(): Every Tweet object anywhere in a SearchTimeline payload.
 def _walk_tweets(obj: Any):
     """Every Tweet object anywhere in a SearchTimeline payload."""
     if isinstance(obj, dict):
@@ -111,6 +116,7 @@ def _walk_tweets(obj: Any):
             yield from _walk_tweets(v)
 
 
+# ZONULY ▸ x search ▸ enrichment · web research layer ▸ x_search._record(): Turn one X tweet object into a post record (url, handle, name, text, date); None if unusable.
 def _record(t: dict) -> dict | None:
     """Turn one X tweet object into a post record (url, handle, name, text, date); None if unusable."""
     legacy = t.get("legacy") or {}
@@ -133,6 +139,7 @@ def _record(t: dict) -> dict | None:
     }
 
 
+# ZONULY ▸ x search · scoring ▸ enrichment · web research layer ▸ x_search.search(): Latest posts matching `query`. Returns {query, posts, backend, error?}.
 def search(query: str, limit: int = 20, *, fresh: bool = False, timeout_s: int = 60) -> dict:
     """Latest posts matching `query`. Returns {query, posts, backend, error?}."""
     query = (query or "").strip()
@@ -176,6 +183,7 @@ def search(query: str, limit: int = 20, *, fresh: bool = False, timeout_s: int =
             ])
             page = ctx.new_page()
 
+            # ZONULY ▸ x search ▸ enrichment · web research layer ▸ x_search.search.on_response(): Collect the JSON of each successful SearchTimeline response the browser page receives.
             def on_response(resp):
                 """Collect the JSON of each successful SearchTimeline response the browser page receives."""
                 if "SearchTimeline" in resp.url and resp.status == 200:

@@ -94,6 +94,7 @@ _JUNK = re.compile(r"shields\.io|badge|\.svg|\.png|\.jpg|slack\.com/(?:downloads
                    r"x\.com/(?:intent|home|share)|localhost|example\.com|schema\.org|w3\.org", re.I)
 
 
+# ZONULY ▸ enrichment · public ways in ▸ enrichment · public ways in ▸ class ways_in.CompanyChannel: One public room, repo or page belonging to a company. The URL was read, never built.
 class CompanyChannel(SQLModel, table=True):
     """One public room, repo or page belonging to a company. The URL was read, never built."""
 
@@ -115,6 +116,7 @@ class CompanyChannel(SQLModel, table=True):
 _ROOT_ONLY = {"docs", "forum", "blog"}
 
 
+# ZONULY ▸ enrichment · public ways in ▸ enrichment · public ways in ▸ ways_in.canonical(): The form of a link worth storing: the site itself, for kinds where the page is incidental.
 def canonical(kind: str, url: str) -> str:
     """The form of a link worth storing: the site itself, for kinds where the page is incidental."""
     if kind not in _ROOT_ONLY:
@@ -123,6 +125,7 @@ def canonical(kind: str, url: str) -> str:
     return m.group(1) if m else url
 
 
+# ZONULY ▸ enrichment · public ways in ▸ enrichment · public ways in ▸ ways_in.resolve(): Follow a shortener to the link that actually opens.
 def resolve(url: str, *, timeout: float = 10.0) -> str:
     """Follow a shortener to the link that actually opens.
 
@@ -139,6 +142,7 @@ def resolve(url: str, *, timeout: float = 10.0) -> str:
         return url
 
 
+# ZONULY ▸ dedup · validation · guardrails ▸ enrichment · public ways in ▸ ways_in.links_in(): (kind, url, evidence) for every way-in link in a page. Junk and duplicates dropped.
 def links_in(text: str, *, source: str) -> list[tuple[str, str, str]]:
     """(kind, url, evidence) for every way-in link in a page. Junk and duplicates dropped."""
     out: list[tuple[str, str, str]] = []
@@ -153,6 +157,7 @@ def links_in(text: str, *, source: str) -> list[tuple[str, str, str]]:
     return out
 
 
+# ZONULY ▸ enrichment · public ways in ▸ enrichment · public ways in ▸ ways_in.save(): Upsert one channel. Returns True when it is new.
 def save(session, company_id: int, kind: str, url: str, *, evidence: str,
          label: str | None = None, detail: str | None = None) -> bool:
     """Upsert one channel. Returns True when it is new."""
@@ -176,6 +181,7 @@ def save(session, company_id: int, kind: str, url: str, *, evidence: str,
 
 # --------------------------------------------------------------- collecting
 
+# ZONULY ▸ github scraping ▸ enrichment · public ways in ▸ ways_in._github(): GET a GitHub API path (JSON, or raw file text) with the token if set; None on error.
 def _github(path: str, *, raw: bool = False) -> object | None:
     """GET a GitHub API path (JSON, or raw file text) with the token if set; None on error.
     Network call."""
@@ -196,6 +202,7 @@ def _github(path: str, *, raw: bool = False) -> object | None:
         return None
 
 
+# ZONULY ▸ scraping ▸ enrichment · public ways in ▸ ways_in._page(): Fetch a web page and return its HTML, or an empty string on an error. Network call.
 def _page(url: str) -> str:
     """Fetch a web page and return its HTML, or an empty string on an error. Network call."""
     try:
@@ -208,6 +215,7 @@ def _page(url: str) -> str:
         return ""
 
 
+# ZONULY ▸ enrichment · public ways in ▸ enrichment · public ways in ▸ ways_in.collect(): Find every public way into one company and store what was actually read.
 def collect(company_id: int, *, read_site: bool = True) -> dict:
     """Find every public way into one company and store what was actually read.
 
@@ -276,6 +284,7 @@ def collect(company_id: int, *, read_site: bool = True) -> dict:
     return stats
 
 
+# ZONULY ▸ enrichment · public ways in ▸ enrichment · public ways in ▸ ways_in.for_company(): Every way in, best first — what the company page shows.
 def for_company(company_id: int) -> list[dict]:
     """Every way in, best first — what the company page shows."""
     init_db()

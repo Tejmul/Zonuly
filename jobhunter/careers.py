@@ -84,6 +84,7 @@ _SOFT_404 = re.compile(r"\b(page not found|404|doesn.t exist|could not be found|
 _ROLE_WORD = re.compile(r"\b(engineer|developer|scientist|intern|sde|analyst|manager|designer|architect|lead)\b", re.I)
 
 
+# ZONULY ▸ enrichment ▸ enrichment · careers pages and open roles ▸ class careers.Find
 @dataclass
 class Find:
     careers_url: str | None = None
@@ -99,6 +100,7 @@ class Find:
 
 # ------------------------------------------------------------------ fetching
 
+# ZONULY ▸ scraping · enrichment ▸ enrichment · careers pages and open roles ▸ careers._fetch(): ("ok" | "missing" | "error", final url, html).
 def _fetch(http: httpx.Client, url: str) -> tuple[str, str | None, str]:
     """("ok" | "missing" | "error", final url, html)."""
     try:
@@ -116,6 +118,7 @@ def _fetch(http: httpx.Client, url: str) -> tuple[str, str | None, str]:
     return "ok", str(r.url), r.text
 
 
+# ZONULY ▸ enrichment ▸ enrichment · careers pages and open roles ▸ careers._site(): Normalize a company website to its scheme://host origin, or None when there is no host.
 def _site(website: str | None) -> str | None:
     """Normalize a company website to its scheme://host origin, or None when there is no host."""
     if not website:
@@ -124,12 +127,14 @@ def _site(website: str | None) -> str | None:
     return f"{p.scheme or 'https'}://{p.hostname}" if p.hostname else None
 
 
+# ZONULY ▸ enrichment ▸ enrichment · careers pages and open roles ▸ careers._stem(): Reduce a company name to an alphanumeric stem, dropping suffixes like ai/labs/tech/india.
 def _stem(name: str) -> str:
     """Reduce a company name to an alphanumeric stem, dropping suffixes like ai/labs/tech/india."""
     return re.sub(r"(ai|labs?|hq|inc|tech|technologies|app|india)$", "", re.sub(r"[^a-z0-9]", "", name.lower())) or \
         re.sub(r"[^a-z0-9]", "", name.lower())
 
 
+# ZONULY ▸ scraping · enrichment ▸ enrichment · careers pages and open roles ▸ careers._slug_fits(): A board found by search is theirs only if its slug carries their name.
 def _slug_fits(name: str, slug: str) -> bool:
     """A board found by search is theirs only if its slug carries their name."""
     s = re.sub(r"[^a-z0-9]", "", slug.lower())
@@ -137,6 +142,7 @@ def _slug_fits(name: str, slug: str) -> bool:
     return bool(stem) and (stem in s or s in re.sub(r"[^a-z0-9]", "", name.lower()))
 
 
+# ZONULY ▸ enrichment ▸ enrichment · careers pages and open roles ▸ careers._same_site(): True when a URL is on the company's site or one of its subdomains (www. ignored).
 def _same_site(url: str, site: str) -> bool:
     """True when a URL is on the company's site or one of its subdomains (www. ignored)."""
     a = (urlparse(url).hostname or "").lower().removeprefix("www.")
@@ -144,6 +150,7 @@ def _same_site(url: str, site: str) -> bool:
     return bool(a and b) and (a == b or a.endswith("." + b) or b.endswith("." + a))
 
 
+# ZONULY ▸ enrichment ▸ enrichment · careers pages and open roles ▸ careers._looks_careers(): A 200 is not a careers page: an unknown path often redirects home or renders a 404 shell.
 def _looks_careers(final_url: str | None, requested: str, html: str, site: str) -> bool:
     """A 200 is not a careers page: an unknown path often redirects home or renders a 404 shell."""
     text = html_to_text(html, limit=20000)
@@ -157,6 +164,7 @@ def _looks_careers(final_url: str | None, requested: str, html: str, site: str) 
     return bool(_HIRING_PAGE.search(text) or ca.detect_ats(html))
 
 
+# ZONULY ▸ scraping · data ingestion · enrichment ▸ enrichment · careers pages and open roles ▸ careers.discover(): Find the careers page (and the hosted board behind it, if any).
 def discover(name: str, website: str | None, careers_url: str | None = None, *,
              use_search: bool = True) -> Find:
     """Find the careers page (and the hosted board behind it, if any)."""
@@ -276,11 +284,13 @@ Reply with exactly:
 If the page lists no open roles, reply {{"roles": []}}."""
 
 
+# ZONULY ▸ enrichment · scoring ▸ enrichment · careers pages and open roles ▸ careers._norm(): Lowercase text and strip markdown punctuation and extra whitespace for loose matching.
 def _norm(text: str) -> str:
     """Lowercase text and strip markdown punctuation and extra whitespace for loose matching."""
     return re.sub(r"\s+", " ", re.sub(r"[*_#`>|\\\[\]]", " ", text or "")).strip().lower()
 
 
+# ZONULY ▸ enrichment · ai model call · llm ▸ enrichment · careers pages and open roles ▸ careers.roles_from_text(): The model reads the page; every title it returns must appear on the page verbatim
 def roles_from_text(name: str, url: str, text: str) -> tuple[list[RawJob], str | None]:
     """The model reads the page; every title it returns must appear on the page verbatim
     (case and whitespace aside), or it is dropped. (jobs, error)."""
@@ -337,6 +347,7 @@ _PLACE = re.compile(r"\b(Bengaluru|Bangalore|Hyderabad|Secunderabad|Remote|Mumba
                     r"United States|USA|Anywhere|Worldwide)\b", re.I)
 
 
+# ZONULY ▸ enrichment ▸ enrichment · careers pages and open roles ▸ careers._split_title(): 'Backend Engineer Bengaluru · Full-time' → ('Backend Engineer', 'Bengaluru').
 def _split_title(text: str) -> tuple[str, str | None]:
     """'Backend Engineer Bengaluru · Full-time' → ('Backend Engineer', 'Bengaluru')."""
     text = re.sub(r"\s+", " ", re.sub(r"[*_#`]", " ", text or "")).strip()
@@ -347,6 +358,7 @@ def _split_title(text: str) -> tuple[str, str | None]:
     return title, (", ".join(dict.fromkeys(places)) or None)
 
 
+# ZONULY ▸ enrichment · ai model call · llm ▸ enrichment · careers pages and open roles ▸ careers.roles_from_links(): Postings read off the page's own links, no model: a link whose URL is a posting
 def roles_from_links(page: str, page_url: str, name: str) -> list[RawJob]:
     """Postings read off the page's own links, no model: a link whose URL is a posting
     and whose text is a job title. The title and the URL are both literally on the page."""
@@ -374,6 +386,7 @@ _CARD_META = re.compile(r"^\s*[•·\-*]?\s*(on[- ]?site|remote|hybrid|full[- ]?
                         r"entry level|mid level|senior level)\b", re.I)
 
 
+# ZONULY ▸ enrichment · ai model call · llm ▸ enrichment · careers pages and open roles ▸ careers.roles_from_lines(): Last resort without a model: lines that are a job title and nothing else — a
 def roles_from_lines(text: str, page_url: str, name: str) -> list[RawJob]:
     """Last resort without a model: lines that are a job title and nothing else — a
     Markdown heading or bullet, or a job card's first line (a title followed by its
@@ -410,6 +423,7 @@ _LABEL = re.compile(r"(?im)^[\s*_#>-]*(?:job title|position|role|designation|ope
                     r"([^*_\n|]{3,80}?)\s*(?:[*_|]|$)")
 
 
+# ZONULY ▸ enrichment · ai model call · llm ▸ enrichment · careers pages and open roles ▸ careers.roles_from_labels(): Postings written as "Job Title: InfoSec Compliance Manager" — a labelled title, no model.
 def roles_from_labels(text: str, page_url: str, name: str) -> list[RawJob]:
     """Postings written as "Job Title: InfoSec Compliance Manager" — a labelled title, no model."""
     out: list[RawJob] = []
@@ -424,11 +438,13 @@ def roles_from_labels(text: str, page_url: str, name: str) -> list[RawJob]:
     return out
 
 
+# ZONULY ▸ scraping · enrichment ▸ enrichment · careers pages and open roles ▸ careers._read_roles(): (jobs, how, error) — the board's JSON, the page's JSON-LD, the posting links on the
 def _read_roles(f: Find, name: str, *, use_model: bool = True) -> tuple[list[RawJob], str, str | None]:
     """(jobs, how, error) — the board's JSON, the page's JSON-LD, the posting links on the
     page, the page text read by the model (unless `use_model` is False — the deterministic
     fill pass, 2026-10-14), and last its title-only headings."""
     if f.ats in ca.API_FETCHERS and f.slug:
+        # ZONULY ▸ scraping · enrichment ▸ enrichment · careers pages and open roles ▸ careers._read_roles.run(): Read the company's ATS board JSON over a fresh HTTP client (network call).
         async def run():
             """Read the company's ATS board JSON over a fresh HTTP client (network call)."""
             async with make_client() as http:
@@ -481,6 +497,7 @@ def _read_roles(f: Find, name: str, *, use_model: bool = True) -> tuple[list[Raw
 
 # ------------------------------------------------------------------ one company
 
+# ZONULY ▸ enrichment ▸ enrichment · careers pages and open roles ▸ careers._read_at(): Find the date of the last careers read stamped in the company notes, or None.
 def _read_at(notes: str | None) -> datetime | None:
     """Find the date of the last careers read stamped in the company notes, or None."""
     m = re.search(r"\[careers\] read (\d{4}-\d{2}-\d{2})", notes or "")
@@ -490,12 +507,14 @@ def _read_at(notes: str | None) -> datetime | None:
         return None
 
 
+# ZONULY ▸ enrichment ▸ enrichment · careers pages and open roles ▸ careers._note(): Replace any earlier careers-read line in the company notes with the given new line.
 def _note(notes: str | None, line: str) -> str:
     """Replace any earlier careers-read line in the company notes with the given new line."""
     kept = [ln for ln in (notes or "").splitlines() if not ln.startswith(MARK)]
     return "\n".join(kept + [line]).strip()
 
 
+# ZONULY ▸ enrichment ▸ enrichment · careers pages and open roles ▸ careers.run_company(): Find one company's careers page and roles; write what was found.
 def run_company(company_id: int, *, use_search: bool = True, use_model: bool = True) -> dict:
     """Find one company's careers page and roles; write what was found.
 
@@ -586,6 +605,7 @@ def run_company(company_id: int, *, use_search: bool = True, use_model: bool = T
 
 # ------------------------------------------------------------------ the pass
 
+# ZONULY ▸ scraping · enrichment ▸ enrichment · careers pages and open roles ▸ careers.pending(): Who to read, in db.fill_order: list rows first, then scrape-first, then priority.
 def pending(limit: int | None = 40, *, list_key: str | None = None, force: bool = False,
             company_ids: list[int] | None = None, refresh_days: int = REFRESH_DAYS) -> list[int]:
     """Who to read, in db.fill_order: list rows first, then scrape-first, then priority.
@@ -609,6 +629,7 @@ def pending(limit: int | None = 40, *, list_key: str | None = None, force: bool 
     return ids[:limit] if limit else ids
 
 
+# ZONULY ▸ enrichment ▸ enrichment · careers pages and open roles ▸ careers.run(): The careers pass over `pending(...)`. Each company commits on its own.
 def run(limit: int | None = 40, *, list_key: str | None = None, force: bool = False,
         company_ids: list[int] | None = None, concurrency: int = 4, use_search: bool = True,
         use_model: bool = True) -> dict:
@@ -617,6 +638,7 @@ def run(limit: int | None = 40, *, list_key: str | None = None, force: bool = Fa
     out: dict = {"companies": len(ids), "careers_found": 0, "with_roles": 0, "roles_found": 0,
                  "roles_inserted": 0, "ats": {}, "via": {}, "failed": {}, "lines": []}
 
+    # ZONULY ▸ scraping · enrichment ▸ enrichment · careers pages and open roles ▸ careers.run.one(): Run the careers scrape for one company; log and return an error dict instead of raising.
     def one(cid: int) -> dict:
         """Run the careers scrape for one company; log and return an error dict instead of raising."""
         try:

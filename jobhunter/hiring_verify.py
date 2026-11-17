@@ -83,6 +83,7 @@ _SAYS_NO_OPENINGS = re.compile(
 )
 
 
+# ZONULY ▸ hiring verification ▸ enrichment · hiring verification ▸ hiring_verify._best_signal(): The tersest true sentence. A page with no full stops yields one 300-char blob;
 def _best_signal(signals: list[str], roles: list[str]) -> str:
     """The tersest true sentence. A page with no full stops yields one 300-char blob;
     a listed role title says the same thing in five words and is worth more."""
@@ -94,6 +95,7 @@ def _best_signal(signals: list[str], roles: list[str]) -> str:
     return (signals[0][:300] if signals else "")
 
 
+# ZONULY ▸ hiring verification · decision ▸ enrichment · hiring verification ▸ hiring_verify._quote_around(): The company's own sentence, so the verdict can always be shown, never asserted.
 def _quote_around(text: str, pattern: re.Pattern[str]) -> str:
     """The company's own sentence, so the verdict can always be shown, never asserted."""
     m = pattern.search(text)
@@ -109,6 +111,7 @@ VERIFIED, ROLE_MISSING, NOT_AUTHORIZED, UNREACHABLE, UNCHECKED = (
 )
 
 
+# ZONULY ▸ hiring verification ▸ enrichment · hiring verification ▸ class hiring_verify.Verification
 @dataclass
 class Verification:
     status: str = UNCHECKED
@@ -118,6 +121,7 @@ class Verification:
     open_count: int | None = None
     checked: list[str] = field(default_factory=list)   # every URL we actually looked at
 
+    # ZONULY ▸ validation · guardrails · enrichment · hiring verification ▸ enrichment · hiring verification ▸ hiring_verify.Verification.as_dict(): Serialize the hiring verification result (status, evidence, careers URL, r…
     def as_dict(self) -> dict:
         """Serialize the hiring verification result (status, evidence, careers URL, roles) to a dict."""
         return {
@@ -142,6 +146,7 @@ _AGGREGATOR_HOST = re.compile(
     r"bit\.ly|tinyurl\.com|t\.co)$", re.I)
 
 
+# ZONULY ▸ hiring verification ▸ enrichment · hiring verification ▸ hiring_verify._site_problem(): Why this URL cannot answer "are they hiring?", or None if it can.
 def _site_problem(website: str | None) -> str | None:
     """Why this URL cannot answer "are they hiring?", or None if it can."""
     if not website:
@@ -156,6 +161,7 @@ def _site_problem(website: str | None) -> str | None:
     return None
 
 
+# ZONULY ▸ enrichment · hiring verification ▸ enrichment · hiring verification ▸ hiring_verify._domain_of(): Return a website's host without www., or None.
 def _domain_of(website: str | None) -> str | None:
     """Return a website's host without www., or None."""
     if not website:
@@ -170,6 +176,7 @@ def _domain_of(website: str | None) -> str | None:
 _TITLE_KEYS = ("title", "text", "name")
 
 
+# ZONULY ▸ scraping · hiring verification ▸ enrichment · hiring verification ▸ hiring_verify._board_titles(): The role titles actually listed on a live board — what a claim is checked against.
 async def _board_titles(http, ats: str, slug: str, limit: int = 40) -> list[str]:
     """The role titles actually listed on a live board — what a claim is checked against."""
     from jobhunter.scrapers.base import get_json
@@ -192,6 +199,7 @@ async def _board_titles(http, ats: str, slug: str, limit: int = 40) -> list[str]
     return titles
 
 
+# ZONULY ▸ scraping · hiring verification ▸ enrichment · hiring verification ▸ hiring_verify._check_ats(): Their own ATS board. A live board with postings is the company saying it itself.
 async def _check_ats(name: str, website: str | None, ats: str | None, slug: str | None) -> Verification | None:
     """Their own ATS board. A live board with postings is the company saying it itself."""
     v = Verification()
@@ -226,6 +234,7 @@ async def _check_ats(name: str, website: str | None, ats: str | None, slug: str 
     return v
 
 
+# ZONULY ▸ enrichment · hiring verification ▸ enrichment · hiring verification ▸ hiring_verify._check_careers(): Their careers page on their own domain, read and searched for real hiring language.
 def _check_careers(website: str | None, *, fresh: bool = False, careers_url: str | None = None) -> Verification:
     """Their careers page on their own domain, read and searched for real hiring language.
     A careers page already found (careers.py — a link on their homepage, a hosted board)
@@ -307,6 +316,7 @@ def _check_careers(website: str | None, *, fresh: bool = False, careers_url: str
 
 # ------------------------------------------------------------------ public API
 
+# ZONULY ▸ enrichment · hiring verification ▸ enrichment · hiring verification ▸ hiring_verify.verify(): Check one company. ATS first (cheapest and strongest), careers page second.
 def verify(name: str, *, website: str | None = None, ats: str | None = None,
            slug: str | None = None, claimed_role: str | None = None,
            fresh: bool = False, careers_url: str | None = None) -> Verification:
@@ -339,6 +349,7 @@ _GENERIC = {"engineer", "engineering", "developer", "software", "senior", "staff
             "ii", "iii", "iv", "remote", "team"}
 
 
+# ZONULY ▸ hiring verification · scoring ▸ enrichment · hiring verification ▸ hiring_verify._role_matches(): Does any listed role plausibly answer the claim?
 def _role_matches(claimed: str, roles: list[str]) -> bool:
     """Does any listed role plausibly answer the claim?
 
@@ -358,6 +369,7 @@ def _role_matches(claimed: str, roles: list[str]) -> bool:
     return False
 
 
+# ZONULY ▸ hiring verification · decision ▸ enrichment · hiring verification ▸ hiring_verify.verify_company(): Verify one company row and write the verdict back.
 def verify_company(company_id: int, *, claimed_role: str | None = None, fresh: bool = False) -> dict:
     """Verify one company row and write the verdict back."""
     init_db()
@@ -405,6 +417,7 @@ def verify_company(company_id: int, *, claimed_role: str | None = None, fresh: b
     return {"company": name, **v.as_dict()}
 
 
+# ZONULY ▸ enrichment · hiring verification ▸ enrichment · hiring verification ▸ hiring_verify.verify_pending(): Verify the companies worth verifying: list rows first (db.fill_order), then the
 def verify_pending(limit: int = 10, *, tiers: tuple[str, ...] = ("tier1", "tier2", "unknown", "prospect"),
                    recheck_days: int = MAX_AGE_DAYS, fresh: bool = False,
                    list_key: str | None = None, budget_s: int | None = None) -> list[dict]:
@@ -450,6 +463,7 @@ def verify_pending(limit: int = 10, *, tiers: tuple[str, ...] = ("tier1", "tier2
     return out
 
 
+# ZONULY ▸ scraping · hiring verification ▸ enrichment · hiring verification ▸ hiring_verify.claim_from_job(): Verify the company behind one scraped posting, testing that posting's own title.
 def claim_from_job(job_id: int) -> dict:
     """Verify the company behind one scraped posting, testing that posting's own title.
 

@@ -71,6 +71,7 @@ _BOT_WALL = guardrails.BOT_WALL
 bot_wall = guardrails.bot_wall
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich._first_real_sentence(): The first line of a page that reads like a description of the business.
 def _first_real_sentence(text: str, *, title: str | None = None) -> str | None:
     """The first line of a page that reads like a description of the business.
 
@@ -109,6 +110,7 @@ _FUNDING_SENTENCE = re.compile(
 _STAGE_OK = re.compile(r"^(pre[- ]?seed|seed|series [a-z])$", re.I)
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich._funding_from(): A funding signal, or {} — extracted only from sentences that are about funding.
 def _funding_from(text: str, *, url: str | None = None) -> dict:
     """A funding signal, or {} — extracted only from sentences that are about funding."""
     if not text:
@@ -165,6 +167,7 @@ Reply with exactly:
 {{"description": "<one sentence>"|null, "evidence": "<the words you based it on, quoted>"|null}}"""
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich._model_available(): Is there a key at all? Asking first turns four logged errors into none.
 def _model_available() -> bool:
     """Is there a key at all? Asking first turns four logged errors into none."""
     try:
@@ -207,6 +210,7 @@ Reply with exactly this JSON:
   "team_evidence": "<quoted words>"|null}}"""
 
 
+# ZONULY ▸ enrichment · ai model call · llm ▸ enrichment · company facts and websites ▸ enrich._profile_with_model(): The whole profile in one call on the `cheap` alias. None on any failure.
 def _profile_with_model(name: str, text: str) -> dict | None:
     """The whole profile in one call on the `cheap` alias. None on any failure."""
     from jobhunter import llm
@@ -233,6 +237,7 @@ def _profile_with_model(name: str, text: str) -> dict | None:
 _ABOUT_PATHS = ("/about", "/about-us", "/company", "/our-story", "/story", "/team", "/mission")
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich._read_about(): The first About-style page that answers, as text — origin stories live there.
 def _read_about(base: str, *, fresh: bool) -> tuple[str, str | None]:
     """The first About-style page that answers, as text — origin stories live there."""
     from urllib.parse import urlparse
@@ -247,6 +252,7 @@ def _read_about(base: str, *, fresh: bool) -> tuple[str, str | None]:
     return "", None
 
 
+# ZONULY ▸ enrichment · ai model call · llm ▸ enrichment · company facts and websites ▸ enrich._describe_with_model(): One line about the company on the `cheap` OpenRouter alias. (None, None) on any failure.
 def _describe_with_model(name: str, text: str) -> tuple[str | None, str | None]:
     """One line about the company on the `cheap` OpenRouter alias. (None, None) on any failure."""
     from jobhunter import llm
@@ -265,6 +271,7 @@ def _describe_with_model(name: str, text: str) -> tuple[str | None, str | None]:
     return (desc[:300] if desc else None), (str(data.get("evidence") or "")[:300] or None)
 
 
+# ZONULY ▸ validation · guardrails · enrichment ▸ enrichment · company facts and websites ▸ enrich._write_funding(): A round read from a source, onto the row — through guardrails.set_funding: stage in
 def _write_funding(session, company: Company, funding: dict, *, source: str | None, channel: str,
                    fill_only: bool = False) -> dict:
     """A round read from a source, onto the row — through guardrails.set_funding: stage in
@@ -274,6 +281,7 @@ def _write_funding(session, company: Company, funding: dict, *, source: str | No
     return guardrails.set_funding(session, company, funding, source=source, channel=channel, fill_only=fill_only)
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich.enrich_company(): Read one company's own pages and write back description, funding and links.
 def enrich_company(company_id: int, *, depth: str = "standard", fresh: bool = False,
                    use_model: bool = True, use_search: bool = True) -> dict:
     """Read one company's own pages and write back description, funding and links."""
@@ -438,6 +446,7 @@ _HQ = re.compile(r"\b(?:headquartered|based|located)\s+in\s+([A-Z][A-Za-z .'-]{2
 _MD_NOISE = re.compile(r"(^|\s)#+\s*|\.{3,}|\[[^\]]*\]\([^)]*\)")
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich._card_sentence(): The sentence on a company card that says what they do: the first one that reads
 def _card_sentence(text: str, name: str) -> str | None:
     """The sentence on a company card that says what they do: the first one that reads
     '<Name> is/builds/provides …', else the first plain sentence long enough to mean something."""
@@ -457,6 +466,7 @@ def _card_sentence(text: str, name: str) -> str | None:
     return sentences[0] if sentences else None
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich._sane_funding(): A round read off a card can be mangled ('$20,000' → 20000M). Above $2B for a
 def _sane_funding(fund: dict) -> dict:
     """A round read off a card can be mangled ('$20,000' → 20000M). Above $2B for a
     startup round is a parse error, not a fact: keep the stage, drop the number."""
@@ -469,6 +479,7 @@ _HIRING_TEXT = re.compile(r"\b(we(?:'re| are) hiring|now hiring|open (?:roles|po
                           r"careers? at|is hiring)\b", re.I)
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich.facts_from_search(): One company-index lookup → description, website, HQ, founded, funding (round,
 def facts_from_search(company_id: int, *, fresh: bool = False, keyless: bool = False) -> dict:
     """One company-index lookup → description, website, HQ, founded, funding (round,
     amount, date, total, valuation) and a hiring hint. Works on a name alone, so a
@@ -593,6 +604,7 @@ _HEADCOUNT = re.compile(
 _USD_TO_INR = float((CONFIG.get("search") or {}).get("usd_to_inr") or 88)
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich._usd_m(): Convert a money figure (number, unit, currency) to USD millions; crore/lakh via the INR rate.
 def _usd_m(num: str, unit: str, cur: str) -> float | None:
     """Convert a money figure (number, unit, currency) to USD millions; crore/lakh via the INR rate.
     Returns None for unparseable numbers and for ambiguous rupee amounts not in crore."""
@@ -609,6 +621,7 @@ def _usd_m(num: str, unit: str, cur: str) -> float | None:
     return n * 1000 if unit in ("billion", "bn", "b") else n
 
 
+# ZONULY ▸ validation · guardrails · enrichment · scoring ▸ enrichment · company facts and websites ▸ enrich._sentence_at(): Return the sentence around a regex match (whitespace collapsed, max 300 chars) as evidence.
 def _sentence_at(text: str, start: int, end: int) -> str:
     """Return the sentence around a regex match (whitespace collapsed, max 300 chars) as evidence."""
     dot = text.rfind(". ", 0, start)
@@ -617,6 +630,7 @@ def _sentence_at(text: str, start: int, end: int) -> str:
     return re.sub(r"\s+", " ", text[a: b + 1 if b != -1 else end + 160]).strip()[:300]
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich.valuation_from(): (USD millions, the sentence) for the first stated valuation that names the company.
 def valuation_from(text: str, name: str) -> tuple[float, str] | None:
     """(USD millions, the sentence) for the first stated valuation that names the company."""
     stem = admission.name_key(name)[:8]
@@ -632,6 +646,7 @@ def valuation_from(text: str, name: str) -> tuple[float, str] | None:
     return None
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ enrichment · company facts and websites ▸ enrich.headcount_from(): (people, the sentence) for the first stated headcount that names the company.
 def headcount_from(text: str, name: str) -> tuple[int, str] | None:
     """(people, the sentence) for the first stated headcount that names the company."""
     stem = admission.name_key(name)[:8]
@@ -649,6 +664,7 @@ def headcount_from(text: str, name: str) -> tuple[int, str] | None:
     return None
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich.size_from_search(): Valuation and team size for one company, keyless: two hosted-Exa-MCP searches, read
 def size_from_search(company_id: int, *, fresh: bool = False) -> dict:
     """Valuation and team size for one company, keyless: two hosted-Exa-MCP searches, read
     by regex, evidence-linked. A channel failure leaves no marker; a miss backs off."""
@@ -691,6 +707,7 @@ def size_from_search(company_id: int, *, fresh: bool = False) -> dict:
     return out
 
 
+# ZONULY ▸ enrichment · retry · backoff ▸ enrichment · company facts and websites ▸ enrich._mark(): Record a failed enrichment step on the company so backoff skips it for a while.
 def _mark(company_id: int, step: str, error: str) -> None:
     """Record a failed enrichment step on the company so backoff skips it for a while.
     Writes to the company table."""
@@ -702,6 +719,7 @@ def _mark(company_id: int, step: str, error: str) -> None:
             session.commit()
 
 
+# ZONULY ▸ scraping · enrichment ▸ enrichment · company facts and websites ▸ enrich._queue(): Active, not overrated, in db.fill_order (list rows, then scrape-first, then
 def _queue(session, *, need_jobs: bool = False, list_key: str | None = None) -> list[Company]:
     """Active, not overrated, in db.fill_order (list rows, then scrape-first, then
     priority) — the order every fill-in pass reads. A hand-picked list row is kept even
@@ -720,6 +738,7 @@ def _queue(session, *, need_jobs: bool = False, list_key: str | None = None) -> 
     return rows
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich.facts_pending(): Companies with no [facts] read yet — with or without roles — list rows first,
 def facts_pending(limit: int = 40, *, keyless: bool = False, roles_only: bool = False,
                   list_key: str | None = None) -> list[dict]:
     """Companies with no [facts] read yet — with or without roles — list rows first,
@@ -727,6 +746,7 @@ def facts_pending(limit: int = 40, *, keyless: bool = False, roles_only: bool = 
     row whose facts were read but still lacks valuation or team size is read again."""
     init_db()
     with get_session() as session:
+        # ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich.facts_pending.gap(): True when the company has no [facts] read yet, or a list row still lacks valuation or team size.
         def gap(c: Company) -> bool:
             """True when the company has no [facts] read yet, or a list row still lacks valuation or team size."""
             if "[facts]" not in (c.notes or ""):
@@ -761,6 +781,7 @@ def facts_pending(limit: int = 40, *, keyless: bool = False, roles_only: bool = 
     return out
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich.enrich_pending(): Enrich the companies worth enriching, best priority first. Never touches a
 def enrich_pending(limit: int = 10, *, tiers: tuple[str, ...] = ("tier1", "tier2", "prospect", "unknown"),
                    only_missing: bool = True, fresh: bool = False, use_model: bool = True,
                    use_search: bool = True, roles_first: bool = True,
@@ -779,6 +800,7 @@ def enrich_pending(limit: int = 10, *, tiers: tuple[str, ...] = ("tier1", "tier2
     with get_session() as session:
         with_jobs = set(session.exec(select(Job.company_id).distinct()).all()) if roles_first else set()
 
+        # ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich.enrich_pending.gap(): True when the company still has the chosen enrichment gap (no description, or story unread).
         def gap(c: Company) -> bool:
             """True when the company still has the chosen enrichment gap (no description, or story unread)."""
             if not only_missing:
@@ -827,6 +849,7 @@ _PARKED = re.compile(r"(domain (?:is )?for sale|buy this domain|this domain (?:m
 _GUESS_TLDS = (".com", ".ai", ".io", ".co", ".dev", ".app", ".tech")
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich._site_candidates(): Pick up to three root URLs from search results whose host plausibly is the company's site.
 def _site_candidates(name: str, results: list[dict]) -> list[str]:
     """Pick up to three root URLs from search results whose host plausibly is the company's site."""
     out: list[str] = []
@@ -840,6 +863,7 @@ def _site_candidates(name: str, results: list[dict]) -> list[str]:
     return out[:3]
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich._guess_domains(): The domains a startup called `name` most likely owns. Only for distinctive names
 def _guess_domains(name: str, *, india: bool = False) -> list[str]:
     """The domains a startup called `name` most likely owns. Only for distinctive names
     (a key of six letters or more): 'zero.com' says nothing about a startup called Zero."""
@@ -855,6 +879,7 @@ def _guess_domains(name: str, *, india: bool = False) -> list[str]:
     return list(dict.fromkeys(out))
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich._verify_site(): (final url, note) when the page answers and names the company; (None, why) else.
 async def _verify_site(http, name: str, url: str) -> tuple[str | None, str]:
     """(final url, note) when the page answers and names the company; (None, why) else."""
     try:
@@ -876,6 +901,7 @@ async def _verify_site(http, name: str, url: str) -> tuple[str | None, str]:
     return None, "page does not name the company"
 
 
+# ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich.find_website(): Find and verify one company's own website. {website} or {error}.
 def find_website(company_id: int, *, keyless: bool = True, use_search: bool = True) -> dict:
     """Find and verify one company's own website. {website} or {error}."""
     import asyncio
@@ -904,6 +930,7 @@ def find_website(company_id: int, *, keyless: bool = True, use_search: bool = Tr
         _mark(company_id, "website", search_error or "name too generic to guess a domain, no search hit")
         return {"company": name, "error": search_error or "no candidate site"}
 
+    # ZONULY ▸ enrichment ▸ enrichment · company facts and websites ▸ enrich.find_website.check(): Verify every candidate website concurrently (six at a time) and return the results.
     async def check() -> list:
         """Verify every candidate website concurrently (six at a time) and return the results."""
         from jobhunter.scrapers.base import gather_limited, make_client
@@ -948,6 +975,7 @@ def find_website(company_id: int, *, keyless: bool = True, use_search: bool = Tr
     return {"company": name, "website": url, "note": note}
 
 
+# ZONULY ▸ scraping · enrichment · decision ▸ enrichment · company facts and websites ▸ enrich._reopen(): Drop the "[ats] probed: no public board" verdict. It was reached by guessing board
 def _reopen(notes: str | None) -> str | None:
     """Drop the "[ats] probed: no public board" verdict. It was reached by guessing board
     slugs from the bare name; with a verified website the probe can read the careers page
@@ -958,6 +986,7 @@ def _reopen(notes: str | None) -> str | None:
     return "\n".join(kept) or None
 
 
+# ZONULY ▸ enrichment · retry · backoff ▸ enrichment · company facts and websites ▸ enrich.find_websites(): find_website over the name-only companies, best priority first, skipping backoff.
 def find_websites(limit: int = 30, *, keyless: bool = True) -> dict:
     """find_website over the name-only companies, best priority first, skipping backoff.
     `keyless` (the hourly free tick) uses only the hosted Exa MCP, domain guesses and

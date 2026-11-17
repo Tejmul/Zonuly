@@ -50,11 +50,13 @@ _MONEY = re.compile(r"\$\s?(\d{2,3}(?:,\d{3})+|\d{3,7})")
 _ENTRY = re.compile(r"(entry|new grad|l3|ic1|e3|swe i\b|junior|associate)", re.I)
 
 
+# ZONULY ▸ pay · salary ▸ enrichment · pay data ▸ levels._slug(): Turn a company name into a lowercase hyphenated slug.
 def _slug(name: str) -> str:
     """Turn a company name into a lowercase hyphenated slug."""
     return _SLUG.sub("-", (name or "").lower()).strip("-")
 
 
+# ZONULY ▸ pay · salary ▸ enrichment · pay data ▸ levels._walk_comp(): Collect {level, total_usd} from levels.fyi's nested JSON.
 def _walk_comp(obj, out: list):
     """Collect {level, total_usd} from levels.fyi's nested JSON."""
     if isinstance(obj, dict):
@@ -69,6 +71,7 @@ def _walk_comp(obj, out: list):
             _walk_comp(v, out)
 
 
+# ZONULY ▸ pay · salary ▸ enrichment · pay data ▸ levels._fresher_usd(): Lowest / entry-level total comp in USD, and the words it came from.
 def _fresher_usd(html: str) -> tuple[float | None, str | None]:
     """Lowest / entry-level total comp in USD, and the words it came from."""
     comps: list = []
@@ -91,6 +94,7 @@ def _fresher_usd(html: str) -> tuple[float | None, str | None]:
     return None, None
 
 
+# ZONULY ▸ pay · salary ▸ enrichment · pay data ▸ levels.lookup(): Read one company's levels.fyi page and write back a fresher PPO in INR LPA.
 def lookup(company_id: int, *, fresh: bool = False) -> dict:
     """Read one company's levels.fyi page and write back a fresher PPO in INR LPA."""
     init_db()
@@ -130,6 +134,7 @@ def lookup(company_id: int, *, fresh: bool = False) -> dict:
     return {"company": name, "found": True, "usd": usd, "ppo_lpa": lpa, "kept_stated": True}
 
 
+# ZONULY ▸ scraping · pay · salary · budget · cost ▸ enrichment · pay data ▸ levels.lookup_pending(): Companies with roles and no pay figure, best tier first, inside the scrape.do budget.
 def lookup_pending(limit: int = 40, *, shard: int | None = None, shards: int | None = None) -> dict:
     """Companies with roles and no pay figure, best tier first, inside the scrape.do budget."""
     from jobhunter.db import Job

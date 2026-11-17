@@ -36,6 +36,7 @@ from jobhunter.research.models import Video
 log = logging.getLogger(__name__)
 
 
+# ZONULY ▸ youtube ▸ enrichment · web research layer ▸ youtube.search(): Search YouTube. Metadata only — no download, no transcript.
 def search(query: str, limit: int = 5, *, fresh: bool = False, timeout: int | None = None) -> dict:
     """Search YouTube. Metadata only — no download, no transcript."""
     query = (query or "").strip()
@@ -109,6 +110,7 @@ _VTT_TS = re.compile(r"^\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->")
 _VTT_TAG = re.compile(r"<[^>]+>")
 
 
+# ZONULY ▸ youtube · dedup ▸ enrichment · web research layer ▸ youtube._vtt_to_text(): Subtitles to prose: drop cues, tags and the duplicate lines auto-captions emit.
 def _vtt_to_text(raw: str, limit: int) -> str:
     """Subtitles to prose: drop cues, tags and the duplicate lines auto-captions emit."""
     lines: list[str] = []
@@ -124,6 +126,7 @@ def _vtt_to_text(raw: str, limit: int) -> str:
     return " ".join(lines)[:limit]
 
 
+# ZONULY ▸ youtube · scraping ▸ enrichment · web research layer ▸ youtube.transcript(): Fetch a video's subtitles as plain text. Never downloads the video itself.
 def transcript(url: str, *, lang: str = "en", max_chars: int = 20000, timeout: int | None = None) -> dict:
     """Fetch a video's subtitles as plain text. Never downloads the video itself."""
     url = (url or "").strip()

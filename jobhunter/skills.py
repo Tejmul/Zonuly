@@ -130,12 +130,14 @@ IMPLIED_BY: dict[str, tuple[str, ...]] = {
 }
 
 
+# ZONULY ▸ cache ▸ enrichment · skill dictionary ▸ skills._compiled(): Return each skill's keyword list compiled into one case-insensitive regex (cached).
 @lru_cache(maxsize=1)
 def _compiled() -> dict[str, re.Pattern]:
     """Return each skill's keyword list compiled into one case-insensitive regex (cached)."""
     return {k: re.compile("|".join(v), re.I) for k, v in SKILLS.items()}
 
 
+# ZONULY ▸ enrichment · skill dictionary ▸ enrichment · skill dictionary ▸ skills.skills_in(): Canonical skills a text names, in dictionary order.
 def skills_in(text: str | None) -> list[str]:
     """Canonical skills a text names, in dictionary order."""
     if not text:
@@ -143,6 +145,7 @@ def skills_in(text: str | None) -> list[str]:
     return [k for k, rx in _compiled().items() if rx.search(text)]
 
 
+# ZONULY ▸ enrichment · skill dictionary ▸ enrichment · skill dictionary ▸ skills.pattern(): One regex for a canonical skill (or the literal text for an unknown one).
 def pattern(skill: str) -> str:
     """One regex for a canonical skill (or the literal text for an unknown one)."""
     return "|".join(SKILLS.get(skill) or (re.escape(skill),))
