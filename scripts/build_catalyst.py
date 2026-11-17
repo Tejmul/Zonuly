@@ -75,6 +75,7 @@ AUTH_ENV = (
 )
 
 
+# ZONULY ▸ github scraping · sign-in · auth · deployment · snapshot ▸ deployment · build the public api ▸ build_catalyst._inject_env(): In GitHub Actions only, copy the sign-in env variables into AppSail's app-config.js…
 def _inject_env() -> list[str]:
     """In GitHub Actions only, copy the sign-in env variables into AppSail's app-config.json.
     Returns the names injected (never the values)."""
@@ -91,6 +92,7 @@ def _inject_env() -> list[str]:
     return sorted(env)
 
 
+# ZONULY ▸ filtering · csv export · deployment · snapshot ▸ deployment · build the public api ▸ build_catalyst._requirements(): List the frozen runtime requirements from `uv export`, minus the excluded heavy packages.
 def _requirements() -> list[str]:
     """List the frozen runtime requirements from `uv export`, minus the excluded heavy packages."""
     out = subprocess.run(
@@ -109,6 +111,7 @@ def _requirements() -> list[str]:
     return keep
 
 
+# ZONULY ▸ deployment · snapshot ▸ deployment · build the public api ▸ build_catalyst.main(): Build the Catalyst AppSail deploy folder: copy code, config and lists, vendor Linux wheels.
 def main() -> None:
     """Build the Catalyst AppSail deploy folder: copy code, config and lists, vendor Linux wheels.
     Refuses if a private file (.env, secrets, the live DB, profile) ends up in the build."""

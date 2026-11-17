@@ -37,6 +37,7 @@ sys.path.insert(0, str(ROOT))
 CITIES = ("Bengaluru", "Hyderabad")
 
 
+# ZONULY ▸ deployment · smoke tests ▸ deployment · smoke tests ▸ smoke._client(): Return an API client: an in-process TestClient on a DB file, or an httpx client for a URL.
 def _client(url: str | None, db: Path | None):
     """Return an API client: an in-process TestClient on a DB file, or an httpx client for a URL.
     Signs in as the API itself when ZONULY_SESSION_SECRET is set."""
@@ -61,12 +62,14 @@ def _client(url: str | None, db: Path | None):
     return httpx.Client(base_url=url.rstrip("/"), timeout=60, follow_redirects=True, cookies=cookies)
 
 
+# ZONULY ▸ scraping · deployment · snapshot · monitoring ▸ deployment · smoke tests ▸ smoke.run(): Smoke-test the API: health snapshot, lists (India star cities), companies, upskill, dashboard.
 def run(url: str | None, db: Path | None, dashboard: str | None) -> list[str]:
     """Smoke-test the API: health snapshot, lists (India star cities), companies, upskill, dashboard.
     Returns a list of failure messages; empty when everything answered."""
     fails: list[str] = []
     c = _client(url, db)
 
+    # ZONULY ▸ deployment · smoke tests ▸ deployment · smoke tests ▸ smoke.run.get(): GET a path and return its JSON, recording a failure when the status is not 200.
     def get(path: str):
         """GET a path and return its JSON, recording a failure when the status is not 200."""
         r = c.get(path)
@@ -125,6 +128,7 @@ def run(url: str | None, db: Path | None, dashboard: str | None) -> list[str]:
     return fails
 
 
+# ZONULY ▸ scraping ▸ deployment · smoke tests ▸ smoke.main(): CLI entry point: parse the URL or --db and --dashboard, run the smoke checks, exit 1 on failure.
 def main() -> None:
     """CLI entry point: parse the URL or --db and --dashboard, run the smoke checks, exit 1 on failure."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
