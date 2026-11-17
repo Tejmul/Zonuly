@@ -33,6 +33,7 @@ log = logging.getLogger(__name__)
 API = "https://api.github.com"
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ outreach · email ▸ researcher.github_work(): Top public repos for a person, most-starred first.
 async def github_work(http: httpx.AsyncClient, github_url: str | None) -> dict:
     """Top public repos for a person, most-starred first."""
     if not github_url:
@@ -95,6 +96,7 @@ Reply with exactly:
 }}"""
 
 
+# ZONULY ▸ people search · referrers · email drafting ▸ outreach · email ▸ researcher._fmt_repos(): Format a person's public repos as bullet lines for the drafting prompt.
 def _fmt_repos(work: dict) -> str:
     """Format a person's public repos as bullet lines for the drafting prompt."""
     repos = work.get("repos") or []
@@ -106,6 +108,7 @@ def _fmt_repos(work: dict) -> str:
     )
 
 
+# ZONULY ▸ people search · referrers · cache ▸ outreach · email ▸ researcher.research_contact(): Gather context on one contact and cache it on the Contact row.
 async def research_contact(contact_id: int, job_id: int | None = None) -> dict:
     """Gather context on one contact and cache it on the Contact row."""
     from jobhunter import llm, resume

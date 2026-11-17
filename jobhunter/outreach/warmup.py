@@ -56,6 +56,7 @@ MAX_PER_RUN = int(_P.get("max_per_run", 2))
 FRONT_LOAD = bool(_P.get("front_load", False))
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ warmup._as_date(): Coerce None (today), a datetime, a date or a YYYY-MM-DD string to a date.
 def _as_date(d: date | datetime | str | None) -> date:
     """Coerce None (today), a datetime, a date or a YYYY-MM-DD string to a date."""
     if d is None:
@@ -67,6 +68,7 @@ def _as_date(d: date | datetime | str | None) -> date:
     return datetime.strptime(str(d)[:10], "%Y-%m-%d").date()
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ warmup.start(): Return the configured send warm-up start date, or None when unset or invalid.
 def start() -> date | None:
     """Return the configured send warm-up start date, or None when unset or invalid."""
     raw = _W.get("start")
@@ -76,11 +78,13 @@ def start() -> date | None:
         return None
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ warmup.is_send_day(): Return True when the date (default today) falls on a configured sending weekday.
 def is_send_day(d: date | datetime | str | None = None) -> bool:
     """Return True when the date (default today) falls on a configured sending weekday."""
     return _DAYS[_as_date(d).weekday()] in SEND_DAYS
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ warmup.sending_day_index(): How many sending days lie between the warm-up start and `d` (start = 0). A
 def sending_day_index(d: date | datetime | str | None = None) -> int:
     """How many sending days lie between the warm-up start and `d` (start = 0). A
     non-sending day counts as the sending day before it. Before the start: 0."""
@@ -91,6 +95,7 @@ def sending_day_index(d: date | datetime | str | None = None) -> int:
     return before if is_send_day(day) else max(0, before - 1)
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ warmup.quota(): Today's warm-up quota, never above the daily cap. Without a warm-up configured the
 def quota(d: date | datetime | str | None = None, *, cap: int | None = None) -> int:
     """Today's warm-up quota, never above the daily cap. Without a warm-up configured the
     quota IS the cap. Before the start date the first step applies (a test send on the
@@ -102,6 +107,7 @@ def quota(d: date | datetime | str | None = None, *, cap: int | None = None) -> 
     return max(0, min(cap, first + step * (sending_day_index(d) // every)))
 
 
+# ZONULY ▸ email sending · calendar · scheduler · tick ▸ outreach · email ▸ warmup.schedule(): The next `days` calendar days: {day, weekday, send_day, quota}.
 def schedule(days: int = 10, *, from_day: date | datetime | str | None = None) -> list[dict]:
     """The next `days` calendar days: {day, weekday, send_day, quota}."""
     d0 = _as_date(from_day or start() or datetime.now().date())
@@ -113,6 +119,7 @@ def schedule(days: int = 10, *, from_day: date | datetime | str | None = None) -
     return out
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ warmup.slots(): `n` send times on day `d`, spread evenly across the window, each moved by up to
 def slots(d: date | datetime | str | None, n: int, *, window: tuple[int, int] | None = None,
           jitter: float | None = None, seed: str = "") -> list[datetime]:
     """`n` send times on day `d`, spread evenly across the window, each moved by up to
@@ -137,6 +144,7 @@ def slots(d: date | datetime | str | None, n: int, *, window: tuple[int, int] | 
     return sorted(out)
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ warmup.due(): How many of today's slots have come due by `now` (0 on a non-sending day).
 def due(now: datetime | None = None, *, cap: int | None = None) -> int:
     """How many of today's slots have come due by `now` (0 on a non-sending day)."""
     now = now or datetime.now()
@@ -148,6 +156,7 @@ def due(now: datetime | None = None, *, cap: int | None = None) -> int:
     return sum(1 for t in slots(now, quota(now, cap=cap)) if t <= now)
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ warmup.describe(): Describe a sending day: whether it is a send day, its warm-up quota, the cap and the send slots.
 def describe(d: date | datetime | str | None = None) -> dict:
     """Describe a sending day: whether it is a send day, its warm-up quota, the cap and the send slots."""
     day = _as_date(d)

@@ -55,6 +55,7 @@ log = logging.getLogger(__name__)
 STRUCTURE_ORDER = ["direct_intro", "advice_first", "give_first", "fit_question", "recruiter_direct"]
 
 
+# ZONULY ▸ cache ▸ outreach · proposals ▸ proposals.ensure_brief(): A stored needs brief for this role — deterministic, from the cached company context
 def ensure_brief(session, job: Job) -> bool:
     """A stored needs brief for this role — deterministic, from the cached company context
     (no network, no model). True when one was written."""
@@ -71,6 +72,7 @@ def ensure_brief(session, job: Job) -> bool:
     return True
 
 
+# ZONULY ▸ outreach · proposals ▸ outreach · proposals ▸ proposals.ensure_briefs(): Store a needs brief for each listed job that lacks one; return how many were written.
 def ensure_briefs(job_ids: list[int]) -> int:
     """Store a needs brief for each listed job that lacks one; return how many were written."""
     n = 0
@@ -82,6 +84,7 @@ def ensure_briefs(job_ids: list[int]) -> int:
     return n
 
 
+# ZONULY ▸ suppression · bounces ▸ outreach · proposals ▸ proposals._recruiters(): Ready recruiters (confirmed current, with an address, not suppressed) per company —
 def _recruiters(company_ids: list[int] | None = None) -> dict[int, list[int]]:
     """Ready recruiters (confirmed current, with an address, not suppressed) per company —
     at the given companies, or anywhere when None."""
@@ -103,6 +106,7 @@ def _recruiters(company_ids: list[int] | None = None) -> dict[int, list[int]]:
     return out
 
 
+# ZONULY ▸ decision ▸ outreach · proposals ▸ proposals._recruiter_targets(): Companies outside the plan's pool where a ready recruiter is the way in.
 def _recruiter_targets(skip: set[int]) -> list[dict]:
     """Companies outside the plan's pool where a ready recruiter is the way in."""
     from jobhunter.outreach.drafter import pick_job
@@ -121,6 +125,7 @@ def _recruiter_targets(skip: set[int]) -> list[dict]:
     return out
 
 
+# ZONULY ▸ remote from india · email drafting ▸ outreach · proposals ▸ proposals._market(): Return the market (india, remote or abroad) of a gathered draft's job and company.
 def _market(g: dict) -> str:
     """Return the market (india, remote or abroad) of a gathered draft's job and company."""
     from jobhunter.outreach import patterns
@@ -128,6 +133,7 @@ def _market(g: dict) -> str:
     return patterns.market(g.get("job"), g.get("company"))
 
 
+# ZONULY ▸ email drafting ▸ outreach · proposals ▸ proposals._payload(): Build one proposal row: recipient, company, role, structure, hook and the drafted text.
 def _payload(g: dict, r: dict, rank: int) -> dict:
     """Build one proposal row: recipient, company, role, structure, hook and the drafted text.
     Incomplete drafts carry only the context and what is missing."""
@@ -171,6 +177,7 @@ def _payload(g: dict, r: dict, rank: int) -> dict:
     return out
 
 
+# ZONULY ▸ email drafting · replies · follow-up ▸ outreach · proposals ▸ proposals.compose_followup(): The follow-up this email would get after five silent days: one NEW piece of value
 def compose_followup(r: dict, c: dict) -> dict:
     """The follow-up this email would get after five silent days: one NEW piece of value
     (a proof the first email did not show), not "just bumping this" (playbook §6)."""
@@ -189,6 +196,7 @@ def compose_followup(r: dict, c: dict) -> dict:
             "new_value": bool(extra), "after_yes": r.get("forward_note")}
 
 
+# ZONULY ▸ decision ▸ outreach · proposals ▸ proposals.build(): Regenerate the proposals: the best targets (batch.plan's order), every ready
 def build(n: int = 10, *, use_model: bool = True, incomplete_examples: int = 3, pool: int = 60) -> dict:
     """Regenerate the proposals: the best targets (batch.plan's order), every ready
     referrer at each, the contract run for each; then ~n picked round-robin across
@@ -235,6 +243,7 @@ def build(n: int = 10, *, use_model: bool = True, incomplete_examples: int = 3, 
         key = (item[2]["structure"], _market(item[1]))
         buckets.setdefault(key, []).append(item)
     # India and Remote are the targets; an on-site-abroad role fills in only if they run out
+    # ZONULY ▸ people search · referrers ▸ outreach · proposals ▸ proposals.build._ord(): Sort (structure, market) bucket keys by the preferred structure order, then market.
     def _ord(keys):
         """Sort (structure, market) bucket keys by the preferred structure order, then market."""
         return sorted(keys, key=lambda k: (STRUCTURE_ORDER.index(k[0]) if k[0] in STRUCTURE_ORDER else 9, k[1]))
@@ -331,6 +340,7 @@ STATE_LABEL = {
 }
 
 
+# ZONULY ▸ email drafting ▸ outreach · proposals ▸ proposals.draft_state(): The draft behind a proposal (or none), with its state in plain words.
 def draft_state(e: Email | None) -> dict:
     """The draft behind a proposal (or none), with its state in plain words."""
     from jobhunter.outreach import patterns
@@ -353,6 +363,7 @@ def draft_state(e: Email | None) -> dict:
             "sent_at": e.sent_at.isoformat() if e.sent_at else None}
 
 
+# ZONULY ▸ people search · referrers · email drafting ▸ outreach · proposals ▸ proposals._draft_for_contact(): The newest cold email to this person — what the proposal turned into, if anything.
 def _draft_for_contact(session, contact_id: int | None) -> Email | None:
     """The newest cold email to this person — what the proposal turned into, if anything."""
     if not contact_id:
@@ -361,6 +372,7 @@ def _draft_for_contact(session, contact_id: int | None) -> Email | None:
                         .order_by(col(Email.id).desc())).first()
 
 
+# ZONULY ▸ email drafting · review gate ▸ outreach · proposals ▸ proposals.to_draft(): Put this proposal into the review queue as a draft — the exact email shown, re-gated
 def to_draft(proposal_id: int) -> dict:
     """Put this proposal into the review queue as a draft — the exact email shown, re-gated
     against the same facts. Never approves: the user does that, here or in the queue."""
@@ -385,6 +397,7 @@ def to_draft(proposal_id: int) -> dict:
     return r
 
 
+# ZONULY ▸ email drafting ▸ outreach · proposals ▸ proposals.latest(): The stored proposals, best first, with the run's summary — and for each, the draft
 def latest() -> dict:
     """The stored proposals, best first, with the run's summary — and for each, the draft
     it became (if any) and that draft's state."""

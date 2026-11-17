@@ -214,6 +214,7 @@ _LAUNCH = re.compile(r"\b(launch(?:es|ed|ing)?|introduc(?:es|ed|ing)|announc(?:e
 
 # ------------------------------------------------------------------ slots from evidence
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.first_name(): A real first name, or None. Handles, scripts we cannot address, initials-only,
 def first_name(name: str | None) -> str | None:
     """A real first name, or None. Handles, scripts we cannot address, initials-only,
     company/team words and digits all fail — the contract then says "missing first name"."""
@@ -238,6 +239,7 @@ def first_name(name: str | None) -> str | None:
     return first
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.recipient_role(): Their role in their own words (headline / bio, first clause), else the class the
 def recipient_role(role: str | None, role_class: str | None) -> str | None:
     """Their role in their own words (headline / bio, first clause), else the class the
     evidence gave them. None for an unknown "other"."""
@@ -250,6 +252,7 @@ def recipient_role(role: str | None, role_class: str | None) -> str | None:
     return _CLASS_WORD.get(role_class or "")
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.short_role(): 'Backend Engineer - Studio Media Platform' -> 'Backend Engineer'; at most 6 words.
 def short_role(title: str | None) -> str | None:
     """'Backend Engineer - Studio Media Platform' -> 'Backend Engineer'; at most 6 words."""
     if not title:
@@ -263,6 +266,7 @@ def short_role(title: str | None) -> str | None:
     return " ".join(words[:6]) if words else None
 
 
+# ZONULY ▸ enrichment · email drafting ▸ outreach · email ▸ compose.is_small(): True for a small company: team size at or under the small-team limit, else an early funding stage.
 def is_small(company: dict) -> bool:
     """True for a small company: team size at or under the small-team limit, else an early funding stage."""
     size = company.get("team_size")
@@ -271,17 +275,20 @@ def is_small(company: dict) -> bool:
     return bool(_SMALL_STAGES.search(company.get("funding_stage") or ""))
 
 
+# ZONULY ▸ github scraping · email drafting ▸ outreach · email ▸ compose._repo_url(): Return the GitHub URL of an owner/name repo.
 def _repo_url(repo: str) -> str:
     """Return the GitHub URL of an owner/name repo."""
     return f"https://github.com/{repo}"
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose._words(): Return the first n words of text, with an ellipsis when cut.
 def _words(text: str, n: int) -> str:
     """Return the first n words of text, with an ellipsis when cut."""
     w = (text or "").split()
     return " ".join(w[:n]) + ("…" if len(w) > n else "")
 
 
+# ZONULY ▸ linkedin scraping · email drafting ▸ outreach · email ▸ compose._clean_title(): Strip site names and 'on LinkedIn/X' suffixes from a page title for use in a draft.
 def _clean_title(t: str) -> str:
     """Strip site names and 'on LinkedIn/X' suffixes from a page title for use in a draft."""
     t = re.sub(r"\s*[|·]\s*(LinkedIn|X|Twitter|YouTube|Medium|TechCrunch|Inc42|YourStory).*$", "", t or "", flags=re.I)
@@ -290,6 +297,7 @@ def _clean_title(t: str) -> str:
     return t.strip(" .:-–\"'")
 
 
+# ZONULY ▸ validation · guardrails · pay · salary · email drafting ▸ outreach · email ▸ compose.hooks(): Every hook the evidence supports, most specific first. Each one is
 def hooks(person: dict, company: dict, building: list[dict], me: dict) -> list[dict]:
     """Every hook the evidence supports, most specific first. Each one is
     {type, sentence, anchor, source, specificity}: `sentence` is the email's first line,
@@ -381,6 +389,7 @@ def hooks(person: dict, company: dict, building: list[dict], me: dict) -> list[d
     return out
 
 
+# ZONULY ▸ email verification · email drafting ▸ outreach · email ▸ compose._proof_line(): The short, true phrasing of one resume line (config outreach.compose.proofs), or a
 def _proof_line(evidence: str) -> dict | None:
     """The short, true phrasing of one resume line (config outreach.compose.proofs), or a
     trimmed clause of the line itself when no phrasing matches. None for the skills list."""
@@ -405,6 +414,7 @@ _WEAK_PROOF = re.compile(r"\bDNS\b|mentor|technical interviews|annotat|training 
                          r"student performance", re.I)
 
 
+# ZONULY ▸ email drafting · scheduler · tick ▸ outreach · email ▸ compose._label(): A skill label inside a sentence: "Machine learning" -> "machine learning"; acronyms
 def _label(skill: str) -> str:
     """A skill label inside a sentence: "Machine learning" -> "machine learning"; acronyms
     and names ("LLMs", "AWS", "PostgreSQL", "AI agents") stay as they are."""
@@ -415,6 +425,7 @@ def _label(skill: str) -> str:
     return skill
 
 
+# ZONULY ▸ email verification · email drafting ▸ outreach · email ▸ compose.needs_and_proofs(): Covered needs from the stored needs brief, each mapped to a distinct resume proof,
 def needs_and_proofs(brief: dict | None, limit: int = 3) -> list[dict]:
     """Covered needs from the stored needs brief, each mapped to a distinct resume proof,
     best first (covered over partial, heavier, a number in the proof). Skills-list and
@@ -463,16 +474,19 @@ _CO_WORDS = re.compile(r"\b(ai|labs?|inc|llc|ltd|limited|pvt|private|technologie
                        r"hq|corp|corporation|company|co|group|global)\b\.?", re.I)
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose._brand(): 'Temporal Technologies' -> 'Temporal'; 'Acme AI' -> 'Acme'.
 def _brand(name: str | None) -> str:
     """'Temporal Technologies' -> 'Temporal'; 'Acme AI' -> 'Acme'."""
     return re.sub(r"\s+", " ", _CO_WORDS.sub(" ", name or "")).strip(" .,-")
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose._names(): True when text names the given name as a whole word (case-insensitive).
 def _names(text: str, name: str) -> bool:
     """True when text names the given name as a whole word (case-insensitive)."""
     return bool(re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", text or "", re.I))
 
 
+# ZONULY ▸ validation · guardrails · email drafting ▸ outreach · email ▸ compose.gifts(): Something he built or used with THEIR product or repo, from evidence only:
 def gifts(person: dict, company: dict, me: dict) -> list[dict]:
     """Something he built or used with THEIR product or repo, from evidence only:
     outreach.compose.gifts (the user's own words, with an optional link and offer), else a
@@ -508,6 +522,7 @@ def gifts(person: dict, company: dict, me: dict) -> list[dict]:
 
 # ------------------------------------------------------------------ the contract
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ class compose.Contract
 @dataclass
 class Contract:
     first_name: str | None = None
@@ -534,11 +549,13 @@ class Contract:
     small: bool = False
     missing: list[str] = field(default_factory=list)
 
+    # ZONULY ▸ email drafting · ai model call · llm ▸ outreach · email ▸ compose.Contract.complete(): True when the drafting contract has nothing missing.
     @property
     def complete(self) -> bool:
         """True when the drafting contract has nothing missing."""
         return not self.missing
 
+    # ZONULY ▸ email drafting ▸ outreach · email ▸ compose.Contract.as_dict(): Return the drafting contract as a dict, with readable labels for the missing parts.
     def as_dict(self) -> dict:
         """Return the drafting contract as a dict, with readable labels for the missing parts."""
         d = asdict(self)
@@ -546,6 +563,7 @@ class Contract:
         return d
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.choose_structure(): Choose the cold email structure for a recipient and why (drafting).
 def choose_structure(role_class: str | None, small: bool = False, has_gift: bool = False,
                      mode: str | None = None) -> tuple[str, str]:
     """Choose the cold email structure for a recipient and why (drafting).
@@ -568,6 +586,7 @@ def choose_structure(role_class: str | None, small: bool = False, has_gift: bool
                             "they can offer to help instead of being asked to vouch for a stranger")
 
 
+# ZONULY ▸ validation · guardrails · enrichment · email drafting ▸ outreach · email ▸ compose.contract(): Fill every slot from evidence; record what could not be filled.
 def contract(person: dict, company: dict, job: dict | None, brief: dict | None, me: dict) -> Contract:
     """Fill every slot from evidence; record what could not be filled."""
     c = Contract()
@@ -614,6 +633,7 @@ _YEARS = re.compile(r"\b(?:[2-9]|1\d)\s*\+?\s*(?:-\s*\d+\s*)?(?:years?|yrs?)\b",
 _SENIOR = re.compile(r"\b(senior|sr\.?|staff|principal|lead|ii|iii|iv)\b", re.I)
 
 
+# ZONULY ▸ validation · guardrails · email drafting ▸ outreach · email ▸ compose.more_experience(): The evidence that the role asks for more experience than a final-year student has:
 def more_experience(job: dict | None, brief: dict | None) -> str | None:
     """The evidence that the role asks for more experience than a final-year student has:
     the role marked senior, a senior title, or the posting asking for 2+ years. None otherwise."""
@@ -629,6 +649,7 @@ def more_experience(job: dict | None, brief: dict | None) -> str | None:
     return None
 
 
+# ZONULY ▸ email verification · email drafting ▸ outreach · email ▸ compose.resume_proofs(): Every curated proof (outreach.compose.proofs) whose resume line is really on the
 def resume_proofs(me: dict) -> list[dict]:
     """Every curated proof (outreach.compose.proofs) whose resume line is really on the
     resume (me.work_lines), in config order — the top-up for a direct_intro track record."""
@@ -641,6 +662,7 @@ def resume_proofs(me: dict) -> list[dict]:
     return sorted(out, key=lambda x: order.get(x["proof"], 999))
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.track_record(): 3–4 concrete results: the ones covering the role's needs first (needs brief, best
 def track_record(proofs: list[dict], me: dict, limit: int = RECORD_MAX) -> list[dict]:
     """3–4 concrete results: the ones covering the role's needs first (needs brief, best
     first), then the strongest other lines of the resume. No two that share a number, no
@@ -671,6 +693,7 @@ SUBJECT_PATTERNS = {
 }
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.hook_subject(): 2–5 words about the hook: "your voice-sdk commits", "Acme AI's recent launch".
 def hook_subject(c: Contract) -> str | None:
     """2–5 words about the hook: "your voice-sdk commits", "Acme AI's recent launch"."""
     h = c.hook or {}
@@ -685,6 +708,7 @@ def hook_subject(c: Contract) -> str | None:
 _PERSON_HOOKS = ("person_commit", "person_repo", "person_bio")
 
 
+# ZONULY ▸ people search · referrers · email drafting ▸ outreach · email ▸ compose.liked_phrase(): The {liked} slot: Tejmul's own line for the company (company_likes), else the person's
 def liked_phrase(c: Contract) -> str:
     """The {liked} slot: Tejmul's own line for the company (company_likes), else the person's
     real work when we found it (their commits or repo on GitHub, the same thing the subject
@@ -704,6 +728,7 @@ def liked_phrase(c: Contract) -> str:
     return DEFAULT_LIKE
 
 
+# ZONULY ▸ people search · referrers · email drafting ▸ outreach · email ▸ compose._direct_subject(): The referral subject in one of its wordings (config direct_subjects), same pick as the body.
 def _direct_subject(c: Contract, role: str, co: str) -> str:
     """The referral subject in one of its wordings (config direct_subjects), same pick as the body.
     A person whose own work we found gets a subject naming it (2026-10-30: "the specific thing
@@ -724,6 +749,7 @@ def _direct_subject(c: Contract, role: str, co: str) -> str:
     return full if not gates.subject_problems(full) else f"Referral for {role}"
 
 
+# ZONULY ▸ email drafting · review gate ▸ outreach · email ▸ compose.subject_options(): Every subject the structure's patterns give that passes the gate's subject rules
 def subject_options(c: Contract, me: dict) -> list[dict]:
     """Every subject the structure's patterns give that passes the gate's subject rules
     and is 2–5 words."""
@@ -749,6 +775,7 @@ def subject_options(c: Contract, me: dict) -> list[dict]:
     return out
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.pick(): A stable rotation over the options (so variants spread evenly and repeat on a rerun).
 def pick(options: list, key: Any) -> int:
     """A stable rotation over the options (so variants spread evenly and repeat on a rerun)."""
     if not options:
@@ -763,6 +790,7 @@ EASY_OUT = "If not, that's completely fine."
 DEFAULT_OFFER = "If it's ever useful, I'm happy to share what I ran into. It might be naive next to what your team knows."
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.ask_line(): The one question of the email, per structure.
 def ask_line(c: Contract) -> str:
     """The one question of the email, per structure."""
     h = c.hook or {}
@@ -780,17 +808,20 @@ def ask_line(c: Contract) -> str:
     return "In my place, what would you learn next to be useful on a team like yours?"
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose._cap(): Capitalise the first letter of a string.
 def _cap(s: str) -> str:
     """Capitalise the first letter of a string."""
     return s[0].upper() + s[1:] if s else s
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose._opening(): "the Backend Engineer opening at Acme AI (https://…)" — the link only when it is the body's one link.
 def _opening(c: Contract) -> str:
     """"the Backend Engineer opening at Acme AI (https://…)" — the link only when it is the body's one link."""
     link = f" ({c.link})" if c.link and c.link == c.target_role_url else ""
     return f"the {c.target_role} opening at {c.company}{link}"
 
 
+# ZONULY ▸ people search · referrers · email drafting ▸ outreach · email ▸ compose.forward_note(): The two lines a referrer can forward — an AFTER-YES asset (sent once they offer to
 def forward_note(c: Contract, me: dict) -> str:
     """The two lines a referrer can forward — an AFTER-YES asset (sent once they offer to
     help, or in a follow-up), never in the first email."""
@@ -806,11 +837,13 @@ OUT_MORE_EXPERIENCE = ("I understand the role asks for more experience than I ha
 OUT_PLAIN = "If it isn't something you can help with, I completely understand."
 
 
+# ZONULY ▸ validation · guardrails · email drafting ▸ outreach · email ▸ compose.out_line(): The honest humility line: "more experience than I have" only when evidence says so.
 def out_line(c: Contract) -> str:
     """The honest humility line: "more experience than I have" only when evidence says so."""
     return OUT_MORE_EXPERIENCE if c.more_experience else OUT_PLAIN
 
 
+# ZONULY ▸ email drafting · knowledge graph ▸ outreach · email ▸ compose.record_paragraph(): "I've done four internships so far. I fine-tuned … I also built …" — every item a
 def record_paragraph(c: Contract, me: dict) -> str:
     """"I've done four internships so far. I fine-tuned … I also built …" — every item a
     resume line's curated phrasing, the role's needs first."""
@@ -821,6 +854,7 @@ def record_paragraph(c: Contract, me: dict) -> str:
     return head + " ".join(items)
 
 
+# ZONULY ▸ people search · referrers · email drafting ▸ outreach · email ▸ compose.variant_index(): A stable pick per recipient (their address, else name + company): the same person
 def variant_index(c: Contract, n: int) -> int:
     """A stable pick per recipient (their address, else name + company): the same person
     always gets the same wording, neighbours at one company mostly get different ones."""
@@ -830,6 +864,7 @@ def variant_index(c: Contract, n: int) -> int:
     return (int(hashlib.sha1(key.encode()).hexdigest(), 16) + (c.variant_offset or 0)) % max(1, n)
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose._direct(): Write the direct_intro email body: the configured template wording, else intro, record and ask.
 def _direct(c: Contract, me: dict) -> str:
     """Write the direct_intro email body: the configured template wording, else intro, record and ask."""
     if DIRECT_TEMPLATE:                      # the user's own email, in one of its wordings (config)
@@ -846,6 +881,7 @@ def _direct(c: Contract, me: dict) -> str:
     return f"Hi {c.first_name},\n\n" + "\n\n".join(paras)
 
 
+# ZONULY ▸ enrichment · email drafting ▸ outreach · email ▸ compose.fill(): The message (greeting → thanks) written from the slots alone. Returns {message,
 def fill(c: Contract, me: dict) -> dict:
     """The message (greeting → thanks) written from the slots alone. Returns {message,
     forward_note}: the drafter adds the opt-out line and the signature. One question,
@@ -892,6 +928,7 @@ SIGN_OFF = "Best,"
 SIGN_OFF_BY = {"direct_intro": DIRECT_SIGN_OFF}
 
 
+# ZONULY ▸ email drafting · suppression · bounces ▸ outreach · email ▸ compose.assemble(): The full body exactly as it would be sent: the message, the opt-out line, the
 def assemble(message: str, signature: str, opt_out: str | None = None, structure: str | None = None) -> str:
     """The full body exactly as it would be sent: the message, the opt-out line, the
     sign-off ("Thank you for your time," in the user's pattern) and the signature."""
@@ -901,6 +938,7 @@ def assemble(message: str, signature: str, opt_out: str | None = None, structure
     return "\n\n".join(parts) + f"\n\n{SIGN_OFF_BY.get(structure or '', SIGN_OFF)}\n{signature}"
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.word_band(): The message's word band: the user's pattern carries a track record (80–170), the
 def word_band(c: Contract | None) -> tuple[int, int]:
     """The message's word band: the user's pattern carries a track record (80–170), the
     research structures are short (gate config, 60–110)."""
@@ -909,6 +947,7 @@ def word_band(c: Contract | None) -> tuple[int, int]:
     return gates.MIN_WORDS, gates.MAX_WORDS
 
 
+# ZONULY ▸ email drafting · suppression · bounces ▸ outreach · email ▸ compose.message_of(): The message part of a whole body: everything before the opt-out line or the sign-off.
 def message_of(body: str, opt_lines: list[str] | None = None) -> str:
     """The message part of a whole body: everything before the opt-out line or the sign-off."""
     cut = len(body or "")
@@ -943,11 +982,13 @@ HUMILITY = {
 }
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.links(): Return every link found in a message.
 def links(message: str) -> list[str]:
     """Return every link found in a message."""
     return _LINK.findall(message or "")
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.old_shape(): What the message carries that the first email must not (the pre-2026-10-17 template).
 def old_shape(message: str, c: Contract | None = None) -> list[str]:
     """What the message carries that the first email must not (the pre-2026-10-17 template)."""
     out = []
@@ -969,6 +1010,7 @@ def old_shape(message: str, c: Contract | None = None) -> list[str]:
     return out
 
 
+# ZONULY ▸ email drafting · ai model call · llm ▸ outreach · email ▸ compose.keeps_contract(): What a (model) rewrite dropped that the contract requires to be in the message, or
 def keeps_contract(message: str, c: Contract) -> list[str]:
     """What a (model) rewrite dropped that the contract requires to be in the message, or
     the old template shape it brought back."""
@@ -1005,6 +1047,7 @@ def keeps_contract(message: str, c: Contract) -> list[str]:
     return out
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.humility(): Which humility markers the message carries, and any grovelling.
 def humility(message: str) -> dict:
     """Which humility markers the message carries, and any grovelling."""
     found = [k for k, rx in HUMILITY.items() if rx.search(message or "")]
@@ -1012,6 +1055,7 @@ def humility(message: str) -> dict:
     return {"markers": found, "grovel": grovel}
 
 
+# ZONULY ▸ people search · referrers · email drafting ▸ outreach · email ▸ compose.quality(): 0–100 and its parts. Personalisation 20, hook specificity 15 (the user's direct_intro
 def quality(message: str, subject: str, c: Contract, flags: list[dict], words: int, **_legacy) -> dict:
     """0–100 and its parts. Personalisation 20, hook specificity 15 (the user's direct_intro
     pattern has no hook: its 15 are the track record — 3–4 numbered results that fit the
@@ -1083,6 +1127,7 @@ def quality(message: str, subject: str, c: Contract, flags: list[dict], words: i
     }}
 
 
+# ZONULY ▸ decision · email drafting ▸ outreach · email ▸ compose.volume(): Targets ({company_id, job_id, ...}, best first) kept within one batch's limits: at
 def volume(targets: list[dict], *, per_company: int | None = None, per_role: int | None = None) -> list[dict]:
     """Targets ({company_id, job_id, ...}, best first) kept within one batch's limits: at
     most MAX_PER_COMPANY people at one company and MAX_PER_ROLE about one role."""
@@ -1102,6 +1147,7 @@ def volume(targets: list[dict], *, per_company: int | None = None, per_role: int
     return out
 
 
+# ZONULY ▸ email drafting ▸ outreach · email ▸ compose.not_claimed(): What the email deliberately leaves out: the role's needs the resume does not cover
 def not_claimed(brief: dict | None, c: Contract) -> list[dict]:
     """What the email deliberately leaves out: the role's needs the resume does not cover
     (never claimed), and the hooks that were on record but not used."""

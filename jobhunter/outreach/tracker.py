@@ -72,6 +72,7 @@ _QUOTE = re.compile(
 )
 
 
+# ZONULY ▸ email sending · replies · follow-up ▸ outreach · email ▸ tracker._decode(): Decode a Gmail base64url message part to text; empty string on missing or malformed data.
 def _decode(data: str | None) -> str:
     """Decode a Gmail base64url message part to text; empty string on missing or malformed data."""
     if not data:
@@ -82,6 +83,7 @@ def _decode(data: str | None) -> str:
         return ""
 
 
+# ZONULY ▸ people search · referrers · replies · follow-up ▸ outreach · email ▸ tracker._extract_body(): Walk the MIME tree, preferring text/plain.
 def _extract_body(payload: dict[str, Any]) -> str:
     """Walk the MIME tree, preferring text/plain."""
     if not payload:
@@ -110,6 +112,7 @@ def _extract_body(payload: dict[str, Any]) -> str:
     return ""
 
 
+# ZONULY ▸ scoring · replies · follow-up ▸ outreach · email ▸ tracker._strip_quoted(): Drop the quoted original so the classifier judges only what they wrote.
 def _strip_quoted(text: str) -> str:
     """Drop the quoted original so the classifier judges only what they wrote."""
     m = _QUOTE.search(text)
@@ -119,6 +122,7 @@ def _strip_quoted(text: str) -> str:
     return "\n".join(lines).strip()
 
 
+# ZONULY ▸ replies · follow-up · ai model call · llm ▸ outreach · email ▸ tracker.classify(): Classify a reply's sentiment (positive / negative / closed / neutral) with the cheap model.
 def classify(body: str, sender: str) -> dict:
     """Classify a reply's sentiment (positive / negative / closed / neutral) with the cheap model.
     Falls back to neutral, read it yourself, when the model gives no valid answer."""
@@ -139,6 +143,7 @@ def classify(body: str, sender: str) -> dict:
     return data
 
 
+# ZONULY ▸ replies · follow-up ▸ outreach · email ▸ tracker.record_reply(): Store one inbound reply, classify it, and — if it carries a yes with a time, a link
 def record_reply(email_id: int, body: str, *, sender: str, message_id: str | None = None) -> dict:
     """Store one inbound reply, classify it, and — if it carries a yes with a time, a link
     or a deadline — put it on the calendar path. Used by the Gmail poll and by the
@@ -192,6 +197,7 @@ def record_reply(email_id: int, body: str, *, sender: str, message_id: str | Non
     return out
 
 
+# ZONULY ▸ replies · follow-up ▸ outreach · email ▸ tracker.poll(): Check every sent thread for new inbound messages.
 def poll(limit: int = 400) -> dict:
     """Check every sent thread for new inbound messages."""
     init_db()
@@ -254,6 +260,7 @@ def poll(limit: int = 400) -> dict:
     return stats
 
 
+# ZONULY ▸ replies · follow-up ▸ outreach · email ▸ tracker._when(): A message's Date header as naive UTC, like Email.sent_at.
 def _when(msg: dict) -> datetime | None:
     """A message's Date header as naive UTC, like Email.sent_at."""
     try:
@@ -263,6 +270,7 @@ def _when(msg: dict) -> datetime | None:
     return d.astimezone(timezone.utc).replace(tzinfo=None) if d.tzinfo else d
 
 
+# ZONULY ▸ replies · follow-up ▸ outreach · email ▸ tracker._poll_imap(): The same walk over IMAP, in two passes.
 def _poll_imap(stats: dict, limit: int = 400) -> dict:
     """The same walk over IMAP, in two passes.
 
@@ -296,6 +304,7 @@ def _poll_imap(stats: dict, limit: int = 400) -> dict:
             ).all()
         }
 
+    # ZONULY ▸ replies · follow-up ▸ outreach · email ▸ tracker._poll_imap.record(): Record one incoming reply against an email (sentiment-classified) and update the poll stats.
     def record(email_id: int, msg: dict, where: str) -> None:
         """Record one incoming reply against an email (sentiment-classified) and update the poll stats."""
         body = _strip_quoted(msg["text"])
@@ -390,14 +399,17 @@ def _poll_imap(stats: dict, limit: int = 400) -> dict:
     return stats
 
 
+# ZONULY ▸ email verification · email drafting · replies · follow-up ▸ outreach · email ▸ tracker.funnel(): Counts for the Overview funnel: drafted -> approved -> sent -> replied -> positive.
 def funnel() -> dict:
     """Counts for the Overview funnel: drafted -> approved -> sent -> replied -> positive."""
     init_db()
     with get_session() as session:
+        # ZONULY ▸ filtering · scoring · replies · follow-up ▸ outreach · email ▸ tracker.funnel.count_emails(): Count emails matching the given filters.
         def count_emails(*where) -> int:
             """Count emails matching the given filters."""
             return session.exec(select(func.count()).select_from(Email).where(*where)).one()
 
+        # ZONULY ▸ replies · follow-up ▸ outreach · email ▸ tracker.funnel.count_replies(): Count replies with the given sentiment.
         def count_replies(sentiment: str) -> int:
             """Count replies with the given sentiment."""
             return session.exec(
@@ -421,6 +433,7 @@ def funnel() -> dict:
 
 # ------------------------------------------------------------------ the lifecycle view (2026-10-14)
 
+# ZONULY ▸ replies · follow-up ▸ outreach · email ▸ tracker.lifecycle(): Where one cold email stands, in the user's words:
 def lifecycle(e: Email, replies: list[Reply], children: list[Email], contact=None, *, now=None) -> dict:
     """Where one cold email stands, in the user's words:
     draft / incomplete / approved / sent → waiting (days, follow-up due) → replied
@@ -452,6 +465,7 @@ def lifecycle(e: Email, replies: list[Reply], children: list[Email], contact=Non
     return out
 
 
+# ZONULY ▸ replies · follow-up ▸ outreach · email ▸ tracker.track(): Every cold email with its lifecycle, newest first, and the counts on top.
 def track(*, status: str | None = None, sentiment: str | None = None, limit: int = 500) -> dict:
     """Every cold email with its lifecycle, newest first, and the counts on top."""
     import json as _json
@@ -509,6 +523,7 @@ def track(*, status: str | None = None, sentiment: str | None = None, limit: int
     return {"counts": counts, "rows": rows}
 
 
+# ZONULY ▸ replies · follow-up ▸ outreach · email ▸ tracker.thread(): One conversation in order: our cold email exactly as sent, every follow-up, and every
 def thread(email_id: int) -> dict | None:
     """One conversation in order: our cold email exactly as sent, every follow-up, and every
     reply with its sentiment and the classifier's reason."""
@@ -541,6 +556,7 @@ def thread(email_id: int) -> dict | None:
         lc = lifecycle(root, list(reps), list(kids), contact)
         import json as _json
 
+        # ZONULY ▸ replies · follow-up ▸ outreach · email ▸ tracker.thread._j(): Parse a JSON text column, or None when empty or invalid.
         def _j(raw):
             """Parse a JSON text column, or None when empty or invalid."""
             try:

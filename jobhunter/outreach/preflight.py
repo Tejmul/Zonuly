@@ -46,11 +46,13 @@ MAX_DAILY = 25
 MAX_GUESSED = 5
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ preflight._c(): Build one preflight check row: id, label, status (green/amber/red), detail and fix.
 def _c(id_: str, label: str, status: str, detail: str, fix: str | None = None) -> dict:
     """Build one preflight check row: id, label, status (green/amber/red), detail and fix."""
     return {"id": id_, "label": label, "status": status, "detail": detail, "fix": fix}
 
 
+# ZONULY ▸ scheduler · tick ▸ outreach · email ▸ preflight._launchd(): Return the names of the loaded launchd agents whose label contains "zonuly" (empty off macOS).
 def _launchd() -> set[str]:
     """Return the names of the loaded launchd agents whose label contains "zonuly" (empty off macOS)."""
     try:
@@ -60,6 +62,7 @@ def _launchd() -> set[str]:
         return set()
 
 
+# ZONULY ▸ email sending · sign-in · auth ▸ outreach · email ▸ preflight._gmail(): Preflight checks for sending through Gmail: sender identity, app password, and (optionally) login.
 def _gmail(o: dict, *, sign_in: bool) -> list[dict]:
     """Preflight checks for sending through Gmail: sender identity, app password, and (optionally) login.
 
@@ -97,6 +100,7 @@ def _gmail(o: dict, *, sign_in: bool) -> list[dict]:
     return out
 
 
+# ZONULY ▸ email sending · scheduler · tick ▸ outreach · email ▸ preflight.run(): Run the send launch preflight: Gmail, send mode, caps, warm-up, brake, window, mail, launchd agents.
 def run(*, sign_in: bool = True, today: datetime | None = None) -> dict:
     """Run the send launch preflight: Gmail, send mode, caps, warm-up, brake, window, mail, launchd agents.
 
@@ -144,6 +148,7 @@ def run(*, sign_in: bool = True, today: datetime | None = None) -> dict:
     lo, hi = int(sender.SEND_WINDOW[0]), int(sender.SEND_WINDOW[1])
     tz = time.strftime("%Z")
     offset = datetime.now().astimezone().utcoffset() or timedelta(0)
+    # ZONULY ▸ lock ▸ outreach · email ▸ preflight.run._at(): Convert local hour `h` to the clock time `delta_h` hours from UTC, as HH:MM.
     def _at(h: int, delta_h: float) -> str:
         """Convert local hour `h` to the clock time `delta_h` hours from UTC, as HH:MM."""
         t = datetime(2026, 10, 19, h) - offset + timedelta(hours=delta_h)
@@ -286,6 +291,7 @@ USER_CHECKLIST = [
 ]
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ preflight.text(): Render a preflight report as plain text lines, one per check with its fix.
 def text(report: dict) -> str:
     """Render a preflight report as plain text lines, one per check with its fix."""
     mark = {"green": "ok  ", "amber": "look", "red": "FIX "}

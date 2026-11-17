@@ -34,6 +34,7 @@ CALENDAR_ID = str(_C.get("calendar_id", "primary"))
 LOCAL_TZ = str(_C.get("timezone", "Asia/Kolkata"))
 
 
+# ZONULY ▸ email sending · calendar · sign-in · auth ▸ outreach · email ▸ calendar.status(): Report Google Calendar status: enabled, Gmail OAuth configured and authorized, calendar id.
 def status() -> dict:
     """Report Google Calendar status: enabled, Gmail OAuth configured and authorized, calendar id."""
     g = gmail.status()
@@ -45,6 +46,7 @@ def status() -> dict:
     }
 
 
+# ZONULY ▸ email sending · calendar ▸ outreach · email ▸ calendar._service(): Build a Google Calendar API client from the saved Gmail OAuth credentials.
 def _service():
     """Build a Google Calendar API client from the saved Gmail OAuth credentials."""
     from googleapiclient.discovery import build
@@ -53,6 +55,7 @@ def _service():
     return build("calendar", "v3", credentials=creds, cache_discovery=False)
 
 
+# ZONULY ▸ calendar ▸ outreach · email ▸ calendar.push(): Create (or update) the calendar entry for one Event. Never raises.
 def push(event_id: int) -> dict:
     """Create (or update) the calendar entry for one Event. Never raises."""
     if not ENABLED:

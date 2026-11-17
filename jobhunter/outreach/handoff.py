@@ -46,6 +46,7 @@ CSV_DIR = ROOT / "data" / "csv"
 _NAME = re.compile(r"(?:csv)?\s*(\d+)", re.I)
 
 
+# ZONULY ▸ csv export ▸ outreach · email ▸ handoff.parse_name(): "CSV7", "csv7" or "7" -> 7. ValueError on anything else.
 def parse_name(name: str) -> int:
     """"CSV7", "csv7" or "7" -> 7. ValueError on anything else."""
     m = _NAME.fullmatch((name or "").strip())
@@ -54,11 +55,13 @@ def parse_name(name: str) -> int:
     return int(m.group(1))
 
 
+# ZONULY ▸ csv export ▸ outreach · email ▸ handoff.path(): Return the file path of numbered hand-off batch CSV<n>.csv.
 def path(n: int) -> Path:
     """Return the file path of numbered hand-off batch CSV<n>.csv."""
     return CSV_DIR / f"CSV{n}.csv"
 
 
+# ZONULY ▸ csv export ▸ outreach · email ▸ handoff.next_number(): One past the highest batch recorded AND the highest CSV<n>.csv already in data/csv,
 def next_number(session: Session) -> int:
     """One past the highest batch recorded AND the highest CSV<n>.csv already in data/csv,
     so a file Tejmul may still be mailing from is never overwritten."""
@@ -72,12 +75,14 @@ def next_number(session: Session) -> int:
     return max(recorded, on_disk) + 1
 
 
+# ZONULY ▸ people search · referrers · email verification · csv export ▸ outreach · email ▸ handoff.proved_real(): Is this address one a batch may carry? Only an address on contact.email (which
 def proved_real(contact: Contact) -> bool:
     """Is this address one a batch may carry? Only an address on contact.email (which
     db._only_verified_addresses lets hold nothing unproved) whose status is "real"."""
     return bool(contact.email) and (contact.email_status or "") == "real"
 
 
+# ZONULY ▸ people search · referrers · csv export ▸ outreach · email ▸ handoff.spent_contact_ids(): Leads a new batch must not offer: already in a batch (done or not), or mailed by him.
 def spent_contact_ids(session: Session) -> set[int]:
     """Leads a new batch must not offer: already in a batch (done or not), or mailed by him."""
     ids = set(session.exec(select(CsvBatchContact.contact_id)).all())
@@ -85,6 +90,7 @@ def spent_contact_ids(session: Session) -> set[int]:
     return ids
 
 
+# ZONULY ▸ csv export ▸ outreach · email ▸ handoff.record(): Record the batch that was just written: the row and one link per lead.
 def record(session: Session, n: int, contact_ids: list[int]) -> CsvBatch:
     """Record the batch that was just written: the row and one link per lead."""
     ids = list(dict.fromkeys(contact_ids))
@@ -96,6 +102,7 @@ def record(session: Session, n: int, contact_ids: list[int]) -> CsvBatch:
     return batch
 
 
+# ZONULY ▸ csv export ▸ outreach · email ▸ handoff.mark_done(): `--done CSV<n>`: he mailed that batch. Stamps done_at and marks every lead in it
 def mark_done(session: Session, name: str) -> dict:
     """`--done CSV<n>`: he mailed that batch. Stamps done_at and marks every lead in it
     mailed by him, so no later batch can include them. Idempotent — running it twice marks
@@ -120,6 +127,7 @@ def mark_done(session: Session, name: str) -> dict:
     return {"n": n, "leads": len(ids), "marked": marked, "done_at": batch.done_at}
 
 
+# ZONULY ▸ people search · referrers · csv export ▸ outreach · email ▸ handoff.batch_of(): contact id -> {"batch": n, "mailed_by_tejmul": bool} for the leads that are in a batch.
 def batch_of(session: Session, contact_ids: list[int]) -> dict[int, dict]:
     """contact id -> {"batch": n, "mailed_by_tejmul": bool} for the leads that are in a batch.
     What the dashboard's read-only column shows. The latest batch wins if a lead is in two."""

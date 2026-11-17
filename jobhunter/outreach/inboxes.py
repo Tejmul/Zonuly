@@ -70,6 +70,7 @@ TOTAL_CAP = int(_O.get("total_daily_cap", _O.get("daily_send_cap", 25)))
 MIN_GAP_MINUTES = float(_O.get("min_gap_minutes", 15))
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ class inboxes.Inbox
 @dataclass(frozen=True)
 class Inbox:
     key: str
@@ -87,11 +88,13 @@ class Inbox:
     sent_box: str = "Sent"
     spam_boxes: tuple[str, ...] = ("Spam", "Junk")
 
+    # ZONULY ▸ email sending ▸ outreach · email ▸ inboxes.Inbox.is_gmail(): True when this sending inbox is the main Gmail account.
     @property
     def is_gmail(self) -> bool:
         """True when this sending inbox is the main Gmail account."""
         return self.kind == GMAIL
 
+    # ZONULY ▸ email verification · email sending ▸ outreach · email ▸ inboxes.Inbox.password(): The inbox's SMTP/IMAP password: the Gmail app password, or the secret named by password_env.
     def password(self) -> str:
         """The inbox's SMTP/IMAP password: the Gmail app password, or the secret named by password_env."""
         if self.is_gmail:
@@ -100,6 +103,7 @@ class Inbox:
             return gmail.app_password()
         return (secret(self.password_env) or os.environ.get(self.password_env) or "").replace(" ", "")
 
+    # ZONULY ▸ email verification · email sending ▸ outreach · email ▸ inboxes.Inbox.ready(): True when the inbox has everything it needs to send (address, SMTP host, password).
     def ready(self) -> bool:
         """True when the inbox has everything it needs to send (address, SMTP host, password)."""
         if self.is_gmail:
@@ -109,12 +113,14 @@ class Inbox:
         return bool(self.address and self.smtp_host and self.password_env and self.password())
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ inboxes._hostport(): Split a host:port string, using the default port when none is given.
 def _hostport(raw: str | None, default_port: int) -> tuple[str, int]:
     """Split a host:port string, using the default port when none is given."""
     host, _, port = str(raw or "").partition(":")
     return host.strip(), int(port) if port.strip().isdigit() else default_port
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ inboxes._gmail(): Build the Inbox record for the main Gmail account from the Gmail settings and outreach config.
 def _gmail() -> Inbox:
     """Build the Inbox record for the main Gmail account from the Gmail settings and outreach config."""
     from jobhunter.outreach import gmail
@@ -126,6 +132,7 @@ def _gmail() -> Inbox:
                  sent_box='"[Gmail]/Sent Mail"', spam_boxes=('"[Gmail]/Spam"',))
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ inboxes.all_inboxes(): Every configured inbox, Gmail first, ready or not.
 def all_inboxes() -> list[Inbox]:
     """Every configured inbox, Gmail first, ready or not."""
     out = [_gmail()]
@@ -148,11 +155,13 @@ def all_inboxes() -> list[Inbox]:
     return out
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ inboxes.ready(): List every configured sending inbox that is ready to send.
 def ready() -> list[Inbox]:
     """List every configured sending inbox that is ready to send."""
     return [i for i in all_inboxes() if i.ready()]
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ inboxes.sending(): The inboxes a send run uses: the ready ones; in a dry run the Gmail as well, so the
 def sending(live: bool) -> list[Inbox]:
     """The inboxes a send run uses: the ready ones; in a dry run the Gmail as well, so the
     rehearsal runs without a password."""
@@ -162,6 +171,7 @@ def sending(live: bool) -> list[Inbox]:
     return boxes
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ inboxes.get(): Look up a sending inbox by key (default: Gmail), or None.
 def get(key: str | None) -> Inbox | None:
     """Look up a sending inbox by key (default: Gmail), or None."""
     key = key or GMAIL
@@ -170,6 +180,7 @@ def get(key: str | None) -> Inbox | None:
 
 # ------------------------------------------------------------------------ the ramp
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ inboxes._first_send(): Date of the first email this inbox ever sent (reads the email table), or None.
 def _first_send(session, inbox: Inbox) -> date | None:
     """Date of the first email this inbox ever sent (reads the email table), or None."""
     from jobhunter.db import Email
@@ -178,6 +189,7 @@ def _first_send(session, inbox: Inbox) -> date | None:
     return first.date() if first else None
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ inboxes.start(): Warm-up start date for an inbox: from config, the Gmail warm-up, or its first send.
 def start(session, inbox: Inbox) -> date | None:
     """Warm-up start date for an inbox: from config, the Gmail warm-up, or its first send."""
     from jobhunter.outreach import warmup
@@ -190,6 +202,7 @@ def start(session, inbox: Inbox) -> date | None:
     return _first_send(session, inbox)
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ inboxes.quota(): This inbox's mail for `day`: the ramp first + step * (sending day // every), never above
 def quota(session, inbox: Inbox, day: date | datetime | str | None = None) -> int:
     """This inbox's mail for `day`: the ramp first + step * (sending day // every), never above
     its cap. A new inbox with no start and no sends is on its first step."""
@@ -207,6 +220,7 @@ def quota(session, inbox: Inbox, day: date | datetime | str | None = None) -> in
     return max(0, min(inbox.cap, first + step * (n // every)))
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ inboxes.total_quota(): The day's mail across the ready inboxes, never above outreach.total_daily_cap. Gmail
 def total_quota(session, day: date | datetime | str | None = None) -> int:
     """The day's mail across the ready inboxes, never above outreach.total_daily_cap. Gmail
     always counts (as it always has), so a copy without passwords shows the same cap."""
@@ -215,12 +229,14 @@ def total_quota(session, day: date | datetime | str | None = None) -> int:
     return min(TOTAL_CAP, sum(quota(session, i, day) for i in boxes.values()))
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ inboxes._midnight_utc(): UTC time of local midnight today, the start of the daily send count.
 def _midnight_utc(now: datetime | None = None) -> datetime:
     """UTC time of local midnight today, the start of the daily send count."""
     local = (now or datetime.now()).astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
     return local.astimezone(timezone.utc).replace(tzinfo=None)
 
 
+# ZONULY ▸ suppression · bounces ▸ outreach · email ▸ inboxes.used_today(): Mail this inbox sent since local midnight (a bounce still went out). Mail sent before
 def used_today(session, inbox: Inbox, now: datetime | None = None) -> int:
     """Mail this inbox sent since local midnight (a bounce still went out). Mail sent before
     inboxes existed has no sender_inbox and was Gmail's."""
@@ -233,11 +249,13 @@ def used_today(session, inbox: Inbox, now: datetime | None = None) -> int:
         who, col(Email.sent_at) >= _midnight_utc(now))).one()
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ inboxes.left_today(): How many more emails this inbox may send today (quota minus sent today).
 def left_today(session, inbox: Inbox, now: datetime | None = None) -> int:
     """How many more emails this inbox may send today (quota minus sent today)."""
     return max(0, quota(session, inbox, now) - used_today(session, inbox, now))
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ inboxes.due(): How many of this inbox's jittered slots in the India window have come due by `now`.
 def due(session, inbox: Inbox, now: datetime | None = None) -> int:
     """How many of this inbox's jittered slots in the India window have come due by `now`.
     Each inbox has its own slots (seeded by its key), so the inboxes do not fire together."""
@@ -251,6 +269,7 @@ def due(session, inbox: Inbox, now: datetime | None = None) -> int:
     return sum(1 for t in warmup.slots(now, quota(session, inbox, now), seed=inbox.key) if t <= now)
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ inboxes.gap_ok(): At least MIN_GAP_MINUTES (plus up to half again, fixed per last mail) since this inbox's
 def gap_ok(session, inbox: Inbox, now: datetime | None = None) -> bool:
     """At least MIN_GAP_MINUTES (plus up to half again, fixed per last mail) since this inbox's
     last send. The gap is per inbox: one person writing, not the whole pool."""
@@ -272,6 +291,7 @@ BRAKE_HOURS = float(_O.get("inbox_brake_hours", 48))
 _REFUSAL = re.compile(r"\b5\.\d\.\d|\b55\d\b|limit exceeded|spam|blocked|rejected", re.I)
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ inboxes.brake(): Why this inbox must rest, or None. 2026-10-30, Tejmul: "nothing should go in spam and
 def brake(session, inbox: Inbox, now: datetime | None = None) -> str | None:
     """Why this inbox must rest, or None. 2026-10-30, Tejmul: "nothing should go in spam and
     nothing should go blocked". One bounce or one refusal from an inbox in the last
@@ -300,6 +320,7 @@ def brake(session, inbox: Inbox, now: datetime | None = None) -> str | None:
             f"({(last.error or '')[:80]})")
 
 
+# ZONULY ▸ email sending ▸ outreach · email ▸ inboxes._cleared(): When the inbox's sending brake was last lifted by hand (settings table), or None.
 def _cleared(session, inbox: Inbox) -> datetime | None:
     """When the inbox's sending brake was last lifted by hand (settings table), or None."""
     from jobhunter.db import get_setting
@@ -311,6 +332,7 @@ def _cleared(session, inbox: Inbox) -> datetime | None:
         return None
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ inboxes.lift(): Lift an inbox's rest by hand (2026-10-30, Tejmul: "at least 25+ should be sent today"):
 def lift(session, key: str) -> dict:
     """Lift an inbox's rest by hand (2026-10-30, Tejmul: "at least 25+ should be sent today"):
     the failures so far stop counting; a new bounce or refusal rests it again. The caller commits."""
@@ -324,11 +346,13 @@ def lift(session, key: str) -> dict:
     return {"inbox": box.key, "was": was, "lifted": True}
 
 
+# ZONULY ▸ outreach · email ▸ outreach · email ▸ inboxes.takes(): A domain inbox writes to verified addresses only (verified_only, the default).
 def takes(inbox: Inbox, *, guessed: bool) -> bool:
     """A domain inbox writes to verified addresses only (verified_only, the default)."""
     return not (guessed and inbox.verified_only)
 
 
+# ZONULY ▸ scraping · email sending ▸ outreach · email ▸ inboxes.describe(): Describe every sending inbox for the dashboard: ready, cap, rest state, today's quota and use.
 def describe(session, now: datetime | None = None) -> list[dict]:
     """Describe every sending inbox for the dashboard: ready, cap, rest state, today's quota and use."""
     out = []

@@ -41,6 +41,7 @@ HEADER = ["Company", "Domain", "Name", "Role", "Email", "Confidence", "Source", 
           "Seniority", "Referral Rank", "GitHub", "LinkedIn", "X", "Employer Claim", "Created"]
 
 
+# ZONULY ▸ people search · referrers · csv export ▸ outreach · sheet export ▸ export_leads_to_sheet._rows(): Read every lead with an address from the DB as sheet rows; optionally only reachable referrers.
 def _rows(db: Path, reachable: bool) -> list[list]:
     """Read every lead with an address from the DB as sheet rows; optionally only reachable referrers."""
     con = sqlite3.connect(db)
@@ -69,6 +70,7 @@ def _rows(db: Path, reachable: bool) -> list[list]:
     return [["" if v is None else v for v in r[1:3] + r[4:]] for r in rows]
 
 
+# ZONULY ▸ csv export ▸ outreach · sheet export ▸ export_leads_to_sheet.main(): Export leads to a Google Sheet tab: clear it, append all rows, freeze and bold the header.
 def main(
     sheet: str = typer.Option(os.environ.get("ZONULY_LEADS_SHEET_ID", DEFAULT_SHEET_ID), help="spreadsheet id"),
     db: Path = typer.Option(None, help="sqlite file; default is the configured DB"),

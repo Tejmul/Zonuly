@@ -96,11 +96,13 @@ LEGACY_OPT_OUT_LINES = [
 ]
 
 
+# ZONULY ▸ suppression · bounces ▸ outreach · email ▸ suppress.opt_out_lines(): The current opt-out line first, then the older ones still found in stored bodies.
 def opt_out_lines() -> list[str]:
     """The current opt-out line first, then the older ones still found in stored bodies."""
     return [x for x in [OPT_OUT_LINE, *LEGACY_OPT_OUT_LINES] if x]
 
 
+# ZONULY ▸ suppression · bounces ▸ outreach · email ▸ suppress.has_opt_out(): True when the email body already contains one of the opt-out lines.
 def has_opt_out(body: str | None) -> bool:
     """True when the email body already contains one of the opt-out lines."""
     return any(x in (body or "") for x in opt_out_lines())
@@ -113,11 +115,13 @@ _LIVE = ("approved", "sending", "sent", "replied")
 
 # ------------------------------------------------------------------ the do-not-contact list
 
+# ZONULY ▸ scoring · suppression · bounces ▸ outreach · email ▸ suppress._norm_company(): Normalize a company name to lowercase letters and digits for suppression matching.
 def _norm_company(name: str | None) -> str:
     """Normalize a company name to lowercase letters and digits for suppression matching."""
     return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
 
 
+# ZONULY ▸ people search · referrers · suppression · bounces · lock ▸ outreach · email ▸ suppress.config_block(): Why config's do_not_contact forbids this address / company, or None.
 def config_block(*, email: str | None = None, company: Company | None = None) -> str | None:
     """Why config's do_not_contact forbids this address / company, or None."""
     em = (email or "").strip().lower()
@@ -137,6 +141,7 @@ def config_block(*, email: str | None = None, company: Company | None = None) ->
     return None
 
 
+# ZONULY ▸ people search · referrers · email drafting · suppression · bounces ▸ outreach · email ▸ suppress.blocked(): The reason no mail may go to this person / company, or None. Checked at draft
 def blocked(session, *, contact: Contact | None, company: Company | None, to_email: str | None = None) -> str | None:
     """The reason no mail may go to this person / company, or None. Checked at draft
     selection, at approval and again inside the send."""
@@ -170,6 +175,7 @@ def blocked(session, *, contact: Contact | None, company: Company | None, to_ema
 
 # ------------------------------------------------------------------ the day's target companies
 
+# ZONULY ▸ decision · suppression · bounces ▸ outreach · email ▸ suppress._focus_rows(): Company ids from the daily focus target lists saved in settings between two date keys.
 def _focus_rows(session, since: str, until: str | None = None) -> set[int]:
     """Company ids from the daily focus target lists saved in settings between two date keys."""
     import json
@@ -185,11 +191,13 @@ def _focus_rows(session, since: str, until: str | None = None) -> set[int]:
     return out
 
 
+# ZONULY ▸ decision · suppression · bounces ▸ outreach · email ▸ suppress.focus_companies(): The target companies picked for `day` (YYYY-MM-DD). Written by focus.py.
 def focus_companies(session, day: str) -> set[int]:
     """The target companies picked for `day` (YYYY-MM-DD). Written by focus.py."""
     return _focus_rows(session, day, day)
 
 
+# ZONULY ▸ suppression · bounces ▸ outreach · email ▸ suppress.circle_ids(): The companies in the circle now (focus.py): each is written to until FOCUS_GOAL asks.
 def circle_ids(session) -> set[int]:
     """The companies in the circle now (focus.py): each is written to until FOCUS_GOAL asks."""
     import json
@@ -201,6 +209,7 @@ def circle_ids(session) -> set[int]:
         return set()
 
 
+# ZONULY ▸ decision · suppression · bounces ▸ outreach · email ▸ suppress.focus_ids(): The circle, and the target companies for `since` (default today) and every later day picked.
 def focus_ids(session, since: str | None = None) -> set[int]:
     """The circle, and the target companies for `since` (default today) and every later day picked."""
     from datetime import date
@@ -210,6 +219,7 @@ def focus_ids(session, since: str | None = None) -> set[int]:
 
 # ------------------------------------------------------------------ cooldown
 
+# ZONULY ▸ email verification · suppression · bounces · replies · follow-up ▸ outreach · email ▸ suppress.cooldown(): One cold ask per company until a reply or COMPANY_COOLDOWN_DAYS, never two approved
 def cooldown(session, email: Email) -> str | None:
     """One cold ask per company until a reply or COMPANY_COOLDOWN_DAYS, never two approved
     at once; one cold mail per person per CONTACT_COOLDOWN_DAYS. Follow-ups are exempt —
@@ -259,6 +269,7 @@ def cooldown(session, email: Email) -> str | None:
 
 # ------------------------------------------------------------------ the opt-out line
 
+# ZONULY ▸ suppression · bounces ▸ outreach · email ▸ suppress.with_opt_out(): The body with outreach.opt_out_line above the sign-off — once. Idempotent.
 def with_opt_out(body: str) -> str:
     """The body with outreach.opt_out_line above the sign-off — once. Idempotent."""
     line = OPT_OUT_LINE
@@ -288,6 +299,7 @@ _OPT_OUT = [
 ]
 
 
+# ZONULY ▸ suppression · bounces · replies · follow-up ▸ outreach · email ▸ suppress.is_opt_out(): The phrase that asks us to stop, or None. Read on the reply's own words (the
 def is_opt_out(text: str | None) -> str | None:
     """The phrase that asks us to stop, or None. Read on the reply's own words (the
     quoted original stripped), so our own opt-out line never trips it."""
@@ -303,6 +315,7 @@ def is_opt_out(text: str | None) -> str | None:
     return None
 
 
+# ZONULY ▸ people search · referrers · suppression · bounces ▸ outreach · email ▸ suppress.opt_out(): Suppress the person and the company forever; withdraw every pending mail to that
 def opt_out(session, email: Email, *, phrase: str, sender: str | None = None) -> dict:
     """Suppress the person and the company forever; withdraw every pending mail to that
     company. The caller commits."""
@@ -339,6 +352,7 @@ def opt_out(session, email: Email, *, phrase: str, sender: str | None = None) ->
 _ADDR = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 
 
+# ZONULY ▸ people search · referrers · suppression · bounces ▸ outreach · email ▸ suppress.mark_bounced(): The address is dead: the email failed, the contact loses the address (kept as
 def mark_bounced(session, email: Email, text: str | None = None) -> dict:
     """The address is dead: the email failed, the contact loses the address (kept as
     dead_email, never stored again), pending mail to it is withdrawn. The ledger slot it
@@ -375,6 +389,7 @@ def mark_bounced(session, email: Email, text: str | None = None) -> dict:
     return out
 
 
+# ZONULY ▸ email sending · suppression · bounces ▸ outreach · email ▸ suppress.bounced_in_window(): Count bounced emails in the last `days` days (used by the send brake).
 def bounced_in_window(session, days: int = BRAKE_DAYS) -> int:
     """Count bounced emails in the last `days` days (used by the send brake)."""
     since = utcnow() - timedelta(days=days)
@@ -383,6 +398,7 @@ def bounced_in_window(session, days: int = BRAKE_DAYS) -> int:
     return len(rows)
 
 
+# ZONULY ▸ suppression · bounces ▸ outreach · email ▸ suppress.brake(): Why guessed addresses are paused now (too many bounces this week), or None.
 def brake(session) -> str | None:
     """Why guessed addresses are paused now (too many bounces this week), or None."""
     n = bounced_in_window(session)
@@ -405,16 +421,19 @@ _SPAM_BLOCK = re.compile(r"message blocked|message rejected|has been blocked|\b5
                          r"\bspam\b|unsolicited|policy reasons", re.I)
 
 
+# ZONULY ▸ suppression · bounces · lock ▸ outreach · email ▸ suppress.is_spam_block(): A bounce that says the mail was refused as spam / by policy (not "address not found").
 def is_spam_block(text: str | None) -> bool:
     """A bounce that says the mail was refused as spam / by policy (not "address not found")."""
     return bool(text and _SPAM_BLOCK.search(text))
 
 
+# ZONULY ▸ suppression · bounces ▸ outreach · email ▸ suppress._domain(): Return the lowercase domain part of an email address, or empty string.
 def _domain(addr: str | None) -> str:
     """Return the lowercase domain part of an email address, or empty string."""
     return (addr or "").rsplit("@", 1)[-1].strip().lower() if "@" in (addr or "") else ""
 
 
+# ZONULY ▸ suppression · bounces · lock ▸ outreach · email ▸ suppress.spam_blocks(): Bounced emails in the last `hours` hours whose error reads as a spam block.
 def spam_blocks(session, *, hours: float) -> list[Email]:
     """Bounced emails in the last `hours` hours whose error reads as a spam block."""
     since = utcnow() - timedelta(hours=hours)
@@ -423,6 +442,7 @@ def spam_blocks(session, *, hours: float) -> list[Email]:
     return [e for e in rows if is_spam_block(e.error)]
 
 
+# ZONULY ▸ email sending · suppression · bounces ▸ outreach · email ▸ suppress.spam_hold(): Why this cold mail must wait because Gmail refused earlier mail as spam, or None:
 def spam_hold(session, email: Email) -> str | None:
     """Why this cold mail must wait because Gmail refused earlier mail as spam, or None:
     any block in the last SPAM_PAUSE_HOURS pauses every cold mail (the account is being
@@ -451,6 +471,7 @@ def spam_hold(session, email: Email) -> str | None:
     return None
 
 
+# ZONULY ▸ suppression · bounces ▸ outreach · email ▸ suppress.domain_cap_for(): Cold mails a day into one domain: PER_DOMAIN_DAILY_CAP, or FOCUS_PER_COMPANY when
 def domain_cap_for(session, company_id: int | None, day: str) -> int:
     """Cold mails a day into one domain: PER_DOMAIN_DAILY_CAP, or FOCUS_PER_COMPANY when
     that is higher and the company is one of the day's targets."""
@@ -459,6 +480,7 @@ def domain_cap_for(session, company_id: int | None, day: str) -> int:
     return PER_DOMAIN_DAILY_CAP
 
 
+# ZONULY ▸ suppression · bounces ▸ outreach · email ▸ suppress.domain_cap(): At most PER_DOMAIN_DAILY_CAP cold mails a day into one recipient domain: a company's
 def domain_cap(session, email: Email) -> str | None:
     """At most PER_DOMAIN_DAILY_CAP cold mails a day into one recipient domain: a company's
     mail server (sarvam.ai is Google Workspace) sees every inbox, and a dozen near-identical
@@ -483,6 +505,7 @@ def domain_cap(session, email: Email) -> str | None:
     return None
 
 
+# ZONULY ▸ people search · referrers · suppression · bounces ▸ outreach · email ▸ suppress.dead_addresses(): Lowercased addresses known dead (bounced) on contacts, optionally for one company.
 def dead_addresses(session, company_id: int | None = None) -> set[str]:
     """Lowercased addresses known dead (bounced) on contacts, optionally for one company."""
     stmt = select(Contact.dead_email).where(col(Contact.dead_email).is_not(None))
