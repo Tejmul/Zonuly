@@ -96,6 +96,7 @@ _SENIORITY = re.compile(r"\b(senior|sr\.?|lead|principal|staff|architect|l[4-9]\
 EXCLUDE_SENIOR = bool(_S.get("exclude_senior", False))
 
 
+# ZONULY ▸ filtering · normalization · dedup fingerprint · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.is_internship(): Does this posting describe an internship rather than a full-time ro…
 def is_internship(title: str | None, description: str | None = None) -> bool:
     """Does this posting describe an internship rather than a full-time role?"""
     if title and _INTERNSHIP_RE.search(title):
@@ -104,6 +105,7 @@ def is_internship(title: str | None, description: str | None = None) -> bool:
     return bool(head and _INTERNSHIP_RE.search(head) and re.search(r"\bstipend\b", head, re.I))
 
 
+# ZONULY ▸ filtering ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.title_relevant(): Cheap pre-store filter — is this even the right kind of job?
 def title_relevant(title: str) -> bool:
     """Cheap pre-store filter — is this even the right kind of job?"""
     if not title:
@@ -115,6 +117,7 @@ def title_relevant(title: str) -> bool:
     return bool(_ROLE_WORDS.search(title))
 
 
+# ZONULY ▸ filtering · remote from india ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.location_ok(): Location filter: keep remote, unknown, or allowed locations; drop blocked Indian cities.
 def location_ok(location: str | None, remote: bool = False) -> bool:
     """Location filter: keep remote, unknown, or allowed locations; drop blocked Indian cities."""
     if remote:
@@ -128,6 +131,7 @@ def location_ok(location: str | None, remote: bool = False) -> bool:
     return any(ok in loc for ok in LOCATIONS_OK)
 
 
+# ZONULY ▸ filtering · normalization · dedup fingerprint · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.is_senior(): True when a job title reads senior (senior, lead, staff, etc.).
 def is_senior(title: str) -> bool:
     """True when a job title reads senior (senior, lead, staff, etc.)."""
     return bool(_SENIORITY.search(title or ""))
@@ -148,6 +152,7 @@ _ANYWHERE = re.compile(
 )
 
 
+# ZONULY ▸ remote from india ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.remote_anywhere(): Does the posting itself say the role can be done from any country?
 def remote_anywhere(location: str | None, description: str | None = None) -> bool:
     """Does the posting itself say the role can be done from any country?"""
     if location and _ANYWHERE.search(location):
@@ -180,6 +185,7 @@ _RF_TITLE_PLACE = re.compile(
     r"singapore|philippines|israel|us west|us east)\b", re.I)
 
 
+# ZONULY ▸ filtering · normalization · dedup fingerprint · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.place_restricted_title(): A title that ties the role to a country or region other th…
 def place_restricted_title(title: str | None) -> bool:
     """A title that ties the role to a country or region other than India."""
     return bool(_RF_TITLE_ABBR.search(title or "") or _RF_TITLE_PLACE.search(title or ""))
@@ -190,6 +196,7 @@ _RF_DESC = re.compile(
     r"remote[^.\n]{0,15}india)", re.I)
 
 
+# ZONULY ▸ remote from india ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.remote_from_india(): Can this role be done remotely from India? Read from the posting's own words, never assumed.
 def remote_from_india(location: str | None, description: str | None = None) -> bool:
     """Can this role be done remotely from India? Read from the posting's own words, never assumed."""
     # a list of regions that names one India is in: "LATAM, Europe, USA, Canada, APAC"
@@ -215,6 +222,7 @@ def remote_from_india(location: str | None, description: str | None = None) -> b
 _MOJIBAKE = re.compile(r"[ÃÂÐÑ][\x80-\xbf-¿–—’“”]|â€|Ã©|Ã¶|Ã¼|Ã¡|Ã³")
 
 
+# ZONULY ▸ filtering · normalization · dedup fingerprint · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.fix_mojibake(): Repair double-encoded UTF-8. Returns the input unchanged if it isn't…
 def fix_mojibake(text: str | None) -> str | None:
     """Repair double-encoded UTF-8. Returns the input unchanged if it isn't broken."""
     if not text or not _MOJIBAKE.search(text):
@@ -230,6 +238,7 @@ def fix_mojibake(text: str | None) -> str | None:
     return text
 
 
+# ZONULY ▸ dedup ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.fingerprint(): Stable key for the same role posted to several sources.
 def fingerprint(company: str, title: str) -> str:
     """Stable key for the same role posted to several sources."""
     norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())  # noqa: E731
@@ -253,6 +262,7 @@ _SUFFIX_NOISE = (r"remote|hybrid|on-?site|in-?office|wfh|full[- ]time|part[- ]ti
 
 # ---------------------------------------------------------------- salary
 
+# ZONULY ▸ pay · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ class normalize.Salary
 @dataclass
 class Salary:
     min_lpa: float | None = None
@@ -260,6 +270,7 @@ class Salary:
     currency: str | None = None
     raw: str | None = None
 
+    # ZONULY ▸ pay · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.Salary.ok(): True when a minimum or maximum salary was parsed.
     def ok(self) -> bool:
         """True when a minimum or maximum salary was parsed."""
         return self.min_lpa is not None or self.max_lpa is not None
@@ -301,6 +312,7 @@ _NOT_MONEY = re.compile(
 )
 
 
+# ZONULY ▸ filtering · normalization · dedup fingerprint · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize._to_number(): Parse a number string with commas or spaces into a float, or None.
 def _to_number(num: str) -> float | None:
     """Parse a number string with commas or spaces into a float, or None."""
     try:
@@ -309,6 +321,7 @@ def _to_number(num: str) -> float | None:
         return None
 
 
+# ZONULY ▸ pay · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize._annual_lpa(): Convert one parsed money token to INR lakhs per annum.
 def _annual_lpa(value: float, unit: str | None, currency: str, period: str) -> float | None:
     """Convert one parsed money token to INR lakhs per annum."""
     u = (unit or "").lower()
@@ -334,6 +347,7 @@ def _annual_lpa(value: float, unit: str | None, currency: str, period: str) -> f
     return lpa if 2.0 <= lpa <= 2000.0 else None
 
 
+# ZONULY ▸ filtering · normalization · dedup fingerprint · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize._currency_of(): Map a currency symbol or code to its currency; otherwise INR if the…
 def _currency_of(tok: str | None, context: str) -> str:
     """Map a currency symbol or code to its currency; otherwise INR if the text has INR cues, else USD."""
     if tok:
@@ -347,6 +361,7 @@ def _currency_of(tok: str | None, context: str) -> str:
     return "INR" if _INR_CUE.search(context) else "USD"
 
 
+# ZONULY ▸ enrichment · pay · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.parse_salary(): Regex salary extraction over (salary_raw, title, description) in priority order.
 def parse_salary(*texts: str | None) -> Salary:
     """Regex salary extraction over (salary_raw, title, description) in priority order."""
     for text in texts:
@@ -358,6 +373,7 @@ def parse_salary(*texts: str | None) -> Salary:
     return Salary()
 
 
+# ZONULY ▸ pay · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize._parse_one(): Parse one salary (a range or single figure) from text into a Salary in LPA.
 def _parse_one(text: str) -> Salary:
     """Parse one salary (a range or single figure) from text into a Salary in LPA.
     Long texts are only searched near compensation words; non-money numbers are ignored."""
@@ -429,6 +445,7 @@ Reply with exactly:
 {{"found": true|false, "min": number|null, "max": number|null, "currency": "USD"|"INR"|"EUR"|"GBP"|"CAD"|"AUD"|"SGD"|null, "raw": "the exact text you read it from"|null}}"""
 
 
+# ZONULY ▸ pay · salary · ai model call · llm ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.llm_salary(): Ask the local model only when regex found nothing but the text talks about pay.
 def llm_salary(title: str, company: str, location: str | None, description: str | None) -> Salary:
     """Ask the local model only when regex found nothing but the text talks about pay."""
     from jobhunter import llm
@@ -463,6 +480,7 @@ def llm_salary(title: str, company: str, location: str | None, description: str 
     return Salary(round(lo, 1), round(hi, 1), cur, (data.get("raw") or "")[:120] or None)
 
 
+# ZONULY ▸ pay · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.salary_in_range(): Does this pay meet the user's floor? Unknown salary passes — we don't discard on silence.
 def salary_in_range(sal: Salary) -> bool:
     """Does this pay meet the user's floor? Unknown salary passes — we don't discard on silence."""
     if not sal.ok():
@@ -483,6 +501,7 @@ _SENT_SPLIT = re.compile(r"(?<=[.!?\n])\s+")
 _WHITESPACE = re.compile(r"\s+")
 
 
+# ZONULY ▸ enrichment · decision ▸ filtering · normalization · dedup fingerprint · salary ▸ class normalize.PayFacts: The two numbers company targeting runs on, each with the sentence it came from.
 @dataclass
 class PayFacts:
     """The two numbers company targeting runs on, each with the sentence it came from.
@@ -498,6 +517,7 @@ class PayFacts:
     ppo_source: str | None = None      # "ppo" (stated as a conversion offer) | "salary" (the full-time band)
 
 
+# ZONULY ▸ filtering · normalization · dedup fingerprint · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize._sentences(): Split text into whitespace-normalised sentences of 9 to 399 characters…
 def _sentences(text: str, limit: int = 400) -> list[str]:
     """Split text into whitespace-normalised sentences of 9 to 399 characters, up to a limit."""
     out = []
@@ -510,6 +530,7 @@ def _sentences(text: str, limit: int = 400) -> list[str]:
     return out
 
 
+# ZONULY ▸ filtering · normalization · dedup fingerprint · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize._monthly_inr(): (INR per month, the money token) from a sentence, or None.
 def _monthly_inr(sentence: str) -> tuple[int, str] | None:
     """(INR per month, the money token) from a sentence, or None."""
     monthly = bool(_PER_MONTH.search(sentence))
@@ -542,6 +563,7 @@ def _monthly_inr(sentence: str) -> tuple[int, str] | None:
     return None
 
 
+# ZONULY ▸ pay · salary ▸ filtering · normalization · dedup fingerprint · salary ▸ normalize.parse_pay(): Read the internship stipend and the PPO / full-time package out of a posting.
 def parse_pay(*texts: str | None) -> PayFacts:
     """Read the internship stipend and the PPO / full-time package out of a posting.
 

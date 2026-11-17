@@ -100,6 +100,7 @@ BORDERLINE_MIN_ROLES = int(_O.get("borderline_min_open_roles", 3))
 BORDERLINE_PAY_BANDS = set(_O.get("borderline_pay_bands") or ["pays", "deep_pockets"])
 
 
+# ZONULY ▸ admission gate · filtering · lock ▸ filtering · admission gate ▸ admission._famous_entries(): (group, entry) for every famous name in config. Reads the old `hyped:` block too,
 def _famous_entries() -> list[tuple[str, str]]:
     """(group, entry) for every famous name in config. Reads the old `hyped:` block too,
     so a config that has not been migrated keeps excluding what it excluded before."""
@@ -125,11 +126,13 @@ _SOFT = {"labs", "lab", "technologies", "technology", "ai", "io", "hq", "app", "
          "systems", "solutions", "group", "holdings", "global", "india", "online"}
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission._ascii(): Fold accents and drop non-ASCII characters (NFKD) so names compare as plain ASCII.
 def _ascii(text: str) -> str:
     """Fold accents and drop non-ASCII characters (NFKD) so names compare as plain ASCII."""
     return unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode()
 
 
+# ZONULY ▸ admission gate · filtering · scoring ▸ filtering · admission gate ▸ admission._tokens(): Split a company name into lowercase word tokens for matching; drops domain suffixes like .com/.ai.
 def _tokens(name: str) -> list[str]:
     """Split a company name into lowercase word tokens for matching; drops domain suffixes like .com/.ai."""
     n = _ascii(name).lower().replace("&", " and ")
@@ -137,6 +140,7 @@ def _tokens(name: str) -> list[str]:
     return [t for t in re.sub(r"[^a-z0-9]+", " ", n).split() if t]
 
 
+# ZONULY ▸ admission gate · filtering · dedup ▸ filtering · admission gate ▸ admission.name_key(): A company's identity key: lowercase, no punctuation, no spaces, no corporate or
 def name_key(name: str) -> str:
     """A company's identity key: lowercase, no punctuation, no spaces, no corporate or
     soft suffix. 'RevenueCat', 'Revenue Cat' and 'RevenueCat, Inc.' are one key."""
@@ -147,6 +151,7 @@ def name_key(name: str) -> str:
     return "".join(core)
 
 
+# ZONULY ▸ admission gate · filtering · scoring ▸ filtering · admission gate ▸ admission._famous_tokens(): Tokens for the famous-name match: corporate and soft words go, but 'ai' stays,
 def _famous_tokens(name: str) -> list[str]:
     """Tokens for the famous-name match: corporate and soft words go, but 'ai' stays,
     so 'Scale AI' is 'scale ai' and not 'scale'."""
@@ -154,6 +159,7 @@ def _famous_tokens(name: str) -> list[str]:
     return [t for t in _tokens(name) if t not in _CORP and t not in soft]
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission.famous(): (group, entry) when the name is on the famous list, else None.
 def famous(name: str) -> tuple[str, str] | None:
     """(group, entry) when the name is on the famous list, else None.
 
@@ -175,6 +181,7 @@ def famous(name: str) -> tuple[str, str] | None:
     return None
 
 
+# ZONULY ▸ admission gate · filtering · filtering · scoring · decision ▸ filtering · admission gate ▸ admission.kept(): On targeting.overrated.keep — matched on leading words like the famous list.
 def kept(name: str) -> bool:
     """On targeting.overrated.keep — matched on leading words like the famous list."""
     toks = " ".join(_famous_tokens(name)) + " "
@@ -245,6 +252,7 @@ TRUSTED_SOURCES = {"yc", "ats", "greenhouse", "lever", "ashby", "companies.yaml"
                    "onboard", "wellfound"}
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission.clean_name(): (clean name, what was done) — or (None, why it is not a company).
 def clean_name(raw: str | None, *, headline: bool = False, source: str | None = None) -> tuple[str | None, str]:
     """(clean name, what was done) — or (None, why it is not a company).
 
@@ -341,6 +349,7 @@ _BOGUS_HOST = re.compile(
 _SUBDOMAIN_SITES = re.compile(r"\.(notion\.site|github\.io|vercel\.app|netlify\.app|webflow\.io|carrd\.co)$", re.I)
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission.host_of(): Return the bare lowercase host of a URL (no scheme, www., port, path or credentials), or None.
 def host_of(url: str | None) -> str | None:
     """Return the bare lowercase host of a URL (no scheme, www., port, path or credentials), or None."""
     if not url:
@@ -350,6 +359,7 @@ def host_of(url: str | None) -> str | None:
     return host or None
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission.registrable(): 'jobs.acme.co.uk' -> 'acme.co.uk', 'app.exa.ai' -> 'exa.ai'.
 def registrable(host: str | None) -> str | None:
     """'jobs.acme.co.uk' -> 'acme.co.uk', 'app.exa.ai' -> 'exa.ai'."""
     if not host:
@@ -360,6 +370,7 @@ def registrable(host: str | None) -> str | None:
     return ".".join(parts[-2:]) if len(parts) >= 2 else host
 
 
+# ZONULY ▸ scraping · admission gate · filtering ▸ filtering · admission gate ▸ admission.bogus_host(): Is this host never a company's own site (a board, form, shortener, press, social)?
 def bogus_host(host: str | None, name: str | None = None) -> bool:
     """Is this host never a company's own site (a board, form, shortener, press, social)?
 
@@ -379,6 +390,7 @@ def bogus_host(host: str | None, name: str | None = None) -> bool:
     return True
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission.host_fits_name(): Does the domain carry the company's name? 'acme.com', 'getacme.io', 'acmehq.com'
 def host_fits_name(name: str, host: str | None) -> bool:
     """Does the domain carry the company's name? 'acme.com', 'getacme.io', 'acmehq.com'
     fit "Acme"; 'exa.ai' does not fit "Wonderful". Used where a URL arrived as an apply
@@ -401,6 +413,7 @@ def host_fits_name(name: str, host: str | None) -> bool:
     return len(first) >= 4 and first in label
 
 
+# ZONULY ▸ admission gate · filtering · filtering · enrichment ▸ filtering · admission gate ▸ admission.domain_of(): The domain we keep for a website, or None when the host is not a company site.
 def domain_of(url: str | None) -> str | None:
     """The domain we keep for a website, or None when the host is not a company site."""
     host = host_of(url)
@@ -417,11 +430,13 @@ _STAGE_RANK = {"Bootstrapped": 0, "Pre-seed": 1, "Seed": 2, "Series A": 3, "Seri
 _LETTER_STAGE = {"a": "Series A", "b": "Series B", "c": "Series C"}
 
 
+# ZONULY ▸ admission gate · filtering · enrichment ▸ filtering · admission gate ▸ admission._series(): Map a funding-round letter (a/b/c) to its Series stage name; any other letter means Series D+.
 def _series(letter: str) -> str:
     """Map a funding-round letter (a/b/c) to its Series stage name; any other letter means Series D+."""
     return _LETTER_STAGE.get(letter.lower(), "Series D+")
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission.normalize_stage(): Any way a round is written -> one of STAGES, or None when it names no stage.
 def normalize_stage(text: str | None) -> str | None:
     """Any way a round is written -> one of STAGES, or None when it names no stage.
 
@@ -466,6 +481,7 @@ def normalize_stage(text: str | None) -> str | None:
     return "Bootstrapped"
 
 
+# ZONULY ▸ admission gate · filtering · enrichment ▸ filtering · admission gate ▸ admission.stage_rank(): Rank a funding stage from 0 (Bootstrapped) to 7 (Public) after normalizing it; None if unknown.
 def stage_rank(stage: str | None) -> int | None:
     """Rank a funding stage from 0 (Bootstrapped) to 7 (Public) after normalizing it; None if unknown."""
     s = normalize_stage(stage)
@@ -485,6 +501,7 @@ _CARD_ROUND = re.compile(
 )
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission._money_m(): 'USD', '35,591,849' -> 35.6. A number with no thousands separator and a trailing
 def _money_m(cur: str, num: str) -> float | None:
     """'USD', '35,591,849' -> 35.6. A number with no thousands separator and a trailing
     decimal ('USD 14.') is a truncated quote, not 14 dollars, and gives None."""
@@ -498,6 +515,7 @@ def _money_m(cur: str, num: str) -> float | None:
     return round(val * _FX.get(cur.lower(), 1.0) / 1e6, 2)
 
 
+# ZONULY ▸ admission gate · filtering · enrichment ▸ filtering · admission gate ▸ admission.parse_funding_card(): The structured company card Exa returns ("- Total Funding: USD 35,591,849 -
 def parse_funding_card(text: str | None) -> dict:
     """The structured company card Exa returns ("- Total Funding: USD 35,591,849 -
     Series a (2024-11-20): USD 11,000,000 - ...") -> {total_usd_m, stage, amount_usd_m,
@@ -542,6 +560,7 @@ _RAISE_WORDS = re.compile(r"\b(raised|raises|raising|total funding|in funding|fu
                           r"seed|round|valuation|valued|investment|invested|backed)\b", re.I)
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission.credible_amount(): Is this amount a raise, and not revenue, transaction volume or a pricing table?
 def credible_amount(amount_usd_m: float | None, evidence: str | None) -> bool:
     """Is this amount a raise, and not revenue, transaction volume or a pricing table?"""
     if not amount_usd_m:
@@ -555,6 +574,7 @@ def credible_amount(amount_usd_m: float | None, evidence: str | None) -> bool:
     return bool(_RAISE_WORDS.search(ev))
 
 
+# ZONULY ▸ admission gate · filtering · enrichment · pay · salary ▸ filtering · admission gate ▸ admission.funding_facts(): The funding a company row actually supports, repaired: card totals read, revenue
 def funding_facts(*, stage: str | None, amount_usd_m: float | None, total_usd_m: float | None,
                   announced: str | None, valuation_usd_m: float | None, evidence: str | None) -> dict:
     """The funding a company row actually supports, repaired: card totals read, revenue
@@ -584,6 +604,7 @@ def funding_facts(*, stage: str | None, amount_usd_m: float | None, total_usd_m:
 
 # ------------------------------------------------------------------ overrated
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ class admission.Overrated
 @dataclass
 class Overrated:
     overrated: bool
@@ -591,6 +612,7 @@ class Overrated:
     borderline: bool = False
 
 
+# ZONULY ▸ admission gate · filtering · decision ▸ filtering · admission gate ▸ admission.overrated_verdict(): Is this company past the point where our application is one of a thousand?
 def overrated_verdict(name: str, *, stage: str | None = None, amount_usd_m: float | None = None,
                       total_usd_m: float | None = None, valuation_usd_m: float | None = None,
                       evidence: str | None = None, hiring_verified: bool = False,
@@ -648,6 +670,7 @@ for _city, _aliases in (_I.get("cities") or {"Bengaluru": ["bengaluru", "bangalo
 INDIA_OTHER_CITIES: list[str] = [c.lower() for c in (_I.get("other_cities") or [])]
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission.india_city(): 'Bengaluru', 'Hyderabad', 'Bengaluru · Hyderabad' or None, from any location text.
 def india_city(*texts: str | None) -> str | None:
     """'Bengaluru', 'Hyderabad', 'Bengaluru · Hyderabad' or None, from any location text."""
     blob = " ".join(t.lower() for t in texts if t)
@@ -658,6 +681,7 @@ def india_city(*texts: str | None) -> str | None:
     return " · ".join(sorted(found)) if found else None
 
 
+# ZONULY ▸ admission gate · filtering · decision ▸ filtering · admission gate ▸ admission.india_other_city(): The first non-target Indian city named (Delhi, Gurugram, Mumbai, Pune…), or None.
 def india_other_city(*texts: str | None) -> str | None:
     """The first non-target Indian city named (Delhi, Gurugram, Mumbai, Pune…), or None."""
     blob = " ".join(t.lower() for t in texts if t)
@@ -699,6 +723,7 @@ _IT_SERVICES_TEXT = re.compile(r"(?i)\b((?:it|software|technology|tech) (?:servi
                                r"staff augmentation|body ?shop|onsite[- ]offshore)\b")
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission.body_shop(): Why this poster is not a company to chase — 'confidential poster', 'staffing /
 def body_shop(name: str | None, text: str | None = None, *, industry: str | None = None,
               headcount: int | None = None) -> str | None:
     """Why this poster is not a company to chase — 'confidential poster', 'staffing /
@@ -722,6 +747,7 @@ def body_shop(name: str | None, text: str | None = None, *, industry: str | None
 
 # ------------------------------------------------------------------ dedup
 
+# ZONULY ▸ admission gate · filtering · dedup · sign-in · auth ▸ filtering · admission gate ▸ admission._index(): name_key -> company id, built once per session and kept on the session itself, so
 def _index(session) -> dict[str, int]:
     """name_key -> company id, built once per session and kept on the session itself, so
     two threads never share it and a new session always sees the current table."""
@@ -741,6 +767,7 @@ def _index(session) -> dict[str, int]:
     return idx
 
 
+# ZONULY ▸ admission gate · filtering · sign-in · auth ▸ filtering · admission gate ▸ admission.remember(): Put a just-flushed row into the session's index, so a twin later in the same
 def remember(session, company) -> None:
     """Put a just-flushed row into the session's index, so a twin later in the same
     batch finds it (the old code reserved id -1 here and then inserted the twin anyway)."""
@@ -750,6 +777,7 @@ def remember(session, company) -> None:
     _index(session)[key] = company.id
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission.find_existing(): Exact name, then normalized name key, then domain (when the name fits it).
 def find_existing(session, name: str, domain: str | None = None):
     """Exact name, then normalized name key, then domain (when the name fits it).
     A merged row resolves to the row it was merged into."""
@@ -774,6 +802,7 @@ def find_existing(session, name: str, domain: str | None = None):
 
 # ------------------------------------------------------------------ the gate
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ class admission.Candidate: A company some source wants to create or update.
 @dataclass
 class Candidate:
     """A company some source wants to create or update."""
@@ -794,6 +823,7 @@ class Candidate:
     pay_band: str | None = None
 
 
+# ZONULY ▸ admission gate · filtering · decision ▸ filtering · admission gate ▸ class admission.Verdict
 @dataclass
 class Verdict:
     ok: bool
@@ -806,12 +836,14 @@ class Verdict:
     borderline: bool = False
     notes: list[str] = field(default_factory=list)
 
+    # ZONULY ▸ admission gate · filtering · decision ▸ filtering · admission gate ▸ admission.Verdict.__iter__(): Let a Verdict unpack as `ok, reason = verdict` (admission result tuple form).
     def __iter__(self):
         """Let a Verdict unpack as `ok, reason = verdict` (admission result tuple form)."""
         yield self.ok
         yield self.reason
 
 
+# ZONULY ▸ admission gate · filtering · review gate ▸ filtering · admission gate ▸ admission.admit(): The one gate. ok=False means: do not create this company, and do not store its jobs.
 def admit(cand: Candidate, session=None) -> Verdict:
     """The one gate. ok=False means: do not create this company, and do not store its jobs."""
     name, how = clean_name(cand.name, headline=cand.headline, source=cand.source)
@@ -880,6 +912,7 @@ def admit(cand: Candidate, session=None) -> Verdict:
     return v
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission.stamp(): Write the identity fields every admitted row carries.
 def stamp(company, verdict: Verdict | None = None) -> None:
     """Write the identity fields every admitted row carries."""
     company.name_key = name_key(company.name)
@@ -889,6 +922,7 @@ def stamp(company, verdict: Verdict | None = None) -> None:
             company.notes = f"{company.notes}\n{tag}".strip() if company.notes else tag
 
 
+# ZONULY ▸ admission gate · filtering ▸ filtering · admission gate ▸ admission.months_old(): Age in months of 'YYYY-MM-DD', 'YYYY-MM' or 'YYYY'.
 def months_old(date: str | None) -> int | None:
     """Age in months of 'YYYY-MM-DD', 'YYYY-MM' or 'YYYY'."""
     if not date:

@@ -65,6 +65,7 @@ _FILL = ("website", "domain", "github_org", "ats", "ats_slug", "description", "s
          "hiring_claim_by", "hiring_claim_source", "hiring_claim_at", "email_pattern", "city")
 
 
+# ZONULY ▸ filtering · dedup · cleanup ▸ filtering · dedup · cleanup ▸ class hygiene.Plan
 @dataclass
 class Plan:
     renames: list[tuple[int, str, str]] = field(default_factory=list)          # id, old, new
@@ -80,8 +81,10 @@ class Plan:
     untouched_list_rows: int = 0
     total: int = 0
 
+    # ZONULY ▸ filtering · dedup · cleanup ▸ filtering · dedup · cleanup ▸ hygiene.Plan.summary(): Summarise the company clean-up plan: counts, reasons and a few sample rows per change kind.
     def summary(self, samples: int = 6) -> dict:
         """Summarise the company clean-up plan: counts, reasons and a few sample rows per change kind."""
+        # ZONULY ▸ filtering · dedup · cleanup ▸ filtering · dedup · cleanup ▸ hygiene.Plan.summary.s(): Format the first few plan rows as pipe-joined strings.
         def s(rows):
             """Format the first few plan rows as pipe-joined strings."""
             return [" | ".join(str(x) for x in r) for r in rows[:samples]]
@@ -108,6 +111,7 @@ class Plan:
         }
 
 
+# ZONULY ▸ filtering · dedup · cleanup ▸ filtering · dedup · cleanup ▸ hygiene._count(): Count values (None as 'null') and return them as a dict sorted by count, highest first.
 def _count(values) -> dict:
     """Count values (None as 'null') and return them as a dict sorted by count, highest first."""
     out: dict = defaultdict(int)
@@ -116,6 +120,7 @@ def _count(values) -> dict:
     return dict(sorted(out.items(), key=lambda kv: -kv[1]))
 
 
+# ZONULY ▸ filtering · dedup · cleanup ▸ filtering · dedup · cleanup ▸ hygiene._source_of(): (source, headline?) for a row, from its claim source and its notes' tags.
 def _source_of(c: Company) -> tuple[str, bool]:
     """(source, headline?) for a row, from its claim source and its notes' tags."""
     notes = c.notes or ""
@@ -126,12 +131,14 @@ def _source_of(c: Company) -> tuple[str, bool]:
     return src or "unknown", headline
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ filtering · dedup · cleanup ▸ hygiene._weight(): Survivor order: most roles + people, has a site, most fields filled, oldest.
 def _weight(c: Company, jobs: dict, people: dict) -> tuple:
     """Survivor order: most roles + people, has a site, most fields filled, oldest."""
     filled = sum(1 for f in _FILL if getattr(c, f, None))
     return (-(jobs.get(c.id, 0) + people.get(c.id, 0)), 0 if c.website else 1, -filled, c.id)
 
 
+# ZONULY ▸ filtering · dedup · cleanup ▸ filtering · dedup · cleanup ▸ hygiene.plan(): Everything apply() would do, computed from a read. Writes nothing.
 def plan(session) -> Plan:
     """Everything apply() would do, computed from a read. Writes nothing."""
     from jobhunter.enrich import bot_wall
@@ -289,6 +296,7 @@ def plan(session) -> Plan:
     return p
 
 
+# ZONULY ▸ dedup · enrichment ▸ filtering · dedup · cleanup ▸ hygiene._merge(): Move everything that points at the loser onto the survivor, fill the survivor's
 def _merge(session, loser: Company, survivor: Company, why: str) -> None:
     """Move everything that points at the loser onto the survivor, fill the survivor's
     blanks from the loser, and mark the loser merged. Never deletes the loser."""
@@ -309,6 +317,7 @@ def _merge(session, loser: Company, survivor: Company, why: str) -> None:
     session.add(loser)
 
 
+# ZONULY ▸ scheduler · tick ▸ filtering · dedup · cleanup ▸ hygiene.apply(): Carry out a plan. Commits every `batch` changes so a concurrent tick waits seconds,
 def apply(p: Plan, *, batch: int = 100) -> dict:
     """Carry out a plan. Commits every `batch` changes so a concurrent tick waits seconds,
     not minutes. Then regrades overrated + priority + city for every row."""
@@ -327,6 +336,7 @@ def apply(p: Plan, *, batch: int = 100) -> dict:
     with get_session() as session:
         n = 0
 
+        # ZONULY ▸ scheduler · tick · sign-in · auth ▸ filtering · dedup · cleanup ▸ hygiene.apply.tick(): Count one change and commit the session every batch changes.
         def tick() -> None:
             """Count one change and commit the session every batch changes."""
             nonlocal n
@@ -387,6 +397,7 @@ def apply(p: Plan, *, batch: int = 100) -> dict:
     return dict(done)
 
 
+# ZONULY ▸ filtering · dedup · cleanup ▸ filtering · dedup · cleanup ▸ hygiene.run(): The cleanup. dry_run (the default) reads and reports; it writes nothing.
 def run(*, dry_run: bool = True) -> dict:
     """The cleanup. dry_run (the default) reads and reports; it writes nothing."""
     init_db()
@@ -399,6 +410,7 @@ def run(*, dry_run: bool = True) -> dict:
     return out
 
 
+# ZONULY ▸ dedup · enrichment ▸ filtering · dedup · cleanup ▸ hygiene.backfill_keys(): Write name_key where it is missing — the cheap part, safe to run every hour.
 def backfill_keys() -> int:
     """Write name_key where it is missing — the cheap part, safe to run every hour."""
     init_db()
@@ -417,6 +429,7 @@ def backfill_keys() -> int:
 __all__ = ["plan", "apply", "run", "backfill_keys", "Plan"]
 
 
+# ZONULY ▸ scraping ▸ filtering · dedup · cleanup ▸ hygiene.mark_empty(): Flag every active, not-overrated company we hold nothing about as `scrape_first`,
 def mark_empty(*, dry_run: bool = False) -> dict:
     """Flag every active, not-overrated company we hold nothing about as `scrape_first`,
     and clear the flag on the ones that now have a site and either people or roles.
