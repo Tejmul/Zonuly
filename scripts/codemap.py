@@ -20,6 +20,9 @@
 #   strip_old()    — Remove a previously generated block (and the blank line after it).
 #   insert()       — Put the block at the top, after a shebang or encoding line if the file has one.
 #   collect()      — The map for every file: path, folder, stage, purpose, called by, calls, functions.
+#   tag_line()     — The search tag for one function or class: stage words, matched phrases, name and summary.
+#   strip_tags()   — Remove every previously generated search-tag line.
+#   add_tags()     — Insert a search tag on the line above every function and class (above its decorators).
 #   main()         — Rewrite every header (or only print the map with --dry-run).
 # ── end of code map ──
 
@@ -171,17 +174,20 @@ STAGES = {
 ROUTE = re.compile(r"^(app|router)\.(get|post|put|patch|delete)$")
 
 
+# ZONULY ▸ tooling · code map generator ▸ tooling · code map generator ▸ codemap.files(): Every Python file the map covers: jobhunter/ (recursive) and scripts/.
 def files() -> list[Path]:
     """Every Python file the map covers: jobhunter/ (recursive) and scripts/."""
     out = sorted((ROOT / "jobhunter").rglob("*.py")) + sorted((ROOT / "scripts").glob("*.py"))
     return [p for p in out if "__pycache__" not in p.parts]
 
 
+# ZONULY ▸ tooling · code map generator ▸ tooling · code map generator ▸ codemap.rel(): Repository-relative path with forward slashes.
 def rel(p: Path) -> str:
     """Repository-relative path with forward slashes."""
     return p.relative_to(ROOT).as_posix()
 
 
+# ZONULY ▸ greenhouse scraping · scraping ▸ tooling · code map generator ▸ codemap.module_name(): jobhunter/scrapers/greenhouse.py -> jobhunter.scrapers.greenhouse (None for scripts).
 def module_name(p: Path) -> str | None:
     """jobhunter/scrapers/greenhouse.py -> jobhunter.scrapers.greenhouse (None for scripts)."""
     r = rel(p)
@@ -191,6 +197,7 @@ def module_name(p: Path) -> str | None:
     return m[: -len(".__init__")] if m.endswith(".__init__") else m
 
 
+# ZONULY ▸ tooling · code map generator ▸ tooling · code map generator ▸ codemap.stage_of(): The most specific STAGES entry for a path (exact file, else the longest folder prefix).
 def stage_of(r: str) -> str:
     """The most specific STAGES entry for a path (exact file, else the longest folder prefix)."""
     if r in STAGES:
@@ -199,12 +206,14 @@ def stage_of(r: str) -> str:
     return STAGES[best] if best else "SUPPORT"
 
 
+# ZONULY ▸ scraping ▸ tooling · code map generator ▸ codemap.folder_of(): 'jobhunter/scrapers/ — job sources, ...' for the Folder line.
 def folder_of(r: str) -> str:
     """'jobhunter/scrapers/ — job sources, ...' for the Folder line."""
     d = r.rsplit("/", 1)[0]
     return f"{d}/ — {FOLDERS.get(d, '')}".rstrip(" —")
 
 
+# ZONULY ▸ data ingestion ▸ tooling · code map generator ▸ codemap.imports_of(): Every jobhunter module this file imports, wherever the import sits (top level or in a
 def imports_of(path: Path, tree: ast.AST, modules: dict[str, Path]) -> set[str]:
     """Every jobhunter module this file imports, wherever the import sits (top level or in a
     function), plus module names written as strings (the scraper registry, __import__ calls)."""
@@ -213,6 +222,7 @@ def imports_of(path: Path, tree: ast.AST, modules: dict[str, Path]) -> set[str]:
     if path.name != "__init__.py":
         pkg = pkg.rsplit(".", 1)[0]
 
+    # ZONULY ▸ data ingestion ▸ tooling · code map generator ▸ codemap.imports_of.add(): Record `name`, or its nearest parent package that is a known module.
     def add(name: str) -> None:
         """Record `name`, or its nearest parent package that is a known module."""
         while name and name not in modules:
@@ -243,12 +253,14 @@ def imports_of(path: Path, tree: ast.AST, modules: dict[str, Path]) -> set[str]:
     return found
 
 
+# ZONULY ▸ tooling · code map generator ▸ tooling · code map generator ▸ codemap.first_line(): The first line of a docstring, or '' when there is none.
 def first_line(node) -> str:
     """The first line of a docstring, or '' when there is none."""
     d = ast.get_docstring(node) or ""
     return d.strip().splitlines()[0].strip() if d.strip() else ""
 
 
+# ZONULY ▸ enrichment ▸ tooling · code map generator ▸ codemap.functions_of(): (label, description) for each public top-level function and class; route handlers are
 def functions_of(tree: ast.Module) -> list[tuple[str, str]]:
     """(label, description) for each public top-level function and class; route handlers are
     labelled with their HTTP method and path."""
@@ -266,11 +278,13 @@ def functions_of(tree: ast.Module) -> list[tuple[str, str]]:
     return out
 
 
+# ZONULY ▸ tooling · code map generator ▸ tooling · code map generator ▸ codemap.clip(): Shorten a line to n characters for the header.
 def clip(s: str, n: int) -> str:
     """Shorten a line to n characters for the header."""
     return s if len(s) <= n else s[: n - 1].rstrip() + "…"
 
 
+# ZONULY ▸ tooling · code map generator ▸ tooling · code map generator ▸ codemap.wrap_list(): '# Called by: a, b, c' wrapped onto continuation lines.
 def wrap_list(label: str, items: list[str], width: int = 100) -> list[str]:
     """'# Called by: a, b, c' wrapped onto continuation lines."""
     if not items:
@@ -286,6 +300,7 @@ def wrap_list(label: str, items: list[str], width: int = 100) -> list[str]:
     return lines
 
 
+# ZONULY ▸ lock ▸ tooling · code map generator ▸ codemap.build(): The header block for one file.
 def build(info: dict) -> str:
     """The header block for one file."""
     path_line = " / ".join(["ZoNuLy", *info["path"].split("/")])
@@ -305,6 +320,7 @@ def build(info: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+# ZONULY ▸ lock ▸ tooling · code map generator ▸ codemap.strip_old(): Remove a previously generated block (and the blank line after it).
 def strip_old(text: str) -> str:
     """Remove a previously generated block (and the blank line after it)."""
     if START not in text:
@@ -319,6 +335,7 @@ def strip_old(text: str) -> str:
     return text[:a] + rest
 
 
+# ZONULY ▸ lock ▸ tooling · code map generator ▸ codemap.insert(): Put the block at the top, after a shebang or encoding line if the file has one.
 def insert(text: str, block: str) -> str:
     """Put the block at the top, after a shebang or encoding line if the file has one."""
     lines = text.splitlines(keepends=True)
@@ -328,6 +345,7 @@ def insert(text: str, block: str) -> str:
     return "".join(lines[:i]) + block + "\n" + "".join(lines[i:])
 
 
+# ZONULY ▸ tooling · code map generator ▸ tooling · code map generator ▸ codemap.collect(): The map for every file: path, folder, stage, purpose, called by, calls, functions.
 def collect() -> dict[str, dict]:
     """The map for every file: path, folder, stage, purpose, called by, calls, functions."""
     paths = files()
@@ -346,6 +364,116 @@ def collect() -> dict[str, dict]:
     return out
 
 
+# ------------------------------------------------------------------ search tags above every function
+
+TAG = "# ZONULY ▸"
+
+#: phrases matched on a function's own name, docstring and file: (regex, search phrase)
+RULES = [
+    (r"apify", "apify scraping · apify people search"),
+    (r"linkedin", "linkedin scraping"),
+    (r"himalayas", "himalayas scraping"), (r"greenhouse", "greenhouse scraping"),
+    (r"\blever", "lever scraping"), (r"ashby", "ashby scraping"), (r"\bwwr\b|weworkremotely", "wwr scraping"),
+    (r"remoteok", "remoteok scraping"), (r"\bhn\b|hacker ?news|who is hiring", "hacker news scraping"),
+    (r"wellfound|angellist", "wellfound scraping"), (r"freehire", "freehire scraping"),
+    (r"\byc\b|y combinator", "yc scraping"), (r"github", "github scraping"), (r"reddit", "reddit"),
+    (r"youtube|yt-dlp", "youtube"), (r"\bx\b search|x_search|twitter", "x search"),
+    (r"scrap|fetch|crawl|harvest|board", "scraping"),
+    (r"ingest|persist|discover|admit_|import", "data ingestion"),
+    (r"admission|admit\b|\badmit", "admission gate · filtering"),
+    (r"filter|keep\b|relevan|location_ok|title_relevant|exclude|reject", "filtering"),
+    (r"dedup|duplicate|fingerprint|merge|name_key", "dedup"),
+    (r"guardrail|validat|evidence", "validation · guardrails"),
+    (r"enrich|fill|careers|website|facts|funding|description|homepage", "enrichment"),
+    (r"hiring.?verif|hiring claim", "hiring verification"),
+    (r"salary|pay\b|stipend|lpa|ppo|compensation|levels", "pay · salary"),
+    (r"score|fit\b|rubric|judge|match", "scoring"),
+    (r"decide|decision|p_offer|verdict|shortlist|target", "decision"),
+    (r"remote", "remote from india"),
+    (r"contact|referr|people|person|employee", "people search · referrers"),
+    (r"reacher|prove|proof|verif.*email|email.*verif|mx\b|smtp|deliverab", "email verification"),
+    (r"(?<!job)hunter(?!_queue)|hunter\.io", "hunter.io"),
+    (r"draft|compose|template", "email drafting"),
+    (r"autoreview|review|gate", "review gate"),
+    (r"\bsend|sender|ledger|send cap|outbox|gmail", "email sending"),
+    (r"suppress|bounce|opt.?out|unsubscribe", "suppression · bounces"),
+    (r"reply|replies|tracker|follow.?up", "replies · follow-up"),
+    (r"calendar|meeting|event", "calendar"),
+    (r"csv|export|handoff", "csv export"),
+    (r"llm|openrouter|model\b|alias|chat_json|complete\(", "ai model call · llm"),
+    (r"budget|cost|spend|credit", "budget · cost"),
+    (r"cache", "cache"),
+    (r"backoff|retry|retries", "retry · backoff"),
+    (r"tick|schedul|launchd|cron", "scheduler · tick"),
+    (r"lock\b|_lock|flock", "lock"),
+    (r"\bkg\b|graph|node|edge", "knowledge graph"),
+    (r"\bauth|sign.?in|login|session|cookie|accounts/", "sign-in · auth"),
+    (r"access\.|access control|public instance|operator|ZONULY_PUBLIC", "access control"),
+    (r"snapshot|demo\.db|deploy|catalyst", "deployment · snapshot"),
+    (r"audit|watchdog|health|monitor", "monitoring"),
+]
+_RULES = [(re.compile(rx, re.I), phrase) for rx, phrase in RULES]
+
+
+# ZONULY ▸ scoring ▸ tooling · code map generator ▸ codemap.tag_line(): The search tag for one function or class: stage words, matched phrases, name and summary.
+def tag_line(node, info: dict, rel_path: str, qual: str) -> str:
+    """The search tag for one function or class: stage words, matched phrases, name and summary."""
+    hay = f"{qual} {first_line(node)} {rel_path}"
+    phrases: list[str] = []
+    route = None
+    if not isinstance(node, ast.ClassDef):
+        for d in node.decorator_list:
+            if isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and ROUTE.match(ast.unparse(d.func)) \
+                    and d.args and isinstance(d.args[0], ast.Constant):
+                route = f"api route {d.func.attr.upper()} {d.args[0].value}"
+    if route:
+        phrases.append(route)
+    for rx, phrase in _RULES:
+        if rx.search(hay) and phrase not in phrases:
+            phrases.append(phrase)
+    stage = info["stage"].split(" (")[0].lower().replace(" · ", " · ")
+    words = " · ".join(phrases[:6]) or stage
+    summary = first_line(node)
+    line = f"{TAG} {words} ▸ {stage} ▸ {qual}" + (f": {summary}" if summary else "")
+    return clip(line, 220)
+
+
+# ZONULY ▸ tooling · code map generator ▸ tooling · code map generator ▸ codemap.strip_tags(): Remove every previously generated search-tag line.
+def strip_tags(text: str) -> str:
+    """Remove every previously generated search-tag line."""
+    return "".join(l for l in text.splitlines(keepends=True) if not l.lstrip().startswith(TAG))
+
+
+# ZONULY ▸ tooling · code map generator ▸ tooling · code map generator ▸ codemap.add_tags(): Insert a search tag on the line above every function and class (above its decorators).
+def add_tags(text: str, info: dict, rel_path: str) -> str:
+    """Insert a search tag on the line above every function and class (above its decorators)."""
+    text = strip_tags(text)
+    tree = ast.parse(text)
+    stem = rel_path.rsplit("/", 1)[-1][:-3]
+    spots: list[tuple[int, str]] = []
+
+    # ZONULY ▸ tooling · code map generator ▸ tooling · code map generator ▸ codemap.add_tags.walk(): Collect (line index, tag) for every def/class, with dotted names for methods and nested defs.
+    def walk(node, prefix: str) -> None:
+        """Collect (line index, tag) for every def/class, with dotted names for methods and nested defs."""
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                qual = f"{prefix}.{child.name}" if prefix else f"{stem}.{child.name}"
+                start = min([child.lineno] + [d.lineno for d in getattr(child, "decorator_list", [])])
+                label = f"class {qual}" if isinstance(child, ast.ClassDef) else f"{qual}()"
+                spots.append((start - 1, label, child))
+                walk(child, qual)
+            else:
+                walk(child, prefix)
+
+    walk(tree, "")
+    lines = text.splitlines(keepends=True)
+    for idx, label, node in sorted(spots, key=lambda s: -s[0]):
+        indent = re.match(r"[ \t]*", lines[idx]).group(0)
+        lines.insert(idx, indent + tag_line(node, info, rel_path, label) + "\n")
+    return "".join(lines)
+
+
+# ZONULY ▸ tooling · code map generator ▸ tooling · code map generator ▸ codemap.main(): Rewrite every header (or only print the map with --dry-run).
 def main() -> int:
     """Rewrite every header (or only print the map with --dry-run)."""
     ap = argparse.ArgumentParser()
@@ -359,7 +487,7 @@ def main() -> int:
             raw = fh.read()
         eol = "\r\n" if "\r\n" in raw else "\n"
         text = strip_old(raw.replace("\r\n", "\n"))
-        new = insert(text, build(info)).replace("\n", eol)
+        new = insert(add_tags(text, info, r), build(info)).replace("\n", eol)
         if not args.dry_run and new != raw:
             with open(p, "w", newline="") as fh:
                 fh.write(new)
