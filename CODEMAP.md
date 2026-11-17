@@ -2,6 +2,19 @@
 
 Which folder does what, where every important file lives, and how data moves from one file to the next. `node_modules/`, `docs/` and `tests/` are left out on purpose.
 
+![ZoNuLy code map](CODEMAP.svg)
+
+The picture above is `CODEMAP.svg`: each lane is a stage, the boxes are the real files in call order, the database is on the left and the outside services are on the right. ↺ marks what happens when something fails.
+
+**Search tags above every function.** Every function and class has one comment line right above it, starting with `# ZONULY ▸`, which lists search phrases, its stage, its full name and what it does. For example:
+
+```python
+# ZONULY ▸ apify scraping · apify people search · people search · referrers ▸ people · referrer pipeline ▸ referrals.apify_step(): Buy up to `limit` companies' People tabs ...
+def apify_step(limit: int = 1, ...):
+```
+
+In VS Code press **Ctrl/Cmd + Shift + F** and type a phrase such as `apify scraping`, `himalayas scraping`, `admission gate`, `email verification`, `email sending`, `api route GET /api/companies` or `retry · backoff`. Every hit is the line directly above the function that does that job.
+
 **How to read a path.** `ZoNuLy → jobhunter → scrapers → greenhouse.py` means: open the repo folder `ZoNuLy`, then the folder `jobhunter`, then `scrapers`, and the file is `greenhouse.py`.
 
 **How to search the code.** Every Python file starts with a generated block headed `ZONULY CODE MAP`. It shows the file's full path, its stage, which files call it, which files it calls, and every function with one line on what it does. Search for a stage word to find every file in that stage:
