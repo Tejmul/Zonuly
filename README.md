@@ -358,6 +358,8 @@ python scripts/smoke.py --db demo.db
 
 ---
 
+**Code map:** which folder and file does what, and how data moves from file to file, in [CODEMAP.md](CODEMAP.md). Every Python file starts with a searchable `ZONULY CODE MAP` header.
+
 **System design (LLD):** requirements, class diagram, OOP, SOLID, design patterns, sequence and activity diagrams, API, database schema, error handling and the working implementation, one file each, in [docs/system-design/](docs/system-design/README.md).
 
 ---
