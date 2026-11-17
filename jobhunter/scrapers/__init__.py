@@ -40,6 +40,7 @@ REGISTRY: dict[str, str] = {
 }
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion · scraper registry ▸ __init__.get_fetcher(): Look up a scraper by name in the registry and return its fetch function, or None.
 def get_fetcher(name: str) -> Callable[..., Any] | None:
     """Look up a scraper by name in the registry and return its fetch function, or None.
     Logs and returns None for an unknown scraper or one whose module fails to import."""

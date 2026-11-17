@@ -46,6 +46,7 @@ _UNPAID = re.compile(r"\bunpaid\b|\bvolunteer\b", re.I)
 _UTM = re.compile(r"[?&]utm_source=freehire\.me$")
 
 
+# ZONULY ▸ freehire scraping · scraping · remote from india ▸ scraping · data ingestion ▸ freehire._queries(): Build the freehire search queries: India and remote-global, for junior and intern seniority.
 def _queries() -> list[dict]:
     """Build the freehire search queries: India and remote-global, for junior and intern seniority."""
     out = []
@@ -55,6 +56,7 @@ def _queries() -> list[dict]:
     return out
 
 
+# ZONULY ▸ freehire scraping · scraping · filtering ▸ scraping · data ingestion ▸ freehire._keep(): Filter a freehire posting: open, tech, paid, at most 1 year asked, Bengaluru/Hyderabad if India.
 def _keep(j: dict) -> bool:
     """Filter a freehire posting: open, tech, paid, at most 1 year asked, Bengaluru/Hyderabad if India."""
     if j.get("is_tech") != "tech" or j.get("closed_at") or not j.get("company") or not j.get("title"):
@@ -69,6 +71,7 @@ def _keep(j: dict) -> bool:
     return True
 
 
+# ZONULY ▸ freehire scraping · scraping · data ingestion ▸ scraping · data ingestion ▸ freehire._raw(): Convert a freehire API posting into a RawJob for ingestion.
 def _raw(j: dict) -> RawJob:
     """Convert a freehire API posting into a RawJob for ingestion."""
     remote = j.get("work_mode") == "remote" or "global" in (j.get("regions") or [])
@@ -88,6 +91,7 @@ def _raw(j: dict) -> RawJob:
     )
 
 
+# ZONULY ▸ freehire scraping · scraping · dedup ▸ scraping · data ingestion ▸ freehire.fetch(): Scrape fresher tech postings from the freehire.me API, paging each query and deduping by slug.
 async def fetch(http: httpx.AsyncClient, companies: list[dict]) -> list[RawJob]:  # noqa: ARG001 — board-wide, not per company
     """Scrape fresher tech postings from the freehire.me API, paging each query and deduping by slug.
     Network call; returns RawJobs for ingestion.

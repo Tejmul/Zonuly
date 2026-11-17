@@ -56,6 +56,7 @@ _MULT = {"billion": 1000.0, "bn": 1000.0, "b": 1000.0, "million": 1.0, "m": 1.0,
 _LEAD_NOISE = re.compile(r"^(exclusive|breaking|report|update|just in)\s*[:\-]?\s*", re.I)
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ funding_rss._amount_usd_m(): Read the first money amount in a funding headline as USD millions (0.1 to 5000), else None.
 def _amount_usd_m(text: str) -> float | None:
     """Read the first money amount in a funding headline as USD millions (0.1 to 5000), else None."""
     m = _AMOUNT.search(text)
@@ -67,6 +68,7 @@ def _amount_usd_m(text: str) -> float | None:
     return round(usd, 1) if 0.1 <= usd <= 5000 else None
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ funding_rss._name(): Extract the company name from a funding headline (the words before raises/secures/...).
 def _name(title: str) -> str | None:
     """Extract the company name from a funding headline (the words before raises/secures/...)."""
     t = _LEAD_NOISE.sub("", title or "").strip()
@@ -78,6 +80,7 @@ def _name(title: str) -> str | None:
     return name if 1 < len(name) <= 60 and len(name.split()) <= 6 else None
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ funding_rss._announced(): Return a feed entry's published (or updated) date as YYYY-MM-DD, or None.
 def _announced(entry) -> str | None:
     """Return a feed entry's published (or updated) date as YYYY-MM-DD, or None."""
     for key in ("published_parsed", "updated_parsed"):
@@ -93,6 +96,7 @@ FEED_TIMEOUT_S = 12.0
 TOTAL_BUDGET_S = 90.0
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ funding_rss._read(): Fetch a feed with a deadline.
 def _read(url: str, timeout: float) -> bytes | None:
     """Fetch a feed with a deadline.
 
@@ -114,6 +118,7 @@ def _read(url: str, timeout: float) -> bytes | None:
         return None
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ funding_rss.fetch(): Read every funding feed and return one record per item that names a company and a round.
 def fetch() -> list[dict]:
     """Read every funding feed and return one record per item that names a company and a round."""
     out: dict[str, dict] = {}

@@ -61,6 +61,7 @@ HEADERS = {
 }
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion · shared http client and rawjob ▸ class base.RawJob: One posting as scraped, before normalization. Every scraper emits these.
 @dataclass
 class RawJob:
     """One posting as scraped, before normalization. Every scraper emits these."""
@@ -82,6 +83,7 @@ class RawJob:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion · shared http client and rawjob ▸ base.make_client(): Build the shared async HTTP client for scraping (headers, timeout, redirects, pool limits).
 def make_client() -> httpx.AsyncClient:
     """Build the shared async HTTP client for scraping (headers, timeout, redirects, pool limits)."""
     return httpx.AsyncClient(
@@ -92,6 +94,7 @@ def make_client() -> httpx.AsyncClient:
     )
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion · shared http client and rawjob ▸ base.get_json(): GET returning parsed JSON, or None on any failure. Scrapers must never crash the run.
 async def get_json(http: httpx.AsyncClient, url: str, **kw: Any) -> Any:
     """GET returning parsed JSON, or None on any failure. Scrapers must never crash the run."""
     try:
@@ -105,6 +108,7 @@ async def get_json(http: httpx.AsyncClient, url: str, **kw: Any) -> Any:
         return None
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion · shared http client and rawjob ▸ base.get_text(): GET a URL and return its text, or None on an HTTP error or network failure.
 async def get_text(http: httpx.AsyncClient, url: str, **kw: Any) -> str | None:
     """GET a URL and return its text, or None on an HTTP error or network failure."""
     try:
@@ -117,10 +121,12 @@ async def get_text(http: httpx.AsyncClient, url: str, **kw: Any) -> str | None:
         return None
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion · shared http client and rawjob ▸ base.gather_limited(): Run coroutines with bounded concurrency; exceptions become None.
 async def gather_limited(coros: list, limit: int = CONCURRENCY) -> list:
     """Run coroutines with bounded concurrency; exceptions become None."""
     sem = asyncio.Semaphore(limit)
 
+    # ZONULY ▸ scraping ▸ scraping · data ingestion · shared http client and rawjob ▸ base.gather_limited.run(): Await one coroutine under the semaphore; a raised exception becomes None.
     async def run(c):
         """Await one coroutine under the semaphore; a raised exception becomes None."""
         async with sem:
@@ -137,6 +143,7 @@ _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"[ \t]+")
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion · shared http client and rawjob ▸ base.html_to_text(): Readable plain text from a job-description HTML blob.
 def html_to_text(html: str | None, *, limit: int = 12000) -> str:
     """Readable plain text from a job-description HTML blob."""
     if not html:
@@ -174,11 +181,13 @@ def html_to_text(html: str | None, *, limit: int = 12000) -> str:
 _REMOTE_RE = re.compile(r"\b(remote|anywhere|work from home|wfh|distributed|worldwide)\b", re.I)
 
 
+# ZONULY ▸ scraping · remote from india ▸ scraping · data ingestion · shared http client and rawjob ▸ base.looks_remote(): True when any of the given text fields mentions remote work.
 def looks_remote(*fields: str | None) -> bool:
     """True when any of the given text fields mentions remote work."""
     return any(_REMOTE_RE.search(f) for f in fields if f)
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion · shared http client and rawjob ▸ base.parse_ts(): Best-effort timestamp parsing across the many shapes job boards use.
 def parse_ts(value: Any) -> datetime | None:
     """Best-effort timestamp parsing across the many shapes job boards use."""
     if value in (None, "", 0):

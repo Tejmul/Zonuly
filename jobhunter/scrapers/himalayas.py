@@ -57,6 +57,7 @@ SENIOR_TITLE = re.compile(r"senior|\bsr\.?\b|staff|principal|lead|manager|direct
                           re.I)
 
 
+# ZONULY ▸ himalayas scraping · scraping · filtering · pay · salary ▸ scraping · data ingestion ▸ himalayas.keep(): Filter a Himalayas posting: full-time, non-senior tech title, and stated USD pay at the floor.
 def keep(j: dict) -> bool:
     """Filter a Himalayas posting: full-time, non-senior tech title, and stated USD pay at the floor."""
     title = j.get("title") or ""
@@ -73,6 +74,7 @@ def keep(j: dict) -> bool:
     return True
 
 
+# ZONULY ▸ himalayas scraping · scraping · data ingestion · remote from india ▸ scraping · data ingestion ▸ himalayas.to_raw(): Convert a Himalayas job JSON into a remote RawJob for ingestion; None without title/company…
 def to_raw(j: dict) -> RawJob | None:
     """Convert a Himalayas job JSON into a remote RawJob for ingestion; None without title/company/URL."""
     title, company = (j.get("title") or "").strip(), (j.get("companyName") or "").strip()
@@ -90,6 +92,7 @@ def to_raw(j: dict) -> RawJob | None:
                          "employment": j.get("employmentType")})
 
 
+# ZONULY ▸ himalayas scraping · scraping ▸ scraping · data ingestion ▸ himalayas._query(): Page through Himalayas job search results open to India for one query. Network call.
 async def _query(http: httpx.AsyncClient, q: str) -> list[dict]:
     """Page through Himalayas job search results open to India for one query. Network call."""
     out: list[dict] = []
@@ -103,6 +106,7 @@ async def _query(http: httpx.AsyncClient, q: str) -> list[dict]:
     return out
 
 
+# ZONULY ▸ himalayas scraping · scraping · filtering · dedup · remote from india ▸ scraping · data ingestion ▸ himalayas.fetch(): Scrape Himalayas for remote jobs open to India across all queries, filtered and dedup by…
 async def fetch(http: httpx.AsyncClient, companies: list[dict] | None = None) -> list[RawJob]:
     """Scrape Himalayas for remote jobs open to India across all queries, filtered and dedup by URL.
     Returns RawJob rows for the ingestion pipeline. Network call."""

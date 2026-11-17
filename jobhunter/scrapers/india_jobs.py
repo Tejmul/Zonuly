@@ -70,6 +70,7 @@ KEYWORDS = ["software engineer", "AI engineer", "ML engineer", "backend engineer
             "full stack engineer", "SDE", "founding engineer", "GenAI engineer"]
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion ▸ india_jobs.search_url(): The guest search fragment: f_E 1,2 = internship + entry level, f_TPR r604800 = past week.
 def search_url(keywords: str, location: str, start: int = 0, *, experience: str | None = "1,2",
                posted: str | None = "r604800") -> str:
     """The guest search fragment: f_E 1,2 = internship + entry level, f_TPR r604800 = past week."""
@@ -84,23 +85,27 @@ def search_url(keywords: str, location: str, start: int = 0, *, experience: str 
 _JOB_ID = re.compile(r"(?:/jobs/view/(?:[^/?#]*?-)?|currentJobId=|jobPosting:)(\d{8,12})\b")
 
 
+# ZONULY ▸ linkedin scraping · scraping ▸ scraping · data ingestion ▸ india_jobs.job_id(): Return the LinkedIn job id found in a job URL or URN, or None.
 def job_id(url: str | None) -> str | None:
     """Return the LinkedIn job id found in a job URL or URN, or None."""
     m = _JOB_ID.search(unquote(url or ""))
     return m.group(1) if m else None
 
 
+# ZONULY ▸ scraping · dedup ▸ scraping · data ingestion ▸ india_jobs.job_url(): One canonical URL per posting — the dedup key Job.url.
 def job_url(jid: str) -> str:
     """One canonical URL per posting — the dedup key Job.url."""
     return f"https://www.linkedin.com/jobs/view/{jid}"
 
 
+# ZONULY ▸ linkedin scraping · scraping ▸ scraping · data ingestion ▸ india_jobs.company_slug(): Return the LinkedIn company slug from a /company/ URL, or None.
 def company_slug(url: str | None) -> str | None:
     """Return the LinkedIn company slug from a /company/ URL, or None."""
     m = re.search(r"linkedin\.com/company/([^/?#\s)]+)", url or "")
     return m.group(1) if m else None
 
 
+# ZONULY ▸ linkedin scraping · scraping ▸ scraping · data ingestion ▸ india_jobs.company_url(): Return the LinkedIn company page URL for a slug.
 def company_url(slug: str) -> str:
     """Return the LinkedIn company page URL for a slug."""
     return f"https://www.linkedin.com/company/{slug}"
@@ -110,6 +115,7 @@ _AGO = re.compile(r"\b(\d+|an?|one)\s+(minute|hour|day|week|month|year)s?\s+ago\
 _UNIT_DAYS = {"minute": 1 / 1440, "hour": 1 / 24, "day": 1, "week": 7, "month": 30, "year": 365}
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion ▸ india_jobs.relative_date(): '35 minutes ago', '2 days ago', '1 week ago' -> a datetime; 'just now' -> now.
 def relative_date(text: str | None, now: datetime | None = None) -> datetime | None:
     """'35 minutes ago', '2 days ago', '1 week ago' -> a datetime; 'just now' -> now."""
     if not text:
@@ -124,6 +130,7 @@ def relative_date(text: str | None, now: datetime | None = None) -> datetime | N
     return now - timedelta(days=n * _UNIT_DAYS[m.group(2).lower()])
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion ▸ class india_jobs.Card: One job card from a search page.
 @dataclass
 class Card:
     """One job card from a search page."""
@@ -143,6 +150,7 @@ class Card:
 _MONEY_HINT = re.compile(r"[₹$€£]|\b(?:INR|USD|LPA|lakhs?)\b", re.I)
 
 
+# ZONULY ▸ linkedin scraping · scraping · pay · salary ▸ scraping · data ingestion ▸ india_jobs._md_cards(): Parse LinkedIn job-search results read as Markdown into job Cards (title, company, location, pay).
 def _md_cards(text: str, now: datetime | None) -> list[Card]:
     """Parse LinkedIn job-search results read as Markdown into job Cards (title, company, location, pay)."""
     out: list[Card] = []
@@ -171,6 +179,7 @@ def _md_cards(text: str, now: datetime | None) -> list[Card]:
     return out
 
 
+# ZONULY ▸ linkedin scraping · scraping · pay · salary ▸ scraping · data ingestion ▸ india_jobs._html_cards(): Parse LinkedIn guest job-search HTML into job Cards (title, company, location, date, pay).
 def _html_cards(html: str, now: datetime | None) -> list[Card]:
     """Parse LinkedIn guest job-search HTML into job Cards (title, company, location, date, pay)."""
     from bs4 import BeautifulSoup
@@ -204,6 +213,7 @@ def _html_cards(html: str, now: datetime | None) -> list[Card]:
     return out
 
 
+# ZONULY ▸ linkedin scraping · scraping ▸ scraping · data ingestion ▸ india_jobs.parse_cards(): Every job card on one guest search page — Jina Markdown or LinkedIn's own HTML.
 def parse_cards(text: str | None, now: datetime | None = None) -> list[Card]:
     """Every job card on one guest search page — Jina Markdown or LinkedIn's own HTML."""
     if not text:
@@ -218,6 +228,7 @@ _WALL = re.compile(r"authwall|sign in to view more|join linkedin to see|uas/logi
                    r'|http-equiv="refresh"[^>]*url=https://www\.linkedin\.com', re.I)
 
 
+# ZONULY ▸ scraping · sign-in · auth ▸ scraping · data ingestion ▸ india_jobs.walled(): A login / challenge page instead of content.
 def walled(text: str | None) -> bool:
     """A login / challenge page instead of content."""
     if not text or not text.strip():
@@ -225,12 +236,14 @@ def walled(text: str | None) -> bool:
     return bool(_WALL.search(text[:6000])) and "/jobs/view/" not in text[:20000]
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion ▸ india_jobs._criterion(): Return the value on the line after a job-criteria label (e.g. Seniority level), or None.
 def _criterion(text: str, label: str) -> str | None:
     """Return the value on the line after a job-criteria label (e.g. Seniority level), or None."""
     m = re.search(rf"{label}\s*\n+\s*([^\n#*]+?)\s*(?:\n|$)", text, re.I)
     return m.group(1).strip() if m else None
 
 
+# ZONULY ▸ scraping · enrichment · pay · salary ▸ scraping · data ingestion ▸ india_jobs.parse_job_page(): The public job page: description, criteria, and the employer's stated pay.
 def parse_job_page(text: str | None) -> dict:
     """The public job page: description, criteria, and the employer's stated pay.
 
@@ -277,6 +290,7 @@ def parse_job_page(text: str | None) -> dict:
     return out
 
 
+# ZONULY ▸ linkedin scraping · scraping · decision ▸ scraping · data ingestion ▸ india_jobs._redirect_target(): linkedin.com/redir/redirect?url=https%3A%2F%2Fgitforce%2Eai -> https://gitforce.ai
 def _redirect_target(url: str) -> str:
     """linkedin.com/redir/redirect?url=https%3A%2F%2Fgitforce%2Eai -> https://gitforce.ai"""
     if "linkedin.com/redir" in url:
@@ -286,6 +300,7 @@ def _redirect_target(url: str) -> str:
     return url
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ india_jobs.parse_company_page(): The public company page: website, industry, size, headquarters, the About text.
 def parse_company_page(text: str | None) -> dict:
     """The public company page: website, industry, size, headquarters, the About text."""
     out = {"website": None, "industry": None, "size": None, "headcount": None, "headcount_min": None, "hq": None,
@@ -327,6 +342,7 @@ _JF_META = re.compile(r"^(?P<kind>Full-time|Part-time|Internship|Contract|Tempor
                       r"(?P<exp>Fresher|\d+(?:-\d+)?\+? yrs)?", re.I)
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion ▸ india_jobs.parse_jobfound(): Cards on a jobfound listing. `listed_band` is jobfound's band — an estimate.
 def parse_jobfound(text: str | None, now: datetime | None = None) -> list[dict]:
     """Cards on a jobfound listing. `listed_band` is jobfound's band — an estimate."""
     out = []
@@ -355,6 +371,7 @@ _IH_CARD = re.compile(
     re.S)
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion ▸ india_jobs.parse_instahyre(): Parse an Instahyre city listing page into job dicts: company, title, location, size, blurb, url.
 def parse_instahyre(text: str | None) -> list[dict]:
     """Parse an Instahyre city listing page into job dicts: company, title, location, size, blurb, url."""
     out = []
@@ -394,6 +411,7 @@ _LEAD_STOP = {"the", "a", "an", "my", "an", "one", "this", "that", "india", "ban
               "2025", "2027", "summer", "winter", "posted", "discuss"}
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ india_jobs.offer_leads(): Company names a forum post says it got an offer from. Leads to look up, not facts.
 def offer_leads(text: str | None) -> list[str]:
     """Company names a forum post says it got an offer from. Leads to look up, not facts."""
     names: list[str] = []

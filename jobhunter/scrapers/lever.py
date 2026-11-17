@@ -27,6 +27,7 @@ SOURCE = "lever"
 API = "https://api.lever.co/v0/postings/{slug}?mode=json"
 
 
+# ZONULY ▸ lever scraping · scraping · pay · salary ▸ scraping · data ingestion ▸ lever._salary(): Format a Lever posting's salary range as text, or None when no range is given.
 def _salary(posting: dict) -> str | None:
     """Format a Lever posting's salary range as text, or None when no range is given."""
     sr = posting.get("salaryRange") or {}
@@ -36,6 +37,7 @@ def _salary(posting: dict) -> str | None:
     return None
 
 
+# ZONULY ▸ lever scraping · scraping ▸ scraping · data ingestion ▸ lever.fetch_board(): Scrape every posting on one Lever board via its public API into RawJobs (network call).
 async def fetch_board(http: httpx.AsyncClient, slug: str, company_name: str | None = None) -> list[RawJob]:
     """Scrape every posting on one Lever board via its public API into RawJobs (network call)."""
     data = await get_json(http, API.format(slug=slug))
@@ -75,6 +77,7 @@ async def fetch_board(http: httpx.AsyncClient, slug: str, company_name: str | No
     return out
 
 
+# ZONULY ▸ lever scraping · scraping ▸ scraping · data ingestion ▸ lever.fetch(): Scrape all Lever boards listed in the companies config and return their jobs.
 async def fetch(http: httpx.AsyncClient, companies: list[dict]) -> list[RawJob]:
     """Scrape all Lever boards listed in the companies config and return their jobs."""
     targets = [c for c in companies if c.get("ats") == "lever" and c.get("ats_slug")]

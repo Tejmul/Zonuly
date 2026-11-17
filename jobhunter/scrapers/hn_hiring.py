@@ -114,6 +114,7 @@ _SUBDOMAIN = re.compile(r"^(?:www|careers?|jobs|apply|boards?|hire|hiring|work|j
 _TWO_PART_TLD = re.compile(r"\.(?:co|com|org|net|ac|gov|edu)\.[a-z]{2}$", re.I)
 
 
+# ZONULY ▸ scraping ▸ scraping · data ingestion ▸ hn_hiring._from_domain(): "https://airspace-intelligence.com" -> "Airspace Intelligence". Last resort.
 def _from_domain(url: str | None) -> str | None:
     """"https://airspace-intelligence.com" -> "Airspace Intelligence". Last resort."""
     if not url:
@@ -147,6 +148,7 @@ _DESCRIBES_NOT_NAMES = re.compile(
 )
 
 
+# ZONULY ▸ hacker news scraping · scraping ▸ scraping · data ingestion ▸ hn_hiring._valid_name(): Clean an HN post header part into an employer name, or None when it is not a name.
 def _valid_name(name: str | None) -> str | None:
     """Clean an HN post header part into an employer name, or None when it is not a name."""
     if not name:
@@ -165,6 +167,7 @@ def _valid_name(name: str | None) -> str | None:
     return name
 
 
+# ZONULY ▸ hacker news scraping · scraping ▸ scraping · data ingestion ▸ hn_hiring.company_name(): The employer behind an HN hiring post, or None when the post never names one.
 def company_name(header: str, apply_url: str | None = None) -> str | None:
     """The employer behind an HN hiring post, or None when the post never names one."""
     head = _LEAD_NOISE.sub("", (header or "").strip(), count=1)
@@ -195,6 +198,7 @@ def company_name(header: str, apply_url: str | None = None) -> str | None:
     return _valid_name(_from_domain(apply_url))
 
 
+# ZONULY ▸ hacker news scraping · scraping ▸ scraping · data ingestion ▸ hn_hiring._parse_comment(): Parse one HN 'Who is hiring' comment into a RawJob; None when it names no employer or role.
 def _parse_comment(c: dict) -> RawJob | None:
     """Parse one HN 'Who is hiring' comment into a RawJob; None when it names no employer or role."""
     text = html_to_text(c.get("text"))
@@ -251,6 +255,7 @@ def _parse_comment(c: dict) -> RawJob | None:
     )
 
 
+# ZONULY ▸ hacker news scraping · scraping ▸ scraping · data ingestion ▸ hn_hiring._fetch_thread(): Fetch one HN 'Who is hiring' thread and parse its top-level comments into jobs.
 async def _fetch_thread(http: httpx.AsyncClient, story_id: str) -> list[RawJob]:
     """Fetch one HN 'Who is hiring' thread and parse its top-level comments into jobs."""
     data = await get_json(http, ITEM.format(id=story_id))
@@ -267,6 +272,7 @@ async def _fetch_thread(http: httpx.AsyncClient, story_id: str) -> list[RawJob]:
     return out
 
 
+# ZONULY ▸ hacker news scraping · scraping ▸ scraping · data ingestion ▸ hn_hiring.fetch(): Scrape the latest HN 'Who is hiring' threads (found via Algolia search) into jobs.
 async def fetch(http: httpx.AsyncClient, companies: list[dict] | None = None) -> list[RawJob]:
     """Scrape the latest HN 'Who is hiring' threads (found via Algolia search) into jobs."""
     search = await get_json(http, SEARCH)

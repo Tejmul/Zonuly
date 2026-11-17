@@ -66,12 +66,14 @@ _SIZE = {
 }
 
 
+# ZONULY ▸ wellfound scraping · scraping · remote from india ▸ scraping · data ingestion ▸ wellfound.page_url(): Build the Wellfound role listing URL for a role, location (or remote) and page number.
 def page_url(role: str, location: str, page: int) -> str:
     """Build the Wellfound role listing URL for a role, location (or remote) and page number."""
     path = f"/role/r/{role}" if location == "remote" else f"/role/l/{role}/{location}"
     return f"{BASE}{path}" + (f"?page={page}" if page > 1 else "")
 
 
+# ZONULY ▸ wellfound scraping · scraping ▸ scraping · data ingestion ▸ wellfound.parse(): Every (startup, job) pair on one landing page.
 def parse(html: str) -> list[RawJob]:
     """Every (startup, job) pair on one landing page."""
     m = _NEXT_DATA.search(html or "")
@@ -126,6 +128,7 @@ def parse(html: str) -> list[RawJob]:
     return out
 
 
+# ZONULY ▸ wellfound scraping · scraping ▸ scraping · data ingestion ▸ wellfound.fetch(): Every role × location landing page, `PAGES` deep, one polite GET at a time.
 async def fetch(http: httpx.AsyncClient, companies: list[dict] | None = None) -> list[RawJob]:
     """Every role × location landing page, `PAGES` deep, one polite GET at a time."""
     out: list[RawJob] = []

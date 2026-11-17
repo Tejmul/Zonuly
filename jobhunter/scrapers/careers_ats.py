@@ -92,6 +92,7 @@ _MD_LINK = re.compile(r"\[([^\]]{0,120})\]\((https?://[^)\s]+)\)")
 _BARE_URL = re.compile(r"https?://[^\s\"'<>)\]]+")
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats.detect_ats(): (ats, slug) for the first hosted board this URL / HTML / Markdown points at.
 def detect_ats(text: str | None) -> tuple[str, str] | None:
     """(ats, slug) for the first hosted board this URL / HTML / Markdown points at."""
     if not text:
@@ -104,12 +105,14 @@ def detect_ats(text: str | None) -> tuple[str, str] | None:
     return None
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats.links(): (absolute url, anchor text) for every link on a page — HTML anchors, any other
 def links(html_or_md: str, base: str) -> list[tuple[str, str]]:
     """(absolute url, anchor text) for every link on a page — HTML anchors, any other
     href/src (iframes and embed scripts carry the ATS), and Markdown links from the reader."""
     out: list[tuple[str, str]] = []
     seen: set[str] = set()
 
+    # ZONULY ▸ scraping · filtering · dedup · enrichment ▸ scraping · data ingestion ▸ careers_ats.links.add(): Resolve a link against the page, skip anchors, junk and duplicates, and keep (url, text).
     def add(href: str, text: str = "") -> None:
         """Resolve a link against the page, skip anchors, junk and duplicates, and keep (url, text)."""
         href = (href or "").strip()
@@ -135,6 +138,7 @@ def links(html_or_md: str, base: str) -> list[tuple[str, str]]:
     return out
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats.careers_links(): Links that look like the careers page: on their own site (or a job-page host), the
 def careers_links(page_links: list[tuple[str, str]], site: str) -> list[str]:
     """Links that look like the careers page: on their own site (or a job-page host), the
     path or the anchor text says careers / jobs / join us. Shortest path first — /careers
@@ -160,6 +164,7 @@ def careers_links(page_links: list[tuple[str, str]], site: str) -> list[str]:
 _LD = re.compile(r"<script[^>]+type\s*=\s*[\"']application/ld\+json[\"'][^>]*>(.*?)</script>", re.I | re.S)
 
 
+# ZONULY ▸ scraping · enrichment · knowledge graph ▸ scraping · data ingestion ▸ careers_ats._walk(): Yield every dict in a JSON-LD tree, descending into @graph and item lists.
 def _walk(node):
     """Yield every dict in a JSON-LD tree, descending into @graph and item lists."""
     if isinstance(node, list):
@@ -172,6 +177,7 @@ def _walk(node):
                 yield from _walk(node[key])
 
 
+# ZONULY ▸ scraping · enrichment · remote from india ▸ scraping · data ingestion ▸ careers_ats._ld_location(): Read a JSON-LD JobPosting's location text and whether it is remote (TELECOMMUTE).
 def _ld_location(posting: dict) -> tuple[str | None, bool]:
     """Read a JSON-LD JobPosting's location text and whether it is remote (TELECOMMUTE)."""
     remote = str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE"
@@ -191,6 +197,7 @@ def _ld_location(posting: dict) -> tuple[str | None, bool]:
     return loc, remote
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats.jsonld_jobs(): Every JobPosting the page declares about itself in JSON-LD — structured, so trusted.
 def jsonld_jobs(html: str, page_url: str, company_name: str, *, source: str = "careers") -> list[RawJob]:
     """Every JobPosting the page declares about itself in JSON-LD — structured, so trusted."""
     out: list[RawJob] = []
@@ -215,6 +222,7 @@ def jsonld_jobs(html: str, page_url: str, company_name: str, *, source: str = "c
     return out
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats._slug(): Turn text into a lowercase hyphenated slug (max 80 chars).
 def _slug(text: str) -> str:
     """Turn text into a lowercase hyphenated slug (max 80 chars)."""
     return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")[:80]
@@ -227,6 +235,7 @@ def _slug(text: str) -> str:
 HIT, MISS, ERROR = "hit", "miss", "error"
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats._get(): GET an ATS JSON endpoint: HIT with the data, MISS for not-found/denied/non-JSON,
 async def _get(http: httpx.AsyncClient, url: str, **kw) -> tuple[str, object]:
     """GET an ATS JSON endpoint: HIT with the data, MISS for not-found/denied/non-JSON,
     ERROR for network failures, 429 and 5xx (retryable)."""
@@ -244,11 +253,13 @@ async def _get(http: httpx.AsyncClient, url: str, **kw) -> tuple[str, object]:
         return MISS, None
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats._place(): Join the non-empty location parts with commas, or None.
 def _place(*bits) -> str | None:
     """Join the non-empty location parts with commas, or None."""
     return ", ".join(str(b) for b in bits if b and str(b).strip()) or None
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats._workable(): Scrape a Workable board's public widget API into RawJob postings. Network call.
 async def _workable(http, slug, name):
     """Scrape a Workable board's public widget API into RawJob postings. Network call."""
     st, data = await _get(http, f"https://apply.workable.com/api/v1/widget/accounts/{slug}")
@@ -267,6 +278,7 @@ async def _workable(http, slug, name):
     return HIT, out
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats._smartrecruiters(): Scrape a SmartRecruiters company's public postings API into RawJob postings. Network call.
 async def _smartrecruiters(http, slug, name):
     """Scrape a SmartRecruiters company's public postings API into RawJob postings. Network call."""
     st, data = await _get(http, f"https://api.smartrecruiters.com/v1/companies/{slug}/postings?limit=100")
@@ -284,6 +296,7 @@ async def _smartrecruiters(http, slug, name):
     return HIT, out
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats._recruitee(): Scrape a Recruitee board's public offers API into RawJob postings. Network call.
 async def _recruitee(http, slug, name):
     """Scrape a Recruitee board's public offers API into RawJob postings. Network call."""
     st, data = await _get(http, f"https://{slug}.recruitee.com/api/offers/")
@@ -301,6 +314,7 @@ async def _recruitee(http, slug, name):
     return HIT, out
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats._bamboohr(): Scrape a BambooHR careers list (JSON) into RawJob postings. Network call.
 async def _bamboohr(http, slug, name):
     """Scrape a BambooHR careers list (JSON) into RawJob postings. Network call."""
     st, data = await _get(http, f"https://{slug}.bamboohr.com/careers/list", headers={"Accept": "application/json"})
@@ -319,6 +333,7 @@ async def _bamboohr(http, slug, name):
     return HIT, out
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats._breezy(): Scrape a Breezy HR board's JSON feed into RawJob postings. Network call.
 async def _breezy(http, slug, name):
     """Scrape a Breezy HR board's JSON feed into RawJob postings. Network call."""
     st, data = await _get(http, f"https://{slug}.breezy.hr/json")
@@ -335,6 +350,7 @@ async def _breezy(http, slug, name):
     return HIT, out
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats._darwinbox(): Darwinbox's candidate portal is a JS app; its own JSON feed lists every opening
 async def _darwinbox(http, slug, name):
     """Darwinbox's candidate portal is a JS app; its own JSON feed lists every opening
     (2026-10-14: Red.Health's 20 roles were invisible to the page reader)."""
@@ -364,9 +380,11 @@ async def _darwinbox(http, slug, name):
     return (HIT, out) if out else (MISS, [])
 
 
+# ZONULY ▸ greenhouse scraping · lever scraping · ashby scraping · scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats._existing(): Greenhouse / Lever / Ashby: the fetchers in this package. They swallow erro…
 def _existing(fetch):
     """Greenhouse / Lever / Ashby: the fetchers in this package. They swallow errors into
     an empty list, so an empty answer is reported as a MISS."""
+    # ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats._existing.run(): Run the wrapped fetcher; report HIT with its jobs, or MISS when it returned none.
     async def run(http, slug, name):
         """Run the wrapped fetcher; report HIT with its jobs, or MISS when it returned none."""
         jobs = await fetch(http, slug, name)
@@ -409,6 +427,7 @@ BOARD_PAGES = {
 }
 
 
+# ZONULY ▸ scraping · enrichment ▸ scraping · data ingestion ▸ careers_ats.read_board(): (HIT, jobs) | (MISS, []) | (ERROR, why). Only for boards in API_FETCHERS.
 async def read_board(http: httpx.AsyncClient, ats: str, slug: str, company_name: str) -> tuple[str, list[RawJob] | str | None]:
     """(HIT, jobs) | (MISS, []) | (ERROR, why). Only for boards in API_FETCHERS."""
     fetch = API_FETCHERS.get(ats)
