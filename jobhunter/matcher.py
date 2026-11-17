@@ -60,12 +60,14 @@ PREFILTER_METHOD = "lexical-v1"
 _METHOD_KEY = "prefilter_method"
 
 
+# ZONULY ▸ enrichment · scoring ▸ scoring · ai judge ▸ matcher.job_text(): Build the text used for matching a job: title, company, location and the start of the description.
 def job_text(job: Job) -> str:
     """Build the text used for matching a job: title, company, location and the start of the description."""
     bits = [job.title, job.company_name, job.location or "", (job.description or "")[:4000]]
     return "\n".join(b for b in bits if b)
 
 
+# ZONULY ▸ filtering · scoring · review gate · ai model call · llm ▸ scoring · ai judge ▸ matcher.prefilter(): Score jobs that have no gate score yet. Free — no model, no network.
 def prefilter(limit: int = 400, *, recompute: bool = False) -> int:
     """Score jobs that have no gate score yet. Free — no model, no network.
 
@@ -149,6 +151,7 @@ Reply with exactly:
 }}"""
 
 
+# ZONULY ▸ scoring ▸ scoring · ai judge ▸ class matcher.Score
 @dataclass
 class Score:
     score: int
@@ -158,6 +161,7 @@ class Score:
     breakdown: dict
 
 
+# ZONULY ▸ scoring · ai model call · llm ▸ scoring · ai judge ▸ matcher.score_job(): Score a job against the resume with the LLM rubric (judge model call), then apply hard rules.
 def score_job(job: Job, profile_text: str, yoe: float) -> Score | None:
     """Score a job against the resume with the LLM rubric (judge model call), then apply hard rules.
     Returns a Score with reasons, gaps, verdict and breakdown, or None when the model answer is unusable.
@@ -204,6 +208,7 @@ def score_job(job: Job, profile_text: str, yoe: float) -> Score | None:
     )
 
 
+# ZONULY ▸ scoring · ai model call · llm ▸ scoring · ai judge ▸ matcher._apply_hard_rules(): Deterministic corrections the LLM is unreliable about.
 def _apply_hard_rules(score: int, job: Job) -> int:
     """Deterministic corrections the LLM is unreliable about."""
     if norm.is_senior(job.title):
@@ -215,6 +220,7 @@ def _apply_hard_rules(score: int, job: Job) -> int:
     return int(max(0, min(100, score)))
 
 
+# ZONULY ▸ filtering · scoring ▸ scoring · ai judge ▸ matcher.prefilter_threshold(): Effective cutoff: the configured percentile of the live distribution, floored by the absolute.
 def prefilter_threshold() -> float:
     """Effective cutoff: the configured percentile of the live distribution, floored by the absolute."""
     if not PREFILTER_PCT:
@@ -227,6 +233,7 @@ def prefilter_threshold() -> float:
     return max(PREFILTER, round(sims[idx], 4))
 
 
+# ZONULY ▸ scoring ▸ scoring · ai judge ▸ matcher.score_pending(): Rubric-score the highest-similarity unscored jobs.
 def score_pending(limit: int = 40, *, min_sim: float | None = None) -> dict:
     """Rubric-score the highest-similarity unscored jobs."""
     init_db()
@@ -278,6 +285,7 @@ def score_pending(limit: int = 40, *, min_sim: float | None = None) -> dict:
     return stats
 
 
+# ZONULY ▸ scoring ▸ scoring · ai judge ▸ matcher.rescore_all(): Clear scores (e.g. after the resume changed) so the next pass redoes everything.
 def rescore_all() -> int:
     """Clear scores (e.g. after the resume changed) so the next pass redoes everything."""
     init_db()
@@ -302,6 +310,7 @@ def rescore_all() -> int:
     return len(rows)
 
 
+# ZONULY ▸ scoring ▸ scoring · ai judge ▸ matcher.counts(): Count jobs in total, embedded, rubric-scored and marked high_match (reads the job table).
 def counts() -> dict:
     """Count jobs in total, embedded, rubric-scored and marked high_match (reads the job table)."""
     with get_session() as session:

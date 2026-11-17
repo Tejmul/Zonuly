@@ -111,6 +111,7 @@ MARKETS = ("india", "remote", "abroad")
 ENGINE_VERSION = "selection-v2"
 
 
+# ZONULY ▸ remote from india ▸ scoring · selection confidence ▸ confidence.weights(): Selection-confidence term weights for a market (india, else the remote profile) from config.
 def weights(market: str) -> dict[str, float]:
     """Selection-confidence term weights for a market (india, else the remote profile) from config."""
     prof = "india" if market == "india" else "remote"
@@ -132,6 +133,7 @@ LABELS = {
 }
 
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.band(): Map a 0-100 selection score to its band: high, medium, low or long_shot (None stays None).
 def band(score: int | None) -> str | None:
     """Map a 0-100 selection score to its band: high, medium, low or long_shot (None stays None)."""
     if score is None:
@@ -147,6 +149,7 @@ def band(score: int | None) -> str | None:
 
 # ------------------------------------------------------------------ the result
 
+# ZONULY ▸ scoring · selection confidence ▸ scoring · selection confidence ▸ class confidence.Term
 @dataclass
 class Term:
     key: str
@@ -156,16 +159,19 @@ class Term:
     quote: str | None = None
     url: str | None = None
 
+    # ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.Term.points(): Points this term contributes to the score: weight times value, rounded.
     @property
     def points(self) -> float:
         """Points this term contributes to the score: weight times value, rounded."""
         return round(self.weight * self.value, 1)
 
+    # ZONULY ▸ scoring · selection confidence ▸ scoring · selection confidence ▸ confidence.Term.as_dict(): Serialize the term to a dict with its display label and points.
     def as_dict(self) -> dict:
         """Serialize the term to a dict with its display label and points."""
         return {**asdict(self), "label": LABELS.get(self.key, self.key), "points": self.points}
 
 
+# ZONULY ▸ scoring · selection confidence ▸ scoring · selection confidence ▸ class confidence.Blocker
 @dataclass
 class Blocker:
     kind: str
@@ -174,11 +180,13 @@ class Blocker:
     quote: str | None = None
     url: str | None = None
 
+    # ZONULY ▸ scoring · selection confidence ▸ scoring · selection confidence ▸ confidence.Blocker.as_dict(): Serialize the blocker to a plain dict.
     def as_dict(self) -> dict:
         """Serialize the blocker to a plain dict."""
         return asdict(self)
 
 
+# ZONULY ▸ scoring · selection confidence ▸ scoring · selection confidence ▸ class confidence.Selection
 @dataclass
 class Selection:
     market: str
@@ -191,11 +199,13 @@ class Selection:
     city: str | None = None
     notes: list[str] = field(default_factory=list)
 
+    # ZONULY ▸ scoring · selection confidence ▸ scoring · selection confidence ▸ confidence.Selection.top_reasons(): Return up to n strong terms (value at least 0.7) as label: why lines, highest points first.
     def top_reasons(self, n: int = 3) -> list[str]:
         """Return up to n strong terms (value at least 0.7) as label: why lines, highest points first."""
         good = sorted((t for t in self.terms if t.value >= 0.7), key=lambda t: -t.points)
         return [f"{LABELS.get(t.key, t.key)}: {t.why}" for t in good[:n]]
 
+    # ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.Selection.main_blocker(): Describe what holds the score down: the tightest blocker cap, else the weakest heavy term.
     def main_blocker(self) -> str | None:
         """Describe what holds the score down: the tightest blocker cap, else the weakest heavy term."""
         if self.blockers:
@@ -204,6 +214,7 @@ class Selection:
         weak = sorted((t for t in self.terms if t.value < 0.3 and t.weight >= 8), key=lambda t: -(t.weight * (1 - t.value)))
         return f"{LABELS.get(weak[0].key, weak[0].key)}: {weak[0].why}" if weak else None
 
+    # ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.Selection.as_dict(): Serialize the selection score (terms, blockers, band, reasons, weights) for the API and storage.
     def as_dict(self) -> dict:
         """Serialize the selection score (terms, blockers, band, reasons, weights) for the API and storage."""
         return {"market": self.market, "score": self.score, "raw": self.raw, "band": self.band,
@@ -248,6 +259,7 @@ _ENG_TITLE = re.compile(r"\b(engineer(?:ing|s)?|developer|dev|sde|swe|programmer
 _APPLICANTS = re.compile(r"(\d[\d,]*)\+?\s+(?:applicants|people (?:have )?applied)", re.I)
 
 
+# ZONULY ▸ validation · guardrails · scoring ▸ scoring · selection confidence ▸ confidence._quote_at(): Return the sentence around a regex match in the text, as a short evidence quote.
 def _quote_at(text: str, m: re.Match, limit: int = 220) -> str:
     """Return the sentence around a regex match in the text, as a short evidence quote."""
     from jobhunter.needs import _sentence_around
@@ -255,6 +267,7 @@ def _quote_at(text: str, m: re.Match, limit: int = 220) -> str:
     return _sentence_around(text, m.start(), m.end(), limit)
 
 
+# ZONULY ▸ enrichment · remote from india ▸ scoring · selection confidence ▸ confidence.market_of(): (india | remote | abroad, detail). The location field speaks first; the description
 def market_of(job: Job, company: Company | None = None) -> tuple[str, dict]:
     """(india | remote | abroad, detail). The location field speaks first; the description
     and the company's HQ only when the location says nothing."""
@@ -297,6 +310,7 @@ _TRULY_ANYWHERE = re.compile(r"(anywhere in the world|work from anywhere|any cou
                              r"time ?zone[- ]agnostic|hire (?:from )?anywhere)", re.I)
 
 
+# ZONULY ▸ remote from india ▸ scoring · selection confidence ▸ confidence.remote_restriction(): (why, quote) when a remote role is limited to a country / region India is not in.
 def remote_restriction(job: Job) -> tuple[str, str] | None:
     """(why, quote) when a remote role is limited to a country / region India is not in.
 
@@ -322,6 +336,7 @@ def remote_restriction(job: Job) -> tuple[str, str] | None:
 
 # ------------------------------------------------------------------ the terms
 
+# ZONULY ▸ scraping ▸ scoring · selection confidence ▸ confidence._age_days(): Days since the job was posted (or first scraped) and which date was used.
 def _age_days(job: Job) -> tuple[int | None, str]:
     """Days since the job was posted (or first scraped) and which date was used."""
     when, what = (job.posted_at, "posted") if job.posted_at else (job.scraped_at, "first seen")
@@ -330,6 +345,7 @@ def _age_days(job: Job) -> tuple[int | None, str]:
     return max(0, (utcnow() - when).days), what
 
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.term_recency(): Score the recency term: fresher postings score higher; unknown date gets 0.4.
 def term_recency(job: Job, w: float) -> Term:
     """Score the recency term: fresher postings score higher; unknown date gets 0.4."""
     age, what = _age_days(job)
@@ -339,6 +355,7 @@ def term_recency(job: Job, w: float) -> Term:
     return Term("recency", w, v, f"{what} {age} day{'s' if age != 1 else ''} ago", url=job.url)
 
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.term_seniority(): Score the seniority term from title and stated years; internships and fresher-open roles score 1.0.
 def term_seniority(job: Job, key: str, w: float, exp) -> Term:
     """Score the seniority term from title and stated years; internships and fresher-open roles score 1.0."""
     title = job.title or ""
@@ -358,6 +375,7 @@ def term_seniority(job: Job, key: str, w: float, exp) -> Term:
     return Term(key, w, 0.6, "no experience bar stated, title not senior")
 
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.term_skills(): Score the skills term by blending needs-brief stack coverage, lexical fit and the rubric score.
 def term_skills(job: Job, w: float, brief: dict, lexical: float | None) -> Term:
     """Score the skills term by blending needs-brief stack coverage, lexical fit and the rubric score."""
     stated = brief.get("stated") or []
@@ -388,6 +406,7 @@ def term_skills(job: Job, w: float, brief: dict, lexical: float | None) -> Term:
     return Term("skills", w, round(max(0.0, min(1.0, v)), 3), why, url=job.url)
 
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.term_gap(): Score the needs-gap term as the share of the role's needs the resume covers.
 def term_gap(w: float, brief: dict) -> Term:
     """Score the needs-gap term as the share of the role's needs the resume covers."""
     cov = brief.get("coverage") or {}
@@ -399,6 +418,7 @@ def term_gap(w: float, brief: dict) -> Term:
                                  f"{cov.get('uncovered', 0)} uncovered of {cov.get('total', 0)} needs (from {src})")
 
 
+# ZONULY ▸ scoring · people search · referrers ▸ scoring · selection confidence ▸ confidence.term_referral(): Score the referral term from how many ready referrers (people with usable addresses) exist.
 def term_referral(w: float, ref: dict) -> Term:
     """Score the referral term from how many ready referrers (people with usable addresses) exist."""
     if ref.get("ready_verified"):
@@ -414,6 +434,7 @@ def term_referral(w: float, ref: dict) -> Term:
 _OWN_BOARD = {"greenhouse", "lever", "ashby", "workable", "recruitee", "bamboohr", "breezy", "careers"}
 
 
+# ZONULY ▸ scraping · hiring verification · scoring ▸ scoring · selection confidence ▸ confidence.term_hiring(): Score the hiring term from the company's hiring verification status or the job's own-board source.
 def term_hiring(job: Job, company: Company | None, w: float) -> Term:
     """Score the hiring term from the company's hiring verification status or the job's own-board source."""
     hs = company.hiring_status if company else None
@@ -431,6 +452,7 @@ def term_hiring(job: Job, company: Company | None, w: float) -> Term:
     return Term("hiring", w, 0.4, f"not verified on their own site ({hs or 'unchecked'})")
 
 
+# ZONULY ▸ enrichment ▸ scoring · selection confidence ▸ confidence._stage_value(): Value the company's size or funding stage (smaller means fewer applicants), with reason and quote.
 def _stage_value(company: Company | None) -> tuple[float, str, str | None]:
     """Value the company's size or funding stage (smaller means fewer applicants), with reason and quote."""
     if company is None:
@@ -446,6 +468,7 @@ def _stage_value(company: Company | None) -> tuple[float, str, str | None]:
         (company.funding_evidence or "")[:220] or None
 
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.term_stage(): Score the stage term from company size/stage, halved when the posting shows 200+ applicants.
 def term_stage(job: Job, company: Company | None, w: float) -> Term:
     """Score the stage term from company size/stage, halved when the posting shows 200+ applicants."""
     v, why, q = _stage_value(company)
@@ -458,6 +481,7 @@ def term_stage(job: Job, company: Company | None, w: float) -> Term:
     return Term("stage", w, round(v, 3), why + (" — smaller means fewer applicants" if v >= 0.75 else ""), quote=q)
 
 
+# ZONULY ▸ scraping · scoring ▸ scoring · selection confidence ▸ confidence.term_competition(): Score the competition term: overrated or highly valued companies and public boards score lower.
 def term_competition(job: Job, company: Company | None, w: float) -> Term:
     """Score the competition term: overrated or highly valued companies and public boards score lower."""
     if company is None:
@@ -478,6 +502,7 @@ def term_competition(job: Job, company: Company | None, w: float) -> Term:
     return Term("competition", w, round(v, 3), why)
 
 
+# ZONULY ▸ pay · salary · scoring ▸ scoring · selection confidence ▸ confidence.term_pay_india(): Score the India pay term (stipend, PPO, stated band or company pay).
 def term_pay_india(job: Job, company: Company | None, w: float) -> tuple[Term, Blocker | None]:
     """Score the India pay term (stipend, PPO, stated band or company pay).
     Returns the term and a pay blocker when stated pay or stipend is under the floor.
@@ -510,6 +535,7 @@ def term_pay_india(job: Job, company: Company | None, w: float) -> tuple[Term, B
     return Term("pay", w, 0.35, "no pay figure stated"), None
 
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.term_city(): Score the India city term: Bengaluru/Hyderabad 1.0, another city 0.0, unstated 0.6.
 def term_city(w: float, detail: dict) -> Term:
     """Score the India city term: Bengaluru/Hyderabad 1.0, another city 0.0, unstated 0.6."""
     if detail.get("city"):
@@ -527,6 +553,7 @@ _TZ_US = re.compile(r"\b(pst|pdt|pacific (?:time|standard)|us (?:business )?hour
                     r"cst|central time|mst|us time ?zones?)\b", re.I)
 
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.term_timezone(): Score the time-zone term from the posting: IST/APAC/any is best, US Pacific hours worst.
 def term_timezone(job: Job, w: float) -> Term:
     """Score the time-zone term from the posting: IST/APAC/any is best, US Pacific hours worst."""
     text = f"{job.location or ''}\n{(job.description or '')[:6000]}"
@@ -548,6 +575,7 @@ _ASYNC = re.compile(r"\b(async(?:hronous)?(?:[- ]first)?|written communication|w
                     r"design docs?|rfcs?|remote[- ]first|fully[- ]remote|distributed (?:team|company)|no meetings?)\b", re.I)
 
 
+# ZONULY ▸ enrichment · scoring ▸ scoring · selection confidence ▸ confidence.term_async(): Score the async term from async / written-culture phrases in the job description.
 def term_async(job: Job, w: float) -> Term:
     """Score the async term from async / written-culture phrases in the job description."""
     text = (job.description or "")[:8000]
@@ -565,6 +593,7 @@ _INTL = re.compile(r"\b(contractors?|eor\b|employer of record|deel|remote\.com|o
                    r"across \d+\+? (?:countries|time ?zones)|international team)\b", re.I)
 
 
+# ZONULY ▸ scoring · remote from india ▸ scoring · selection confidence ▸ confidence.term_intl(): Score the international-hiring term from cross-border hiring text or remote-anywhere role count.
 def term_intl(job: Job, company: Company | None, w: float, anywhere_roles: int) -> Term:
     """Score the international-hiring term from cross-border hiring text or remote-anywhere role count."""
     for text, url in ((job.description or "")[:8000], job.url), ((company.description or "") if company else "", company.website if company else None):
@@ -578,6 +607,7 @@ def term_intl(job: Job, company: Company | None, w: float, anywhere_roles: int) 
     return Term("intl_hiring", w, 0.2, "no evidence of hiring outside their country")
 
 
+# ZONULY ▸ scoring · remote from india ▸ scoring · selection confidence ▸ confidence.term_remote(): Score the remote-terms term: anywhere or India/APAC remote scores high; country-restricted scores 0.
 def term_remote(job: Job, w: float, detail: dict, restricted) -> Term:
     """Score the remote-terms term: anywhere or India/APAC remote scores high; country-restricted scores 0."""
     text = f"{job.location or ''}\n{(job.description or '')[:6000]}"
@@ -595,6 +625,7 @@ def term_remote(job: Job, w: float, detail: dict, restricted) -> Term:
 
 # ------------------------------------------------------------------ blockers
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.blockers_for(): Collect the hard blockers that cap a role's selection score.
 def blockers_for(job: Job, company: Company | None, market: str, detail: dict, exp, restricted) -> list[Blocker]:
     """Collect the hard blockers that cap a role's selection score.
     Covers visa, location, years asked, senior title, gig, language, company state and stale postings.
@@ -651,6 +682,7 @@ def blockers_for(job: Job, company: Company | None, market: str, detail: dict, e
 
 # ------------------------------------------------------------------ the engine
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.compute(): The selection score for one role. Pure: everything it needs is passed in.
 def compute(job: Job, company: Company | None, *, ref: dict | None = None, brief: dict | None = None,
             anywhere_roles: int = 0) -> Selection:
     """The selection score for one role. Pure: everything it needs is passed in."""
@@ -710,6 +742,7 @@ def compute(job: Job, company: Company | None, *, ref: dict | None = None, brief
 
 # ------------------------------------------------------------------ batch: referrers, inputs, recompute
 
+# ZONULY ▸ people search · referrers ▸ scoring · selection confidence ▸ confidence.referral_index(): Per company: how many leads we could actually write to (network._reachable).
 def referral_index(session) -> dict[int, dict]:
     """Per company: how many leads we could actually write to (network._reachable)."""
     from jobhunter import network
@@ -741,6 +774,7 @@ def referral_index(session) -> dict[int, dict]:
     return out
 
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.inputs_hash(): Hash every input that affects the selection score so unchanged roles are not re-scored.
 def inputs_hash(job: Job, company: Company | None, ref: dict, anywhere: int) -> str:
     """Hash every input that affects the selection score so unchanged roles are not re-scored."""
     age, _ = _age_days(job)
@@ -762,6 +796,7 @@ def inputs_hash(job: Job, company: Company | None, ref: dict, anywhere: int) -> 
     return hashlib.sha1(repr(parts).encode()).hexdigest()[:16]
 
 
+# ZONULY ▸ scoring · selection confidence ▸ scoring · selection confidence ▸ confidence._stored_brief(): Parse the job's stored needs brief JSON, or None when missing or invalid.
 def _stored_brief(job: Job) -> dict | None:
     """Parse the job's stored needs brief JSON, or None when missing or invalid."""
     if not job.needs_brief:
@@ -772,6 +807,7 @@ def _stored_brief(job: Job) -> dict | None:
         return None
 
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.recompute(): Score every role whose inputs changed (all of them with `force`), then roll up the
 def recompute(limit: int | None = None, *, force: bool = False, job_ids: list[int] | None = None,
               budget_s: float | None = None) -> dict:
     """Score every role whose inputs changed (all of them with `force`), then roll up the
@@ -825,6 +861,7 @@ def recompute(limit: int | None = None, *, force: bool = False, job_ids: list[in
     return out
 
 
+# ZONULY ▸ remote from india ▸ scoring · selection confidence ▸ confidence.rollup(): Each company's best India/Remote role (abroad roles only when it has nothing else).
 def rollup(session) -> int:
     """Each company's best India/Remote role (abroad roles only when it has nothing else)."""
     best: dict[int, tuple] = {}
@@ -848,6 +885,7 @@ def rollup(session) -> int:
 
 # ------------------------------------------------------------------ briefs for the best bets
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.build_briefs(): Stored needs briefs for the top roles by selection score.
 def build_briefs(*, market: str | None = None, top: int = 50, synth: int = 0, web: int = 0,
                  refresh: bool = False, budget_s: float | None = None) -> dict:
     """Stored needs briefs for the top roles by selection score.
@@ -921,6 +959,7 @@ def build_briefs(*, market: str | None = None, top: int = 50, synth: int = 0, we
     return out
 
 
+# ZONULY ▸ scoring · budget · cost · scheduler · tick ▸ scoring · selection confidence ▸ confidence.tick(): The tick's selection step: re-score changed roles, then a few briefs within budget.
 def tick() -> dict:
     """The tick's selection step: re-score changed roles, then a few briefs within budget."""
     res = {"recompute": recompute(limit=int(_TICK.get("recompute_per_tick", 3000)),
@@ -938,6 +977,7 @@ def tick() -> dict:
 
 # ------------------------------------------------------------------ reading
 
+# ZONULY ▸ scraping · scoring ▸ scoring · selection confidence ▸ confidence.role_row(): Build the dashboard row for a scored role: job fields plus selection score, band and reasons.
 def role_row(job: Job, company: Company | None = None) -> dict:
     """Build the dashboard row for a scored role: job fields plus selection score, band and reasons."""
     why = {}
@@ -961,6 +1001,7 @@ def role_row(job: Job, company: Company | None = None) -> dict:
     }
 
 
+# ZONULY ▸ scoring ▸ scoring · selection confidence ▸ confidence.distribution(): Summarize stored selection scores per market: count, bands and p50/p90/max (reads the job table).
 def distribution() -> dict:
     """Summarize stored selection scores per market: count, bands and p50/p90/max (reads the job table)."""
     with get_session() as session:
@@ -980,6 +1021,7 @@ def distribution() -> dict:
     return out
 
 
+# ZONULY ▸ scoring · selection confidence ▸ scoring · selection confidence ▸ confidence.now_iso(): Current local time as an ISO string with seconds.
 def now_iso() -> str:
     """Current local time as an ISO string with seconds."""
     return datetime.now().isoformat(timespec="seconds")
