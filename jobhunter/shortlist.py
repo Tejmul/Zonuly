@@ -98,6 +98,7 @@ PARTS = {
 }
 
 
+# ZONULY ▸ decision · people search · referrers ▸ decision · shortlist completion ▸ shortlist._tech_ready(): Count a company's tech contacts who are ready referrers, and how many of them have an email.
 def _tech_ready(session, cid: int) -> tuple[int, int]:
     """Count a company's tech contacts who are ready referrers, and how many of them have an email."""
     from jobhunter import guardrails
@@ -107,6 +108,7 @@ def _tech_ready(session, cid: int) -> tuple[int, int]:
     return len(ready), sum(1 for p in ready if p.email)
 
 
+# ZONULY ▸ enrichment · decision ▸ decision · shortlist completion ▸ shortlist.state(): Which parts of the card are filled.
 def state(session, c: Company) -> dict[str, bool]:
     """Which parts of the card are filled."""
     tech, tech_addr = _tech_ready(session, c.id)
@@ -135,6 +137,7 @@ _FILL_KEYS = {"description": ("description",), "hiring": ("hiring", "careers"), 
               "referrer_address": ("referrer_email", "addresses", "referrers")}
 
 
+# ZONULY ▸ decision ▸ decision · shortlist completion ▸ shortlist._why(): Why a part is still missing, in the words of the step that tried it.
 def _why(c: Company, part: str, steps: dict, tech: int) -> str:
     """Why a part is still missing, in the words of the step that tried it."""
     try:
@@ -160,6 +163,7 @@ def _why(c: Company, part: str, steps: dict, tech: int) -> str:
     return "not found by the free sources yet"
 
 
+# ZONULY ▸ decision ▸ decision · shortlist completion ▸ shortlist.queue(): The shortlist in working order, without companies done inside refresh_days.
 def queue(limit: int | None = None) -> list[dict]:
     """The shortlist in working order, without companies done inside refresh_days."""
     init_db()
@@ -181,6 +185,7 @@ def queue(limit: int | None = None) -> list[dict]:
     return out[:limit] if limit else out
 
 
+# ZONULY ▸ validation · guardrails · decision ▸ decision · shortlist completion ▸ shortlist.details(): The Agent Reach pipeline: what the company is and how it is funded, evidence-linked.
 def details(cid: int) -> dict:
     """The Agent Reach pipeline: what the company is and how it is funded, evidence-linked."""
     import re
@@ -237,6 +242,7 @@ def details(cid: int) -> dict:
     return out
 
 
+# ZONULY ▸ apify scraping · apify people search · decision · people search · referrers · scheduler · tick ▸ decision · shortlist completion ▸ shortlist.people(): Referrals are the Apify job's (referrals.apify_step, laun…
 def people(cid: int) -> dict:
     """Referrals are the Apify job's (referrals.apify_step, launchd com.zonuly.apify), which
     buys the shortlist's People tabs in this same order; this says where the company stands."""
@@ -259,6 +265,7 @@ def people(cid: int) -> dict:
 _DRAFT_ORDER = {"senior_engineer": 0, "engineer": 1, "eng_manager": 2, "founder": 3}
 
 
+# ZONULY ▸ decision · people search · referrers · email drafting · review gate ▸ decision · shortlist completion ▸ shortlist.draft(): One draft for the company's best real-address referrer, into the review queue.
 def draft(cid: int, job_id: int | None) -> dict:
     """One draft for the company's best real-address referrer, into the review queue."""
     from jobhunter import guardrails
@@ -288,6 +295,7 @@ def draft(cid: int, job_id: int | None) -> dict:
             "flags": [f.get("kind") for f in r.get("flags") or []]}
 
 
+# ZONULY ▸ enrichment · decision ▸ decision · shortlist completion ▸ shortlist.one(): Fill one company completely, record it, return the record.
 def one(cid: int) -> dict:
     """Fill one company completely, record it, return the record."""
     from jobhunter import confidence, decide, fill
@@ -352,6 +360,7 @@ def one(cid: int) -> dict:
     return out
 
 
+# ZONULY ▸ decision · people search · referrers · email drafting ▸ decision · shortlist completion ▸ shortlist.catch_up(): Drafts for shortlisted companies already visited, whose referrers arrived after the
 def catch_up(limit: int = 2) -> list[dict]:
     """Drafts for shortlisted companies already visited, whose referrers arrived after the
     visit. 2026-10-25: Apify bought 156 verified engineers for companies the shortlist had
@@ -384,6 +393,7 @@ def catch_up(limit: int = 2) -> list[dict]:
     return out
 
 
+# ZONULY ▸ decision ▸ decision · shortlist completion ▸ shortlist.run(): The next `limit` companies on the shortlist, one after another; then up to three
 def run(limit: int = 1) -> dict:
     """The next `limit` companies on the shortlist, one after another; then up to three
     template drafts re-written by the model, which does nothing while its daily ceiling holds."""
@@ -420,6 +430,7 @@ def run(limit: int = 1) -> dict:
             "left": len(queue())}
 
 
+# ZONULY ▸ decision ▸ decision · shortlist completion ▸ shortlist.progress(): Per pool: how many shortlisted companies are complete / partial / not started, the
 def progress() -> dict:
     """Per pool: how many shortlisted companies are complete / partial / not started, the
     company being worked on next, and the latest record of each company."""
@@ -458,6 +469,7 @@ def progress() -> dict:
 _ROLE_ORDER = {"senior_engineer": 0, "engineer": 1, "eng_manager": 2, "founder": 3, "tech_recruiter": 4, "recruiter": 5}
 
 
+# ZONULY ▸ decision · people search · referrers ▸ decision · shortlist completion ▸ shortlist.referrals(): Every person at every shortlisted company, Best bets order, the tech team first —
 def referrals(pool: str | None = None, *, tech_only: bool = False) -> dict:
     """Every person at every shortlisted company, Best bets order, the tech team first —
     the leads list the user works from (2026-10-24: "I need the full list of the people")."""

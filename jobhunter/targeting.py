@@ -92,6 +92,7 @@ TIER_ORDER = {TIER1: 0, TIER2: 1, PROSPECT: 2, UNKNOWN: 3, REJECT: 4}
 
 # ------------------------------------------------------------------ underrated
 
+# ZONULY ▸ decision ▸ decision · targeting · grades · priority ▸ targeting.hype_check(): (not famous?, why not). Kept for callers that only have a name; the full rule —
 def hype_check(name: str) -> tuple[bool, str | None]:
     """(not famous?, why not). Kept for callers that only have a name; the full rule —
     famous, listed, valuation, money raised — is admission.overrated_verdict."""
@@ -103,6 +104,7 @@ def hype_check(name: str) -> tuple[bool, str | None]:
 
 # ------------------------------------------------------------------ region
 
+# ZONULY ▸ decision ▸ decision · targeting · grades · priority ▸ targeting.region_of(): Which target region does this location text belong to? None when it does not say.
 def region_of(*texts: str | None) -> str | None:
     """Which target region does this location text belong to? None when it does not say."""
     blob = " ".join(t.lower() for t in texts if t)
@@ -122,6 +124,7 @@ def region_of(*texts: str | None) -> str | None:
     return best[1] if best else None
 
 
+# ZONULY ▸ pay · salary · decision ▸ decision · targeting · grades · priority ▸ targeting.region_floor(): Return the minimum LPA pay floor configured for a targeting region key (0 when unknown).
 def region_floor(key: str | None) -> float:
     """Return the minimum LPA pay floor configured for a targeting region key (0 when unknown)."""
     for entry in REGIONS:
@@ -132,6 +135,7 @@ def region_floor(key: str | None) -> float:
 
 # ------------------------------------------------------------------ the grade
 
+# ZONULY ▸ decision ▸ decision · targeting · grades · priority ▸ class targeting.Grade: One company's verdict, with every rule that fired.
 @dataclass
 class Grade:
     """One company's verdict, with every rule that fired."""
@@ -151,11 +155,13 @@ class Grade:
     pay_basis_evidence: str | None = None
     checks: list[str] = field(default_factory=list)
 
+    # ZONULY ▸ decision ▸ decision · targeting · grades · priority ▸ targeting.Grade.is_target(): True when the grade's tier is tier 1, tier 2 or prospect.
     @property
     def is_target(self) -> bool:
         """True when the grade's tier is tier 1, tier 2 or prospect."""
         return self.tier in (TIER1, TIER2, PROSPECT)
 
+    # ZONULY ▸ pay · salary · decision ▸ decision · targeting · grades · priority ▸ targeting.Grade.as_dict(): Return the company grade as a plain dict: tier, reason, region, stipend, PPO pay and checks.
     def as_dict(self) -> dict:
         """Return the company grade as a plain dict: tier, reason, region, stipend, PPO pay and checks."""
         return {
@@ -166,6 +172,7 @@ class Grade:
         }
 
 
+# ZONULY ▸ decision ▸ decision · targeting · grades · priority ▸ targeting.grade(): Apply the five rules in order. The first one that decides, decides.
 def grade(
     name: str,
     *,
@@ -309,6 +316,7 @@ PP_LABEL = {"pays": "Pays — they wrote the number", "deep_pockets": "Deep pock
             "funded": "Funded — can pay", "thin": "Thin — no evidence they can", "unknown": "Unknown — needs research"}
 
 
+# ZONULY ▸ decision ▸ decision · targeting · grades · priority ▸ class targeting.PayPower
 @dataclass
 class PayPower:
     band: str = "unknown"
@@ -316,12 +324,14 @@ class PayPower:
     why: str = "nothing found yet"
     per_head_usd_k: float | None = None
 
+    # ZONULY ▸ pay · salary · scoring · decision ▸ decision · targeting · grades · priority ▸ targeting.PayPower.as_dict(): Return the pay-power verdict as a dict: band, score, why, label and pay per head.
     def as_dict(self) -> dict:
         """Return the pay-power verdict as a dict: band, score, why, label and pay per head."""
         return {"band": self.band, "score": self.score, "why": self.why,
                 "label": PP_LABEL.get(self.band, self.band), "per_head_usd_k": self.per_head_usd_k}
 
 
+# ZONULY ▸ pay · salary · decision ▸ decision · targeting · grades · priority ▸ targeting.pay_power(): How easily can this company pay a fresher ₹30–40 L? The bands are in config.yaml
 def pay_power(*, region: str | None, ppo_lpa: float | None, ppo_evidence: str | None,
               stage: str | None, amount_usd_m: float | None, announced: str | None,
               funding_evidence: str | None, valuation_usd_m: float | None,
@@ -381,6 +391,7 @@ def pay_power(*, region: str | None, ppo_lpa: float | None, ppo_evidence: str | 
     return pp
 
 
+# ZONULY ▸ validation · guardrails · enrichment · pay · salary · scoring · decision ▸ decision · targeting · grades · priority ▸ targeting.funding_pay_basis(): (basis, evidence) — can they pay a fresher ₹30 L+, judged f…
 def funding_pay_basis(region: str | None, stage: str | None, amount_usd_m: float | None,
                       announced: str | None, *, hiring_verified: bool = False,
                       evidence: str | None = None) -> tuple[str, str]:
@@ -428,6 +439,7 @@ _MONTHS = {m: i for i, m in enumerate(
      "august", "september", "october", "november", "december"], start=1)}
 
 
+# ZONULY ▸ enrichment · decision ▸ decision · targeting · grades · priority ▸ targeting._months_old(): Age in months of a funding date written any of the ways the press writes it.
 def _months_old(announced: str | None) -> int | None:
     """Age in months of a funding date written any of the ways the press writes it."""
     if not announced:
@@ -451,6 +463,7 @@ def _months_old(announced: str | None) -> int | None:
 
 # ------------------------------------------------------------------ job-level pay
 
+# ZONULY ▸ enrichment · pay · salary · decision ▸ decision · targeting · grades · priority ▸ targeting.extract_job_pay(): Regex pass over job descriptions filling is_internship / stipend / ppo.
 def extract_job_pay(limit: int | None = None, *, only_missing: bool = True) -> dict:
     """Regex pass over job descriptions filling is_internship / stipend / ppo.
 
@@ -498,6 +511,7 @@ STATED_BOOST_LPA = float(_P.get("stated_pay_boost_lpa", 30))
 W_STATED = float(_P.get("stated_pay_boost", 15))
 
 
+# ZONULY ▸ pay · salary · decision ▸ decision · targeting · grades · priority ▸ targeting.stated_pay(): (₹ LPA, title) — the highest full-time figure a non-senior, non-internship posting
 def stated_pay(jobs) -> tuple[float, str] | None:
     """(₹ LPA, title) — the highest full-time figure a non-senior, non-internship posting
     states itself. A board's estimate is never on the row, so never here."""
@@ -513,6 +527,7 @@ STAGE_VALUATION_MAX = {admission.normalize_stage(k): float(v) for k, v in (_P.ge
     "Pre-seed": 30, "Seed": 80, "Series A": 300, "Series B": 1000, "Series C": 3000}).items()}
 
 
+# ZONULY ▸ decision ▸ decision · targeting · grades · priority ▸ targeting.priority(): (0–100, why). Who to chase first among the companies that are not overrated:
 def priority(*, overrated: admission.Overrated | None, stage: str | None, announced: str | None,
              amount_usd_m: float | None, valuation_usd_m: float | None, hiring_verified: bool,
              roles: int, fresher_roles: int, anywhere_roles: int, pay_score: int | None,
@@ -579,6 +594,7 @@ def priority(*, overrated: admission.Overrated | None, stage: str | None, announ
 
 # ------------------------------------------------------------------ company grading
 
+# ZONULY ▸ validation · guardrails · decision ▸ decision · targeting · grades · priority ▸ targeting.evidence_for(): Everything we already know about one company, gathered from its own job rows.
 def evidence_for(session, company: Company) -> dict:
     """Everything we already know about one company, gathered from its own job rows."""
     jobs = session.exec(select(Job).where(Job.company_id == company.id)).all()
@@ -615,6 +631,7 @@ def evidence_for(session, company: Company) -> dict:
     }
 
 
+# ZONULY ▸ scoring · decision ▸ decision · targeting · grades · priority ▸ targeting._judge(): (overrated verdict, priority, why, India city, non-target India city) for one row —
 def _judge(company: Company, *, jobs: int, fresher: int, anywhere: int, locations: str,
            pay_band: str | None, pay_score: int | None, stated: tuple[float, str] | None = None) -> tuple[admission.Overrated, int, str, str | None, str | None]:
     """(overrated verdict, priority, why, India city, non-target India city) for one row —
@@ -636,6 +653,7 @@ def _judge(company: Company, *, jobs: int, fresher: int, anywhere: int, location
     return o, score, why, admission.india_city(*texts), admission.india_other_city(*texts)
 
 
+# ZONULY ▸ decision ▸ decision · targeting · grades · priority ▸ targeting._india_off_target(): Why an India company is not an India target (its only presence is another city).
 def _india_off_target(company: Company, city: str | None, other: str | None, anywhere: int) -> str | None:
     """Why an India company is not an India target (its only presence is another city)."""
     if company.list_key or (company.hq_region or "") != "india" or anywhere:
@@ -645,6 +663,7 @@ def _india_off_target(company: Company, city: str | None, other: str | None, any
     return None
 
 
+# ZONULY ▸ decision ▸ decision · targeting · grades · priority ▸ targeting.grade_company(): Grade one company row from its own columns plus its jobs, and write the verdict.
 def grade_company(session, company: Company) -> Grade:
     """Grade one company row from its own columns plus its jobs, and write the verdict."""
     if company.status in ("quarantined", "merged"):
@@ -718,6 +737,7 @@ def grade_company(session, company: Company) -> Grade:
     return g
 
 
+# ZONULY ▸ decision ▸ decision · targeting · grades · priority ▸ targeting.grade_companies(): Grade every company in the registry. Idempotent; commits per company.
 def grade_companies(limit: int | None = None, *, regrade: bool = True) -> dict:
     """Grade every company in the registry. Idempotent; commits per company."""
     init_db()
@@ -738,6 +758,7 @@ def grade_companies(limit: int | None = None, *, regrade: bool = True) -> dict:
     return {**counts, "overrated_excluded": hyped, "hyped_excluded": hyped}
 
 
+# ZONULY ▸ decision ▸ decision · targeting · grades · priority ▸ targeting.refresh_priority(): The hourly regrade: overrated, priority and city for every row, from bulk-loaded
 def refresh_priority(*, dry_run: bool = False, batch: int = 200) -> dict:
     """The hourly regrade: overrated, priority and city for every row, from bulk-loaded
     job counts — seconds, not the per-company queries of a full grade. Tier is only
@@ -805,6 +826,7 @@ def refresh_priority(*, dry_run: bool = False, batch: int = 200) -> dict:
     return out
 
 
+# ZONULY ▸ scraping · decision ▸ decision · targeting · grades · priority ▸ targeting.targets(): The graded registry, best first — what the dashboard and the CLI both read.
 def targets(tier: str | None = None, limit: int = 50) -> list[dict]:
     """The graded registry, best first — what the dashboard and the CLI both read."""
     init_db()

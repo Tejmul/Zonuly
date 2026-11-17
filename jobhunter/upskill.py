@@ -69,17 +69,20 @@ _CACHE: dict = {"at": 0.0, "key": None, "data": None}
 CACHE_S = 600
 
 
+# ZONULY ▸ decision · upskill plan ▸ decision · upskill plan ▸ upskill._sig(): Logistic sigmoid of x.
 def _sig(x: float) -> float:
     """Logistic sigmoid of x."""
     return 1 / (1 + math.exp(-x))
 
 
+# ZONULY ▸ decision · upskill plan ▸ decision · upskill plan ▸ upskill._logit(): Log-odds of p, with p clamped away from 0 and 1.
 def _logit(p: float) -> float:
     """Log-odds of p, with p clamped away from 0 and 1."""
     p = min(max(p, 1e-4), 1 - 1e-4)
     return math.log(p / (1 - p))
 
 
+# ZONULY ▸ decision · upskill plan ▸ decision · upskill plan ▸ upskill._brief(): Return a job's needs brief: the stored JSON, else built from the resume (empty when no profile).
 def _brief(job: Job, company: Company | None) -> dict:
     """Return a job's needs brief: the stored JSON, else built from the resume (empty when no profile)."""
     from jobhunter import needs
@@ -96,6 +99,7 @@ def _brief(job: Job, company: Company | None) -> dict:
     return needs.build_brief(job, company, context=None, synth=False)
 
 
+# ZONULY ▸ decision · upskill plan ▸ decision · upskill plan ▸ upskill._det(): The deterministic part of confidence.term_skills, with `learned` counted as shipped.
 def _det(stated: list[dict], learned: str | None = None) -> float | None:
     """The deterministic part of confidence.term_skills, with `learned` counted as shipped."""
     tot = got = 0.0
@@ -111,6 +115,7 @@ def _det(stated: list[dict], learned: str | None = None) -> float | None:
     return (got + 1.0) / (tot + 2.0) if tot else None
 
 
+# ZONULY ▸ decision · upskill plan ▸ decision · upskill plan ▸ upskill._offer_after(): P(offer) if the best role's skills term rose by dv — through the brain's own formulas.
 def _offer_after(d: CompanyDecision, dv: float) -> float:
     """P(offer) if the best role's skills term rose by dv — through the brain's own formulas."""
     s0 = d.p_screen
@@ -121,6 +126,7 @@ def _offer_after(d: CompanyDecision, dv: float) -> float:
     return d.p_offer * (call(s1) / max(call(s0), 1e-9)) * (l1 / max(d.p_loop, 1e-9))
 
 
+# ZONULY ▸ decision · email verification ▸ decision · upskill plan ▸ upskill.analyse(): Rank the skills to learn or prove across the shortlisted companies' top roles (upskill page).
 def analyse(refresh: bool = False) -> dict:
     """Rank the skills to learn or prove across the shortlisted companies' top roles (upskill page).
 
@@ -203,6 +209,7 @@ def analyse(refresh: bool = False) -> dict:
     return data
 
 
+# ZONULY ▸ decision ▸ decision · upskill plan ▸ upskill.dsa_outlook(): What raising your DSA level is worth: the shortlist's loop answers at each level, and the
 def dsa_outlook(session, levels: tuple[float, ...] = (0.5, 0.65, 0.8)) -> dict:
     """What raising your DSA level is worth: the shortlist's loop answers at each level, and the
     India companies parked for DSA that would come back."""
@@ -232,6 +239,7 @@ def dsa_outlook(session, levels: tuple[float, ...] = (0.5, 0.65, 0.8)) -> dict:
     return {"level_now": now, "levels": rows, "status": _item_status(session, "DSA")}
 
 
+# ZONULY ▸ decision · upskill plan ▸ decision · upskill plan ▸ upskill._item_status(): Return the saved upskill status for a skill (todo, learning or done); todo when none.
 def _item_status(session, skill: str) -> str:
     """Return the saved upskill status for a skill (todo, learning or done); todo when none."""
     it = session.get(UpskillItem, skill)
@@ -240,6 +248,7 @@ def _item_status(session, skill: str) -> str:
 
 # ------------------------------------------------------------------ your progress
 
+# ZONULY ▸ email verification ▸ decision · upskill plan ▸ upskill.mark(): Set a skill's upskill status in the upskill table; done needs a proof link and note.
 def mark(skill: str, status: str, proof_url: str | None = None, proof_note: str | None = None) -> dict:
     """Set a skill's upskill status in the upskill table; done needs a proof link and note.
 
@@ -265,6 +274,7 @@ def mark(skill: str, status: str, proof_url: str | None = None, proof_note: str 
     return out
 
 
+# ZONULY ▸ email verification ▸ decision · upskill plan ▸ upskill.resume_line(): The line to paste into the resume PDF — your words, the skill named, the proof linked.
 def resume_line(it: UpskillItem) -> str:
     """The line to paste into the resume PDF — your words, the skill named, the proof linked."""
     note = (it.proof_note or "").strip().rstrip(".")
@@ -272,6 +282,7 @@ def resume_line(it: UpskillItem) -> str:
     return f"{note}{'' if named else f' ({it.skill})'} — {it.proof_url}"
 
 
+# ZONULY ▸ decision · upskill plan ▸ decision · upskill plan ▸ upskill.add_to_profile(): Add a DONE skill to profile/profile.json as a project, after a dated backup. Then the
 def add_to_profile(skill: str) -> dict:
     """Add a DONE skill to profile/profile.json as a project, after a dated backup. Then the
     role scores and the brain run again so the gain shows."""
@@ -301,6 +312,7 @@ def add_to_profile(skill: str) -> dict:
     return {"skill": skill, "backup": str(backup.relative_to(ROOT)), "resume_line": line, "briefs_remapped": remapped}
 
 
+# ZONULY ▸ scoring ▸ decision · upskill plan ▸ upskill.remap_stored_briefs(): Re-check every stored needs brief against the profile as it is now. The role scores
 def remap_stored_briefs() -> int:
     """Re-check every stored needs brief against the profile as it is now. The role scores
     read stored briefs, so without this a new skill would not move P(offer) until each brief
@@ -334,6 +346,7 @@ def remap_stored_briefs() -> int:
     return n
 
 
+# ZONULY ▸ validation · guardrails · cache ▸ decision · upskill plan ▸ upskill._reload_profile(): The resume evidence is cached per process; a changed profile must be read again.
 def _reload_profile() -> None:
     """The resume evidence is cached per process; a changed profile must be read again."""
     from jobhunter import needs

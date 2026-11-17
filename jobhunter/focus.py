@@ -72,6 +72,7 @@ DUD_AFTER = 3   # rejected drafts, with none ever approved, before a company lea
 TECH = {"senior_engineer": 0, "engineer": 1, "eng_manager": 2}
 
 
+# ZONULY ▸ decision · email sending ▸ decision · daily focus ▸ focus.target_day(): The first send day after today — today's sends are already settled.
 def target_day(today: date | None = None) -> date:
     """The first send day after today — today's sends are already settled."""
     from jobhunter.outreach import warmup
@@ -82,6 +83,7 @@ def target_day(today: date | None = None) -> date:
     return d
 
 
+# ZONULY ▸ email sending ▸ decision · daily focus ▸ focus.sendable(): Engineers at the company who can be asked now: confirmed current, a real address,
 def sendable(session, cid: int) -> list[Contact]:
     """Engineers at the company who can be asked now: confirmed current, a real address,
     not asked before, not refused by the drafter. Verified first, then seniority."""
@@ -103,23 +105,27 @@ def sendable(session, cid: int) -> list[Contact]:
     return sorted(ok, key=lambda p: (p.confidence != "verified", TECH[p.role_class], p.id))
 
 
+# ZONULY ▸ decision · daily focus ▸ decision · daily focus ▸ focus._stored(): Return the focus plan stored for a day (from the setting table), or None.
 def _stored(session, day: str) -> dict | None:
     """Return the focus plan stored for a day (from the setting table), or None."""
     row = session.get(Setting, suppress.FOCUS_KEY + day)
     return json.loads(row.value) if row else None
 
 
+# ZONULY ▸ decision · daily focus ▸ decision · daily focus ▸ focus._since(): Return the time a day's plan was picked, from its picked_at field.
 def _since(plan: dict) -> datetime:
     """Return the time a day's plan was picked, from its picked_at field."""
     return datetime.fromisoformat(plan["picked_at"])
 
 
+# ZONULY ▸ email drafting ▸ decision · daily focus ▸ focus._asks(): Statuses of every cold ask made (or drafted) at the company.
 def _asks(session, cid: int) -> list[str]:
     """Statuses of every cold ask made (or drafted) at the company."""
     return list(session.exec(select(Email.status).where(
         Email.company_id == cid, Email.kind == "cold", col(Email.status).in_(["draft", *suppress._LIVE]))).all())
 
 
+# ZONULY ▸ filtering · email drafting · review gate ▸ decision · daily focus ▸ focus._rejected(): Cold drafts at the company the review rejected (outreach/autoreview.py), since `since`.
 def _rejected(session, cid: int, since: datetime | None = None) -> int:
     """Cold drafts at the company the review rejected (outreach/autoreview.py), since `since`."""
     q = select(Email.id).where(Email.company_id == cid, Email.kind == "cold", Email.status == "rejected",
@@ -129,6 +135,7 @@ def _rejected(session, cid: int, since: datetime | None = None) -> int:
     return len(session.exec(q).all())
 
 
+# ZONULY ▸ decision · daily focus ▸ decision · daily focus ▸ focus._blocked(): True when the company must not be in the outreach circle.
 def _blocked(s, c: Company | None) -> bool:
     """True when the company must not be in the outreach circle.
     Reasons: inactive, overrated, do-not-contact, rejected, a body shop, or no fresher role."""
@@ -140,6 +147,7 @@ def _blocked(s, c: Company | None) -> bool:
     return role_for(s, c) is False
 
 
+# ZONULY ▸ email drafting ▸ decision · daily focus ▸ focus.role_for(): The role a draft at the company asks about: its best bet, or — when that one is senior or
 def role_for(s, c: Company) -> int | None | bool:
     """The role a draft at the company asks about: its best bet, or — when that one is senior or
     wants 3+ years — its best fresher role. None when no role is on file (the drafter frames a
@@ -158,6 +166,7 @@ def role_for(s, c: Company) -> int | None | bool:
     return False if jobs or best is not None else None
 
 
+# ZONULY ▸ decision ▸ decision · daily focus ▸ focus._candidates(): Companies in the decision brain's order. 2026-10-26, Tejmul: "the best bets are our
 def _candidates(s):
     """Companies in the decision brain's order. 2026-10-26, Tejmul: "the best bets are our
     priority, let's complete that first" — so the Best bets shortlists come first, city by
@@ -171,6 +180,7 @@ def _candidates(s):
                   key=lambda d: (d.rank is None, order[d.pool], d.rank or 0, -d.p_offer, d.company_id))
 
 
+# ZONULY ▸ decision · daily focus ▸ decision · daily focus ▸ focus._circle(): Return the stored circle of focus companies; on first run seed it from the latest day's plan.
 def _circle(s) -> dict:
     """Return the stored circle of focus companies; on first run seed it from the latest day's plan."""
     row = s.get(Setting, suppress.CIRCLE_KEY)
@@ -184,6 +194,7 @@ def _circle(s) -> dict:
     return {"companies": members, "done": []}
 
 
+# ZONULY ▸ decision · daily focus ▸ decision · daily focus ▸ focus.pick(): The day's plan: stored, or made now from the circle and stored.
 def pick(day: date | None = None) -> dict:
     """The day's plan: stored, or made now from the circle and stored.
 
@@ -222,6 +233,7 @@ def pick(day: date | None = None) -> dict:
                 members.append(m)
         room: dict[int, int] = {}
 
+        # ZONULY ▸ people search · referrers ▸ decision · daily focus ▸ focus.pick.share(): Return how many new people a circle company may get today (per-company cap, goal, ready count).
         def share(cid: int) -> int:
             """Return how many new people a circle company may get today (per-company cap, goal, ready count)."""
             # the day's share: new people only — mail already waiting goes before this day —
@@ -241,6 +253,7 @@ def pick(day: date | None = None) -> dict:
                 if z != sender._LOCAL_TZ:
                     backlog[z] = backlog.get(z, 0) + 1
 
+        # ZONULY ▸ email sending ▸ decision · daily focus ▸ focus.pick.capacity(): Return how many sends the circle can make today, capping foreign time zones by abroad_per_day.
         def capacity() -> int:
             """Return how many sends the circle can make today, capping foreign time zones by abroad_per_day."""
             by: dict[str, int] = {}
@@ -301,6 +314,7 @@ def pick(day: date | None = None) -> dict:
     return plan
 
 
+# ZONULY ▸ decision · daily focus ▸ decision · daily focus ▸ focus.circle(): The circle now, with each company's asks so far against the goal.
 def circle() -> dict:
     """The circle now, with each company's asks so far against the goal."""
     init_db()
@@ -315,6 +329,7 @@ def circle() -> dict:
     return cur
 
 
+# ZONULY ▸ decision · email drafting ▸ decision · daily focus ▸ focus.prepare(): Pick the day's plan and draft for it: each target gets `take` drafts, counted from
 def prepare(day: date | None = None) -> dict:
     """Pick the day's plan and draft for it: each target gets `take` drafts, counted from
     when the plan was made. Idempotent: a run that finds them written does nothing."""
@@ -348,6 +363,7 @@ def prepare(day: date | None = None) -> dict:
     return out
 
 
+# ZONULY ▸ decision · email drafting ▸ decision · daily focus ▸ focus.status(): The stored plan for `day` (default: the next target day), with each target's drafts.
 def status(day: date | str | None = None) -> dict | None:
     """The stored plan for `day` (default: the next target day), with each target's drafts."""
     init_db()

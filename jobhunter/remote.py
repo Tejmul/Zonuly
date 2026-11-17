@@ -72,6 +72,7 @@ GIG = re.compile(r"\b(toptal|turing|karat|remotepeople|remote people|a\.team|g2i
                  r"staffing|recruit\w*|talent\w*|outsourc\w*|consult\w*|hr plus)\b", re.I)
 
 
+# ZONULY ▸ decision · remote from india ▸ decision · remote-from-india targets ▸ class remote.Target
 @dataclass
 class Target:
     company_id: int
@@ -84,6 +85,7 @@ class Target:
     linkedin: bool
     roles: list[str] = field(default_factory=list)
 
+    # ZONULY ▸ pay · salary · decision · remote from india ▸ decision · remote-from-india targets ▸ remote.Target.key(): Sort key: recent hiring first, then a stated pay figure, then higher pay, then name.
     @property
     def key(self) -> tuple:
         """Sort key: recent hiring first, then a stated pay figure, then higher pay, then name."""
@@ -91,6 +93,7 @@ class Target:
         return (0 if self.recent else 1, 0 if self.stated_lpa else 1, -(self.stated_lpa or 0), self.name.lower())
 
 
+# ZONULY ▸ decision · remote from india ▸ decision · remote-from-india targets ▸ remote.qualifying(): Return True when a job qualifies as a remote target: remote from India, tech, non-senior, full-time.
 def qualifying(job: Job) -> bool:
     """Return True when a job qualifies as a remote target: remote from India, tech, non-senior, full-time.
 
@@ -103,12 +106,14 @@ def qualifying(job: Job) -> bool:
             and not re.search(r"https?://|www\.", t))         # a URL scraped as the title is not a role
 
 
+# ZONULY ▸ scraping · pay · salary · remote from india ▸ decision · remote-from-india targets ▸ remote._lpa(): A posting's stated annual pay in LPA, if any. salary_*_lpa is already converted by the scrapers.
 def _lpa(job: Job) -> float | None:
     """A posting's stated annual pay in LPA, if any. salary_*_lpa is already converted by the scrapers."""
     vals = [v for v in (job.salary_max_lpa, job.salary_min_lpa) if v]
     return max(vals) if vals else None
 
 
+# ZONULY ▸ decision · remote from india ▸ decision · remote-from-india targets ▸ remote.targets(): Return the remote-first target companies, each with its best qualifying role, best first.
 def targets(session, *, need_linkedin: bool = False) -> list[Target]:
     """Return the remote-first target companies, each with its best qualifying role, best first.
 
@@ -137,6 +142,7 @@ def targets(session, *, need_linkedin: bool = False) -> list[Target]:
         stated = [x for x in (_lpa(j) for j in roles) if x]
         if stated and max(stated) < MIN_LPA:
             continue              # the company itself says it pays under the bar
+        # ZONULY ▸ scraping · decision · remote from india ▸ decision · remote-from-india targets ▸ remote.targets.when(): Return the job's posted date, else its scraped date.
         def when(j: Job):
             """Return the job's posted date, else its scraped date."""
             return j.posted_at or j.scraped_at
@@ -150,6 +156,7 @@ def targets(session, *, need_linkedin: bool = False) -> list[Target]:
     return out
 
 
+# ZONULY ▸ decision · remote from india ▸ decision · remote-from-india targets ▸ remote.target_ids(): Return the company ids of the remote targets, in target order.
 def target_ids(session) -> list[int]:
     """Return the company ids of the remote targets, in target order."""
     return [t.company_id for t in targets(session)]

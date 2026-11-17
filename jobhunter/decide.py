@@ -145,22 +145,26 @@ STAGE_LABEL = {"open": "A fresher role is open", "reach": "A referral ask gets a
                "loop": "Clears their interview loop", "pay": "Pays at least the floor"}
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide._sig(): Logistic sigmoid: map a real number to a probability between 0 and 1.
 def _sig(x: float) -> float:
     """Logistic sigmoid: map a real number to a probability between 0 and 1."""
     return 1.0 / (1.0 + math.exp(-x))
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide._logit(): Log-odds of a probability, clamped away from 0 and 1.
 def _logit(p: float) -> float:
     """Log-odds of a probability, clamped away from 0 and 1."""
     p = min(max(p, 1e-4), 1 - 1e-4)
     return math.log(p / (1 - p))
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide._clip(): Clamp a probability into [lo, hi].
 def _clip(p: float, lo: float = 0.01, hi: float = 0.99) -> float:
     """Clamp a probability into [lo, hi]."""
     return min(max(p, lo), hi)
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.pool_of(): The first city pool named in the company's city ("Bengaluru · Hyderabad" → Bengaluru);
 def pool_of(company: Company, remote_roles: int = 0) -> str | None:
     """The first city pool named in the company's city ("Bengaluru · Hyderabad" → Bengaluru);
     otherwise Remote when it has a role open to someone in India (confidence's remote market:
@@ -197,6 +201,7 @@ _DOWNPLAYED = re.compile(r"(care (?:about )?less|less (?:about|important|weight)
 _SAME_LINE_NOT = re.compile(r"\b(no|not|without|instead of|rather than|never|over|isn'?t|aren'?t|don'?t|won'?t|skip)\b", re.I)
 
 
+# ZONULY ▸ scoring · decision ▸ decision · p(offer) decision brain ▸ decide._downplayed(): True when a DSA-signal match is downplayed by negating words before it or on its line.
 def _downplayed(blob: str, m: re.Match) -> bool:
     """True when a DSA-signal match is downplayed by negating words before it or on its line."""
     before = blob[max(0, m.start() - 300):m.start()]
@@ -204,12 +209,14 @@ def _downplayed(blob: str, m: re.Match) -> bool:
     return bool(_DOWNPLAYED.search(before) or _SAME_LINE_NOT.search(line))
 
 
+# ZONULY ▸ scoring · decision ▸ decision · p(offer) decision brain ▸ decide._quote(): Return the text around a regex match, whitespace-collapsed, with ellipses where cut.
 def _quote(text: str, m: re.Match, pad: int = 90) -> str:
     """Return the text around a regex match, whitespace-collapsed, with ellipses where cut."""
     a, b = max(0, m.start() - pad), min(len(text), m.end() + pad)
     return ("…" if a else "") + re.sub(r"\s+", " ", text[a:b]).strip() + ("…" if b < len(text) else "")
 
 
+# ZONULY ▸ validation · guardrails · decision ▸ decision · p(offer) decision brain ▸ decide.dsa_intensity(): (0..1 intensity, evidence, how many signals were text) — log-odds over a prior of 0.35.
 def dsa_intensity(company: Company, texts: list[str]) -> tuple[float, list[dict], int]:
     """(0..1 intensity, evidence, how many signals were text) — log-odds over a prior of 0.35.
 
@@ -257,6 +264,7 @@ def dsa_intensity(company: Company, texts: list[str]) -> tuple[float, list[dict]
 
 # ------------------------------------------------------------------ the five questions
 
+# ZONULY ▸ pay · salary · decision ▸ decision · p(offer) decision brain ▸ decide._terms(): Read a job's scoring terms from selection_why JSON, keyed by term, plus the pay cap as _cap.
 def _terms(job: Job) -> dict[str, dict]:
     """Read a job's scoring terms from selection_why JSON, keyed by term, plus the pay cap as _cap."""
     try:
@@ -270,6 +278,7 @@ _HIRING_PRIOR = {"verified": 0.55, "careers_only": 0.45, "needs_recheck": 0.35, 
                  "not_authorized": 0.12}
 
 
+# ZONULY ▸ scoring · decision ▸ decision · p(offer) decision brain ▸ decide.q_open(): Decision stage 'open': estimate P(the company has an open role he fits) from scored roles.
 def q_open(company: Company, roles: list[tuple[Job, dict]]) -> dict:
     """Decision stage 'open': estimate P(the company has an open role he fits) from scored roles.
 
@@ -300,6 +309,7 @@ def q_open(company: Company, roles: list[tuple[Job, dict]]) -> dict:
             "fill_fixes": True}
 
 
+# ZONULY ▸ decision · replies · follow-up ▸ decision · p(offer) decision brain ▸ decide.reply_posterior(): The per-ask reply rate: the Beta prior updated by every cold email sent and every positive reply.
 def reply_posterior(session) -> dict:
     """The per-ask reply rate: the Beta prior updated by every cold email sent and every positive reply."""
     sent_ids = [e for e in session.exec(select(Email.id).where(col(Email.status).in_(["sent", "replied"]),
@@ -310,6 +320,7 @@ def reply_posterior(session) -> dict:
     return {"alpha": a, "beta": b, "mean": a / (a + b), "sent": len(sent_ids), "positive": pos}
 
 
+# ZONULY ▸ decision · people search · referrers ▸ decision · p(offer) decision brain ▸ decide.q_reach(): Decision stage 'reach': estimate P(a referral ask gets an answer) from ready referrers.
 def q_reach(company: Company, ref: dict, r: float) -> dict:
     """Decision stage 'reach': estimate P(a referral ask gets an answer) from ready referrers.
 
@@ -330,6 +341,7 @@ def q_reach(company: Company, ref: dict, r: float) -> dict:
     return {"p": _clip(p), "n": 3, "why": why, "fill_fixes": True}
 
 
+# ZONULY ▸ enrichment · scoring · decision ▸ decision · p(offer) decision brain ▸ decide._stage_small(): Return a smallness score (0.2 to 1.0) from team size, else from funding stage.
 def _stage_small(company: Company) -> float:
     """Return a smallness score (0.2 to 1.0) from team size, else from funding stage."""
     n = company.team_size
@@ -339,6 +351,7 @@ def _stage_small(company: Company) -> float:
     return 0.9 if "seed" in st else 0.8 if "series a" in st else 0.6 if "series b" in st else 0.4 if st else 0.5
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.q_screen(): Decision stage 'screen': estimate P(passing the resume screen) from skills, gap and company size.
 def q_screen(company: Company, best: tuple[Job, dict] | None) -> dict:
     """Decision stage 'screen': estimate P(passing the resume screen) from skills, gap and company size."""
     t = best[1] if best else {}
@@ -353,6 +366,7 @@ def q_screen(company: Company, best: tuple[Job, dict] | None) -> dict:
     return {"p": _clip(_sig(z)), "n": 10 if known else 4, "why": why, "fill_fixes": not known, "skills": sk}
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.q_loop(): Decision stage 'loop': estimate P(passing the interview loop) from his DSA level vs theirs.
 def q_loop(dsa: float, dsa_text_hits: int, skills: float) -> dict:
     """Decision stage 'loop': estimate P(passing the interview loop) from his DSA level vs theirs."""
     z = LOOP["slope"] * (DSA_LEVEL - dsa) + LOOP["fit"] * (skills - 0.5) + LOOP["base"]
@@ -360,6 +374,7 @@ def q_loop(dsa: float, dsa_text_hits: int, skills: float) -> dict:
             "why": f"your DSA {DSA_LEVEL:.2f} vs their loop {dsa:.2f}; skills fit {skills:.2f}"}
 
 
+# ZONULY ▸ pay · salary · decision · remote from india ▸ decision · p(offer) decision brain ▸ decide.q_pay(): (answer, high_paying). high_paying feeds the after-DSA rule. A remote role is paid from
 def q_pay(company: Company, best: tuple[Job, dict] | None, pool: str | None = None) -> tuple[dict, bool]:
     """(answer, high_paying). high_paying feeds the after-DSA rule. A remote role is paid from
     the company's home market, so its pay power reads higher than the same band in India."""
@@ -382,6 +397,7 @@ def q_pay(company: Company, best: tuple[Job, dict] | None, pool: str | None = No
             "fill_fixes": band == "unknown"}, high
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.info_share(): Return the share of deciding fields known for a company and the list of missing ones.
 def info_share(company: Company, best, ref: dict) -> tuple[float, list[str]]:
     """Return the share of deciding fields known for a company and the list of missing ones."""
     fields = {
@@ -396,6 +412,7 @@ def info_share(company: Company, best, ref: dict) -> tuple[float, list[str]]:
     return round(sum(fields.values()) / len(fields), 3), [k for k, v in fields.items() if not v]
 
 
+# ZONULY ▸ pay · salary · decision · people search · referrers ▸ decision · p(offer) decision brain ▸ decide._skip_reason(): Return why a company is skipped (quarantined, below pay bar, do-not-contact, overrated...) or…
 def _skip_reason(company: Company) -> str | None:
     """Return why a company is skipped (quarantined, below pay bar, do-not-contact, overrated...) or None."""
     if company.status in ("quarantined", "merged"):
@@ -413,6 +430,7 @@ def _skip_reason(company: Company) -> str | None:
 
 # ------------------------------------------------------------------ sampling
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.sample(): Mean and 80% interval of P(offer) and of the interview call, from Beta draws.
 def sample(qs: dict[str, dict], seed: int) -> dict:
     """Mean and 80% interval of P(offer) and of the interview call, from Beta draws."""
     rng = np.random.default_rng(seed)
@@ -430,6 +448,7 @@ def sample(qs: dict[str, dict], seed: int) -> dict:
 
 # ------------------------------------------------------------------ the engine
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.parked_for_dsa(): India: a DSA-heavy loop that is also well above your level — so raising `me.dsa_level`
 def parked_for_dsa(dsa: float, high_pay: bool, level: float | None = None) -> bool:
     """India: a DSA-heavy loop that is also well above your level — so raising `me.dsa_level`
     really does bring these back (the loop must stay more than `dsa.margin` above you).
@@ -444,6 +463,7 @@ def parked_for_dsa(dsa: float, high_pay: bool, level: float | None = None) -> bo
     return dsa >= DSA_HEAVY and dsa > level + DSA_MARGIN and (high_pay or dsa >= DSA_PARK_ALWAYS)
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.culture_index(): Latest AmbitionBox rating per company, as the mixer read it off their own Naukri ads.
 def culture_index(session) -> dict[int, tuple[float, int]]:
     """Latest AmbitionBox rating per company, as the mixer read it off their own Naukri ads."""
     out: dict[int, tuple[float, int]] = {}
@@ -453,6 +473,7 @@ def culture_index(session) -> dict[int, tuple[float, int]]:
     return out
 
 
+# ZONULY ▸ scoring · decision ▸ decision · p(offer) decision brain ▸ decide.decide_one(): Decide one company: score every stage, sample P(offer), and pick a verdict.
 def decide_one(company: Company, roles: list[tuple[Job, dict]], ref: dict, r: float,
                culture: tuple[float, int] | None = None) -> dict:
     """Decide one company: score every stage, sample P(offer), and pick a verdict.
@@ -512,6 +533,7 @@ def decide_one(company: Company, roles: list[tuple[Job, dict]], ref: dict, r: fl
     }
 
 
+# ZONULY ▸ scoring · decision ▸ decision · p(offer) decision brain ▸ decide._load(): Load the companies in a decision pool and their scored roles with parsed scoring terms.
 def _load(session, ids: list[int] | None = None):
     """Load the companies in a decision pool and their scored roles with parsed scoring terms."""
     remote = Counter(session.exec(select(Job.company_id).where(Job.selection_market == "remote")).all())
@@ -526,6 +548,7 @@ def _load(session, ids: list[int] | None = None):
     return companies, roles
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.run(): Decide every Bengaluru / Hyderabad company (or `ids`), store it, re-rank the shortlists.
 def run(ids: list[int] | None = None) -> dict:
     """Decide every Bengaluru / Hyderabad company (or `ids`), store it, re-rank the shortlists."""
     from jobhunter import confidence
@@ -565,6 +588,7 @@ def run(ids: list[int] | None = None) -> dict:
     return out
 
 
+# ZONULY ▸ enrichment · decision ▸ decision · p(offer) decision brain ▸ decide.rank(): Shortlist slots: the best N per pool by P(offer) among target + fill_first.
 def rank(session) -> dict:
     """Shortlist slots: the best N per pool by P(offer) among target + fill_first."""
     out = {}
@@ -584,6 +608,7 @@ def rank(session) -> dict:
     return out
 
 
+# ZONULY ▸ decision · scheduler · tick ▸ decision · p(offer) decision brain ▸ decide.tick(): Scheduler tick: run the company decision pass and return its summary counts.
 def tick() -> dict:
     """Scheduler tick: run the company decision pass and return its summary counts."""
     res = run()
@@ -592,12 +617,14 @@ def tick() -> dict:
 
 # ------------------------------------------------------------------ reading
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide._odds(): Convert a probability to odds p/(1-p), clamped.
 def _odds(p: float) -> float:
     """Convert a probability to odds p/(1-p), clamped."""
     p = _clip(p, 1e-6, 1 - 1e-6)
     return p / (1 - p)
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.row(): Serialise a CompanyDecision row for the API: verdict, P(offer), stage odds, lift and reasons.
 def row(d: CompanyDecision, company: Company | None, median_odds: float | None = None, full: bool = False) -> dict:
     """Serialise a CompanyDecision row for the API: verdict, P(offer), stage odds, lift and reasons.
 
@@ -623,12 +650,14 @@ def row(d: CompanyDecision, company: Company | None, median_odds: float | None =
     return out
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide._median_odds(): The shortlist's median odds — "2× the typical company on your list", not on all 1,700.
 def _median_odds(rows: list[CompanyDecision]) -> float | None:
     """The shortlist's median odds — "2× the typical company on your list", not on all 1,700."""
     live = sorted(_odds(r.p_offer) for r in rows if r.rank is not None)
     return live[len(live) // 2] if live else None
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.shortlist(): The ranked shortlist (or, with `verdict` after_dsa / skip, those parked rows) plus counts.
 def shortlist(pool: str | None = None, verdict: str | None = None, limit: int = 200) -> dict:
     """The ranked shortlist (or, with `verdict` after_dsa / skip, those parked rows) plus counts."""
     with get_session() as session:
@@ -652,6 +681,7 @@ def shortlist(pool: str | None = None, verdict: str | None = None, limit: int = 
             "generated_at": at.isoformat() if at else None}
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.company_view(): Return one company's stored decision with full detail, or None if it was never decided.
 def company_view(company_id: int) -> dict | None:
     """Return one company's stored decision with full detail, or None if it was never decided."""
     with get_session() as session:
@@ -664,16 +694,19 @@ def company_view(company_id: int) -> dict | None:
 
 # ------------------------------------------------------------------ one company a day
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.local_day(): Return today's date (YYYY-MM-DD) in the local time zone.
 def local_day(now: datetime | None = None) -> str:
     """Return today's date (YYYY-MM-DD) in the local time zone."""
     return (now or datetime.now(LOCAL_TZ)).astimezone(LOCAL_TZ).strftime("%Y-%m-%d")
 
 
+# ZONULY ▸ decision · email verification ▸ decision · p(offer) decision brain ▸ decide._worked_companies(): Companies already being written to — a cold email sent or waiting approved.
 def _worked_companies(session) -> set[int]:
     """Companies already being written to — a cold email sent or waiting approved."""
     return set(session.exec(select(Email.company_id).where(col(Email.status).in_(["sent", "replied", "approved"]))).all())
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide._next_pick(): Choose today's DailyPick: the top P(offer) ranked company not picked or worked recently.
 def _next_pick(session, day: str) -> DailyPick | None:
     """Choose today's DailyPick: the top P(offer) ranked company not picked or worked recently.
 
@@ -696,6 +729,7 @@ def _next_pick(session, day: str) -> DailyPick | None:
     return None
 
 
+# ZONULY ▸ enrichment · decision ▸ decision · p(offer) decision brain ▸ decide._pick_view(): Serialise a DailyPick with its current decision; marks a fill pick done once the company is filled.
 def _pick_view(session, pick: DailyPick) -> dict:
     """Serialise a DailyPick with its current decision; marks a fill pick done once the company is filled."""
     c = session.get(Company, pick.company_id)
@@ -710,6 +744,7 @@ def _pick_view(session, pick: DailyPick) -> dict:
             "decision": row(d, c, med, full=True) if d else None}
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.today(): Today's company: the live pick for the local day, or a new one off the shortlist.
 def today(create: bool = True) -> dict:
     """Today's company: the live pick for the local day, or a new one off the shortlist."""
     init_db()
@@ -723,6 +758,7 @@ def today(create: bool = True) -> dict:
                 "skipped": [{"company_id": p.company_id, "note": p.note} for p in picks if p.status == "skipped"]}
 
 
+# ZONULY ▸ decision ▸ decision · p(offer) decision brain ▸ decide.mark(): asked | skipped for today's live pick. A skip picks the next company on the shortlist.
 def mark(status: str, note: str | None = None) -> dict:
     """asked | skipped for today's live pick. A skip picks the next company on the shortlist."""
     if status not in ("asked", "skipped", "filled"):
@@ -739,6 +775,7 @@ def mark(status: str, note: str | None = None) -> dict:
     return today(create=(status == "skipped"))
 
 
+# ZONULY ▸ decision · people search · referrers ▸ decision · p(offer) decision brain ▸ decide.record_outcome(): Record what happened with a company (replied, referred, interview, offer...) as a DecisionOutcome.
 def record_outcome(company_id: int, stage: str, note: str | None = None) -> dict:
     """Record what happened with a company (replied, referred, interview, offer...) as a DecisionOutcome.
 
@@ -758,6 +795,7 @@ def record_outcome(company_id: int, stage: str, note: str | None = None) -> dict
 
 # ------------------------------------------------------------------ proper scoring
 
+# ZONULY ▸ scoring · decision ▸ decision · p(offer) decision brain ▸ decide._scores(): Score predictions against outcomes: Brier score, log loss and skill vs the base rate.
 def _scores(pairs: list[tuple[float, int]]) -> dict:
     """Score predictions against outcomes: Brier score, log loss and skill vs the base rate."""
     if not pairs:
@@ -774,6 +812,7 @@ def _scores(pairs: list[tuple[float, int]]) -> dict:
                        "better than guessing the base rate" if ref > 0 and brier < ref else "no better than the base rate"}
 
 
+# ZONULY ▸ scoring · decision ▸ decision · p(offer) decision brain ▸ decide.calibrate(): Score what the brain said against what happened.
 def calibrate() -> dict:
     """Score what the brain said against what happened.
 
