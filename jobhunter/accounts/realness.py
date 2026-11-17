@@ -73,16 +73,19 @@ yopmail.com yopmail.fr yopmail.net emltmp.com tmpeml.com minuteinbox.com
 """.split())
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ realness.normalise(): Trim and lower-case a sign-in email address; None becomes an empty string.
 def normalise(raw: str | None) -> str:
     """Trim and lower-case a sign-in email address; None becomes an empty string."""
     return (raw or "").strip().lower()
 
 
+# ZONULY ▸ scoring · sign-in · auth ▸ api · sign-in · accounts ▸ realness.well_formed(): Return True when the sign-in email matches the address regex and has no double dot.
 def well_formed(email: str) -> bool:
     """Return True when the sign-in email matches the address regex and has no double dot."""
     return bool(_EMAIL.match(email)) and ".." not in email
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ realness.disposable(): Return True when the email's domain (or a parent domain) is a known throwaway mail service.
 def disposable(email: str) -> bool:
     """Return True when the email's domain (or a parent domain) is a known throwaway mail service."""
     domain = email.rpartition("@")[2]
@@ -90,6 +93,7 @@ def disposable(email: str) -> bool:
     return any(domain == d or domain.endswith("." + d) for d in DISPOSABLE)
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ realness.receives_mail(): True if the domain can take mail. Only a definite "no such domain / no records"
 @lru_cache(maxsize=4096)
 def receives_mail(domain: str) -> bool:
     """True if the domain can take mail. Only a definite "no such domain / no records"
@@ -115,6 +119,7 @@ def receives_mail(domain: str) -> bool:
     return False
 
 
+# ZONULY ▸ people search · referrers · sign-in · auth ▸ api · sign-in · accounts ▸ realness.problem_with(): Why this address cannot sign up, in words to show the person — or None.
 def problem_with(email: str) -> str | None:
     """Why this address cannot sign up, in words to show the person — or None."""
     if not well_formed(email):
@@ -128,16 +133,19 @@ def problem_with(email: str) -> str | None:
 
 # ------------------------------------------------------------------- Turnstile
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ realness.turnstile_site_key(): Return the Cloudflare Turnstile site key from secrets (empty when not configured).
 def turnstile_site_key() -> str:
     """Return the Cloudflare Turnstile site key from secrets (empty when not configured)."""
     return secret("ZONULY_TURNSTILE_SITE_KEY")
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ realness.turnstile_on(): Return True when both the Turnstile secret and site key are set, so the human check runs.
 def turnstile_on() -> bool:
     """Return True when both the Turnstile secret and site key are set, so the human check runs."""
     return bool(secret("ZONULY_TURNSTILE_SECRET") and turnstile_site_key())
 
 
+# ZONULY ▸ decision · sign-in · auth ▸ api · sign-in · accounts ▸ realness.human(): Cloudflare Turnstile verdict. Always True when Turnstile is not configured.
 def human(token: str | None, ip: str | None) -> bool:
     """Cloudflare Turnstile verdict. Always True when Turnstile is not configured."""
     if not turnstile_on():
@@ -158,17 +166,20 @@ def human(token: str | None, ip: str | None) -> bool:
 
 # ------------------------------------------------------------------- rate limits
 
+# ZONULY ▸ calendar · sign-in · auth ▸ api · sign-in · accounts ▸ class realness.Window: At most `limit` events per `seconds` for each key. In memory: on a sleeping
 class Window:
     """At most `limit` events per `seconds` for each key. In memory: on a sleeping
     instance it forgets — but an attacker who keeps hammering keeps it awake, which is
     exactly when it needs to remember."""
 
+    # ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ realness.Window.__init__(): Set up an empty, thread-safe sliding window allowing `limit` hits per `seconds` per key.
     def __init__(self, limit: int, seconds: float):
         """Set up an empty, thread-safe sliding window allowing `limit` hits per `seconds` per key."""
         self.limit, self.seconds = limit, seconds
         self._hits: dict[str, deque] = defaultdict(deque)
         self._lock = threading.Lock()
 
+    # ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ realness.Window.allow(): Record a hit for `key` and return True, or return False when the key is over its rate limit.
     def allow(self, key: str) -> bool:
         """Record a hit for `key` and return True, or return False when the key is over its rate limit."""
         now = time.monotonic()
@@ -181,6 +192,7 @@ class Window:
             q.append(now)
             return True
 
+    # ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ realness.Window.clear(): Forget every recorded hit for every key in this rate-limit window.
     def clear(self) -> None:
         """Forget every recorded hit for every key in this rate-limit window."""
         with self._lock:
@@ -197,6 +209,7 @@ guesses_per_challenge = Window(5, 15 * 60)
 guesses_per_ip = Window(30, 3600)
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ realness.reset_limits(): Clear every sign-in rate-limit window (code requests and code guesses, per address and IP).
 def reset_limits() -> None:
     """Clear every sign-in rate-limit window (code requests and code guesses, per address and IP)."""
     for w in (codes_per_address, codes_per_ip, guesses_per_challenge, guesses_per_ip):

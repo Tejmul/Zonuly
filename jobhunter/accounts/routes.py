@@ -51,6 +51,7 @@ router = APIRouter(prefix="/api/auth", tags=["accounts"])
 OAUTH_COOKIE = "zonuly_oauth"
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ routes._ip(): Return the caller's IP: X-Real-IP, else the first X-Forwarded-For hop, else the socket peer.
 def _ip(request: Request) -> str:
     """Return the caller's IP: X-Real-IP, else the first X-Forwarded-For hop, else the socket peer."""
     real = request.headers.get("x-real-ip")
@@ -62,6 +63,7 @@ def _ip(request: Request) -> str:
     return request.client.host if request.client else "?"
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ routes._safe_next(): Only a path on this site — never `//evil.com` or `https://…`, which would turn the
 def _safe_next(raw: str | None) -> str:
     """Only a path on this site — never `//evil.com` or `https://…`, which would turn the
     login into a redirector anyone could send a link through."""
@@ -71,6 +73,7 @@ def _safe_next(raw: str | None) -> str:
     return path
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ routes._set_session(): Set the signed, httponly session cookie for `user` on the sign-in response.
 def _set_session(response: Response, user: dict) -> None:
     """Set the signed, httponly session cookie for `user` on the sign-in response."""
     response.set_cookie(
@@ -80,12 +83,14 @@ def _set_session(response: Response, user: dict) -> None:
     )
 
 
+# ZONULY ▸ sign-in · auth · access control ▸ api · sign-in · accounts ▸ routes._needs_secret(): Raise HTTP 503 when this is a public instance and the token signing secret is not configured.
 def _needs_secret() -> None:
     """Raise HTTP 503 when this is a public instance and the token signing secret is not configured."""
     if access.PUBLIC and not tokens.configured():
         raise HTTPException(503, "Sign-in is not set up on this instance yet.")
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ routes._record(): Upsert the user's login in the accounts store and return the user; StoreError becomes HTTP 503.
 def _record(email: str, *, provider: str, request: Request, name: str | None = None,
             google_sub: str | None = None) -> dict:
     """Upsert the user's login in the accounts store and return the user; StoreError becomes HTTP 503."""
@@ -99,6 +104,7 @@ def _record(email: str, *, provider: str, request: Request, name: str | None = N
 
 # ------------------------------------------------------------------- who am I
 
+# ZONULY ▸ api route GET /me · sign-in · auth ▸ api · sign-in · accounts ▸ routes.me(): GET /api/auth/me — return the signed-in user, whether auth is required, and the sign-in methods on.
 @router.get("/me")
 def me(request: Request):
     """GET /api/auth/me — return the signed-in user, whether auth is required, and the sign-in methods on."""
@@ -117,6 +123,7 @@ def me(request: Request):
     }
 
 
+# ZONULY ▸ api route POST /logout · sign-in · auth ▸ api · sign-in · accounts ▸ routes.logout(): POST /api/auth/logout — delete the session cookie and answer 204.
 @router.post("/logout")
 def logout():
     """POST /api/auth/logout — delete the session cookie and answer 204."""
@@ -127,17 +134,20 @@ def logout():
 
 # ------------------------------------------------------------------- email code
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ class routes.StartBody
 class StartBody(BaseModel):
     email: str
     name: str | None = None
     turnstile: str | None = None
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ class routes.VerifyBody
 class VerifyBody(BaseModel):
     challenge: str
     code: str
 
 
+# ZONULY ▸ api route POST /email/start · sign-in · auth ▸ api · sign-in · accounts ▸ routes.email_start(): POST /api/auth/email/start — check address, human check and rate limits, then email a 6-digit code.
 @router.post("/email/start")
 def email_start(body: StartBody, request: Request):
     """POST /api/auth/email/start — check address, human check and rate limits, then email a 6-digit code.
@@ -171,6 +181,7 @@ def email_start(body: StartBody, request: Request):
     return out
 
 
+# ZONULY ▸ api route POST /email/verify · email verification · sign-in · auth ▸ api · sign-in · accounts ▸ routes.email_verify(): POST /api/auth/email/verify — check the code against the signed challenge and sign the us…
 @router.post("/email/verify")
 def email_verify(body: VerifyBody, request: Request, response: Response):
     """POST /api/auth/email/verify — check the code against the signed challenge and sign the user in.
@@ -196,6 +207,7 @@ def email_verify(body: VerifyBody, request: Request, response: Response):
 
 # ------------------------------------------------------------------- Google
 
+# ZONULY ▸ api route GET /google/start · sign-in · auth ▸ api · sign-in · accounts ▸ routes.google_start(): GET /api/auth/google/start — redirect to Google OAuth with signed state and a browser-bound nonce.
 @router.get("/google/start")
 def google_start(next: str | None = None):
     """GET /api/auth/google/start — redirect to Google OAuth with signed state and a browser-bound nonce."""
@@ -212,6 +224,7 @@ def google_start(next: str | None = None):
     return response
 
 
+# ZONULY ▸ api route GET /google/callback · sign-in · auth ▸ api · sign-in · accounts ▸ routes.google_callback(): GET /api/auth/google/callback — finish Google sign-in: check state, identify, record, set session.
 @router.get("/google/callback")
 def google_callback(request: Request, code: str | None = None, state: str | None = None,
                     error: str | None = None):
@@ -219,6 +232,7 @@ def google_callback(request: Request, code: str | None = None, state: str | None
 
     Any failure redirects back to the dashboard login page with a readable error.
     """
+    # ZONULY ▸ scraping · sign-in · auth ▸ api · sign-in · accounts ▸ routes.google_callback.back(): Redirect to the dashboard login page with `problem` as the error query parameter.
     def back(problem: str) -> RedirectResponse:
         """Redirect to the dashboard login page with `problem` as the error query parameter."""
         from urllib.parse import quote

@@ -49,31 +49,37 @@ TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
 _ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
 
 
+# ZONULY ▸ email verification · sign-in · auth ▸ api · sign-in · accounts ▸ class google.GoogleError: Google refused, or what came back does not prove who this is.
 class GoogleError(RuntimeError):
     """Google refused, or what came back does not prove who this is."""
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ google.client_id(): Return the Google OAuth client ID from the secret store (ZONULY_ or plain env name).
 def client_id() -> str:
     """Return the Google OAuth client ID from the secret store (ZONULY_ or plain env name)."""
     return secret("ZONULY_GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_ID")
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ google.client_secret(): Return the Google OAuth client secret from the secret store (ZONULY_ or plain env name).
 def client_secret() -> str:
     """Return the Google OAuth client secret from the secret store (ZONULY_ or plain env name)."""
     return secret("ZONULY_GOOGLE_CLIENT_SECRET", "GOOGLE_CLIENT_SECRET")
 
 
+# ZONULY ▸ sign-in · auth · access control ▸ api · sign-in · accounts ▸ google.public_url(): Return the public base URL of the site (ZONULY_PUBLIC_URL), defaulting to localhost:3001.
 def public_url() -> str:
     """Return the public base URL of the site (ZONULY_PUBLIC_URL), defaulting to localhost:3001."""
     return (secret("ZONULY_PUBLIC_URL") or "http://localhost:3001").rstrip("/")
 
 
+# ZONULY ▸ scraping · sign-in · auth ▸ api · sign-in · accounts ▸ google.callback_path(): Where the API is reached from the browser: through the dashboard's /zapi proxy when
 def callback_path() -> str:
     """Where the API is reached from the browser: through the dashboard's /zapi proxy when
     deployed, directly on a laptop."""
     return "/zapi/api/auth/google/callback" if secret("ZONULY_PUBLIC_URL") else "/api/auth/google/callback"
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ google.redirect_uri(): Return the OAuth redirect URI: the public callback URL if set, else the local API callback.
 def redirect_uri() -> str:
     """Return the OAuth redirect URI: the public callback URL if set, else the local API callback."""
     if secret("ZONULY_PUBLIC_URL"):
@@ -81,11 +87,13 @@ def redirect_uri() -> str:
     return "http://127.0.0.1:8000/api/auth/google/callback"
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ google.configured(): True when both a Google client ID and client secret are configured for sign-in.
 def configured() -> bool:
     """True when both a Google client ID and client secret are configured for sign-in."""
     return bool(client_id() and client_secret())
 
 
+# ZONULY ▸ sign-in · auth ▸ api · sign-in · accounts ▸ google.authorise_url(): Build the Google sign-in (OAuth consent) URL for the given anti-forgery state value.
 def authorise_url(state: str) -> str:
     """Build the Google sign-in (OAuth consent) URL for the given anti-forgery state value."""
     return AUTH_URL + "?" + urlencode({
@@ -98,6 +106,7 @@ def authorise_url(state: str) -> str:
     })
 
 
+# ZONULY ▸ email verification · sign-in · auth ▸ api · sign-in · accounts ▸ google.identify(): Exchange the code; return {email, name, sub} for a verified Google account.
 def identify(code: str) -> dict:
     """Exchange the code; return {email, name, sub} for a verified Google account."""
     try:

@@ -26,6 +26,7 @@ from fastapi import APIRouter, HTTPException, Query
 router = APIRouter(prefix="/api/kg", tags=["knowledge graph"])
 
 
+# ZONULY ▸ knowledge graph ▸ api · knowledge graph routes ▸ routes_warm._or_404(): Raise HTTP 404 when a knowledge graph answer carries an error, else return it unchanged.
 def _or_404(out: dict) -> dict:
     """Raise HTTP 404 when a knowledge graph answer carries an error, else return it unchanged."""
     if out.get("error"):
@@ -33,6 +34,7 @@ def _or_404(out: dict) -> dict:
     return out
 
 
+# ZONULY ▸ api route GET /warm/company/{company_id} · people search · referrers · knowledge graph ▸ api · knowledge graph routes ▸ routes_warm.warm_company(): Warm paths into one company: people with a link to your back…
 @router.get("/warm/company/{company_id}")
 def warm_company(company_id: int, people: int = Query(12, ge=1, le=50)) -> dict:
     """Warm paths into one company: people with a link to your background (ranked by
@@ -42,6 +44,7 @@ def warm_company(company_id: int, people: int = Query(12, ge=1, le=50)) -> dict:
     return _or_404(warm.warm_paths(company_id, people=people))
 
 
+# ZONULY ▸ api route GET /warm/contact/{contact_id} · people search · referrers · knowledge graph ▸ api · knowledge graph routes ▸ routes_warm.warm_contact(): Warm paths and the graph referrer signal for one person.
 @router.get("/warm/contact/{contact_id}")
 def warm_contact(contact_id: int) -> dict:
     """Warm paths and the graph referrer signal for one person."""
@@ -50,6 +53,7 @@ def warm_contact(contact_id: int) -> dict:
     return _or_404(warm.contact_paths(contact_id))
 
 
+# ZONULY ▸ api route GET /similar/{company_id} · knowledge graph ▸ api · knowledge graph routes ▸ routes_warm.similar(): "If you liked this company": graph neighbours by shared investors and skills.
 @router.get("/similar/{company_id}")
 def similar(company_id: int, limit: int = Query(8, ge=1, le=40)) -> dict:
     """"If you liked this company": graph neighbours by shared investors and skills."""
@@ -58,6 +62,7 @@ def similar(company_id: int, limit: int = Query(8, ge=1, le=40)) -> dict:
     return _or_404(warm.similar_companies(company_id, limit=limit))
 
 
+# ZONULY ▸ api route GET /next-companies · knowledge graph ▸ api · knowledge graph routes ▸ routes_warm.next_companies(): The next companies to work on — similar to the ones you're already engaged with.
 @router.get("/next-companies")
 def next_companies(limit: int = Query(12, ge=1, le=50), seed: list[int] | None = Query(None)) -> dict:
     """The next companies to work on — similar to the ones you're already engaged with."""

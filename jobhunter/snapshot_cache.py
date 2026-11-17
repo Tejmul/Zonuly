@@ -51,6 +51,7 @@ CACHE_CONTROL = b"public, max-age=60, s-maxage=600, stale-while-revalidate=60480
 PRIVATE_CACHE_CONTROL = b"private, max-age=60"
 
 
+# ZONULY ▸ review gate · cache · sign-in · auth · deployment · snapshot ▸ api · response cache middleware ▸ snapshot_cache.cache_control_for(): Cache-Control header for a response: private behind the login gate, else pu…
 def cache_control_for(path: str) -> bytes:
     """Cache-Control header for a response: private behind the login gate, else public with CDN caching."""
     if access.AUTH_REQUIRED and not access.is_open_when_gated("GET", path):
@@ -80,9 +81,11 @@ PREWARM = (
 )
 
 
+# ZONULY ▸ cache · deployment · snapshot ▸ api · response cache middleware ▸ class snapshot_cache.SnapshotCache: Pure ASGI middleware: GET 200 JSON responses, kept by path + query, LRU-bounded.
 class SnapshotCache:
     """Pure ASGI middleware: GET 200 JSON responses, kept by path + query, LRU-bounded."""
 
+    # ZONULY ▸ cache · deployment · snapshot ▸ api · response cache middleware ▸ snapshot_cache.SnapshotCache.__init__(): Wrap the ASGI app with an empty LRU response cache capped at max_bytes.
     def __init__(self, app, max_bytes: int = 96_000_000):
         """Wrap the ASGI app with an empty LRU response cache capped at max_bytes."""
         self.app = app
@@ -94,6 +97,7 @@ class SnapshotCache:
         #: instance makes both wait about twice as long, so the second waits for the first.
         self.inflight: dict[str, asyncio.Event] = {}
 
+    # ZONULY ▸ cache · access control · deployment · snapshot ▸ api · response cache middleware ▸ snapshot_cache.SnapshotCache._cacheable(): True for public-mode GET /api/ requests that are not skipped paths or operator req…
     def _cacheable(self, scope) -> bool:
         """True for public-mode GET /api/ requests that are not skipped paths or operator requests."""
         if not access.PUBLIC or scope["type"] != "http" or scope["method"] != "GET":
@@ -103,6 +107,7 @@ class SnapshotCache:
             return False
         return not access.is_operator(Headers(scope=scope))
 
+    # ZONULY ▸ cache · deployment · snapshot ▸ api · response cache middleware ▸ snapshot_cache.SnapshotCache.__call__(): ASGI entry: serve cacheable API GETs from the snapshot cache, else run the app and store the result.
     async def __call__(self, scope, receive, send):
         """ASGI entry: serve cacheable API GETs from the snapshot cache, else run the app and store the result.
         Concurrent requests for the same key wait for the first one instead of computing it twice.
@@ -126,6 +131,7 @@ class SnapshotCache:
         start: dict = {}
         chunks: list[bytes] = []
 
+        # ZONULY ▸ cache · deployment · snapshot ▸ api · response cache middleware ▸ snapshot_cache.SnapshotCache.__call__.capture(): Pass response messages through, setting Cache-Control on 200s and storing the full body when…
         async def capture(message):
             """Pass response messages through, setting Cache-Control on 200s and storing the full body when done."""
             if message["type"] == "http.response.start":
@@ -152,6 +158,7 @@ class SnapshotCache:
             del self.inflight[key]
             done.set()
 
+    # ZONULY ▸ filtering · cache · deployment · snapshot ▸ api · response cache middleware ▸ snapshot_cache.SnapshotCache._keep(): Store a JSON response body in the LRU cache, evicting the oldest entries past max_bytes.
     def _keep(self, key: str, headers: list, body: bytes) -> None:
         """Store a JSON response body in the LRU cache, evicting the oldest entries past max_bytes."""
         ctype = next((v for k, v in headers if k.lower() == b"content-type"), b"")
@@ -166,6 +173,7 @@ class SnapshotCache:
             self.size -= len(old)
 
 
+# ZONULY ▸ scraping · cache · deployment · snapshot ▸ api · response cache middleware ▸ snapshot_cache.prewarm(): Fetch PREWARM through the full middleware stack, in-process, one at a time.
 async def prewarm(app) -> None:
     """Fetch PREWARM through the full middleware stack, in-process, one at a time."""
     if not access.PUBLIC:
