@@ -36,6 +36,7 @@ from jobhunter.db import utcnow
 DELAYS_DAYS = (1, 3, 7, 21, 60)
 
 
+# ZONULY ▸ retry · backoff ▸ reliability · retry backoff ▸ backoff._state(): Parse a company's `retry_state` JSON into a dict of per-step retry info; empty on bad data.
 def _state(company) -> dict:
     """Parse a company's `retry_state` JSON into a dict of per-step retry info; empty on bad data."""
     try:
@@ -45,6 +46,7 @@ def _state(company) -> dict:
         return {}
 
 
+# ZONULY ▸ retry · backoff ▸ reliability · retry backoff ▸ backoff.due(): May this step run on this company now?
 def due(company, step: str, now: datetime | None = None) -> bool:
     """May this step run on this company now?"""
     entry = _state(company).get(step)
@@ -56,11 +58,13 @@ def due(company, step: str, now: datetime | None = None) -> bool:
         return True
 
 
+# ZONULY ▸ enrichment · retry · backoff ▸ reliability · retry backoff ▸ backoff.tries(): How many times the given enrichment step has been tried for this company (from retry_state).
 def tries(company, step: str) -> int:
     """How many times the given enrichment step has been tried for this company (from retry_state)."""
     return int((_state(company).get(step) or {}).get("tries") or 0)
 
 
+# ZONULY ▸ retry · backoff ▸ reliability · retry backoff ▸ backoff.fail(): Record a failure. A non-retryable one waits the longest delay straight away.
 def fail(company, step: str, error: str, *, retryable: bool = True) -> None:
     """Record a failure. A non-retryable one waits the longest delay straight away."""
     state = _state(company)
@@ -72,6 +76,7 @@ def fail(company, step: str, error: str, *, retryable: bool = True) -> None:
     company.retry_state = json.dumps(state)
 
 
+# ZONULY ▸ retry · backoff ▸ reliability · retry backoff ▸ backoff.ok(): Clear a step after it worked.
 def ok(company, step: str) -> None:
     """Clear a step after it worked."""
     state = _state(company)
@@ -80,6 +85,7 @@ def ok(company, step: str) -> None:
         company.retry_state = json.dumps(state) if state else None
 
 
+# ZONULY ▸ enrichment · retry · backoff ▸ reliability · retry backoff ▸ backoff.last_error(): The last error recorded for this company's enrichment step in retry_state, or None.
 def last_error(company, step: str) -> str | None:
     """The last error recorded for this company's enrichment step in retry_state, or None."""
     return (_state(company).get(step) or {}).get("error")
