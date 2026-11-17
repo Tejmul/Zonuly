@@ -64,6 +64,7 @@ PROFILES_TO_ENRICH = 12   # bios cost one call each; only fetch them for people 
 _resolved: str | None = None
 
 
+# ZONULY ▸ github scraping · people search · referrers · sign-in · auth ▸ people · contact discovery · email proof ▸ github_miner._gh_cli_token(): The token the authenticated GitHub CLI holds (`gh auth token`), or "".
 def _gh_cli_token() -> str:
     """The token the authenticated GitHub CLI holds (`gh auth token`), or ""."""
     import subprocess
@@ -85,6 +86,7 @@ def _gh_cli_token() -> str:
         return ""
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ github_miner.token(): A token GitHub actually accepts: GITHUB_TOKEN from .env, else the GitHub CLI's.
 def token() -> str:
     """A token GitHub actually accepts: GITHUB_TOKEN from .env, else the GitHub CLI's.
 
@@ -117,6 +119,7 @@ def token() -> str:
     return ""
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ github_miner.headers(): Build GitHub REST API request headers, with the bearer token when one is configured.
 def headers() -> dict[str, str]:
     """Build GitHub REST API request headers, with the bearer token when one is configured."""
     h = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
@@ -126,6 +129,7 @@ def headers() -> dict[str, str]:
     return h
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ class github_miner.GHPerson
 @dataclass
 class GHPerson:
     login: str
@@ -144,6 +148,7 @@ class GHPerson:
     profile_email: bool = False              # the address is the public one on their profile
 
 
+# ZONULY ▸ github scraping · people search · referrers · monitoring ▸ people · contact discovery · email proof ▸ github_miner.get_json(): GET → JSON or None, recording the GitHub channel's health (a 404 is an answer;
 async def get_json(http: httpx.AsyncClient, url: str, **kw) -> object | None:
     """GET → JSON or None, recording the GitHub channel's health (a 404 is an answer;
     403/429/5xx and transport errors are failures — guardrails' hourly audit reads them)."""
@@ -164,6 +169,7 @@ async def get_json(http: httpx.AsyncClient, url: str, **kw) -> object | None:
         return None
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ github_miner._when(): Parse a GitHub ISO timestamp into a naive datetime; None when missing or malformed.
 def _when(raw: str | None) -> datetime | None:
     """Parse a GitHub ISO timestamp into a naive datetime; None when missing or malformed."""
     try:
@@ -175,6 +181,7 @@ def _when(raw: str | None) -> datetime | None:
 _DECOR = re.compile(r"(ai|labs?|hq|inc|tech|technologies|app|org|engg|eng|git|github|oss|dev)$")
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ github_miner._norm(): A name with its decoration stripped: "Edubuk-org", "Swish HQ" and "Sarvam AI"
 def _norm(text: str | None) -> str:
     """A name with its decoration stripped: "Edubuk-org", "Swish HQ" and "Sarvam AI"
     become edubuk, swish, sarvam — the part that has to agree."""
@@ -183,17 +190,20 @@ def _norm(text: str | None) -> str:
     return bare if len(bare) >= 3 else stem
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ github_miner._host(): Return the bare host of a URL (no scheme, path or leading www.).
 def _host(url: str | None) -> str:
     """Return the bare host of a URL (no scheme, path or leading www.)."""
     return (url or "").replace("https://", "").replace("http://", "").split("/")[0].removeprefix("www.")
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ github_miner._sld(): The registered label: new.turbohire.co → turbohire, vahan.ai → vahan.
 def _sld(host: str) -> str:
     """The registered label: new.turbohire.co → turbohire, vahan.ai → vahan."""
     parts = host.split(".")
     return parts[-2] if len(parts) >= 2 else host
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ github_miner._same(): Why this org is the company's — or None. Exact on the normalized name, or the
 def _same(company_name: str, website: str | None, *, login: str | None = None,
           org_name: str | None = None, blog: str | None = None) -> str | None:
     """Why this org is the company's — or None. Exact on the normalized name, or the
@@ -210,6 +220,7 @@ def _same(company_name: str, website: str | None, *, login: str | None = None,
     return None
 
 
+# ZONULY ▸ github scraping · people search · referrers · sign-in · auth ▸ people · contact discovery · email proof ▸ github_miner.find_org(): Resolve a company name to its GitHub org login — or to nothing.
 async def find_org(http: httpx.AsyncClient, company_name: str, website: str | None = None) -> str | None:
     """Resolve a company name to its GitHub org login — or to nothing.
 
@@ -232,6 +243,7 @@ async def find_org(http: httpx.AsyncClient, company_name: str, website: str | No
     return None
 
 
+# ZONULY ▸ github scraping · people search · referrers · monitoring ▸ people · contact discovery · email proof ▸ github_miner.org_is_theirs(): The same test find_org applies, for an org already on record — the audit pat…
 async def org_is_theirs(http: httpx.AsyncClient, company_name: str, website: str | None, org: str) -> tuple[bool, str]:
     """The same test find_org applies, for an org already on record — the audit path."""
     why = _same(company_name, website, login=org)
@@ -246,6 +258,7 @@ async def org_is_theirs(http: httpx.AsyncClient, company_name: str, website: str
     return False, f"org is {data.get('name')!r} ({_host(data.get('blog')) or 'no website'}) — not {company_name}"
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ github_miner.top_repos(): List an org's most recently pushed public repos, skipping archived repos and forks.
 async def top_repos(http: httpx.AsyncClient, org: str, limit: int = REPOS_PER_ORG) -> list[str]:
     """List an org's most recently pushed public repos, skipping archived repos and forks.
     Network call to the GitHub API."""
@@ -256,6 +269,7 @@ async def top_repos(http: httpx.AsyncClient, org: str, limit: int = REPOS_PER_OR
     return [r["name"] for r in (repos or []) if r.get("name") and not r.get("archived") and not r.get("fork")]
 
 
+# ZONULY ▸ github scraping · scraping · people search · referrers · sign-in · auth ▸ people · contact discovery · email proof ▸ github_miner.emails_from_repo(): {login: (email, name, when)} harvested from one repo's rec…
 async def emails_from_repo(http: httpx.AsyncClient, org: str, repo: str) -> dict[str, tuple[str, str | None, datetime | None]]:
     """{login: (email, name, when)} harvested from one repo's recent commits."""
     commits = await get_json(
@@ -275,12 +289,14 @@ async def emails_from_repo(http: httpx.AsyncClient, org: str, repo: str) -> dict
     return found
 
 
+# ZONULY ▸ github scraping · people search · referrers · sign-in · auth ▸ people · contact discovery · email proof ▸ github_miner.org_members(): List the public member logins of a GitHub org, skipping bot accounts. Netw…
 async def org_members(http: httpx.AsyncClient, org: str, limit: int = 30) -> list[str]:
     """List the public member logins of a GitHub org, skipping bot accounts. Network call."""
     members = await get_json(http, f"{API}/orgs/{org}/members?per_page={limit}", headers=headers())
     return [m["login"] for m in (members or []) if m.get("login") and not _BOT.search(m["login"])]
 
 
+# ZONULY ▸ github scraping · scraping · people search · referrers ▸ people · contact discovery · email proof ▸ github_miner.user_profile(): Fetch a GitHub user's public profile as a GHPerson; None for orgs or a failed f…
 async def user_profile(http: httpx.AsyncClient, login: str) -> GHPerson | None:
     """Fetch a GitHub user's public profile as a GHPerson; None for orgs or a failed fetch.
     Drops noreply emails; a profile email marks the person as verified, else scraped."""
@@ -302,6 +318,7 @@ async def user_profile(http: httpx.AsyncClient, login: str) -> GHPerson | None:
     )
 
 
+# ZONULY ▸ github scraping · people search · referrers · email verification · sign-in · auth ▸ people · contact discovery · email proof ▸ github_miner.mine(): Return (org_login, people). People with a verified email com…
 async def mine(
     http: httpx.AsyncClient,
     company_name: str,
@@ -365,6 +382,7 @@ async def mine(
 _LEFT: dict = {"at": 0.0, "remaining": None, "limit": None, "reset": None}
 
 
+# ZONULY ▸ github scraping · people search · referrers · budget · cost · sign-in · auth ▸ people · contact discovery · email proof ▸ github_miner.calls_left(): GitHub's core budget right now — {remaining, limit, reset,…
 def calls_left(max_age_s: int = 60) -> dict:
     """GitHub's core budget right now — {remaining, limit, reset, authenticated}. The
     /rate_limit call itself costs nothing; cached for a minute. Unauthenticated (no
@@ -384,6 +402,7 @@ def calls_left(max_age_s: int = 60) -> dict:
     return {k: _LEFT[k] for k in ("remaining", "limit", "reset")} | {"authenticated": bool(token())}
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ github_miner.rate_limit(): Return the GitHub core API rate limit (limit, remaining) and whether a token is in use.
 async def rate_limit(http: httpx.AsyncClient) -> dict:
     """Return the GitHub core API rate limit (limit, remaining) and whether a token is in use."""
     data = await get_json(http, f"{API}/rate_limit", headers=headers())

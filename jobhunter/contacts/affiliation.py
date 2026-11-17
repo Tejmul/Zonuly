@@ -60,10 +60,12 @@ REPOS = 6
 _LOGIN = re.compile(r"github\.com/([A-Za-z0-9][A-Za-z0-9\-]{0,38})/?$")
 
 
+# ZONULY ▸ github scraping · people search · referrers · budget · cost ▸ people · contact discovery · email proof ▸ class affiliation.Budget: GitHub's core budget, read off each response. `ok()` is False once only the
 class Budget:
     """GitHub's core budget, read off each response. `ok()` is False once only the
     reserve is left (or the API said 403/429)."""
 
+    # ZONULY ▸ github scraping · people search · referrers · budget · cost ▸ people · contact discovery · email proof ▸ affiliation.Budget.__init__(): Start a GitHub budget that keeps `reserve` calls in hand; nothing spent…
     def __init__(self, reserve: int = 800):
         """Start a GitHub budget that keeps `reserve` calls in hand; nothing spent or stopped yet."""
         self.reserve = reserve
@@ -72,11 +74,13 @@ class Budget:
         self.calls = 0
         self.stopped: str | None = None
 
+    # ZONULY ▸ github scraping · people search · referrers · budget · cost ▸ people · contact discovery · email proof ▸ affiliation.Budget.ok(): Return True while GitHub has not refused us and more than the reserve of calls…
     def ok(self) -> bool:
         """Return True while GitHub has not refused us and more than the reserve of calls is left."""
         return not self.stopped and (self.remaining is None or self.remaining > self.reserve)
 
 
+# ZONULY ▸ github scraping · people search · referrers · budget · cost ▸ people · contact discovery · email proof ▸ affiliation._get(): GET a GitHub API URL within the rate budget and return its JSON, or None (network c…
 def _get(client: httpx.Client, budget: Budget, url: str) -> object | None:
     """GET a GitHub API URL within the rate budget and return its JSON, or None (network call).
 
@@ -111,6 +115,7 @@ def _get(client: httpx.Client, budget: Budget, url: str) -> object | None:
         return None
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ affiliation._when(): Parse a GitHub ISO timestamp into a naive datetime; None when empty or invalid.
 def _when(raw: str | None) -> datetime | None:
     """Parse a GitHub ISO timestamp into a naive datetime; None when empty or invalid."""
     if not raw:
@@ -121,6 +126,7 @@ def _when(raw: str | None) -> datetime | None:
         return None
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers · sign-in · auth ▸ people · contact discovery · email proof ▸ affiliation.org_evidence(): {members: {login}, recent: {login: (when, repo)}, emails: {email:…
 def org_evidence(client: httpx.Client, budget: Budget, org: str) -> dict:
     """{members: {login}, recent: {login: (when, repo)}, emails: {email: (when, repo)}, repos: [..]}"""
     since = (utcnow() - timedelta(days=guardrails.COMMIT_RECENT_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -161,6 +167,7 @@ def org_evidence(client: httpx.Client, budget: Budget, org: str) -> dict:
             "forks_skipped": sum(1 for r in (repos or []) if isinstance(r, dict) and r.get("fork"))}
 
 
+# ZONULY ▸ github scraping · people search · referrers · sign-in · auth ▸ people · contact discovery · email proof ▸ affiliation.login_of(): Return the contact's GitHub login: the handle, else the user part of the githu…
 def login_of(contact: Contact) -> str | None:
     """Return the contact's GitHub login: the handle, else the user part of the github URL, else None."""
     if contact.handle:
@@ -169,6 +176,7 @@ def login_of(contact: Contact) -> str | None:
     return m.group(1) if m else None
 
 
+# ZONULY ▸ github scraping · validation · guardrails · people search · referrers ▸ people · contact discovery · email proof ▸ affiliation.check_company(): Relabel one company's GitHub contacts from org evidence + profil…
 def check_company(company_id: int, client: httpx.Client, budget: Budget, *, max_profiles: int = 30,
                   dry_run: bool = False, fresh_ids: set[int] | None = None) -> dict:
     """Relabel one company's GitHub contacts from org evidence + profiles. `fresh_ids`:
@@ -262,12 +270,14 @@ def check_company(company_id: int, client: httpx.Client, budget: Budget, *, max_
     return stats
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ affiliation._checked_at(): Return the date of the last affiliation check stamped in the research notes, or None.
 def _checked_at(notes: str | None) -> datetime | None:
     """Return the date of the last affiliation check stamped in the research notes, or None."""
     m = re.search(r"\[affil\] (\d{4}-\d{2}-\d{2})", notes or "")
     return datetime.strptime(m.group(1), "%Y-%m-%d") if m else None
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · contact discovery · email proof ▸ affiliation.pending(): Companies with a GitHub org and GitHub contacts not checked in RECHECK_DAYS —
 def pending(limit: int | None = None) -> list[int]:
     """Companies with a GitHub org and GitHub contacts not checked in RECHECK_DAYS —
     in db.fill_order: the ★ list first, then the least-complete high-priority rows."""
@@ -285,6 +295,7 @@ def pending(limit: int | None = None) -> list[int]:
     return ids[:limit] if limit else ids
 
 
+# ZONULY ▸ people search · referrers · budget · cost ▸ people · contact discovery · email proof ▸ affiliation.run(): The pass over `pending()` until the budget reserve. Each company commits alone.
 def run(limit: int | None = None, *, reserve: int = 800, max_profiles: int = 30, dry_run: bool = False,
         company_ids: list[int] | None = None) -> dict:
     """The pass over `pending()` until the budget reserve. Each company commits alone."""

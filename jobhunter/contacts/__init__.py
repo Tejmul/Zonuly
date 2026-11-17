@@ -51,11 +51,13 @@ MAX_PER_COMPANY = int((CONFIG.get("contacts") or {}).get("max_per_company", 20))
 _RECRUITER_HINT = ("recruit", "talent", "people ops", "hr", "hiring", "staffing")
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ __init__._looks_recruiter(): True when the text (title or headline) contains a recruiter / talent-acquisition hint.
 def _looks_recruiter(text: str | None) -> bool:
     """True when the text (title or headline) contains a recruiter / talent-acquisition hint."""
     return bool(text) and any(h in text.lower() for h in _RECRUITER_HINT)
 
 
+# ZONULY ▸ github scraping · data ingestion · people search · referrers ▸ people · contact discovery · email proof ▸ __init__.discover_for_company(): Run every free source for one company and persist the results. `githu…
 async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_COMPANY, github: bool = True,
                                force_hunter: bool = False) -> dict:
     """Run every free source for one company and persist the results. `github=False`
@@ -277,6 +279,7 @@ async def discover_for_company(company_id: int, *, max_contacts: int = MAX_PER_C
     return stats
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ people · contact discovery · email proof ▸ __init__.fill_by_pattern(): Learn the company's address format from its own addresses and give every ready,
 def fill_by_pattern(company_id: int) -> int:
     """Learn the company's address format from its own addresses and give every ready,
     named referrer without an address the confirmed pattern's address (addresses.fill):
@@ -291,6 +294,7 @@ def fill_by_pattern(company_id: int) -> int:
         return 0
 
 
+# ZONULY ▸ data ingestion · scoring · decision · people search · referrers ▸ people · contact discovery · email proof ▸ __init__.discover_for_high_matches(): Find contacts at target companies that have a high-match job…
 def discover_for_high_matches(limit: int = 5, *, refresh_days: int = 30,
                               tiers: tuple[str, ...] = ("tier1", "tier2", "prospect")) -> list[dict]:
     """Find contacts at target companies that have a high-match job and no recent run.
@@ -327,6 +331,7 @@ def discover_for_high_matches(limit: int = 5, *, refresh_days: int = 30,
     return [asyncio.run(discover_for_company(cid)) for cid in company_ids]
 
 
+# ZONULY ▸ data ingestion · people search · referrers ▸ people · contact discovery · email proof ▸ __init__.discover(): Run people search (contact discovery) for one company synchronously and return its summary.
 def discover(company_id: int) -> dict:
     """Run people search (contact discovery) for one company synchronously and return its summary."""
     return asyncio.run(discover_for_company(company_id))

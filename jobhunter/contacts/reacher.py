@@ -87,6 +87,7 @@ LANE = int(_CONF.get("lane_size", 150))                 # addresses per lane on 
 SAFE = "safe"
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher._proxy(): Return the SOCKS proxy settings for Reacher from config or secrets; empty dict when none set.
 def _proxy() -> dict:
     """Return the SOCKS proxy settings for Reacher from config or secrets; empty dict when none set."""
     host = _CONF.get("proxy_host") or secret("REACHER_PROXY_HOST") or os.environ.get("REACHER_PROXY_HOST")
@@ -98,6 +99,7 @@ def _proxy() -> dict:
             "password": secret("REACHER_PROXY_PASSWORD") or ""}
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher.available(): True when the Reacher (check-if-email-exists) binary is installed.
 def available() -> bool:
     """True when the Reacher (check-if-email-exists) binary is installed."""
     return BIN.exists()
@@ -106,6 +108,7 @@ def available() -> bool:
 _MX: dict[str, tuple[str, ...]] = {}
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher.mx_hosts(): The domain's mail hosts, best first; () only when DNS says there are none.
 def mx_hosts(domain: str) -> tuple[str, ...]:
     """The domain's mail hosts, best first; () only when DNS says there are none."""
     if domain in _MX:
@@ -127,10 +130,12 @@ def mx_hosts(domain: str) -> tuple[str, ...]:
     raise MXUnknown(domain)
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ people · contact discovery · email proof ▸ class reacher.MXUnknown: DNS did not answer: the domain's mail servers are unknown, not absent.
 class MXUnknown(Exception):
     """DNS did not answer: the domain's mail servers are unknown, not absent."""
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher.checkable_here(): False for Google-hosted domains when no proxy is set: they never answer this IP.
 def checkable_here(domain: str) -> bool:
     """False for Google-hosted domains when no proxy is set: they never answer this IP."""
     if _proxy():
@@ -142,6 +147,7 @@ def checkable_here(domain: str) -> bool:
     return bool(hosts) and not any(h.endswith(g) for h in hosts[:1] for g in GOOGLE_MX)
 
 
+# ZONULY ▸ decision · people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher._run(): Run the Reacher binary on one address (via the proxy if set) and return its JSON verdict.
 def _run(address: str) -> dict:
     """Run the Reacher binary on one address (via the proxy if set) and return its JSON verdict.
 
@@ -157,6 +163,7 @@ def _run(address: str) -> dict:
     return json.loads(out.stdout)
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher._user_unknown(): Re-read a Reacher `invalid`: True = the server said no such mailbox (5.1.x),
 def _user_unknown(address: str, host: str) -> bool | None:
     """Re-read a Reacher `invalid`: True = the server said no such mailbox (5.1.x),
     False = it refused for another reason (policy, reputation), None = could not ask."""
@@ -178,6 +185,7 @@ def _user_unknown(address: str, host: str) -> bool | None:
     return False
 
 
+# ZONULY ▸ decision · people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher.probe(): (verdict, catch_all, detail) straight from the tool, `invalid` re-read. No DB.
 def probe(address: str) -> tuple[str, bool | None, str]:
     """(verdict, catch_all, detail) straight from the tool, `invalid` re-read. No DB."""
     address = address.strip().lower()
@@ -207,6 +215,7 @@ def probe(address: str) -> tuple[str, bool | None, str]:
     return verdict, catch_all, detail[:300]
 
 
+# ZONULY ▸ decision · people search · referrers · email verification · sign-in · auth ▸ people · contact discovery · email proof ▸ reacher.record(): Write one verdict in its own committed transaction (so any session's f…
 def record(address: str, verdict: str, *, source: str = "reacher", catch_all: bool | None = None,
            detail: str | None = None) -> EmailCheck:
     """Write one verdict in its own committed transaction (so any session's flush sees it).
@@ -224,18 +233,21 @@ def record(address: str, verdict: str, *, source: str = "reacher", catch_all: bo
         return row
 
 
+# ZONULY ▸ apify scraping · apify people search · people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher.vouch(): A proof that did not come from Reacher (apify | delivered).
 def vouch(address: str, source: str, detail: str | None = None) -> None:
     """A proof that did not come from Reacher (apify | delivered)."""
     if address and "@" in address:
         record(address, SAFE, source=source, detail=detail)
 
 
+# ZONULY ▸ decision · people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher.verdict(): Return the stored email_check verdict for an address, or None if it was never probed.
 def verdict(address: str) -> EmailCheck | None:
     """Return the stored email_check verdict for an address, or None if it was never probed."""
     with get_session() as s:
         return s.get(EmailCheck, (address or "").strip().lower())
 
 
+# ZONULY ▸ decision · people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher.check(): The stored verdict when fresh enough, else a new probe.
 def check(address: str, *, max_age_days: int | None = None) -> EmailCheck:
     """The stored verdict when fresh enough, else a new probe."""
     max_age = FRESH_DAYS if max_age_days is None else max_age_days
@@ -248,6 +260,7 @@ def check(address: str, *, max_age_days: int | None = None) -> EmailCheck:
     return record(address, v, catch_all=ca, detail=why)
 
 
+# ZONULY ▸ decision · people search · referrers · email verification · email sending ▸ people · contact discovery · email proof ▸ reacher.sendable(): May a cold mail go to this address? Only with a fresh `safe` verdict.
 def sendable(address: str) -> tuple[bool, str]:
     """May a cold mail go to this address? Only with a fresh `safe` verdict."""
     row = check(address)
@@ -258,6 +271,7 @@ def sendable(address: str) -> tuple[bool, str]:
 
 # ------------------------------------------------------------------ the cleanup and the standing job
 
+# ZONULY ▸ people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher.promote(): A proved address goes onto the lead (the flush hook lets it through: the row is safe).
 def promote(session, contact: Contact, address: str, source: str) -> None:
     """A proved address goes onto the lead (the flush hook lets it through: the row is safe)."""
     contact.email, contact.email_unverified, contact.email_verified_by = address, None, source
@@ -268,6 +282,7 @@ def promote(session, contact: Contact, address: str, source: str) -> None:
     session.add(contact)
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher.live_mailbox(): A proved address on the person's own company domain places them there now
 def live_mailbox(session, contact: Contact) -> bool:
     """A proved address on the person's own company domain places them there now
     (guardrails.affiliation, `live-mailbox`): an unconfirmed lead becomes likely-current."""
@@ -291,6 +306,7 @@ def live_mailbox(session, contact: Contact) -> bool:
     return a.label == "likely-current"
 
 
+# ZONULY ▸ decision · people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher._apply(): Apply an email_check verdict to a contact: promote a safe address, mark invalid or risk…
 def _apply(session, contact: Contact, row: EmailCheck) -> str:
     """Apply an email_check verdict to a contact: promote a safe address, mark invalid or risky ones fake.
 
@@ -312,6 +328,7 @@ def _apply(session, contact: Contact, row: EmailCheck) -> str:
     return row.verdict
 
 
+# ZONULY ▸ decision · people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher.check_many(): Probe many addresses, each verdict recorded in email_check as it lands. Domains run…
 def check_many(addresses: list[str], *, workers: int | None = None, known: dict | None = None,
                progress=None) -> dict[str, EmailCheck]:
     """Probe many addresses, each verdict recorded in email_check as it lands. Domains run in
@@ -331,6 +348,7 @@ def check_many(addresses: list[str], *, workers: int | None = None, known: dict 
     results: dict[str, EmailCheck] = {}
     lock = threading.Lock()
 
+    # ZONULY ▸ decision · people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher.check_many.run_domain(): Probe one domain lane's addresses in order and store each verdict in the…
     def run_domain(lane: str, addrs: list[str]) -> None:
         """Probe one domain lane's addresses in order and store each verdict in the shared results.
 
@@ -359,6 +377,7 @@ def check_many(addresses: list[str], *, workers: int | None = None, known: dict 
     return results
 
 
+# ZONULY ▸ people search · referrers · email verification ▸ people · contact discovery · email proof ▸ reacher.verify_pending(): Probe every lead's kept-but-unproved address (contact.email_unverified) and promote
 def verify_pending(limit: int | None = None, *, workers: int | None = None, include_google: bool = False,
                    recheck_days: int = 7) -> dict:
     """Probe every lead's kept-but-unproved address (contact.email_unverified) and promote
@@ -408,6 +427,7 @@ def verify_pending(limit: int | None = None, *, workers: int | None = None, incl
     return out
 
 
+# ZONULY ▸ people search · referrers · email verification · review gate ▸ people · contact discovery · email proof ▸ reacher.segregate(): Every lead's address is sorted REAL or FAKE — internally only (2026-10-30, Tejmul:
 def segregate() -> dict:
     """Every lead's address is sorted REAL or FAKE — internally only (2026-10-30, Tejmul:
     "segregate them into real or fake … only internally, in the UI it should not show like that").

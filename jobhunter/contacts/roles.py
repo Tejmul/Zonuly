@@ -116,6 +116,7 @@ _ALIAS_ROLE = {
 }
 
 
+# ZONULY ▸ decision · people search · referrers ▸ people · contact discovery · email proof ▸ class roles.RoleVerdict
 @dataclass
 class RoleVerdict:
     role_class: str = "other"
@@ -124,11 +125,13 @@ class RoleVerdict:
     evidence: str | None = None
     method: str = "rules"        # rules | alias | model | default
 
+    # ZONULY ▸ decision · people search · referrers ▸ people · contact discovery · email proof ▸ roles.RoleVerdict.can_refer(): True when this role class is one that can give a referral.
     @property
     def can_refer(self) -> bool:
         """True when this role class is one that can give a referral."""
         return CAN_REFER.get(self.role_class, False)
 
+    # ZONULY ▸ decision · people search · referrers ▸ people · contact discovery · email proof ▸ roles.RoleVerdict.as_dict(): Return the role verdict as a plain dict, with its label and can_refer flag.
     def as_dict(self) -> dict:
         """Return the role verdict as a plain dict, with its label and can_refer flag."""
         return {
@@ -138,6 +141,7 @@ class RoleVerdict:
         }
 
 
+# ZONULY ▸ scoring · people search · referrers ▸ people · contact discovery · email proof ▸ roles._seniority_of(): Return the first seniority level whose pattern matches the title text, or None.
 def _seniority_of(text: str) -> str | None:
     """Return the first seniority level whose pattern matches the title text, or None."""
     for level, pattern in _SENIORITY:
@@ -146,6 +150,7 @@ def _seniority_of(text: str) -> str | None:
     return None
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ roles.classify(): Classify one person from whatever public text we hold. Never guesses silently.
 def classify(role: str | None, *, name: str | None = None, email: str | None = None,
              bio: str | None = None) -> RoleVerdict:
     """Classify one person from whatever public text we hold. Never guesses silently."""
@@ -196,6 +201,7 @@ Reply with exactly:
 {{"role_class": "<key>", "evidence": "<the words you read it from, quoted from the text>"}}"""
 
 
+# ZONULY ▸ people search · referrers · ai model call · llm ▸ people · contact discovery · email proof ▸ roles.classify_with_model(): The residue the keyword pass could not place, on the `cheap` OpenRouter alias.
 def classify_with_model(name: str | None, text: str) -> RoleVerdict | None:
     """The residue the keyword pass could not place, on the `cheap` OpenRouter alias.
 
@@ -225,6 +231,7 @@ def classify_with_model(name: str | None, text: str) -> RoleVerdict | None:
 
 # ------------------------------------------------------------------ persistence
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ roles.classify_contacts(): Label every contact in the database. Commits per contact; safe to re-run.
 def classify_contacts(limit: int | None = None, *, only_missing: bool = True,
                       use_model: bool = False) -> dict:
     """Label every contact in the database. Commits per contact; safe to re-run."""
@@ -260,6 +267,7 @@ def classify_contacts(limit: int | None = None, *, only_missing: bool = True,
     return stats
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ roles.referral_queue(): Contacts ordered by who is most likely to actually refer us.
 def referral_queue(company_id: int | None = None, limit: int = 50) -> list[dict]:
     """Contacts ordered by who is most likely to actually refer us."""
     init_db()
@@ -292,6 +300,7 @@ def referral_queue(company_id: int | None = None, limit: int = 50) -> list[dict]
 GOOD_REFERRERS = int(_P.get("good_referrers_per_company", 5))
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ roles.good_referrer_counts(): company_id -> how many of its contacts can refer (engineers, EMs, founders,
 def good_referrer_counts(session, company_ids: list[int] | None = None) -> dict[int, int]:
     """company_id -> how many of its contacts can refer (engineers, EMs, founders,
     recruiters — every class whose config says `refer: true`)."""

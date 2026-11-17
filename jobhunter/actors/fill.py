@@ -42,6 +42,7 @@ from jobhunter.db import Company, Contact, get_session, init_db, people_order
 log = logging.getLogger(__name__)
 
 
+# ZONULY ▸ filtering · enrichment · people search · referrers ▸ people · apify · actors ▸ fill.unfilled(): List ids of active, non-reject companies with no good current referrer, in people order.
 def unfilled(limit: int | None = None) -> list[int]:
     """List ids of active, non-reject companies with no good current referrer, in people order.
     Reads the company and contact tables; limit caps the list."""
@@ -56,6 +57,7 @@ def unfilled(limit: int | None = None) -> list[int]:
         return [c.id for c in todo][: limit or None]
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ people · apify · actors ▸ fill.fill_company(): People search for one company: run the company-people actor and store what it finds.
 def fill_company(company_id: int, *, sources: list[str] | None = None, max_verify: int = 10,
                  apify: bool = False, apify_max: int = 25, apify_mode: str = "short",
                  titles: list[str] | None = None) -> dict:
@@ -120,6 +122,7 @@ def fill_company(company_id: int, *, sources: list[str] | None = None, max_verif
             "linkedin": row["stats"].get("resolved_linkedin")}
 
 
+# ZONULY ▸ enrichment ▸ people · apify · actors ▸ fill.fill(): Run fill_company over the unfilled companies (up to limit) and log a summary for each.
 def fill(limit: int = 10, **kw) -> list[dict]:
     """Run fill_company over the unfilled companies (up to limit) and log a summary for each."""
     out = []

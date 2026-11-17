@@ -79,6 +79,7 @@ _MAX_BYTES = 3_000_000
 # ------------------------------------------------------------------ fetching
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ team_people._get(): (status, body) — a direct GET with a hard timeout and a size cap; (0, '') on failure.
 def _get(url: str, *, timeout: httpx.Timeout | float = _TIMEOUT, max_bytes: int = _MAX_BYTES) -> tuple[int, str]:
     """(status, body) — a direct GET with a hard timeout and a size cap; (0, '') on failure."""
     try:
@@ -99,6 +100,7 @@ def _get(url: str, *, timeout: httpx.Timeout | float = _TIMEOUT, max_bytes: int 
         return 0, ""
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ team_people._jina(): The page rendered to Markdown by Jina Reader (keyless), or ''.
 def _jina(url: str, timeout: float = 30.0) -> str:
     """The page rendered to Markdown by Jina Reader (keyless), or ''."""
     from jobhunter.research import web
@@ -118,6 +120,7 @@ _BLOCK = re.compile(r"</?(?:p|div|li|ul|ol|br|tr|td|th|section|article|header|fo
 _HEAD = re.compile(r"<h([1-6])\b[^>]*>(.*?)</h\1>", re.I | re.S)
 
 
+# ZONULY ▸ people search · referrers · lock ▸ people · contact discovery · email proof ▸ team_people.html_lines(): The page as text lines, block by block; headings prefixed '# ' like Jina's Markdown.
 def html_lines(raw: str) -> list[str]:
     """The page as text lines, block by block; headings prefixed '# ' like Jina's Markdown."""
     t = re.sub(r"<(script|style|noscript|svg|template)\b.*?</\1>", " ", raw or "", flags=re.I | re.S)
@@ -129,6 +132,7 @@ def html_lines(raw: str) -> list[str]:
     return [re.sub(r"\s+", " ", ln).strip() for ln in t.splitlines() if ln.strip()]
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ team_people.md_lines(): Jina Markdown as plain lines: links and images unwrapped, emphasis dropped.
 def md_lines(md: str) -> list[str]:
     """Jina Markdown as plain lines: links and images unwrapped, emphasis dropped."""
     out = []
@@ -165,6 +169,7 @@ _SPLIT = re.compile(r"\s*(?:,|\bat\b|@|\||–|—|\s-\s|\bfor\b)\s*", re.I)
 _SENTENCE = re.compile(r"[.!?]\s+[A-Z]|\b(?:is|are|was|we|our|you|your|with|and has|has been)\b", re.I)
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ team_people.title_ok(): A role, short, not a sentence, not an advisor / investor, and not placing them at
 def title_ok(title: str, company: str, domain: str | None) -> bool:
     """A role, short, not a sentence, not an advisor / investor, and not placing them at
     another organisation: every part after a comma / 'at' / '@' is a role word or this
@@ -208,6 +213,7 @@ perks position positions remote role roles salary investor investors funding ins
 _HONORIFIC = re.compile(r"^(?:mr|mrs|ms|miss|dr|prof|shri|smt)\.?\s+|,?\s+(?:ph\.?d|md|mba)\.?$", re.I)
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ team_people._name(): Clean one line from a team page into a person's name, or None if it is not a name.
 def _name(line: str, company: str, domain: str | None) -> str | None:
     """Clean one line from a team page into a person's name, or None if it is not a name.
 
@@ -233,6 +239,7 @@ def _name(line: str, company: str, domain: str | None) -> str | None:
     return chk.value
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ team_people.people_from_lines(): {name, title} for every 'Name' line followed (within two lines) by a title line, or
 def people_from_lines(lines: list[str], company: str, domain: str | None = None) -> list[dict]:
     """{name, title} for every 'Name' line followed (within two lines) by a title line, or
     a single 'Name, Title' / 'Name - Title' line — outside advisor / investor / customer
@@ -273,6 +280,7 @@ def people_from_lines(lines: list[str], company: str, domain: str | None = None)
     return out
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ team_people.people_from_jsonld(): schema.org Person entries (name + jobTitle) in the page's JSON-LD.
 def people_from_jsonld(raw: str, company: str, domain: str | None = None) -> list[dict]:
     """schema.org Person entries (name + jobTitle) in the page's JSON-LD."""
     out: list[dict] = []
@@ -304,6 +312,7 @@ _NOT_TEAM_LINK = re.compile(r"(career|job|blog|news|press|event|webinar|case[- ]
 DEFAULT_PATHS = ("/team", "/about", "/about-us", "/leadership", "/our-team", "/people", "/company")
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ people · contact discovery · email proof ▸ team_people.team_links(): Same-site links on the homepage that look like a team / about page, best first.
 def team_links(home_html: str, base: str) -> list[str]:
     """Same-site links on the homepage that look like a team / about page, best first."""
     host = (urlparse(base).hostname or "").removeprefix("www.")
@@ -326,6 +335,7 @@ def team_links(home_html: str, base: str) -> list[str]:
     return sorted(found, key=lambda k: (found[k], len(k)))
 
 
+# ZONULY ▸ enrichment · people search · referrers ▸ people · contact discovery · email proof ▸ team_people._base(): Reduce a website URL to its scheme and host (adds https:// when missing).
 def _base(website: str) -> str:
     """Reduce a website URL to its scheme and host (adds https:// when missing)."""
     w = website.strip().split("?")[0].split("#")[0].rstrip("/")
@@ -335,6 +345,7 @@ def _base(website: str) -> str:
     return f"{u.scheme}://{u.hostname}"
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ team_people.read_team(): {people: [{name, title, url}], pages: [...], requests: n} from the company's own site.
 def read_team(website: str, company: str, domain: str | None = None, *,
               budget_s: int = TEAM_BUDGET_S, max_pages: int = TEAM_MAX_PAGES) -> dict:
     """{people: [{name, title, url}], pages: [...], requests: n} from the company's own site."""
@@ -386,6 +397,7 @@ def read_team(website: str, company: str, domain: str | None = None, *,
 # ------------------------------------------------------------------ Y Combinator
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ team_people._reg(): Return the registrable domain of a URL or host, or None.
 def _reg(url_or_host: str | None) -> str | None:
     """Return the registrable domain of a URL or host, or None."""
     h = admission.host_of(url_or_host or "") or (url_or_host or "").lower().removeprefix("www.")
@@ -395,6 +407,7 @@ def _reg(url_or_host: str | None) -> str | None:
 _yc_map: dict | None = None
 
 
+# ZONULY ▸ yc scraping · people search · referrers · cache ▸ people · contact discovery · email proof ▸ team_people.yc_directory(): registrable domain -> YC slug, from the open yc-oss mirror (cached a week).
 def yc_directory() -> dict[str, str]:
     """registrable domain -> YC slug, from the open yc-oss mirror (cached a week)."""
     global _yc_map
@@ -422,6 +435,7 @@ def yc_directory() -> dict[str, str]:
     return m
 
 
+# ZONULY ▸ yc scraping · enrichment · people search · referrers ▸ people · contact discovery · email proof ▸ team_people.yc_slug(): Find a company's Y Combinator directory slug from its website or domain, or None.
 def yc_slug(website: str | None, domain: str | None) -> str | None:
     """Find a company's Y Combinator directory slug from its website or domain, or None."""
     for d in (_reg(website), _reg(domain)):
@@ -432,6 +446,7 @@ def yc_slug(website: str | None, domain: str | None) -> str | None:
     return None
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ team_people.yc_founders(): {people: [{name, title, linkedin, url}], status} from ycombinator.com/companies/<slug>.
 def yc_founders(slug: str, company: str) -> dict:
     """{people: [{name, title, linkedin, url}], status} from ycombinator.com/companies/<slug>."""
     url = f"https://www.ycombinator.com/companies/{slug}"
@@ -449,6 +464,7 @@ def yc_founders(slug: str, company: str) -> dict:
             "website": co.get("website")}
 
 
+# ZONULY ▸ yc scraping · people search · referrers ▸ people · contact discovery · email proof ▸ team_people.founders_from_yc(): Active founders whose latest YC company is this one. Pure, so the tests call it.
 def founders_from_yc(co: dict, slug: str) -> list[dict]:
     """Active founders whose latest YC company is this one. Pure, so the tests call it."""
     if (co.get("ycdc_status") or "Active") not in ("Active", "Public"):
@@ -466,6 +482,7 @@ def founders_from_yc(co: dict, slug: str) -> list[dict]:
 # ------------------------------------------------------------------ saving
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ people · contact discovery · email proof ▸ team_people._save(): Store new people (or confirm an unconfirmed row of the same name) through the guardrails.
 def _save(cid: int, people: list[dict], *, kind: str) -> dict:
     """Store new people (or confirm an unconfirmed row of the same name) through the guardrails."""
     from jobhunter.contacts import roles
@@ -522,6 +539,7 @@ def _save(cid: int, people: list[dict], *, kind: str) -> dict:
     return {"added": added, "confirmed": confirmed}
 
 
+# ZONULY ▸ yc scraping · people search · referrers ▸ people · contact discovery · email proof ▸ team_people.find_yc(): The company's active YC founders, when its domain is in the YC directory.
 def find_yc(cid: int) -> dict:
     """The company's active YC founders, when its domain is in the YC directory."""
     with get_session() as session:
@@ -539,6 +557,7 @@ def find_yc(cid: int) -> dict:
             **saved, **({"error": res["error"]} if res.get("error") else {})}
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ team_people.find_team(): People named with a title on the company's own team / about pages.
 def find_team(cid: int, *, budget_s: int = TEAM_BUDGET_S) -> dict:
     """People named with a title on the company's own team / about pages."""
     with get_session() as session:

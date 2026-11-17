@@ -65,11 +65,13 @@ SPEND_FILE = ACTOR_DIR / "apify_spend.jsonl"
 CACHE_DIR = ACTOR_DIR / "apify_cache"
 
 
+# ZONULY ▸ apify scraping · apify people search ▸ people · apify · actors ▸ apify_source.token(): Return the APIFY_TOKEN secret, or None when it is not set.
 def token() -> str | None:
     """Return the APIFY_TOKEN secret, or None when it is not set."""
     return secret("APIFY_TOKEN") or None
 
 
+# ZONULY ▸ apify scraping · apify people search · budget · cost ▸ people · apify · actors ▸ apify_source.spent_today(): Today's booked Apify spend — all of it, or only the rows a caller booked under `label`.
 def spent_today(label: str | None = None) -> float:
     """Today's booked Apify spend — all of it, or only the rows a caller booked under `label`."""
     if not SPEND_FILE.exists():
@@ -96,12 +98,14 @@ _USAGE: dict = {"at": 0.0, "used": None, "max": None, "end": None}
 _SPRINT = {"on": False}
 
 
+# ZONULY ▸ apify scraping · apify people search · budget · cost ▸ people · apify · actors ▸ apify_source.sprint(): Spend up to the monthly stop today, with Apify's real usage re-read before every call.
 def sprint(on: bool = True) -> None:
     """Spend up to the monthly stop today, with Apify's real usage re-read before every call."""
     _SPRINT["on"] = on
     _USAGE["at"] = 0.0
 
 
+# ZONULY ▸ apify scraping · apify people search · cache ▸ people · apify · actors ▸ apify_source.monthly_usage(): (used, max) this billing cycle, from Apify itself, cached 10 minutes. (None, None) when it
 def monthly_usage() -> tuple[float | None, float | None]:
     """(used, max) this billing cycle, from Apify itself, cached 10 minutes. (None, None) when it
     cannot be read — the daily cap still applies then."""
@@ -117,6 +121,7 @@ def monthly_usage() -> tuple[float | None, float | None]:
     return _USAGE["used"], _USAGE["max"]
 
 
+# ZONULY ▸ apify scraping · apify people search · budget · cost ▸ people · apify · actors ▸ apify_source.daily_cap(): Today's cap: what is left of the cycle's credit, spread evenly over the days left in it,
 def daily_cap() -> float:
     """Today's cap: what is left of the cycle's credit, spread evenly over the days left in it,
     never above daily_usd. 2026-10-25, Tejmul: "keep limit … I used all in 1 day" — $9.50 of $19
@@ -138,6 +143,7 @@ def daily_cap() -> float:
     return round(min(DAILY_USD, pace), 4)
 
 
+# ZONULY ▸ apify scraping · apify people search ▸ people · apify · actors ▸ apify_source._monthly_refusal(): 2026-10-24, Tejmul: "even if you use all of Apify, it doesn't matter" — so the day's cap is
 def _monthly_refusal(estimate: float) -> str | None:
     """2026-10-24, Tejmul: "even if you use all of Apify, it doesn't matter" — so the day's cap is
     high, and this is what stops it: the account's real usage, short of its monthly credit."""
@@ -150,12 +156,14 @@ def _monthly_refusal(estimate: float) -> str | None:
     return None
 
 
+# ZONULY ▸ apify scraping · apify people search · people search · referrers · budget · cost ▸ people · apify · actors ▸ apify_source.status(): Return the Apify people-search status: token present, actor id, spend today…
 def status() -> dict:
     """Return the Apify people-search status: token present, actor id, spend today and the daily cap."""
     return {"token": bool(token()), "actor": ACTOR_ID, "spent_today_usd": spent_today(), "daily_usd": daily_cap(),
             "daily_usd_ceiling": DAILY_USD}
 
 
+# ZONULY ▸ apify scraping · apify people search · email verification ▸ people · apify · actors ▸ apify_source.best_email(): (address, "verified" | "published" | "risky") from the actor's `emails` list — [{email,
 def best_email(item: dict) -> tuple[str | None, str | None]:
     """(address, "verified" | "published" | "risky") from the actor's `emails` list — [{email,
     status, deliverable, catchAllDomain, foundInLinkedInProfile, qualityScore}]. 2026-10-24: this
@@ -186,6 +194,7 @@ def best_email(item: dict) -> tuple[str | None, str | None]:
     return addr.strip().lower(), status
 
 
+# ZONULY ▸ apify scraping · apify people search · linkedin scraping · people search · referrers ▸ people · apify · actors ▸ apify_source._normalise(): Map one Apify LinkedIn employee item to our person record (name, tit…
 def _normalise(item: dict) -> dict:
     """Map one Apify LinkedIn employee item to our person record (name, title, current jobs, email).
 
@@ -216,6 +225,7 @@ def _normalise(item: dict) -> dict:
     }
 
 
+# ZONULY ▸ apify scraping · apify people search · people search · referrers · budget · cost · cache ▸ people · apify · actors ▸ apify_source.company_employees(): {people: [...], cost_usd, cached} or {error}. Never raise…
 def company_employees(company_url: str, *, max_items: int = 50, mode: str = "short",
                       job_titles: list[str] | None = None, locations: list[str] | None = None) -> dict:
     """{people: [...], cost_usd, cached} or {error}. Never raises."""
@@ -257,6 +267,7 @@ def company_employees(company_url: str, *, max_items: int = 50, mode: str = "sho
     return {"people": people, "cost_usd": cost, "cached": False}
 
 
+# ZONULY ▸ apify scraping · apify people search · people search · referrers · budget · cost · cache ▸ people · apify · actors ▸ apify_source.run_actor(): Any pinned Apify actor under the same guards as company_employees…
 def run_actor(actor_id: str, inp: dict, *, per_item: float, start_fee: float, max_items: int,
               label: str | None = None, cap_usd: float | None = None, timeout_s: int = 280,
               max_charge_usd: float | None = None) -> dict:

@@ -91,15 +91,18 @@ _WALL_URL = ("/authwall", "/uas/login", "/checkpoint", "/login", "/signup")
 _WALL_STATUS = (429, 999)
 
 
+# ZONULY ▸ people · apify · actors ▸ people · apify · actors ▸ class core.Blocked: The host is cooling down, or its daily cap is spent. The run stops cleanly.
 class Blocked(Exception):
     """The host is cooling down, or its daily cap is spent. The run stops cleanly."""
 
 
+# ZONULY ▸ people · apify · actors ▸ people · apify · actors ▸ core._now(): Return the current time as a timezone-aware UTC datetime.
 def _now() -> datetime:
     """Return the current time as a timezone-aware UTC datetime."""
     return datetime.now(timezone.utc)
 
 
+# ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ core.route_key(): host + first path segment — www.linkedin.com/in, www.linkedin.com/jobs-guest.
 def route_key(url: str) -> str:
     """host + first path segment — www.linkedin.com/in, www.linkedin.com/jobs-guest."""
     u = httpx.URL(url)
@@ -107,6 +110,7 @@ def route_key(url: str) -> str:
     return f"{u.host}/{seg}" if seg else u.host
 
 
+# ZONULY ▸ scraping ▸ people · apify · actors ▸ core._host_conf(): Return the scraping politeness settings for a host: defaults, then built-in, then config.yaml.
 def _host_conf(host: str) -> dict:
     """Return the scraping politeness settings for a host: defaults, then built-in, then config.yaml."""
     host = host.split("/")[0]
@@ -118,6 +122,7 @@ def _host_conf(host: str) -> dict:
 
 # ------------------------------------------------------------------ state (breaker + caps)
 
+# ZONULY ▸ scraping ▸ people · apify · actors ▸ core._load_state(): Read the per-host scraping state (cooldowns, daily counts) from disk; {} when missing or bad.
 def _load_state() -> dict:
     """Read the per-host scraping state (cooldowns, daily counts) from disk; {} when missing or bad."""
     try:
@@ -126,6 +131,7 @@ def _load_state() -> dict:
         return {}
 
 
+# ZONULY ▸ scraping ▸ people · apify · actors ▸ core._save_state(): Write the per-host scraping state to disk atomically (temp file, then replace).
 def _save_state(state: dict) -> None:
     """Write the per-host scraping state to disk atomically (temp file, then replace)."""
     ACTOR_DIR.mkdir(parents=True, exist_ok=True)
@@ -134,6 +140,7 @@ def _save_state(state: dict) -> None:
     tmp.replace(STATE_FILE)
 
 
+# ZONULY ▸ people · apify · actors ▸ people · apify · actors ▸ core.host_status(): {host: {cooldown_until, reason, day, used, cap}} — what `actor status` prints.
 def host_status(host: str | None = None) -> dict:
     """{host: {cooldown_until, reason, day, used, cap}} — what `actor status` prints."""
     state = _load_state()
@@ -153,6 +160,7 @@ def host_status(host: str | None = None) -> dict:
     return out
 
 
+# ZONULY ▸ scraping ▸ people · apify · actors ▸ core.reset_host(): Clear a host's cooldown and daily count so scraping actors may hit it again.
 def reset_host(host: str) -> None:
     """Clear a host's cooldown and daily count so scraping actors may hit it again."""
     state = _load_state()
@@ -162,6 +170,7 @@ def reset_host(host: str) -> None:
 
 # ------------------------------------------------------------------ fetcher
 
+# ZONULY ▸ people · apify · actors ▸ people · apify · actors ▸ class core.Page
 @dataclass
 class Page:
     url: str
@@ -171,10 +180,12 @@ class Page:
     cached: bool = False
 
 
+# ZONULY ▸ scraping ▸ people · apify · actors ▸ class core.Fetcher: One politeness core for every actor. `get()` returns a Page, None for a plain
 class Fetcher:
     """One politeness core for every actor. `get()` returns a Page, None for a plain
     miss (404, network error), and raises Blocked when the host must not be touched."""
 
+    # ZONULY ▸ scraping · dedup ▸ people · apify · actors ▸ core.Fetcher.__init__(): Open the scraping HTTP client: impit with a Chrome fingerprint, else plain httpx.
     def __init__(self, *, fresh: bool = False):
         """Open the scraping HTTP client: impit with a Chrome fingerprint, else plain httpx.
 
@@ -206,6 +217,7 @@ class Fetcher:
             )
             self.client_kind = "httpx"
 
+    # ZONULY ▸ scraping ▸ people · apify · actors ▸ core.Fetcher.close(): Close the underlying HTTP client, ignoring any error.
     def close(self) -> None:
         """Close the underlying HTTP client, ignoring any error."""
         try:
@@ -214,11 +226,13 @@ class Fetcher:
             pass
 
     # -- cache
+    # ZONULY ▸ scraping · cache ▸ people · apify · actors ▸ core.Fetcher._cache_path(): Return the on-disk page-cache file for a URL (SHA-1 of the URL).
     @staticmethod
     def _cache_path(url: str) -> Path:
         """Return the on-disk page-cache file for a URL (SHA-1 of the URL)."""
         return CACHE_DIR / (hashlib.sha1(url.encode()).hexdigest() + ".html")
 
+    # ZONULY ▸ scraping · cache ▸ people · apify · actors ▸ core.Fetcher._cached(): Return the cached page text for a URL when it is younger than `ttl_h` hours, else None.
     def _cached(self, url: str, ttl_h: float) -> str | None:
         """Return the cached page text for a URL when it is younger than `ttl_h` hours, else None."""
         p = self._cache_path(url)
@@ -228,12 +242,14 @@ class Fetcher:
             return None
         return p.read_text(encoding="utf-8", errors="ignore")
 
+    # ZONULY ▸ scraping · cache ▸ people · apify · actors ▸ core.Fetcher._store(): Save a fetched page's text to the on-disk page cache.
     def _store(self, url: str, text: str) -> None:
         """Save a fetched page's text to the on-disk page cache."""
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         self._cache_path(url).write_text(text, encoding="utf-8")
 
     # -- breaker
+    # ZONULY ▸ scraping ▸ people · apify · actors ▸ core.Fetcher._check_open(): Raise Blocked when the host is cooling down or today's request cap for it is spent.
     def _check_open(self, host: str, conf: dict) -> None:
         """Raise Blocked when the host is cooling down or today's request cap for it is spent."""
         state = _load_state()
@@ -245,6 +261,7 @@ class Fetcher:
         if s.get("day") == today and s.get("count", 0) >= conf["daily_cap"]:
             raise Blocked(f"{host} daily cap of {conf['daily_cap']} spent")
 
+    # ZONULY ▸ scraping ▸ people · apify · actors ▸ core.Fetcher._count(): Add one to today's request count for the host in the scraping state file.
     def _count(self, host: str) -> None:
         """Add one to today's request count for the host in the scraping state file."""
         state = _load_state()
@@ -255,6 +272,7 @@ class Fetcher:
         s["count"] = s.get("count", 0) + 1
         _save_state(state)
 
+    # ZONULY ▸ scraping ▸ people · apify · actors ▸ core.Fetcher.trip(): Put the host into cooldown for its configured hours, log it, and raise Blocked.
     def trip(self, host: str, reason: str) -> None:
         """Put the host into cooldown for its configured hours, log it, and raise Blocked."""
         conf = _host_conf(host)
@@ -266,6 +284,7 @@ class Fetcher:
         log.warning("actors: %s tripped (%s) — cooling down %sh", host, reason, conf["cooldown_hours"])
         raise Blocked(f"{host}: {reason}")
 
+    # ZONULY ▸ scraping ▸ people · apify · actors ▸ core.Fetcher._pace(): Sleep until the host's minimum interval plus random jitter has passed since the last request.
     def _pace(self, host: str, conf: dict) -> None:
         """Sleep until the host's minimum interval plus random jitter has passed since the last request."""
         last = self._last.get(host)
@@ -277,6 +296,7 @@ class Fetcher:
         self._last[host] = time.monotonic()
 
     # -- the call
+    # ZONULY ▸ scraping · cache ▸ people · apify · actors ▸ core.Fetcher.get(): GET through cache → breaker → pace → network. `expect(text)` says whether the
     def get(self, url: str, *, expect: Callable[[str], bool] | None = None,
             params: dict | None = None) -> Page | None:
         """GET through cache → breaker → pace → network. `expect(text)` says whether the
@@ -322,6 +342,7 @@ class Fetcher:
 
 # ------------------------------------------------------------------ runs + datasets
 
+# ZONULY ▸ people · apify · actors ▸ people · apify · actors ▸ class core.Run
 @dataclass
 class Run:
     actor: str
@@ -332,6 +353,7 @@ class Run:
     fetcher: Fetcher | None = None
     _fh: Any = None
 
+    # ZONULY ▸ people · apify · actors ▸ people · apify · actors ▸ core.Run.__post_init__(): Give the run a timestamped id and open its JSONL dataset file for appending.
     def __post_init__(self):
         """Give the run a timestamped id and open its JSONL dataset file for appending."""
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -339,17 +361,20 @@ class Run:
         DATASET_DIR.mkdir(parents=True, exist_ok=True)
         self._fh = open(self.dataset_path, "a", encoding="utf-8")
 
+    # ZONULY ▸ people · apify · actors ▸ people · apify · actors ▸ core.Run.dataset_path(): Path of this run's JSONL dataset file.
     @property
     def dataset_path(self) -> Path:
         """Path of this run's JSONL dataset file."""
         return DATASET_DIR / f"{self.run_id}.jsonl"
 
+    # ZONULY ▸ scraping ▸ people · apify · actors ▸ core.Run.push(): Append one scraped record to the run's dataset file and count it.
     def push(self, item: dict) -> None:
         """Append one scraped record to the run's dataset file and count it."""
         self._fh.write(json.dumps(item, default=str, ensure_ascii=False) + "\n")
         self._fh.flush()
         self.items += 1
 
+    # ZONULY ▸ email sending · knowledge graph ▸ people · apify · actors ▸ core.Run.finish(): Close the dataset, append the run's ledger row (status, counts, stats) to the runs file, return it.
     def finish(self, status: str, error: str | None = None) -> dict:
         """Close the dataset, append the run's ledger row (status, counts, stats) to the runs file, return it."""
         self._fh.close()
@@ -366,6 +391,7 @@ class Run:
         return row
 
 
+# ZONULY ▸ people · apify · actors ▸ people · apify · actors ▸ core.read_dataset(): Return the records an actor run wrote to its JSONL dataset file ([] when there is none).
 def read_dataset(run_id: str) -> list[dict]:
     """Return the records an actor run wrote to its JSONL dataset file ([] when there is none)."""
     p = DATASET_DIR / f"{run_id}.jsonl"
@@ -374,6 +400,7 @@ def read_dataset(run_id: str) -> list[dict]:
     return [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+# ZONULY ▸ email sending · knowledge graph ▸ people · apify · actors ▸ core.recent_runs(): Return the last `limit` actor run ledger rows, newest first.
 def recent_runs(limit: int = 20) -> list[dict]:
     """Return the last `limit` actor run ledger rows, newest first."""
     if not RUNS_FILE.exists():

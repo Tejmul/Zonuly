@@ -89,25 +89,30 @@ INDIA_CITIES = {
 _ALIASES = {n for ns in INDIA_CITIES.values() for n in ns[1:]}
 
 
+# ZONULY ▸ filtering · people search · referrers ▸ people · apify · actors ▸ people.city_locations(): The location filter an India company's city implies, else None (no filter).
 def city_locations(city: str | None) -> list[str] | None:
     """The location filter an India company's city implies, else None (no filter)."""
     names = [n for key, ns in INDIA_CITIES.items() if key in (city or "").lower() for n in ns]
     return names or None
 
 
+# ZONULY ▸ dedup · people search · referrers ▸ people · apify · actors ▸ people._norm_name(): Normalise a person's name to lowercase letters only, for dedup keys.
 def _norm_name(n: str | None) -> str:
     """Normalise a person's name to lowercase letters only, for dedup keys."""
     return re.sub(r"[^a-z]", "", (n or "").lower())
 
 
+# ZONULY ▸ linkedin scraping · dedup · people search · referrers ▸ people · apify · actors ▸ class people.Book: The merged candidate list: one entry per person, keyed by LinkedIn slug, else name.
 class Book:
     """The merged candidate list: one entry per person, keyed by LinkedIn slug, else name."""
 
+    # ZONULY ▸ linkedin scraping · people search · referrers ▸ people · apify · actors ▸ people.Book.__init__(): Start an empty book: entries by key, and a name-to-LinkedIn-slug index.
     def __init__(self):
         """Start an empty book: entries by key, and a name-to-LinkedIn-slug index."""
         self.by_key: dict[str, dict] = {}
         self.slug_of_name: dict[str, str] = {}
 
+    # ZONULY ▸ linkedin scraping · dedup · people search · referrers ▸ people · apify · actors ▸ people.Book.add(): Merge one sighting of a person into the book (dedup by LinkedIn slug, else name).
     def add(self, *, name: str | None, source: str, title: str | None = None, linkedin_url: str | None = None,
             url: str | None = None, quote: str | None = None, strength: str = "unverified", **extra) -> None:
         """Merge one sighting of a person into the book (dedup by LinkedIn slug, else name).
@@ -140,6 +145,7 @@ class Book:
 
 # ------------------------------------------------------------------ sources
 
+# ZONULY ▸ people search · referrers ▸ people · apify · actors ▸ people._src_known(): People source: add the contacts already held for the company. Returns the count.
 def _src_known(book: Book, known: Iterable[dict], **_) -> int:
     """People source: add the contacts already held for the company. Returns the count."""
     n = 0
@@ -150,6 +156,7 @@ def _src_known(book: Book, known: Iterable[dict], **_) -> int:
     return n
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · apify · actors ▸ people._src_linkedin_company(): People source: add employees listed on the company's public LinkedIn page.
 def _src_linkedin_company(book: Book, *, run: Run, company: str, slug: str | None, **_) -> int:
     """People source: add employees listed on the company's public LinkedIn page.
     Network call; records company facts in run.stats. Returns the count added."""
@@ -165,6 +172,7 @@ def _src_linkedin_company(book: Book, *, run: Run, company: str, slug: str | Non
     return len(co["employee_profiles"])
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · apify · actors ▸ people._src_search(): People source: keyless web search for LinkedIn profiles per role segment, city first.
 def _src_search(book: Book, *, company: str, domain: str | None, city: str | None, segments: Iterable[str],
                 slug: str | None = None, **_) -> int:
     """People source: keyless web search for LinkedIn profiles per role segment, city first.
@@ -192,6 +200,7 @@ def _src_search(book: Book, *, company: str, domain: str | None, city: str | Non
     return n
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · apify · actors ▸ people._src_exa(): People source: Exa search restricted to linkedin.com for current staff (likely-current).
 def _src_exa(book: Book, *, company: str, domain: str | None, city: str | None, **_) -> int:
     """People source: Exa search restricted to linkedin.com for current staff (likely-current).
     Network call; raises when the daily Exa allowance is used. Returns the count added."""
@@ -213,6 +222,7 @@ def _src_exa(book: Book, *, company: str, domain: str | None, city: str | None, 
     return n
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · apify · actors ▸ people._src_jobs(): The company's open jobs on LinkedIn; a job that shows its hiring team names a person
 def _src_jobs(book: Book, *, run: Run, company: str, domain: str | None, max_jobs: int = 6, **_) -> int:
     """The company's open jobs on LinkedIn; a job that shows its hiring team names a person
     who is there now and is hiring — the warmest cold contact there is."""
@@ -236,6 +246,7 @@ def _src_jobs(book: Book, *, run: Run, company: str, domain: str | None, max_job
     return n
 
 
+# ZONULY ▸ people search · referrers ▸ people · apify · actors ▸ people._src_team(): People source: read the company's own team page; names there count as verified-current.
 def _src_team(book: Book, *, company: str, domain: str | None, website: str | None, **_) -> int:
     """People source: read the company's own team page; names there count as verified-current.
     Network call. Returns the count added."""
@@ -250,6 +261,7 @@ def _src_team(book: Book, *, company: str, domain: str | None, website: str | No
     return len(out.get("people") or [])
 
 
+# ZONULY ▸ yc scraping · people search · referrers ▸ people · apify · actors ▸ people._src_yc(): People source: active founders from the company's YC page (likely-current).
 def _src_yc(book: Book, *, company: str, domain: str | None, website: str | None, **_) -> int:
     """People source: active founders from the company's YC page (likely-current).
     Network call. Returns the count added."""
@@ -265,12 +277,14 @@ def _src_yc(book: Book, *, company: str, domain: str | None, website: str | None
     return len(out.get("people") or [])
 
 
+# ZONULY ▸ github scraping · people search · referrers ▸ people · apify · actors ▸ people._src_github(): People source: mine the company's GitHub org members and committers (likely-current).
 def _src_github(book: Book, *, company: str, website: str | None, github_org: str | None, **_) -> int:
     """People source: mine the company's GitHub org members and committers (likely-current).
     Network call; keeps any public commit email. Returns the count added."""
     from jobhunter.contacts import github_miner
     from jobhunter.scrapers.base import make_client
 
+    # ZONULY ▸ github scraping · people search · referrers ▸ people · apify · actors ▸ people._src_github.go(): Open an HTTP client and mine GitHub people for the company.
     async def go():
         """Open an HTTP client and mine GitHub people for the company."""
         async with make_client() as http:
@@ -287,6 +301,7 @@ def _src_github(book: Book, *, company: str, website: str | None, github_org: st
     return len(people)
 
 
+# ZONULY ▸ apify scraping · apify people search · linkedin scraping · people search · referrers · budget · cost ▸ people · apify · actors ▸ people._src_apify(): People source: Apify LinkedIn employee search for the comp…
 def _src_apify(book: Book, *, company: str, slug: str | None, apify_max: int, apify_mode: str,
                titles: list[str] | None, locations: list[str] | None, run: Run, **_) -> int:
     """People source: Apify LinkedIn employee search for the company slug (spends Apify credit).
@@ -320,6 +335,7 @@ SOURCES = {
 
 # ------------------------------------------------------------------ verify + shape
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · apify · actors ▸ people._verify(): Open up to max_verify LinkedIn profiles to confirm each person still works at the company.
 def _verify(run: Run, book: Book, *, company: str, slug: str | None, domain: str | None, max_verify: int) -> None:
     """Open up to max_verify LinkedIn profiles to confirm each person still works at the company.
     Marks verified-current or former with evidence; stops early when LinkedIn blocks."""
@@ -355,6 +371,7 @@ def _verify(run: Run, book: Book, *, company: str, slug: str | None, domain: str
                                     "quote": f"profile lists {company} with an end date"})
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ people · apify · actors ▸ people._shape(): Turn a book entry into the output row: name parts, role class, can_refer, links, evidence.
 def _shape(rec: dict, company: str) -> dict:
     """Turn a book entry into the output row: name parts, role class, can_refer, links, evidence."""
     from jobhunter.contacts import roles
@@ -377,6 +394,7 @@ def _shape(rec: dict, company: str) -> dict:
     }
 
 
+# ZONULY ▸ filtering · scoring · people search · referrers ▸ people · apify · actors ▸ people._matches(): Filter check: does the person pass the title, excluded-title and location filters?
 def _matches(p: dict, titles: list[str] | None, exclude_titles: list[str] | None, locations: list[str] | None) -> bool:
     """Filter check: does the person pass the title, excluded-title and location filters?"""
     blob = " ".join(filter(None, [p.get("title"), p.get("headline")])).lower()
@@ -394,6 +412,7 @@ def _matches(p: dict, titles: list[str] | None, exclude_titles: list[str] | None
     return True
 
 
+# ZONULY ▸ people search · referrers ▸ people · apify · actors ▸ people.company_people(): Who works at a company now — the People tab, assembled from public sources, verified.
 def company_people(run: Run, *, company: str, domain: str | None = None, website: str | None = None,
                    linkedin: str | None = None, city: str | None = None, github_org: str | None = None,
                    sources: list[str] | None = None, segments: list[str] | None = None,

@@ -68,6 +68,7 @@ _PROFILE_URL = re.compile(r"https?://(?:[a-z]{2,3}\.)?linkedin\.com/in/([A-Za-z0
 _COMPANY_URL = re.compile(r"linkedin\.com/company/([A-Za-z0-9\-_%]+)", re.I)
 
 
+# ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ linkedin._text(): Strip HTML tags, unescape entities and collapse whitespace; None when nothing is left.
 def _text(s: str | None) -> str | None:
     """Strip HTML tags, unescape entities and collapse whitespace; None when nothing is left."""
     if s is None:
@@ -76,12 +77,14 @@ def _text(s: str | None) -> str | None:
     return t or None
 
 
+# ZONULY ▸ linkedin scraping · scoring ▸ people · apify · actors ▸ linkedin._find(): Return the cleaned text of the first regex group matched in the HTML, or None.
 def _find(pattern: str, h: str) -> str | None:
     """Return the cleaned text of the first regex group matched in the HTML, or None."""
     m = re.search(pattern, h, re.S)
     return _text(m.group(1)) if m else None
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · apify · actors ▸ linkedin._ld(): Return the first JSON-LD object of @type `kind` (e.g. Person, Organization) in the page, or None.
 def _ld(h: str, kind: str) -> dict | None:
     """Return the first JSON-LD object of @type `kind` (e.g. Person, Organization) in the page, or None."""
     for raw in _LDJSON.findall(h):
@@ -95,18 +98,21 @@ def _ld(h: str, kind: str) -> dict | None:
     return None
 
 
+# ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ linkedin.profile_slug(): Return the lower-cased LinkedIn profile slug from a /in/ URL, or None.
 def profile_slug(url: str) -> str | None:
     """Return the lower-cased LinkedIn profile slug from a /in/ URL, or None."""
     m = _PROFILE_URL.search(url or "")
     return m.group(1).lower() if m else None
 
 
+# ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ linkedin.profile_url(): Return the canonical LinkedIn profile URL for a slug or profile URL.
 def profile_url(slug_or_url: str) -> str:
     """Return the canonical LinkedIn profile URL for a slug or profile URL."""
     slug = profile_slug(slug_or_url) or slug_or_url.strip("/").split("/")[-1]
     return f"{BASE}/in/{slug}"
 
 
+# ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ linkedin.company_slug(): Return the lower-cased LinkedIn company slug from a /company/ URL or a bare slug.
 def company_slug(s: str) -> str:
     """Return the lower-cased LinkedIn company slug from a /company/ URL or a bare slug."""
     m = _COMPANY_URL.search(s or "")
@@ -115,6 +121,7 @@ def company_slug(s: str) -> str:
 
 # ------------------------------------------------------------------ jobs
 
+# ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ linkedin._parse_cards(): Parse LinkedIn guest job-search HTML into job cards (id, title, company, location, date, url).
 def _parse_cards(h: str) -> list[dict]:
     """Parse LinkedIn guest job-search HTML into job cards (id, title, company, location, date, url)."""
     out = []
@@ -138,6 +145,7 @@ def _parse_cards(h: str) -> list[dict]:
     return out
 
 
+# ZONULY ▸ linkedin scraping · scraping ▸ people · apify · actors ▸ linkedin.job_detail(): Fetch one LinkedIn job posting (guest endpoint) and parse its details; None when not found.
 def job_detail(f: Fetcher, job_id: str) -> dict | None:
     """Fetch one LinkedIn job posting (guest endpoint) and parse its details; None when not found.
 
@@ -178,6 +186,7 @@ def job_detail(f: Fetcher, job_id: str) -> dict | None:
     }
 
 
+# ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ linkedin.jobs(): Job search, the guest endpoint, paged until `max_items` or the results end.
 def jobs(run: Run, *, keywords: str, location: str | None = None, remote: bool = False,
          posted_days: int | None = None, experience: str | None = None, max_items: int = 50,
          details: bool = False) -> None:
@@ -215,6 +224,7 @@ def jobs(run: Run, *, keywords: str, location: str | None = None, remote: bool =
 
 # ------------------------------------------------------------------ company
 
+# ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ linkedin.parse_company(): Parse a LinkedIn company page (JSON-LD + about list) into a company record; None if not a company.
 def parse_company(h: str, url: str) -> dict | None:
     """Parse a LinkedIn company page (JSON-LD + about list) into a company record; None if not a company.
 
@@ -260,6 +270,7 @@ def parse_company(h: str, url: str) -> dict | None:
     }
 
 
+# ZONULY ▸ linkedin scraping · scraping ▸ people · apify · actors ▸ linkedin.fetch_company(): Fetch and parse a public LinkedIn company page by slug or URL (scraping, network call).
 def fetch_company(f: Fetcher, slug_or_url: str) -> dict | None:
     """Fetch and parse a public LinkedIn company page by slug or URL (scraping, network call)."""
     url = f"{BASE}/company/{company_slug(slug_or_url)}/"
@@ -267,6 +278,7 @@ def fetch_company(f: Fetcher, slug_or_url: str) -> dict | None:
     return parse_company(page.text, url) if page else None
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · apify · actors ▸ linkedin.company(): Public company pages: about, size, HQ, specialties, a few employee links.
 def company(run: Run, *, companies: Iterable[str]) -> None:
     """Public company pages: about, size, HQ, specialties, a few employee links."""
     for s in companies:
@@ -276,11 +288,13 @@ def company(run: Run, *, companies: Iterable[str]) -> None:
 
 # ------------------------------------------------------------------ profile
 
+# ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ linkedin._year(): Return `member[key]` (a start/end date) when member is a dict, else None.
 def _year(member: dict | None, key: str):
     """Return `member[key]` (a start/end date) when member is a dict, else None."""
     return (member or {}).get(key) if isinstance(member, dict) else None
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · apify · actors ▸ linkedin.parse_profile(): Parse a public LinkedIn profile page (JSON-LD Person) into a person record; None if not a profile.
 def parse_profile(h: str, url: str) -> dict | None:
     """Parse a public LinkedIn profile page (JSON-LD Person) into a person record; None if not a profile.
 
@@ -323,6 +337,7 @@ def parse_profile(h: str, url: str) -> dict | None:
     }
 
 
+# ZONULY ▸ linkedin scraping · scraping ▸ people · apify · actors ▸ linkedin.fetch_profile(): Fetch and parse a public LinkedIn profile by slug or URL (scraping, network call).
 def fetch_profile(f: Fetcher, slug_or_url: str) -> dict | None:
     """Fetch and parse a public LinkedIn profile by slug or URL (scraping, network call)."""
     url = profile_url(slug_or_url)
@@ -330,6 +345,7 @@ def fetch_profile(f: Fetcher, slug_or_url: str) -> dict | None:
     return parse_profile(page.text, url) if page else None
 
 
+# ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ linkedin.profiles(): Public profiles: current and former employers with years, schools, location.
 def profiles(run: Run, *, urls: Iterable[str]) -> None:
     """Public profiles: current and former employers with years, schools, location."""
     for u in urls:
@@ -339,6 +355,7 @@ def profiles(run: Run, *, urls: Iterable[str]) -> None:
 
 # ------------------------------------------------------------------ employees
 
+# ZONULY ▸ linkedin scraping · scoring ▸ people · apify · actors ▸ linkedin._works_at(): The current position at this company, matched by its LinkedIn company URL first
 def _works_at(rec: dict, name: str, slug: str | None, domain: str | None) -> dict | None:
     """The current position at this company, matched by its LinkedIn company URL first
     (exact), then by name — None when the profile does not say they are there now."""
@@ -358,6 +375,7 @@ def _works_at(rec: dict, name: str, slug: str | None, domain: str | None) -> dic
     return None
 
 
+# ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ linkedin.resolve_company(): The company's LinkedIn page from its name + domain: guessed slugs and search hits,
 def resolve_company(f: Fetcher, name: str, domain: str | None, *, website: str | None = None,
                     max_tries: int = 4) -> dict | None:
     """The company's LinkedIn page from its name + domain: guessed slugs and search hits,
@@ -365,6 +383,7 @@ def resolve_company(f: Fetcher, name: str, domain: str | None, *, website: str |
     domain, its name matches exactly). None rather than a namesake."""
     from jobhunter.research import web
 
+    # ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ linkedin.resolve_company.norm_host(): Return a URL's lower-cased host without scheme or leading www.
     def norm_host(u: str | None) -> str:
         """Return a URL's lower-cased host without scheme or leading www."""
         h = re.sub(r"^https?://", "", (u or "").lower()).split("/")[0]
@@ -410,6 +429,7 @@ def resolve_company(f: Fetcher, name: str, domain: str | None, *, website: str |
     return None
 
 
+# ZONULY ▸ linkedin scraping ▸ people · apify · actors ▸ linkedin._search_candidates(): Profile URLs from search engines, with the result title as a hint. Keyless first;
 def _search_candidates(name: str, domain: str | None, city: str | None, exa: bool) -> list[dict]:
     """Profile URLs from search engines, with the result title as a hint. Keyless first;
     Exa only when asked (it is metered and capped)."""
@@ -433,6 +453,7 @@ def _search_candidates(name: str, domain: str | None, city: str | None, exa: boo
     return out
 
 
+# ZONULY ▸ apify scraping · apify people search · linkedin scraping · people search · referrers · sign-in · auth ▸ people · apify · actors ▸ linkedin.employees(): Apify's "company employees" without a session: gather ca…
 def employees(run: Run, *, company: str, linkedin: str | None = None, domain: str | None = None,
               city: str | None = None, max_profiles: int = 15, exa: bool = False,
               extra_urls: Iterable[str] = ()) -> None:

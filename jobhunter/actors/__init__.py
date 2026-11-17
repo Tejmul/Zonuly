@@ -37,6 +37,7 @@ ACTORS: dict[str, Callable] = {
 }
 
 
+# ZONULY ▸ scraping · email sending · knowledge graph ▸ people · apify · actors ▸ __init__.run(): Run the named actor (scraping job) with its input and return its finished ledger row.
 def run(name: str, *, fresh: bool = False, **inp) -> dict:
     """Run the named actor (scraping job) with its input and return its finished ledger row.
 

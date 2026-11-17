@@ -144,12 +144,14 @@ _keyless = {"queries": 0, "people": 0}
 COMPANY_MAX_S = int(_R.get("company_max_seconds", 240))
 
 
+# ZONULY ▸ scraping · people search · referrers ▸ people · referrer pipeline ▸ class referrals.CompanyTimeout: One company ran past COMPANY_MAX_S. A BaseException, like KeyboardInterrupt, so the
 class CompanyTimeout(BaseException):
     """One company ran past COMPANY_MAX_S. A BaseException, like KeyboardInterrupt, so the
     channels' own `except Exception` (one channel failing must not end the company) cannot
     swallow it and carry on to the next channel."""
 
 
+# ZONULY ▸ people search · referrers · lock ▸ people · referrer pipeline ▸ referrals.with_deadline(): fn() with a wall-clock deadline (SIGALRM) when called on the main thread; a plain
 def with_deadline(fn, seconds: int):
     """fn() with a wall-clock deadline (SIGALRM) when called on the main thread; a plain
     call elsewhere (the API's scheduler thread), where the per-request timeouts still hold."""
@@ -159,6 +161,7 @@ def with_deadline(fn, seconds: int):
     if seconds <= 0 or not hasattr(signal, "SIGALRM") or threading.current_thread() is not threading.main_thread():
         return fn()
 
+    # ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.with_deadline._ring(): SIGALRM handler: raise CompanyTimeout when one company runs past its deadline.
     def _ring(signum, frame):  # noqa: ARG001
         """SIGALRM handler: raise CompanyTimeout when one company runs past its deadline."""
         raise CompanyTimeout(f"over {seconds}s on one company")
@@ -179,6 +182,7 @@ ONLY = tuple(_R.get("only_buckets") or ())
 
 # ------------------------------------------------------------------ bookkeeping
 
+# ZONULY ▸ people search · referrers · scheduler · tick ▸ people · referrer pipeline ▸ referrals.backup(): The live database copied with SQLite's backup API (WAL-safe while the tick writes).
 def backup(tag: str) -> Path:
     """The live database copied with SQLite's backup API (WAL-safe while the tick writes)."""
     dest = ROOT / "data" / "backups" / f"jobhunter-{datetime.now():%Y-%m-%d-%H%M}-{tag}.db"
@@ -192,6 +196,7 @@ def backup(tag: str) -> Path:
     return dest
 
 
+# ZONULY ▸ filtering · people search · referrers · monitoring ▸ people · referrer pipeline ▸ referrals._log_run(): Keep the last 300 runs so the hourly audit can sum what happened in its hour.
 def _log_run(kind: str, out: dict) -> None:
     """Keep the last 300 runs so the hourly audit can sum what happened in its hour."""
     try:
@@ -205,6 +210,7 @@ def _log_run(kind: str, out: dict) -> None:
         log.debug("referrals: could not log run: %s", e)
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.runs_since(): Return the logged referral (people search) runs whose timestamp is at or after `since`.
 def runs_since(since: datetime) -> list[dict]:
     """Return the logged referral (people search) runs whose timestamp is at or after `since`."""
     with get_session() as s:
@@ -216,12 +222,14 @@ def runs_since(since: datetime) -> list[dict]:
     return [r for r in runs if r.get("at", "") >= since.isoformat(timespec="seconds")]
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals._marked(): Return the date of the last [refer] people-search mark in the company notes, or None.
 def _marked(notes: str | None) -> datetime | None:
     """Return the date of the last [refer] people-search mark in the company notes, or None."""
     m = re.search(r"\[refer\] (\d{4}-\d{2}-\d{2})", notes or "")
     return datetime.strptime(m.group(1), "%Y-%m-%d") if m else None
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals._mark(): Replace the company's [refer] and partial marks in its notes with today's [refer] summary line.
 def _mark(session, c: Company, summary: str) -> None:
     """Replace the company's [refer] and partial marks in its notes with today's [refer] summary line."""
     kept = [ln for ln in (c.notes or "").splitlines() if not ln.startswith(MARK) and not ln.startswith(PARTIAL)]
@@ -229,12 +237,14 @@ def _mark(session, c: Company, summary: str) -> None:
     session.add(c)
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals._partial(): Return the time of the last [refer-partial] mark in the company notes, or None.
 def _partial(notes: str | None) -> datetime | None:
     """Return the time of the last [refer-partial] mark in the company notes, or None."""
     m = re.search(r"\[refer-partial\] (\d{4}-\d{2}-\d{2}T\d{2}:\d{2})", notes or "")
     return datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M") if m else None
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals._mark_partial(): Replace the company's [refer-partial] mark in its notes with a timestamped summary line.
 def _mark_partial(session, c: Company, summary: str) -> None:
     """Replace the company's [refer-partial] mark in its notes with a timestamped summary line."""
     kept = [ln for ln in (c.notes or "").splitlines() if not ln.startswith(PARTIAL)]
@@ -242,6 +252,7 @@ def _mark_partial(session, c: Company, summary: str) -> None:
     session.add(c)
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · referrer pipeline ▸ referrals.keyless_tripped(): The keyless LinkedIn search has run KEYLESS_TRIP queries in this process and found
 def keyless_tripped() -> bool:
     """The keyless LinkedIn search has run KEYLESS_TRIP queries in this process and found
     nobody: the engines are answering without LinkedIn results — stop spending time on it."""
@@ -254,6 +265,7 @@ _EXA_SKIP = re.compile(r"\b(capital|ventures?|partners|fund|investments?|holding
                        r"[:|/]|\b(a|an|the)\s+\w+\s+(startup|company)\b", re.I)
 
 
+# ZONULY ▸ people search · referrers · budget · cost ▸ people · referrer pipeline ▸ referrals.exa_worth_it(): Spend one of the day's Exa searches on this company? Not on an investment firm or a
 def exa_worth_it(name: str | None) -> bool:
     """Spend one of the day's Exa searches on this company? Not on an investment firm or a
     headline fragment saved as a name ("MetaShot a gaming startup in Bangalore")."""
@@ -263,6 +275,7 @@ def exa_worth_it(name: str | None) -> bool:
 
 # ------------------------------------------------------------------ measure
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.measure(): The referral numbers: distribution of ready referrers over active companies, with
 def measure(session=None) -> dict:
     """The referral numbers: distribution of ready referrers over active companies, with
     an address, the ★ list, complete companies, ready referrers by source and role."""
@@ -308,6 +321,7 @@ def measure(session=None) -> dict:
             session.close()
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ people · referrer pipeline ▸ referrals._pattern_status(): Return the company's email pattern status from its evidence JSON, else "legacy" or "unlearned".
 def _pattern_status(c: Company) -> str:
     """Return the company's email pattern status from its evidence JSON, else "legacy" or "unlearned"."""
     try:
@@ -325,6 +339,7 @@ _HUNTER_BANDS = {"deep_pockets": 0, "pays": 1, "funded": 2}
 _HUNTER_CITIES = ("bengaluru", "hyderabad")
 
 
+# ZONULY ▸ people search · referrers · hunter.io ▸ people · referrer pipeline ▸ referrals.hunter_queue(): Companies one Hunter lookup could finish: ★ list or Bengaluru / Hyderabad, a domain,
 def hunter_queue() -> list[int]:
     """Companies one Hunter lookup could finish: ★ list or Bengaluru / Hyderabad, a domain,
     no confirmed pattern, at least one ready referrer and none with an address. Pay band
@@ -350,6 +365,7 @@ def hunter_queue() -> list[int]:
         return [c.id for c in picks]
 
 
+# ZONULY ▸ people search · referrers · hunter.io · budget · cost ▸ people · referrer pipeline ▸ referrals.hunter_step(): Spend up to `limit` of the month's Hunter lookups (hunter.MONTHLY_BUDGET) on
 def hunter_step(limit: int = 2) -> dict:
     """Spend up to `limit` of the month's Hunter lookups (hunter.MONTHLY_BUDGET) on
     hunter_queue(). Hunter's addresses are stored and voted on like any other
@@ -385,6 +401,7 @@ def hunter_step(limit: int = 2) -> dict:
 
 # ------------------------------------------------------------------ Apify People tab (2026-10-19)
 
+# ZONULY ▸ apify scraping · apify people search · linkedin scraping · decision · people search · referrers ▸ people · referrer pipeline ▸ referrals.apify_queue(): Companies with a LinkedIn page on record and fewer than…
 def apify_queue() -> list[int]:
     """Companies with a LinkedIn page on record and fewer than two good referrers. The decision
     brain's shortlist first (2026-10-23: Bengaluru by rank, then Hyderabad, then Remote — "use
@@ -415,6 +432,7 @@ def apify_queue() -> list[int]:
         from jobhunter import india
         from jobhunter.db import in_focus
 
+        # ZONULY ▸ apify scraping · apify people search · pay · salary · people search · referrers · email verification ▸ people · referrer pipeline ▸ referrals.apify_queue.mailable(): Return True when a company may be mailed:…
         def mailable(c: Company) -> bool:
             """Return True when a company may be mailed: pay proved (if required) and not a hardware domain."""
             # the name too: a description is sometimes a press quote with no industry word in it
@@ -451,6 +469,7 @@ def apify_queue() -> list[int]:
         return [c.id for c in picks]
 
 
+# ZONULY ▸ apify scraping · apify people search · people search · referrers ▸ people · referrer pipeline ▸ referrals.apify_step(): Buy up to `limit` companies' People tabs (in their own city — actors.people
 def apify_step(limit: int = 1, *, apify_max: int | None = None, apify_mode: str | None = None) -> dict:
     """Buy up to `limit` companies' People tabs (in their own city — actors.people
     city_locations) inside the daily cap (config actors.apify.daily_usd). Mode and size
@@ -471,6 +490,7 @@ def apify_step(limit: int = 1, *, apify_max: int | None = None, apify_mode: str 
     ids = apify_queue()
     out = {"queue": len(ids), "companies": []}
 
+    # ZONULY ▸ apify scraping · apify people search · people search · referrers ▸ people · referrer pipeline ▸ referrals.apify_step.real_engineers(): Count a company's engineer-class contacts with a non-guessed email and no…
     def real_engineers(cid: int) -> int:
         """Count a company's engineer-class contacts with a non-guessed email and not marked do-not-contact."""
         with get_session() as session:
@@ -507,6 +527,7 @@ def apify_step(limit: int = 1, *, apify_max: int | None = None, apify_mode: str 
 
 # ------------------------------------------------------------------ addresses (the pattern step)
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.pattern_step(): Learn every company's address format from its own addresses; retract what an
 def pattern_step(*, dry_run: bool = True, company_ids: list[int] | None = None, sample: int = 12) -> dict:
     """Learn every company's address format from its own addresses; retract what an
     unconfirmed pattern made; address the ready referrers by the confirmed one."""
@@ -555,6 +576,7 @@ def pattern_step(*, dry_run: bool = True, company_ids: list[int] | None = None, 
     return out
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals._with_email_ids(): Return the ids of companies that have at least one ready referrer with an email address.
 def _with_email_ids() -> set[int]:
     """Return the ids of companies that have at least one ready referrer with an email address."""
     with get_session() as s:
@@ -563,11 +585,13 @@ def _with_email_ids() -> set[int]:
 
 # ------------------------------------------------------------------ people
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals._band(): Return the company's people-step priority band (first element of db.people_order).
 def _band(c: Company) -> int:
     """Return the company's people-step priority band (first element of db.people_order)."""
     return people_order(c)[0]
 
 
+# ZONULY ▸ decision · people search · referrers ▸ people · referrer pipeline ▸ referrals.people_queue(): Companies short of TARGET ready referrers or of one with an address, in
 def people_queue(limit: int | None = None, *, list_key: str | None = None, top: int | None = None,
                  force: bool = False) -> list[int]:
     """Companies short of TARGET ready referrers or of one with an address, in
@@ -609,6 +633,7 @@ def people_queue(limit: int | None = None, *, list_key: str | None = None, top: 
     return ids[:limit] if limit else ids
 
 
+# ZONULY ▸ decision · people search · referrers ▸ people · referrer pipeline ▸ referrals.best_bets(): company_id -> position on the decision brain's shortlists (Bengaluru by rank, then
 def best_bets(session) -> dict[int, int]:
     """company_id -> position on the decision brain's shortlists (Bengaluru by rank, then
     Hyderabad, then Remote — shortlist.pool_order), 0 first."""
@@ -621,6 +646,7 @@ def best_bets(session) -> dict[int, int]:
     return {d.company_id: i for i, d in enumerate(ranked)}
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals._counts(): Return (ready referrers, ready referrers with an email) for one company.
 def _counts(cid: int) -> tuple[int, int]:
     """Return (ready referrers, ready referrers with an email) for one company."""
     with get_session() as s:
@@ -630,12 +656,14 @@ def _counts(cid: int) -> tuple[int, int]:
         return len(ready), sum(1 for p in ready if p.email)
 
 
+# ZONULY ▸ decision · people search · referrers ▸ people · referrer pipeline ▸ referrals._short(): Return True when the company has fewer than TARGET ready referrers or none with an email.
 def _short(cid: int) -> bool:
     """Return True when the company has fewer than TARGET ready referrers or none with an email."""
     r, e = _counts(cid)
     return r < TARGET or e < 1
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.team_pages(): Named addresses on their own team / about pages, read through Jina.
 def team_pages(cid: int) -> int:
     """Named addresses on their own team / about pages, read through Jina."""
     from jobhunter.contacts import roles, site_scraper
@@ -671,6 +699,7 @@ def team_pages(cid: int) -> int:
     return added
 
 
+# ZONULY ▸ decision · people search · referrers ▸ people · referrer pipeline ▸ referrals.people_for_company(): The free waterfall for one company, stopping once it has TARGET ready referrers and
 def people_for_company(cid: int, *, linkedin: bool = True) -> dict:
     """The free waterfall for one company, stopping once it has TARGET ready referrers and
     one with an address: GitHub + their site → team pages via Jina → addresses on the open
@@ -764,6 +793,7 @@ def people_for_company(cid: int, *, linkedin: bool = True) -> dict:
     return out
 
 
+# ZONULY ▸ people search · referrers · budget · cost · scheduler · tick ▸ people · referrer pipeline ▸ referrals.people_step(): The people step the tick runs first. Stops at `budget_s` seconds, and stops the
 def people_step(limit: int = 100, *, budget_s: int = 1500, ids: list[int] | None = None,
                 linkedin: bool = True, list_key: str | None = None, top: int | None = None,
                 force: bool = False, owner: str | None = None) -> dict:
@@ -788,6 +818,7 @@ def people_step(limit: int = 100, *, budget_s: int = 1500, ids: list[int] | None
     todo = iter(queue[:limit] if limit else queue)
     lock = threading.Lock()
 
+    # ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.people_step.one(): Run the people search for one company and add its results to the shared counters.
     def one(cid: int) -> None:
         """Run the people search for one company and add its results to the shared counters.
 
@@ -828,6 +859,7 @@ def people_step(limit: int = 100, *, budget_s: int = 1500, ids: list[int] | None
             out["reached_target"] += (a[0] >= TARGET and a[1] >= 1) and not (b[0] >= TARGET and b[1] >= 1)
             out["gained_email"] += a[1] >= 1 and b[1] == 0
 
+    # ZONULY ▸ people search · referrers · budget · cost ▸ people · referrer pipeline ▸ referrals.people_step.worker(): Thread loop: claim and process the next company until the queue or the time budget runs out.
     def worker() -> None:
         """Thread loop: claim and process the next company until the queue or the time budget runs out."""
         # each worker takes the next company until the queue or the time budget runs out; the
@@ -861,11 +893,13 @@ def people_step(limit: int = 100, *, budget_s: int = 1500, ids: list[int] | None
 
 # ------------------------------------------------------------------ claims (who is working a company)
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals._claim_key(): Return the settings-table key that holds a worker's claim on a company.
 def _claim_key(cid: int) -> str:
     """Return the settings-table key that holds a worker's claim on a company."""
     return f"{CLAIM_PREFIX}{cid}"
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.claims(): company_id -> owner, for every claim not yet expired. One `setting` row per company
 def claims(now: datetime | None = None) -> dict[int, str]:
     """company_id -> owner, for every claim not yet expired. One `setting` row per company
     (refer:claim:<id> = '<owner>|<until iso>'), so two writers never overwrite each other's
@@ -886,11 +920,13 @@ def claims(now: datetime | None = None) -> dict[int, str]:
     return out
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.claimed_by_others(): Return the ids of companies currently claimed by a worker other than `owner`.
 def claimed_by_others(owner: str) -> set[int]:
     """Return the ids of companies currently claimed by a worker other than `owner`."""
     return {cid for cid, who in claims().items() if who != owner}
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.claim(): Claim a company for `ttl_s` seconds; False when someone else holds it.
 def claim(cid: int, owner: str, *, ttl_s: int = 900) -> bool:
     """Claim a company for `ttl_s` seconds; False when someone else holds it."""
     from jobhunter.db import Setting
@@ -919,6 +955,7 @@ def claim(cid: int, owner: str, *, ttl_s: int = 900) -> bool:
     return True
 
 
+# ZONULY ▸ people search · referrers · retry · backoff ▸ people · referrer pipeline ▸ referrals.release(): Delete `owner`'s claim on a company from the settings table, retrying while SQLite is locked.
 def release(cid: int, owner: str) -> None:
     """Delete `owner`'s claim on a company from the settings table, retrying while SQLite is locked."""
     from jobhunter.db import Setting
@@ -937,6 +974,7 @@ def release(cid: int, owner: str) -> None:
             time.sleep(1 + attempt)
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.prune_claims(): Expired claim rows deleted (a killed cycle leaves its window behind).
 def prune_claims() -> int:
     """Expired claim rows deleted (a killed cycle leaves its window behind)."""
     from jobhunter.db import Setting
@@ -957,6 +995,7 @@ def prune_claims() -> int:
 
 # ------------------------------------------------------------------ the referral job (run_cycle)
 
+# ZONULY ▸ decision · remote from india · people search · referrers ▸ people · referrer pipeline ▸ referrals.bucket(): 0 Bengaluru, 1 Hyderabad, 2 the rest of India, 3 a remote target; None = not ours.
 def bucket(c: Company) -> int | None:
     """0 Bengaluru, 1 Hyderabad, 2 the rest of India, 3 a remote target; None = not ours.
     A company in both cities counts as Bengaluru (the priority)."""
@@ -976,6 +1015,7 @@ def bucket(c: Company) -> int | None:
     return None
 
 
+# ZONULY ▸ remote from india · people search · referrers ▸ people · referrer pipeline ▸ referrals.cycle_key(): Bengaluru → Hyderabad → India → remote; inside each, the ★ list first (list order),
 def cycle_key(c: Company) -> tuple:
     """Bengaluru → Hyderabad → India → remote; inside each, the ★ list first (list order),
     then companies with evidence of pay at or above the India floor (before pay unknown),
@@ -985,11 +1025,13 @@ def cycle_key(c: Company) -> tuple:
             pay_first(c), -(c.priority_score or 0), -(c.best_selection_score or 0), c.id or 0)
 
 
+# ZONULY ▸ validation · guardrails · pay · salary · people search · referrers ▸ people · referrer pipeline ▸ referrals.pay_first(): 0 when the pay floor found evidence the company clears it (india.apply_pay_floor), else…
 def pay_first(c: Company) -> int:
     """0 when the pay floor found evidence the company clears it (india.apply_pay_floor), else 1."""
     return 0 if guardrails.meta_of(c, "pay_floor").get("value") == "ok" else 1
 
 
+# ZONULY ▸ decision · people search · referrers ▸ people · referrer pipeline ▸ referrals.cycle_queue(): The referral job's queue: companies in a bucket, short of TARGET ready referrers or
 def cycle_queue(limit: int | None = None, *, exclude: set[int] | frozenset = frozenset(), owner: str = "referrals",
                 force: bool = False) -> list[int]:
     """The referral job's queue: companies in a bucket, short of TARGET ready referrers or
@@ -1030,6 +1072,7 @@ def cycle_queue(limit: int | None = None, *, exclude: set[int] | frozenset = fro
     return ids[:limit] if limit else ids
 
 
+# ZONULY ▸ linkedin scraping · github scraping · people search · referrers ▸ people · referrer pipeline ▸ referrals.lead_channel(): Where a referrer came from, in the People page's words: linkedin | github | team |
 def lead_channel(source: str | None, affiliation_source: str | None) -> str:
     """Where a referrer came from, in the People page's words: linkedin | github | team |
     talks | web. The evidence decides first (a LinkedIn headline is LinkedIn whatever
@@ -1048,6 +1091,7 @@ def lead_channel(source: str | None, affiliation_source: str | None) -> str:
     return "web"
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals._ready_rows(): contact id -> (channel, has an address), for the company's ready referrers.
 def _ready_rows(cid: int) -> dict[int, tuple[str, bool]]:
     """contact id -> (channel, has an address), for the company's ready referrers."""
     with get_session() as s:
@@ -1057,6 +1101,7 @@ def _ready_rows(cid: int) -> dict[int, tuple[str, bool]]:
                 for p in rows if guardrails.is_ready(p)}
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.refer_company(): One company, referral work only, in the job's order (2026-10-16, cheapest yield
 def refer_company(cid: int, *, search_ok: bool = True) -> dict:
     """One company, referral work only, in the job's order (2026-10-16, cheapest yield
     first): their YC page's active founders and their own team / about pages
@@ -1083,6 +1128,7 @@ def refer_company(cid: int, *, search_ok: bool = True) -> dict:
                  "before": [len(before), sum(1 for _, e in before.values() if e)], "channels": [], "queries": 0,
                  "exa": 0, "skipped": []}
 
+    # ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.refer_company.ready_now(): Return the company's current count of ready referrers.
     def ready_now() -> int:
         """Return the company's current count of ready referrers."""
         return _counts(cid)[0]
@@ -1090,6 +1136,7 @@ def refer_company(cid: int, *, search_ok: bool = True) -> dict:
     t_last = [time.time(), "start"]
     out["seconds_by_step"] = {}
 
+    # ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.refer_company._lap(): Record the seconds spent on the previous step (when 0.5 s or more) and start timing `step`.
     def _lap(step: str) -> None:
         """Record the seconds spent on the previous step (when 0.5 s or more) and start timing `step`."""
         now = time.time()
@@ -1229,6 +1276,7 @@ def refer_company(cid: int, *, search_ok: bool = True) -> dict:
     return out
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals.run_cycle(): One cycle of the referral job — referral work and nothing else. Claims its queue
 def run_cycle(*, budget_s: int | None = None, limit: int | None = None, exclude: set[int] | None = None,
               ids: list[int] | None = None, owner: str = "referrals") -> dict:
     """One cycle of the referral job — referral work and nothing else. Claims its queue
@@ -1315,6 +1363,7 @@ def run_cycle(*, budget_s: int | None = None, limit: int | None = None, exclude:
     return out
 
 
+# ZONULY ▸ people search · referrers · scheduler · tick ▸ people · referrer pipeline ▸ referrals.job_active(): Is the referral job working? Its agent is loaded in launchd, or a cycle was logged
 def job_active(*, within_minutes: int = 30) -> bool:
     """Is the referral job working? Its agent is loaded in launchd, or a cycle was logged
     in the last `within_minutes` (a cycle run by hand counts too). The tick's people step
@@ -1332,6 +1381,7 @@ def job_active(*, within_minutes: int = 30) -> bool:
 
 # ------------------------------------------------------------------ re-verification
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals._due_referrers(): Return up to `limit` ready referrers whose affiliation check is missing or older than REVERIFY_DAYS.
 def _due_referrers(session, limit: int) -> list[Contact]:
     """Return up to `limit` ready referrers whose affiliation check is missing or older than REVERIFY_DAYS."""
     cutoff = utcnow() - timedelta(days=REVERIFY_DAYS)
@@ -1342,6 +1392,7 @@ def _due_referrers(session, limit: int) -> list[Contact]:
     return [p for p in rows if guardrails.is_ready(p)][:limit]
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · referrer pipeline ▸ referrals._reverify_linkedin(): confirmed | downgraded | inconclusive — their public headline, read again.
 def _reverify_linkedin(session, p: Contact, company: Company) -> str:
     """confirmed | downgraded | inconclusive — their public headline, read again."""
     from jobhunter.contacts import linkedin_public
@@ -1373,6 +1424,7 @@ def _reverify_linkedin(session, p: Contact, company: Company) -> str:
     return "downgraded"
 
 
+# ZONULY ▸ people search · referrers ▸ people · referrer pipeline ▸ referrals._reverify_page(): The page that published their address (or named them) still does.
 def _reverify_page(session, p: Contact) -> str:
     """The page that published their address (or named them) still does."""
     from jobhunter.research import web
@@ -1394,6 +1446,7 @@ def _reverify_page(session, p: Contact) -> str:
     return "downgraded"
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ people · referrer pipeline ▸ referrals.reverify_referrers(): Ready referrers whose evidence is older than REVERIFY_DAYS, re-confirmed.
 def reverify_referrers(limit: int = 150, *, github_reserve: int = 1500) -> dict:
     """Ready referrers whose evidence is older than REVERIFY_DAYS, re-confirmed."""
     import httpx
@@ -1462,6 +1515,7 @@ def reverify_referrers(limit: int = 150, *, github_reserve: int = 1500) -> dict:
 
 # ------------------------------------------------------------------ rolling company re-check
 
+# ZONULY ▸ enrichment · people search · referrers ▸ people · referrer pipeline ▸ referrals._site_answers(): Check whether a company website is alive: a direct GET, else a Jina read (network calls).
 def _site_answers(url: str) -> tuple[bool, str]:
     """Check whether a company website is alive: a direct GET, else a Jina read (network calls).
 
@@ -1488,6 +1542,7 @@ def _site_answers(url: str) -> tuple[bool, str]:
     return False, f"does not answer ({why}; Jina: {page.get('error') or 'empty'})"
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ people · referrer pipeline ▸ referrals.revalidate_companies(): The rolling re-check: never-checked first, then oldest validated_at. Stops after
 def revalidate_companies(limit: int = REVALIDATE_PER_TICK, *, hiring_recheck_days: int = 14,
                          budget_s: int | None = None) -> dict:
     """The rolling re-check: never-checked first, then oldest validated_at. Stops after
@@ -1548,6 +1603,7 @@ def revalidate_companies(limit: int = REVALIDATE_PER_TICK, *, hiring_recheck_day
 
 # ------------------------------------------------------------------ the audit block
 
+# ZONULY ▸ people search · referrers · lock · monitoring ▸ people · referrer pipeline ▸ referrals.audit_block(): Referrals in the last hour, for audit.py and the /health page.
 def audit_block(session, since: datetime) -> dict:
     """Referrals in the last hour, for audit.py and the /health page."""
     ready_new = [p for p in session.exec(select(Contact).where(col(Contact.created_at) >= since)).all()

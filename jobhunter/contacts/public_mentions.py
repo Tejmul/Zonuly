@@ -63,6 +63,7 @@ _ROLE = (r"(?i:co-?founder(?:\s*(?:&|and)\s*(?:CEO|CTO))?|founder(?:\s*(?:&|and)
 _SEP = r"[ \t]*(?:,|-|–|—|\||:)[ \t]*"
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ public_mentions._patterns(): Build the regexes that find a named person and their role at the company in page text.
 def _patterns(company_rx: str) -> list[re.Pattern]:
     """Build the regexes that find a named person and their role at the company in page text."""
     c = company_rx
@@ -80,6 +81,7 @@ def _patterns(company_rx: str) -> list[re.Pattern]:
     ]
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ public_mentions._company_rx(): Build a case-insensitive regex for a company name, tolerating suffixes like AI, Labs, Inc.
 def _company_rx(name: str) -> str:
     """Build a case-insensitive regex for a company name, tolerating suffixes like AI, Labs, Inc."""
     base = re.sub(r"\s+(ai|labs?|inc\.?|technologies|tech|hq|io)$", "", name.strip(), flags=re.I) or name
@@ -91,6 +93,7 @@ _ISO = re.compile(r"\b(20[12]\d)[-/](\d{2})[-/](\d{2})\b")
 _MONTH = re.compile(r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2},?\s+)?(20[12]\d)\b")
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ public_mentions.date_of(): The newest date the text states (an ISO date, "Mar 4, 2026", or a bare year as
 def date_of(text: str, *, now: datetime | None = None) -> datetime | None:
     """The newest date the text states (an ISO date, "Mar 4, 2026", or a bare year as
     1 July of it), never in the future. None when it states none."""
@@ -113,6 +116,7 @@ def date_of(text: str, *, now: datetime | None = None) -> datetime | None:
     return max(found) if found else None
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ public_mentions.mentions(): People the text names at the company: {name, role, quote, url, dated}. Pure.
 def mentions(text: str, company: str, domain: str | None = None, *, url: str = "", when: datetime | None = None,
              now: datetime | None = None) -> list[dict]:
     """People the text names at the company: {name, role, quote, url, dated}. Pure."""
@@ -143,6 +147,7 @@ def mentions(text: str, company: str, domain: str | None = None, *, url: str = "
 
 # ------------------------------------------------------------------ the channels
 
+# ZONULY ▸ youtube · people search · referrers ▸ people · contact discovery · email proof ▸ public_mentions._youtube(): People search via YouTube: run yt-dlp search for talks/podcasts and extract named people.
 def _youtube(name: str, domain: str | None, limit: int = 5) -> tuple[list[dict], str | None]:
     """People search via YouTube: run yt-dlp search for talks/podcasts and extract named people.
     Returns (mentions, error); needs the yt-dlp backend installed."""
@@ -170,6 +175,7 @@ def _youtube(name: str, domain: str | None, limit: int = 5) -> tuple[list[dict],
     return found, None
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ public_mentions._talks(): People search via keyless web search for talks, podcasts and meetups naming company people.
 def _talks(name: str, domain: str | None) -> tuple[list[dict], str | None]:
     """People search via keyless web search for talks, podcasts and meetups naming company people.
     Skips LinkedIn profile results; returns (mentions, error)."""
@@ -191,6 +197,7 @@ def _talks(name: str, domain: str | None) -> tuple[list[dict], str | None]:
 _BYLINE = re.compile(rf"(?:^|\n)[ \t]*(?i:by|written by|author:?|posted by)[ \t]+(?P<name>{_NAME})")
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ public_mentions._blog(): Bylines on their own blog: the company's site says this person writes for it.
 def _blog(name: str, website: str | None, domain: str | None) -> tuple[list[dict], str | None]:
     """Bylines on their own blog: the company's site says this person writes for it."""
     from jobhunter.research import web
@@ -223,6 +230,7 @@ def _blog(name: str, website: str | None, domain: str | None) -> tuple[list[dict
 
 # ------------------------------------------------------------------ save
 
+# ZONULY ▸ validation · guardrails · people search · referrers ▸ people · contact discovery · email proof ▸ public_mentions._save(): Save people named in public mentions as contacts for a company, after guardrail vettin…
 def _save(company_id: int, people: list[dict], channel: str) -> int:
     """Save people named in public mentions as contacts for a company, after guardrail vetting.
     Skips names already held; writes to the contact table; returns how many were added."""
@@ -256,6 +264,7 @@ def _save(company_id: int, people: list[dict], channel: str) -> int:
     return added
 
 
+# ZONULY ▸ people search · referrers ▸ people · contact discovery · email proof ▸ public_mentions.find(): Run the public-mention channels for one company; returns what each added.
 def find(company_id: int, *, channels: tuple[str, ...] = ("youtube", "talks", "blog")) -> dict:
     """Run the public-mention channels for one company; returns what each added."""
     with get_session() as session:

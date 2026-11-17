@@ -64,6 +64,7 @@ _CO_BLOCK = re.compile(r"^###\s*\[([^\]]{2,80})\]\([^)]*\)\s*$(.*?)(?=^###\s|\Z)
 _CUR_ROLE = re.compile(r"^####\s*(.+?)\s*\(Current\)\s*$", re.M)
 
 
+# ZONULY ▸ linkedin scraping · validation · guardrails · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public._current_card(): (role, evidence) when the card lists a current position un…
 def _current_card(snippet: str, company: str, domain: str | None) -> tuple[str, str] | None:
     """(role, evidence) when the card lists a current position under THIS company's heading."""
     from jobhunter import guardrails
@@ -78,6 +79,7 @@ def _current_card(snippet: str, company: str, domain: str | None) -> tuple[str, 
     return None
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public._headline_line(): The card's headline: the first line after the '# Name' heading.
 def _headline_line(snippet: str) -> str:
     """The card's headline: the first line after the '# Name' heading."""
     lines = [x.strip() for x in (snippet or "").splitlines() if x.strip()]
@@ -94,6 +96,7 @@ _LI_SUFFIX = re.compile(r"\s*[-–|·]\s*LinkedIn(?:\s+[A-Z][a-z]+)?\s*$")
 _FORMER = re.compile(r"\b(?:ex\s*[-–—:]|ex\s+(?=[A-Z@])|former(?:ly)?\b|previously\b|prev\.|alum(?:ni|nus)?\b|past\b)", re.I)
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public._former(): True when a profile snippet reads as a former employee (ex-, formerly, previously, alumni).
 def _former(text: str) -> bool:
     """True when a profile snippet reads as a former employee (ex-, formerly, previously, alumni)."""
     from jobhunter import guardrails
@@ -101,6 +104,7 @@ def _former(text: str) -> bool:
     return bool(guardrails._EX.search(text) or _FORMER.search(text))
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public._segment_names(): The first headline segment that names the company and not as a former employer.
 def _segment_names(segments: list[str], company: str, domain: str | None) -> str | None:
     """The first headline segment that names the company and not as a former employer."""
     from jobhunter import guardrails
@@ -111,6 +115,7 @@ def _segment_names(segments: list[str], company: str, domain: str | None) -> str
     return None
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public.people_from_results(): {name, role, url, headline} from web-search hits on linkedin.com/in — a person…
 def people_from_results(results: list[dict], company: str, domain: str | None = None) -> list[dict]:
     """{name, role, url, headline} from web-search hits on linkedin.com/in — a person only
     when the result's own headline ("Name - Role - Company | LinkedIn", the profile's
@@ -163,6 +168,7 @@ def people_from_results(results: list[dict], company: str, domain: str | None = 
     return out
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public._search(): (people, via, error) through the research layer's KEYLESS web search — DuckDuckGo
 def _search(name: str, query: str, max_people: int, domain: str | None = None) -> tuple[list[dict], str, str | None]:
     """(people, via, error) through the research layer's KEYLESS web search — DuckDuckGo
     read through Jina first, then the hosted Exa MCP — never a metered backend."""
@@ -200,11 +206,13 @@ REFERRAL_QUERIES = {
 }
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public._query(): Build a web search query for a person's public LinkedIn profile at a company (site:linkedin…
 def _query(name: str, words: str, where: str) -> str:
     """Build a web search query for a person's public LinkedIn profile at a company (site:linkedin.com/in)."""
     return " ".join(x for x in (f'"{name}"', words, where.strip(), "site:linkedin.com/in") if x)
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public.search_role(): One keyless search for one kind of referrer at one company — with the city for
 def search_role(company_id: int, kind: str, *, max_people: int = MAX_PER_COMPANY,
                 queries: dict[str, str] | None = None, city: str | None = None) -> dict:
     """One keyless search for one kind of referrer at one company — with the city for
@@ -234,6 +242,7 @@ def search_role(company_id: int, kind: str, *, max_people: int = MAX_PER_COMPANY
     return {"company": name, "kind": kind, "found": len(people), "added": added, "via": via}
 
 
+# ZONULY ▸ apify scraping · apify people search · linkedin scraping · people search · referrers · email verification ▸ people · contact discovery · email proof ▸ linkedin_public._prove(): A vendor SMTP check (Apify emai…
 def _prove(session, address: str | None, status: str | None) -> None:
     """A vendor SMTP check (Apify email search: valid, deliverable, not catch-all) is the proof
     the address may go on the lead — recorded in email_check and flushed BEFORE the contact is
@@ -253,6 +262,7 @@ def _prove(session, address: str | None, status: str | None) -> None:
     session.flush()
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public._save(): Store found profiles as contacts, resolving each address from the company's
 def _save(company_id: int, people: list[dict], via: str) -> int:
     """Store found profiles as contacts, resolving each address from the company's
     pattern when it is known — MX-checked, labelled guessed, never verified."""
@@ -341,6 +351,7 @@ EXA_PEOPLE_MAX = int(_LC.get("exa_people_max_per_company", 12))
 EXA_PEOPLE_MODE = str(_LC.get("exa_people_mode", "linkedin-domain"))
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers · budget · cost ▸ people · contact discovery · email proof ▸ linkedin_public.exa_people_available(): True while the Exa web-search budget still has more than the…
 def exa_people_available() -> bool:
     """True while the Exa web-search budget still has more than the reserve kept for people search."""
     from jobhunter.research import web
@@ -348,6 +359,7 @@ def exa_people_available() -> bool:
     return web.exa_budget()["left"] > EXA_PEOPLE_RESERVE
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public.search_people_exa(): One metered Exa people search for one company. Every card still has to name THIS
 def search_people_exa(company_id: int, *, city: str | None = None, max_people: int = EXA_PEOPLE_MAX) -> dict:
     """One metered Exa people search for one company. Every card still has to name THIS
     company as a current position (people_from_results), exactly like a keyless hit."""
@@ -380,6 +392,7 @@ def search_people_exa(company_id: int, *, city: str | None = None, max_people: i
     return {"company": name, "kind": "exa-people", "found": len(people), "added": added, "via": "exa-people"}
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public.find_for_company(): Public LinkedIn people at one company, via search, with emails from its pattern.
 def find_for_company(company_id: int, *, max_people: int = MAX_PER_COMPANY) -> dict:
     """Public LinkedIn people at one company, via search, with emails from its pattern."""
     init_db()
@@ -399,6 +412,7 @@ def find_for_company(company_id: int, *, max_people: int = MAX_PER_COMPANY) -> d
     return {"company": name, "found": len(people), "added": added, "via": via}
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public.find_founders(): The founders and the people who run engineering — the ask of last resort when no
 def find_founders(company_id: int, *, max_people: int = 6) -> dict:
     """The founders and the people who run engineering — the ask of last resort when no
     engineer has an address, and the people whose address is most often published."""
@@ -422,6 +436,7 @@ _TOPUP = "[li-topup]"
 TOPUP_DAYS = 14
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public._topped_up_recently(): True if the company's notes show a LinkedIn people top-up within the last `day…
 def _topped_up_recently(notes: str | None, days: int = TOPUP_DAYS) -> bool:
     """True if the company's notes show a LinkedIn people top-up within the last `days` days."""
     m = re.search(r"\[li-topup\] (\d{4}-\d{2}-\d{2})", notes or "")
@@ -432,6 +447,7 @@ def _topped_up_recently(notes: str | None, days: int = TOPUP_DAYS) -> bool:
     return datetime.strptime(m.group(1), "%Y-%m-%d") >= utcnow() - timedelta(days=days)
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public.top_up(): More referrers for a company still short of `want` who can refer: the engineer /
 def top_up(company_id: int, *, want: int = 5) -> dict:
     """More referrers for a company still short of `want` who can refer: the engineer /
     founder search, then founders + engineering leads + recruiters. Each search runs at
@@ -468,6 +484,7 @@ def top_up(company_id: int, *, want: int = 5) -> dict:
     return out
 
 
+# ZONULY ▸ linkedin scraping · people search · referrers ▸ people · contact discovery · email proof ▸ linkedin_public.find_pending(): Companies with roles and no leads yet — and every list row still short of `want`
 def find_pending(limit: int = 30, *, tiers: tuple[str, ...] = ("tier1", "tier2", "prospect", "unknown"),
                  list_key: str | None = None, want: int | None = None) -> dict:
     """Companies with roles and no leads yet — and every list row still short of `want`

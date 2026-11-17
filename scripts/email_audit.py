@@ -64,6 +64,7 @@ GROUPS = {
 }
 
 
+# ZONULY ▸ people search · referrers · monitoring ▸ people · email proof audit ▸ email_audit.tokens(): Split a person's name into lowercase ASCII word tokens of 2+ letters.
 def tokens(name: str | None) -> list[str]:
     """Split a person's name into lowercase ASCII word tokens of 2+ letters."""
     if not name:
@@ -72,6 +73,7 @@ def tokens(name: str | None) -> list[str]:
     return [t for t in re.split(r"[^a-z]+", a) if len(t) >= 2]
 
 
+# ZONULY ▸ scoring · people search · referrers · monitoring ▸ people · email proof audit ▸ email_audit.name_matches(): True when an address's mailbox name matches the person's name (a name part, initials or first+last).
 def name_matches(name: str | None, addr: str) -> bool:
     """True when an address's mailbox name matches the person's name (a name part, initials or first+last)."""
     local = re.sub(r"[^a-z]", "", addr.split("@")[0].lower())
@@ -84,6 +86,7 @@ def name_matches(name: str | None, addr: str) -> bool:
     return local in (initials, initials[::-1]) or (len(toks) > 1 and local in (toks[0][0] + toks[-1], toks[-1] + toks[0][0]))
 
 
+# ZONULY ▸ email verification · monitoring ▸ people · email proof audit ▸ email_audit.main(): Run the read-only address audit: bucket every lead address (real, dead, fake, suspect, unproved).
 def main() -> int:
     """Run the read-only address audit: bucket every lead address (real, dead, fake, suspect, unproved).
     Writes CSVs and SUMMARY.md to data/audit/<date>/ and prints the summary.
@@ -157,6 +160,7 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     cols = list(out_rows[0].keys())
 
+    # ZONULY ▸ csv export · monitoring ▸ people · email proof audit ▸ email_audit.main.write(): Write rows to a CSV file in the audit output directory.
     def write(name: str, data: list[dict]) -> None:
         """Write rows to a CSV file in the audit output directory."""
         with open(out_dir / name, "w", newline="") as f:
