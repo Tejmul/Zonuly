@@ -120,6 +120,7 @@ HELP = (
 
 # ================================================================== state
 
+# ZONULY ▸ lock ▸ monitoring · notifications ▸ notify_bot._state(): data/notify_state.json, read-modify-written under an fcntl lock.
 @contextmanager
 def _state():
     """data/notify_state.json, read-modify-written under an fcntl lock."""
@@ -141,6 +142,7 @@ def _state():
             fcntl.flock(lk, fcntl.LOCK_UN)
 
 
+# ZONULY ▸ filtering ▸ monitoring · notifications ▸ notify_bot._trim_list(): Keep only the last n entries of a list (bounds the bot's saved state).
 def _trim_list(xs: list, n: int = _KEEP) -> list:
     """Keep only the last n entries of a list (bounds the bot's saved state)."""
     return xs[-n:]
@@ -148,6 +150,7 @@ def _trim_list(xs: list, n: int = _KEEP) -> list:
 
 # ================================================================== delivery
 
+# ZONULY ▸ email sending ▸ monitoring · notifications ▸ notify_bot._mode(): Current outreach send mode (from the sender module).
 def _mode() -> str:
     """Current outreach send mode (from the sender module)."""
     from jobhunter.outreach import sender
@@ -155,6 +158,7 @@ def _mode() -> str:
     return sender.SEND_MODE
 
 
+# ZONULY ▸ email sending ▸ monitoring · notifications ▸ notify_bot._sender_address(): The Gmail address the notification bot sends from.
 def _sender_address() -> str:
     """The Gmail address the notification bot sends from."""
     from jobhunter.outreach import gmail
@@ -162,6 +166,7 @@ def _sender_address() -> str:
     return gmail.ADDRESS
 
 
+# ZONULY ▸ email drafting ▸ monitoring · notifications ▸ notify_bot.compose(): One bot mail: [ZoNuLy] prefix, a [ZN-token] tag, a Message-ID that carries the token.
 def compose(kind: str, subject: str, body: str, *, in_reply_to: str | None = None,
             references: str | None = None, raw_subject: bool = False) -> EmailMessage:
     """One bot mail: [ZoNuLy] prefix, a [ZN-token] tag, a Message-ID that carries the token."""
@@ -182,6 +187,7 @@ def compose(kind: str, subject: str, body: str, *, in_reply_to: str | None = Non
     return msg
 
 
+# ZONULY ▸ email verification · email sending ▸ monitoring · notifications ▸ notify_bot.deliver(): Send over SMTP — or, in dryrun without notify.send_in_dryrun, write outbox/notify/*.eml.
 def deliver(msg: EmailMessage, *, force_dry: bool = False) -> dict:
     """Send over SMTP — or, in dryrun without notify.send_in_dryrun, write outbox/notify/*.eml.
     Records the Message-ID as one of the bot's threads either way."""
@@ -210,6 +216,7 @@ def deliver(msg: EmailMessage, *, force_dry: bool = False) -> dict:
     return result
 
 
+# ZONULY ▸ email verification · email sending ▸ monitoring · notifications ▸ notify_bot._smtp_send(): Send one notification email over Gmail SMTP with the app password (network call).
 def _smtp_send(msg: EmailMessage) -> dict:
     """Send one notification email over Gmail SMTP with the app password (network call).
     Raises GmailNotConfigured when the address or app password is missing.
@@ -225,12 +232,14 @@ def _smtp_send(msg: EmailMessage) -> dict:
     return {"to": EMAIL_TO}
 
 
+# ZONULY ▸ email sending ▸ monitoring · notifications ▸ notify_bot._delivered(): Counts as told: really sent, or written as .eml because send_mode is dryrun. A forced
 def _delivered(r: dict, force_dry: bool) -> bool:
     """Counts as told: really sent, or written as .eml because send_mode is dryrun. A forced
     preview (--dry) is never recorded, so it cannot swallow the real mail."""
     return bool(r.get("sent") or (r.get("dryrun") and not force_dry))
 
 
+# ZONULY ▸ monitoring · notifications ▸ monitoring · notifications ▸ notify_bot._macos(): Show a macOS desktop notification; failures are logged and ignored.
 def _macos(title: str, message: str, subtitle: str = "") -> None:
     """Show a macOS desktop notification; failures are logged and ignored."""
     try:
@@ -243,6 +252,7 @@ def _macos(title: str, message: str, subtitle: str = "") -> None:
 
 # ================================================================== URGENT
 
+# ZONULY ▸ dedup ▸ monitoring · notifications ▸ notify_bot.urgent(): One URGENT mail per issue key per URGENT_DEDUP_H hours (and a macOS notification).
 def urgent(key: str, title: str, detail: str, *, now: datetime | None = None, force_dry: bool = False) -> dict:
     """One URGENT mail per issue key per URGENT_DEDUP_H hours (and a macOS notification)."""
     now = now or datetime.now()
@@ -267,11 +277,13 @@ def urgent(key: str, title: str, detail: str, *, now: datetime | None = None, fo
     return {"key": key, **r}
 
 
+# ZONULY ▸ email sending · monitoring ▸ monitoring · notifications ▸ notify_bot.alert_issues(): Send an URGENT notification for each watchdog issue; returns the per-issue results.
 def alert_issues(issues: list[dict], **kw) -> list[dict]:
     """Send an URGENT notification for each watchdog issue; returns the per-issue results."""
     return [urgent(i["key"], i["title"], i["detail"], **kw) for i in issues]
 
 
+# ZONULY ▸ dedup · monitoring ▸ monitoring · notifications ▸ notify_bot.audit_alerts(): The hourly audit's alerts that are emergencies: a stall, web search down, or several
 def audit_alerts(alerts: list[str], **kw) -> list[dict]:
     """The hourly audit's alerts that are emergencies: a stall, web search down, or several
     research channels failing at once. One channel resting is routine and stays a macOS note."""
@@ -293,6 +305,7 @@ def audit_alerts(alerts: list[str], **kw) -> list[dict]:
 
 # ================================================================== POSITIVE REPLY
 
+# ZONULY ▸ replies · follow-up ▸ monitoring · notifications ▸ notify_bot._excerpt(): Strip quoted history from a reply body and cut it to n characters for a notification.
 def _excerpt(text: str, n: int = 1500) -> str:
     """Strip quoted history from a reply body and cut it to n characters for a notification."""
     from jobhunter.outreach import tracker
@@ -305,6 +318,7 @@ def _excerpt(text: str, n: int = 1500) -> str:
     return text[:n] + ("…" if len(text) > n else "")
 
 
+# ZONULY ▸ email drafting · replies · follow-up ▸ monitoring · notifications ▸ notify_bot._reply_mail(): Compose the notification email for a reply: who wrote, what they said, sentiment, next steps.
 def _reply_mail(session, r: Reply) -> EmailMessage:
     """Compose the notification email for a reply: who wrote, what they said, sentiment, next steps.
     Positive replies get a numbered to-do list; others a short summary with the original email.
@@ -358,6 +372,7 @@ def _reply_mail(session, r: Reply) -> EmailMessage:
     return compose("positive-reply", f"Positive reply: {who} at {cname}", body)
 
 
+# ZONULY ▸ replies · follow-up ▸ monitoring · notifications ▸ notify_bot.email_positive_replies(): Every reply from the last REPLY_LOOKBACK_H hours not yet mailed, one mail each — the
 def email_positive_replies(*, now: datetime | None = None, force_dry: bool = False) -> dict:
     """Every reply from the last REPLY_LOOKBACK_H hours not yet mailed, one mail each — the
     positive ones only, unless notify.replies (then every one: 2026-10-26)."""
@@ -387,6 +402,7 @@ def email_positive_replies(*, now: datetime | None = None, force_dry: bool = Fal
 
 # ================================================================== DAILY DIGEST / status
 
+# ZONULY ▸ email sending · replies · follow-up ▸ monitoring · notifications ▸ notify_bot.is_paused(): Why sending is paused (by a `pause` reply), or None.
 def is_paused() -> str | None:
     """Why sending is paused (by a `pause` reply), or None."""
     try:
@@ -404,6 +420,7 @@ def is_paused() -> str | None:
         return "paused"
 
 
+# ZONULY ▸ email sending ▸ monitoring · notifications ▸ notify_bot.set_paused(): Pause or resume sending by writing the pause flag to the settings table.
 def set_paused(paused: bool, *, by: str = "email") -> None:
     """Pause or resume sending by writing the pause flag to the settings table."""
     with get_session() as s:
@@ -411,12 +428,14 @@ def set_paused(paused: bool, *, by: str = "email") -> None:
                     if paused else "")
 
 
+# ZONULY ▸ monitoring · notifications ▸ monitoring · notifications ▸ notify_bot._local_midnight_utc(): UTC time of local midnight, `days_ago` days back (for today/yesterday email counts).
 def _local_midnight_utc(days_ago: int = 0) -> datetime:
     """UTC time of local midnight, `days_ago` days back (for today/yesterday email counts)."""
     m = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_ago)
     return m.astimezone(timezone.utc).replace(tzinfo=None)
 
 
+# ZONULY ▸ email verification · email drafting · email sending ▸ monitoring · notifications ▸ notify_bot._status_line(): One status line: drafts waiting, approved, sent today, send mode and pause state.
 def _status_line() -> str:
     """One status line: drafts waiting, approved, sent today, send mode and pause state."""
     try:
@@ -432,6 +451,7 @@ def _status_line() -> str:
         return f"Now: the database could not be read ({str(e)[:100]})."
 
 
+# ZONULY ▸ people search · referrers · email sending · scheduler · tick ▸ monitoring · notifications ▸ notify_bot._jobs_text(): List when each scheduler tick (free, send, referrals) last finished, for status emails.
 def _jobs_text() -> str:
     """List when each scheduler tick (free, send, referrals) last finished, for status emails."""
     lines = []
@@ -447,6 +467,7 @@ def _jobs_text() -> str:
     return "\n".join(lines)
 
 
+# ZONULY ▸ scheduler · tick · monitoring ▸ monitoring · notifications ▸ notify_bot.status_text(): Build the status email text: status line, scheduler ticks and any watchdog issues.
 def status_text(*, issues: list[dict] | None = None) -> str:
     """Build the status email text: status line, scheduler ticks and any watchdog issues."""
     from jobhunter import watchdog
@@ -460,6 +481,7 @@ def status_text(*, issues: list[dict] | None = None) -> str:
     return "\n".join(parts)
 
 
+# ZONULY ▸ people search · referrers · email drafting · review gate · replies · follow-up ▸ monitoring · notifications ▸ notify_bot.digest_text(): Build the daily digest email: drafts to review, sent yesterday, replies,…
 def digest_text(now: datetime | None = None, *, issues: list[dict] | None = None) -> str:
     """Build the daily digest email: drafts to review, sent yesterday, replies, new referrers, stuck items."""
     from jobhunter import guardrails, watchdog
@@ -531,6 +553,7 @@ def digest_text(now: datetime | None = None, *, issues: list[dict] | None = None
     return "\n".join(out)
 
 
+# ZONULY ▸ monitoring · notifications ▸ monitoring · notifications ▸ notify_bot.daily_digest(): Once a day, after DIGEST_HOUR local.
 def daily_digest(now: datetime | None = None, *, force: bool = False, force_dry: bool = False) -> dict:
     """Once a day, after DIGEST_HOUR local."""
     now = now or datetime.now()
@@ -551,6 +574,7 @@ def daily_digest(now: datetime | None = None, *, force: bool = False, force_dry:
 _CMD = re.compile(r"^(approve|reject)\s+((?:#?\d+[\s,]*)+)$|^(pause|resume|status|help)$", re.I)
 
 
+# ZONULY ▸ replies · follow-up ▸ monitoring · notifications ▸ notify_bot.parse_commands(): Commands from the new part of a reply: one per line, whole line, case-insensitive.
 def parse_commands(text: str) -> list[tuple[str, list[int]]]:
     """Commands from the new part of a reply: one per line, whole line, case-insensitive.
     Stops at the quoted original ("On … wrote:", "> …") or a signature ("-- ")."""
@@ -576,6 +600,7 @@ def parse_commands(text: str) -> list[tuple[str, list[int]]]:
     return cmds
 
 
+# ZONULY ▸ scraping · filtering · email verification ▸ monitoring · notifications ▸ notify_bot.execute(): Run the commands; one result line each. Approve/reject are the dashboard's own functions.
 def execute(cmds: list[tuple[str, list[int]]]) -> list[str]:
     """Run the commands; one result line each. Approve/reject are the dashboard's own functions."""
     from jobhunter.outreach import sender
@@ -604,6 +629,7 @@ def execute(cmds: list[tuple[str, list[int]]]) -> list[str]:
     return out
 
 
+# ZONULY ▸ monitoring · notifications ▸ monitoring · notifications ▸ notify_bot._text_of(): Extract the plain text of an email message, falling back to stripped HTML.
 def _text_of(msg) -> str:
     """Extract the plain text of an email message, falling back to stripped HTML."""
     parts = list(msg.walk()) if msg.is_multipart() else [msg]
@@ -622,6 +648,7 @@ def _text_of(msg) -> str:
     return ""
 
 
+# ZONULY ▸ monitoring · notifications ▸ monitoring · notifications ▸ notify_bot.accept(): Why this message is NOT a command for the bot — None when it is.
 def accept(msg, bot_ids: set[str], done: set[str]) -> str | None:
     """Why this message is NOT a command for the bot — None when it is."""
     mid = (msg.get("Message-ID") or "").strip()
@@ -640,6 +667,7 @@ def accept(msg, bot_ids: set[str], done: set[str]) -> str | None:
     return None
 
 
+# ZONULY ▸ email sending ▸ monitoring · notifications ▸ notify_bot._imap(): Open an IMAP connection to Gmail with the app password (network call).
 def _imap():
     """Open an IMAP connection to Gmail with the app password (network call)."""
     from jobhunter.outreach import gmail
@@ -652,6 +680,7 @@ def _imap():
     return conn
 
 
+# ZONULY ▸ scraping ▸ monitoring · notifications ▸ notify_bot.fetch_candidates(): Messages from EMAIL_TO in the last few days (All Mail), parsed. Header-only first.
 def fetch_candidates(days: int = 3) -> list:
     """Messages from EMAIL_TO in the last few days (All Mail), parsed. Header-only first."""
     since = (datetime.now() - timedelta(days=days)).strftime("%d-%b-%Y")
@@ -675,6 +704,7 @@ def fetch_candidates(days: int = 3) -> list:
     return msgs
 
 
+# ZONULY ▸ replies · follow-up ▸ monitoring · notifications ▸ notify_bot.handle_commands(): Read replies to the bot, run their commands, confirm by reply.
 def handle_commands(messages: list | None = None, *, force_dry: bool = False) -> dict:
     """Read replies to the bot, run their commands, confirm by reply."""
     out = {"checked": 0, "commands": 0, "ignored": {}}
@@ -707,6 +737,7 @@ def handle_commands(messages: list | None = None, *, force_dry: bool = False) ->
 
 # ================================================================== the cycle
 
+# ZONULY ▸ replies · follow-up · scheduler · tick ▸ monitoring · notifications ▸ notify_bot._fallback_poll(): Replies are polled by the free tick. If it has not managed for a while (stuck, as on
 def _fallback_poll(now: datetime) -> dict | None:
     """Replies are polled by the free tick. If it has not managed for a while (stuck, as on
     2026-10-15), poll here so a positive reply is not missed."""
@@ -723,6 +754,7 @@ def _fallback_poll(now: datetime) -> dict | None:
     return tick.poll_replies()
 
 
+# ZONULY ▸ replies · follow-up · monitoring ▸ monitoring · notifications ▸ notify_bot.cycle(): One run: watchdog → URGENT, positive replies, the digest when due, commands.
 def cycle(now: datetime | None = None, *, force: bool = False, fallback_poll: bool = False,
           issues: list[dict] | None = None, force_dry: bool = False) -> dict:
     """One run: watchdog → URGENT, positive replies, the digest when due, commands.
@@ -732,6 +764,7 @@ def cycle(now: datetime | None = None, *, force: bool = False, fallback_poll: bo
     now = now or datetime.now()
     out: dict = {}
 
+    # ZONULY ▸ monitoring · notifications ▸ monitoring · notifications ▸ notify_bot.cycle.step(): Run one notify-bot step, storing its result or error in the output and flagging slow steps.
     def step(name, fn):
         """Run one notify-bot step, storing its result or error in the output and flagging slow steps."""
         t = time.time()
@@ -756,6 +789,7 @@ def cycle(now: datetime | None = None, *, force: bool = False, fallback_poll: bo
     if COMMANDS and force_dry:
         out["commands"] = {"skipped": "a dry preview reads no mailbox and runs no command"}
     elif COMMANDS:
+        # ZONULY ▸ sign-in · auth ▸ monitoring · notifications ▸ notify_bot.cycle._cmds(): Poll the mailbox for emailed bot commands (rate-limited) and run them; alerts on sign-in failure.
         def _cmds():
             """Poll the mailbox for emailed bot commands (rate-limited) and run them; alerts on sign-in failure."""
             with _state() as st:
@@ -777,6 +811,7 @@ def cycle(now: datetime | None = None, *, force: bool = False, fallback_poll: bo
     return out
 
 
+# ZONULY ▸ email verification · replies · follow-up ▸ monitoring · notifications ▸ notify_bot.test_mail(): One real test notification (or a .eml with force_dry): proves SMTP and the reply loop.
 def test_mail(*, force_dry: bool = False) -> dict:
     """One real test notification (or a .eml with force_dry): proves SMTP and the reply loop."""
     body = ("This is a test from the ZoNuLy notification bot.\n\n"

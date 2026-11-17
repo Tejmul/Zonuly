@@ -48,11 +48,13 @@ _SQL = text(
 _READY = False
 
 
+# ZONULY ▸ monitoring · channel health ▸ monitoring · channel health ▸ channels._hour(): Return the local-hour bucket key (YYYY-MM-DDTHH) used by the channel_hour table.
 def _hour(now: datetime | None = None) -> str:
     """Return the local-hour bucket key (YYYY-MM-DDTHH) used by the channel_hour table."""
     return (now or datetime.now()).strftime("%Y-%m-%dT%H")
 
 
+# ZONULY ▸ monitoring · channel health ▸ monitoring · channel health ▸ channels.record(): One call on one channel. Never raises.
 def record(channel: str, ok: bool, error: str | None = None, *, cooldown: bool = False) -> None:
     """One call on one channel. Never raises."""
     global _READY
@@ -74,6 +76,7 @@ def record(channel: str, ok: bool, error: str | None = None, *, cooldown: bool =
         log.debug("channel record failed for %s: %s", channel, e)
 
 
+# ZONULY ▸ monitoring · channel health ▸ monitoring · channel health ▸ channels.summary(): {channel: {ok, fail, cooldowns, fail_rate, last_ok_at, last_fail_at, last_error}}
 def summary(hours: int = 1, *, now: datetime | None = None) -> dict[str, dict]:
     """{channel: {ok, fail, cooldowns, fail_rate, last_ok_at, last_fail_at, last_error}}
     over the last `hours` local hours (the current hour included)."""

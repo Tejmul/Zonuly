@@ -78,6 +78,7 @@ _LOG_OF = {"free": LOGS / "tick-free.log", "paid": LOGS / "tick-paid.log",
 
 # ------------------------------------------------------------------ small probes
 
+# ZONULY ▸ scheduler · tick · lock · monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog._read_lock(): The "<pid> <iso start>" line a tick lock holds.
 def _read_lock(path: Path) -> tuple[int | None, datetime | None]:
     """The "<pid> <iso start>" line a tick lock holds."""
     try:
@@ -88,6 +89,7 @@ def _read_lock(path: Path) -> tuple[int | None, datetime | None]:
         return None, None
 
 
+# ZONULY ▸ monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog._proc(): {cpu, state, etime, command} for a live pid, None when it is gone.
 def _proc(pid: int) -> dict | None:
     """{cpu, state, etime, command} for a live pid, None when it is gone."""
     try:
@@ -113,6 +115,7 @@ def _proc(pid: int) -> dict | None:
     return {"cpu": cpu, "state": parts[1], "etime": parts[2], "command": parts[3]}
 
 
+# ZONULY ▸ people search · referrers · scheduler · tick · monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog._job_of(): Name the scheduler job a process command line belongs to (referrals or its --kind), or a defau…
 def _job_of(command: str, default: str) -> str:
     """Name the scheduler job a process command line belongs to (referrals or its --kind), or a default."""
     if "referrals" in command:
@@ -121,6 +124,7 @@ def _job_of(command: str, default: str) -> str:
     return m.group(1) if m else default
 
 
+# ZONULY ▸ monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog._awake_since(): When the machine last woke (or booted). None when it cannot be read (not macOS).
 def _awake_since() -> datetime | None:
     """When the machine last woke (or booted). None when it cannot be read (not macOS)."""
     best = None
@@ -136,6 +140,7 @@ def _awake_since() -> datetime | None:
     return best
 
 
+# ZONULY ▸ monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog._state(): Load the watchdog's saved state JSON; empty dict when missing or unreadable.
 def _state() -> dict:
     """Load the watchdog's saved state JSON; empty dict when missing or unreadable."""
     try:
@@ -144,6 +149,7 @@ def _state() -> dict:
         return {}
 
 
+# ZONULY ▸ monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog._save_state(): Save the watchdog state JSON atomically (temp file then replace); logs and skips on OS errors.
 def _save_state(state: dict) -> None:
     """Save the watchdog state JSON atomically (temp file then replace); logs and skips on OS errors."""
     try:
@@ -155,6 +161,7 @@ def _save_state(state: dict) -> None:
         log.debug("watchdog state not saved: %s", e)
 
 
+# ZONULY ▸ monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog._mins(): Return a timedelta as whole minutes.
 def _mins(td: timedelta) -> int:
     """Return a timedelta as whole minutes."""
     return int(td.total_seconds() // 60)
@@ -162,6 +169,7 @@ def _mins(td: timedelta) -> int:
 
 # ------------------------------------------------------------------ the checks
 
+# ZONULY ▸ lock · monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog.stuck_jobs(): Live lock holders past their limit with a silent log.
 def stuck_jobs(now: datetime | None = None, *, kill: bool | None = None) -> list[dict]:
     """Live lock holders past their limit with a silent log."""
     now = now or datetime.now()
@@ -207,6 +215,7 @@ def stuck_jobs(now: datetime | None = None, *, kill: bool | None = None) -> list
     return issues
 
 
+# ZONULY ▸ scheduler · tick · monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog._last_finished(): Return when a scheduler tick kind (or the audit) last finished, as local naive time, or None.
 def _last_finished(kind: str) -> datetime | None:
     """Return when a scheduler tick kind (or the audit) last finished, as local naive time, or None.
     Reads the tick:last / audit:last setting, tolerating old truncated records."""
@@ -231,6 +240,7 @@ def _last_finished(kind: str) -> datetime | None:
     return at.astimezone().replace(tzinfo=None) if at.tzinfo else at
 
 
+# ZONULY ▸ lock · monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog.stale_jobs(): Jobs that have not finished a run for a while, with nobody holding their lock.
 def stale_jobs(now: datetime | None = None, *, awake_since: datetime | None = None) -> list[dict]:
     """Jobs that have not finished a run for a while, with nobody holding their lock."""
     now = now or datetime.now()
@@ -265,6 +275,7 @@ def stale_jobs(now: datetime | None = None, *, awake_since: datetime | None = No
     return issues
 
 
+# ZONULY ▸ lock · monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog.db_locked(): Ask SQLite for a write lock for a few seconds; remember when it first refused.
 def db_locked(now: datetime | None = None, *, wait_s: float = 5.0, db_path: Path | None = None) -> list[dict]:
     """Ask SQLite for a write lock for a few seconds; remember when it first refused."""
     from jobhunter.db import DB_PATH
@@ -309,6 +320,7 @@ def db_locked(now: datetime | None = None, *, wait_s: float = 5.0, db_path: Path
                        "look for a long script or the API server (`lsof jobhunter.db`).")}]
 
 
+# ZONULY ▸ email sending · suppression · bounces · sign-in · auth · monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog.outreach_problems(): Bounce brake on, recent send failures, Gmail refusing the sign-in.
 def outreach_problems(now: datetime | None = None) -> list[dict]:
     """Bounce brake on, recent send failures, Gmail refusing the sign-in."""
     from sqlmodel import col, select
@@ -343,6 +355,7 @@ def outreach_problems(now: datetime | None = None) -> list[dict]:
     return issues
 
 
+# ZONULY ▸ monitoring ▸ monitoring · stuck-job watchdog ▸ watchdog.check(): Every check; one failing check is reported as an issue of its own, never raised.
 def check(now: datetime | None = None, *, kill: bool | None = None, include_outreach: bool = True) -> list[dict]:
     """Every check; one failing check is reported as an issue of its own, never raised."""
     t = time.time()
