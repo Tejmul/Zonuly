@@ -29,6 +29,7 @@ HTML_PATH = ROOT / "knowledge" / "graph.html"
 JSON_PATH = ROOT / "knowledge" / "graph.json"
 
 
+# ZONULY ▸ csv export · knowledge graph ▸ knowledge graph ▸ export.to_dict(): Export the knowledge graph as a dict of slim nodes and edges, optionally one layer.
 def to_dict(*, include_all_jobs: bool = False, layer: str | None = None) -> dict:
     """Export the knowledge graph as a dict of slim nodes and edges, optionally one layer.
 
@@ -51,6 +52,7 @@ def to_dict(*, include_all_jobs: bool = False, layer: str | None = None) -> dict
     return {"nodes": slim, "edges": [{"src": e["src"], "rel": e["rel"], "dst": e["dst"]} for e in edges]}
 
 
+# ZONULY ▸ csv export · knowledge graph ▸ knowledge graph ▸ export.write_json(): Write the knowledge graph as JSON (knowledge/graph.json by default) and return the path.
 def write_json(path: Path | str = JSON_PATH, **kw) -> str:
     """Write the knowledge graph as JSON (knowledge/graph.json by default) and return the path."""
     path = Path(path)
@@ -59,6 +61,7 @@ def write_json(path: Path | str = JSON_PATH, **kw) -> str:
     return str(path)
 
 
+# ZONULY ▸ csv export · knowledge graph ▸ knowledge graph ▸ export.write_html(): Write the standalone knowledge graph HTML viewer with the data embedded and return the path.
 def write_html(path: Path | str = HTML_PATH, **kw) -> str:
     """Write the standalone knowledge graph HTML viewer with the data embedded and return the path."""
     path = Path(path)

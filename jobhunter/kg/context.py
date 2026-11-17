@@ -74,6 +74,7 @@ LINKS: dict[str, tuple[str, str]] = {
 }
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ context.load_yaml(): Load knowledge/context.yaml, the seed of the knowledge graph context layer; raise if missing.
 def load_yaml() -> dict:
     """Load knowledge/context.yaml, the seed of the knowledge graph context layer; raise if missing."""
     if not CONTEXT_PATH.exists():
@@ -81,6 +82,7 @@ def load_yaml() -> dict:
     return yaml.safe_load(CONTEXT_PATH.read_text(encoding="utf-8")) or {}
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ context._as_list(): Return a value as a list of strings: None is [], a string is a one-item list.
 def _as_list(v) -> list[str]:
     """Return a value as a list of strings: None is [], a string is a one-item list."""
     if v is None:
@@ -88,6 +90,7 @@ def _as_list(v) -> list[str]:
     return [v] if isinstance(v, str) else list(v)
 
 
+# ZONULY ▸ knowledge graph · sign-in · auth ▸ knowledge graph ▸ context.load(): (Re)build the context layer from the YAML. Session notes added via `kg note` survive.
 def load(g: Graph, *, replace: bool = True) -> dict:
     """(Re)build the context layer from the YAML. Session notes added via `kg note` survive."""
     data = load_yaml()
@@ -107,6 +110,7 @@ def load(g: Graph, *, replace: bool = True) -> dict:
             if n["kind"] != "note":
                 g.delete_node(n["id"])
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ context.load.add(): Upsert one context.yaml entry as a knowledge graph node and queue its link edges.
     def add(kind: str, entry: dict) -> None:
         """Upsert one context.yaml entry as a knowledge graph node and queue its link edges.
 

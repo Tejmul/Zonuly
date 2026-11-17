@@ -56,11 +56,13 @@ COOLDOWN_DAYS = int(_OUTREACH.get("contact_cooldown_days", 30))
 _TIER_RANK = {"tier1": 0, "tier2": 1, "prospect": 2, "unknown": 3, "reject": 4}
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ hunt._prop(): Read a property from a knowledge graph node's props, with a default.
 def _prop(node: dict | None, key: str, default: Any = None) -> Any:
     """Read a property from a knowledge graph node's props, with a default."""
     return (node or {}).get("props", {}).get(key, default)
 
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ hunt.resolve(): Accept a node id, a company name, or a bare number. People type names, not ids.
 def resolve(g: Graph, ref: str) -> dict | None:
     """Accept a node id, a company name, or a bare number. People type names, not ids."""
     if not ref:
@@ -83,6 +85,7 @@ def resolve(g: Graph, ref: str) -> dict | None:
 
 # ------------------------------------------------------------------ why this company
 
+# ZONULY ▸ validation · guardrails · knowledge graph ▸ knowledge graph ▸ hunt.why(): The whole evidence chain for one company, assembled by traversal.
 def why(ref: str, *, max_contacts: int = 10) -> dict:
     """The whole evidence chain for one company, assembled by traversal.
 
@@ -179,6 +182,7 @@ def why(ref: str, *, max_contacts: int = 10) -> dict:
     }
 
 
+# ZONULY ▸ scoring · decision · knowledge graph ▸ knowledge graph ▸ hunt._verdict(): The one-line answer, with the reason it is that answer. Never a bare score.
 def _verdict(props: dict, jobs: list[dict], contacts: list[dict]) -> dict:
     """The one-line answer, with the reason it is that answer. Never a bare score."""
     tier = props.get("tier")
@@ -223,6 +227,7 @@ def _verdict(props: dict, jobs: list[dict], contacts: list[dict]) -> dict:
 
 # ------------------------------------------------------------------ guardrails
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ hunt._parse(): Parse an ISO timestamp, returning None when empty or invalid.
 def _parse(ts: str | None) -> datetime | None:
     """Parse an ISO timestamp, returning None when empty or invalid."""
     if not ts:
@@ -233,6 +238,7 @@ def _parse(ts: str | None) -> datetime | None:
         return None
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers · knowledge graph ▸ knowledge graph ▸ hunt._contact_guardrail(): MOTIV §6 as a traversal: have we written to them, or to their colleague, recently?
 def _contact_guardrail(g: Graph, contact_id: str) -> dict:
     """MOTIV §6 as a traversal: have we written to them, or to their colleague, recently?
 
@@ -266,6 +272,7 @@ def _contact_guardrail(g: Graph, contact_id: str) -> dict:
     return {"ok": True, "why": "clear"}
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers · knowledge graph ▸ knowledge graph ▸ hunt.guardrails(): Answer 'may I write to this person?' for one contact, or for a whole company.
 def guardrails(ref: str) -> dict:
     """Answer 'may I write to this person?' for one contact, or for a whole company."""
     with Graph() as g:
@@ -297,6 +304,7 @@ def guardrails(ref: str) -> dict:
 
 # ------------------------------------------------------------------ warm expansion
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ hunt.expand(): Companies two hops away through a shared investor.
 def expand(ref: str, *, limit: int = 25) -> dict:
     """Companies two hops away through a shared investor.
 
@@ -343,6 +351,7 @@ def expand(ref: str, *, limit: int = 25) -> dict:
 
 # ------------------------------------------------------------------ the shortlist
 
+# ZONULY ▸ decision · knowledge graph ▸ knowledge graph ▸ hunt.shortlist(): Rank companies by everything the graph knows, not by one column.
 def shortlist(limit: int = 20, *, tiers: tuple[str, ...] = ("tier1", "tier2", "prospect")) -> list[dict]:
     """Rank companies by everything the graph knows, not by one column.
 
@@ -407,6 +416,7 @@ def shortlist(limit: int = 20, *, tiers: tuple[str, ...] = ("tier1", "tier2", "p
 
 # ------------------------------------------------------------------ audit
 
+# ZONULY ▸ knowledge graph · monitoring ▸ knowledge graph ▸ hunt.audit(): Contradictions between what different parts of the graph believe.
 def audit(limit_per_check: int = 20) -> dict:
     """Contradictions between what different parts of the graph believe.
 
@@ -416,6 +426,7 @@ def audit(limit_per_check: int = 20) -> dict:
     """
     findings: dict[str, list[dict]] = {}
 
+    # ZONULY ▸ knowledge graph · monitoring ▸ knowledge graph ▸ hunt.audit.add(): Record one audit finding under a check name, up to limit_per_check rows.
     def add(check: str, row: dict) -> None:
         """Record one audit finding under a check name, up to limit_per_check rows."""
         findings.setdefault(check, [])

@@ -29,6 +29,7 @@ from jobhunter.kg.store import Graph
 BRIEF_PATH = ROOT / "knowledge" / "BRIEF.md"
 
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ brief._live_counts(): Read live pipeline counts for the brief: companies, jobs by status/source, contacts,
 def _live_counts() -> dict:
     """Read live pipeline counts for the brief: companies, jobs by status/source, contacts,
     emails, replies and the top high-match jobs. Reads the database."""
@@ -37,6 +38,7 @@ def _live_counts() -> dict:
     from jobhunter.db import Company, Contact, Email, Job, Reply, get_session
 
     with get_session() as s:
+        # ZONULY ▸ filtering · knowledge graph ▸ knowledge graph ▸ brief._live_counts.count(): Count rows of a table, optionally filtered by the given conditions.
         def count(model, *where):
             """Count rows of a table, optionally filtered by the given conditions."""
             stmt = select(func.count()).select_from(model)
@@ -66,6 +68,7 @@ def _live_counts() -> dict:
         }
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ brief.render(): Render BRIEF.md text from the knowledge graph context layer plus live pipeline counts.
 def render() -> str:
     """Render BRIEF.md text from the knowledge graph context layer plus live pipeline counts."""
     with Graph() as g:
@@ -77,14 +80,17 @@ def render() -> str:
             in_e[e["dst"]].append(e)
         stats = g.stats()
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ brief.render.by_kind(): Return the context nodes of one kind.
     def by_kind(kind: str) -> list[dict]:
         """Return the context nodes of one kind."""
         return [n for n in nodes.values() if n["kind"] == kind]
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ brief.render.label(): Return a node's label, or its id when the node is unknown.
     def label(nid: str) -> str:
         """Return a node's label, or its id when the node is unknown."""
         return nodes[nid]["label"] if nid in nodes else nid
 
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ brief.render.order(): Return a node's numeric sort prop (default 'order'), or default when missing or not a number.
     def order(n: dict, key: str = "order", default: float = 1e9) -> float:
         """Return a node's numeric sort prop (default 'order'), or default when missing or not a number."""
         v = n["props"].get(key)
@@ -153,6 +159,7 @@ def render() -> str:
         L.append("")
 
     # ---- decisions
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ brief.render.natural(): Sort key: the first number in the node id, then the id.
     def natural(n: dict) -> tuple:
         """Sort key: the first number in the node id, then the id."""
         m = re.search(r"(\d+)", n["id"])
@@ -276,6 +283,7 @@ def render() -> str:
     return "\n".join(L).rstrip() + "\n"
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ brief.write(): Render the brief and write it to knowledge/BRIEF.md; return the path.
 def write() -> str:
     """Render the brief and write it to knowledge/BRIEF.md; return the path."""
     text = render()

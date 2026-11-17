@@ -114,6 +114,7 @@ _SPLIT = re.compile(r"\s*(?:,|&|/|\band\b|@|·)\s*")
 
 # ------------------------------------------------------------------ your background
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm._profile(): Load the candidate's profile JSON (config profile_path); empty dict when missing or invalid.
 def _profile() -> dict:
     """Load the candidate's profile JSON (config profile_path); empty dict when missing or invalid."""
     path = ROOT / CONFIG["profile_path"]
@@ -123,6 +124,7 @@ def _profile() -> dict:
         return {}
 
 
+# ZONULY ▸ scoring · ai model call · llm · knowledge graph ▸ knowledge graph ▸ warm._alias_patterns(): Aliases worth matching for one place, longest first. "Newton School of Technology"
 def _alias_patterns(name: str) -> list[str]:
     """Aliases worth matching for one place, longest first. "Newton School of Technology"
     is also written "Newton School" and "newtonschool"; "TheSmartBridge" is "SmartBridge"."""
@@ -140,6 +142,7 @@ def _alias_patterns(name: str) -> list[str]:
     return sorted((a for a in out if len(a) >= 5 and (" " in a or len(a) >= 6)), key=len, reverse=True)
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm.background(): Your side of every warm path: the places you can honestly share with someone
 def background(profile: dict | None = None) -> dict:
     """Your side of every warm path: the places you can honestly share with someone
     (school, past employers), your city if the resume names one, and your specific skills."""
@@ -173,6 +176,7 @@ def background(profile: dict | None = None) -> dict:
     return {"orgs": [o for o in orgs if o["regex"]], "city": city, "skills": sorted(set(skills))}
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm._leaves(): Flatten a nested str / dict / list value into a list of its stripped string leaves.
 def _leaves(v) -> list[str]:
     """Flatten a nested str / dict / list value into a list of its stripped string leaves."""
     if isinstance(v, str):
@@ -184,6 +188,7 @@ def _leaves(v) -> list[str]:
     return []
 
 
+# ZONULY ▸ scoring · knowledge graph ▸ knowledge graph ▸ warm._skill_regex(): Short all-caps skills (RAG, LoRA) must match case-exactly — "rag" in "drag" or a
 def _skill_regex(skills: Iterable[str]) -> re.Pattern | None:
     """Short all-caps skills (RAG, LoRA) must match case-exactly — "rag" in "drag" or a
     lower-case word is not the technique."""
@@ -198,6 +203,7 @@ def _skill_regex(skills: Iterable[str]) -> re.Pattern | None:
 
 # ------------------------------------------------------------------ evidence helpers
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ warm._contact_texts(): (field, text) a contact wrote or a source said about them — the only places a
 def _contact_texts(c) -> list[tuple[str, str]]:
     """(field, text) a contact wrote or a source said about them — the only places a
     warm path may be read from."""
@@ -209,6 +215,7 @@ def _contact_texts(c) -> list[tuple[str, str]]:
     return out
 
 
+# ZONULY ▸ validation · guardrails · scoring · knowledge graph ▸ knowledge graph ▸ warm._quote(): Cut an evidence quote around a match span, padded each side, with ellipses where trimmed.
 def _quote(text: str, start: int, end: int, pad: int = 60) -> str:
     """Cut an evidence quote around a match span, padded each side, with ellipses where trimmed."""
     a, b = max(0, start - pad), min(len(text), end + pad)
@@ -216,12 +223,14 @@ def _quote(text: str, start: int, end: int, pad: int = 60) -> str:
     return ("…" if a else "") + q + ("…" if b < len(text) else "")
 
 
+# ZONULY ▸ linkedin scraping · knowledge graph ▸ knowledge graph ▸ warm._norm_linkedin(): Return the lowercased LinkedIn /in/ profile slug from a URL, or None.
 def _norm_linkedin(url: str | None) -> str | None:
     """Return the lowercased LinkedIn /in/ profile slug from a URL, or None."""
     m = re.search(r"linkedin\.com/in/([^/?#\s]+)", url or "", re.I)
     return m.group(1).lower().rstrip("/") if m else None
 
 
+# ZONULY ▸ github scraping · people search · referrers · knowledge graph · sign-in · auth ▸ knowledge graph ▸ warm._norm_github(): Return a contact's lowercased GitHub login (handle or github URL), or None for bots/empt…
 def _norm_github(c) -> str | None:
     """Return a contact's lowercased GitHub login (handle or github URL), or None for bots/empty."""
     h = (getattr(c, "handle", None) or "").strip() or (getattr(c, "github", None) or "").rstrip("/").split("/")[-1]
@@ -233,6 +242,7 @@ def _norm_github(c) -> str | None:
 
 # ------------------------------------------------------------------ sync-time edges
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ warm.derive_affiliations(): contact -AFFILIATED_WITH-> org, when the person's own text names a place in your
 def derive_affiliations(contacts, orgs: list[dict]) -> dict[tuple[str, str], dict]:
     """contact -AFFILIATED_WITH-> org, when the person's own text names a place in your
     background. The quote is kept on the edge — it is what the email may cite."""
@@ -252,6 +262,7 @@ def derive_affiliations(contacts, orgs: list[dict]) -> dict[tuple[str, str], dic
     return out
 
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ warm.derive_previously_at(): contact -PREVIOUSLY_AT-> company, from "ex-X / previously @X / prev: X" in their own
 def derive_previously_at(contacts, companies) -> dict[tuple[str, str], dict]:
     """contact -PREVIOUSLY_AT-> company, from "ex-X / previously @X / prev: X" in their own
     headline, where X is a company already in the graph. Names under 4 characters and
@@ -276,6 +287,7 @@ def derive_previously_at(contacts, companies) -> dict[tuple[str, str], dict]:
     return out
 
 
+# ZONULY ▸ linkedin scraping · github scraping · people search · referrers · knowledge graph ▸ knowledge graph ▸ warm.derive_same_person(): contact -SAME_PERSON- contact across companies: one LinkedIn slug or one GitHub
 def derive_same_person(contacts) -> dict[tuple[str, str], dict]:
     """contact -SAME_PERSON- contact across companies: one LinkedIn slug or one GitHub
     login seen at 2–3 companies. Deterministic keys only (research: Splink-style
@@ -302,11 +314,13 @@ def derive_same_person(contacts) -> dict[tuple[str, str], dict]:
     return out
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm._city_names(): Split a company's city field on dots, commas or slashes into a list of city names.
 def _city_names(raw: str | None) -> list[str]:
     """Split a company's city field on dots, commas or slashes into a list of city names."""
     return [x.strip() for x in re.split(r"\s*[·,/]\s*", raw or "") if x.strip()]
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm.derive_cities(): Derive knowledge graph company-to-city edges from each company's city field.
 def derive_cities(companies) -> dict[tuple[str, str], dict]:
     """Derive knowledge graph company-to-city edges from each company's city field."""
     out = {}
@@ -316,6 +330,7 @@ def derive_cities(companies) -> dict[tuple[str, str], dict]:
     return out
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm.replace_rel(): Make the `rel` edges exactly `desired`, writing only what changed. A no-op sync
 def replace_rel(g: Graph, rel: str, desired: dict[tuple[str, str], dict]) -> dict:
     """Make the `rel` edges exactly `desired`, writing only what changed. A no-op sync
     writes nothing — the property the 10-min → 6-s sync fix depends on."""
@@ -336,6 +351,7 @@ def replace_rel(g: Graph, rel: str, desired: dict[tuple[str, str], dict]) -> dic
     return {"edges": len(want), "added_or_changed": len(fresh), "removed": len(stale)}
 
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ warm.sync_warm(): Derive and write the warm-path edges. Called by sync.sync_all after contacts.
 def sync_warm(g: Graph, companies, contacts, *, profile: dict | None = None) -> dict:
     """Derive and write the warm-path edges. Called by sync.sync_all after contacts."""
     bg = background(profile)
@@ -371,6 +387,7 @@ _CACHE_LOCK = threading.Lock()
 CACHE_TTL_S = 300
 
 
+# ZONULY ▸ cache · knowledge graph ▸ knowledge graph ▸ warm._cached(): Return a cached value for a key while fresh (CACHE_TTL_S), else build and cache it.
 def _cached(key: str, build):
     """Return a cached value for a key while fresh (CACHE_TTL_S), else build and cache it."""
     with _CACHE_LOCK:
@@ -383,19 +400,23 @@ def _cached(key: str, build):
     return val
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm._graph(): Use the given knowledge graph handle, or open a new one; returns (graph, opened_here).
 def _graph(g: Graph | None) -> tuple[Graph, bool]:
     """Use the given knowledge graph handle, or open a new one; returns (graph, opened_here)."""
     return (g, False) if g is not None else (Graph(), True)
 
 
+# ZONULY ▸ data ingestion · filtering · knowledge graph · sign-in · auth ▸ knowledge graph ▸ warm._session(): Open a database session (imported lazily to keep kg below db in the layering).
 def _session():
     """Open a database session (imported lazily to keep kg below db in the layering)."""
     from jobhunter.db import get_session
     return get_session()
 
 
+# ZONULY ▸ enrichment · knowledge graph ▸ knowledge graph ▸ warm._company_facts(): Per-company scalars the recommender ranks on, read once per TTL.
 def _company_facts(conn) -> dict[int, dict]:
     """Per-company scalars the recommender ranks on, read once per TTL."""
+    # ZONULY ▸ enrichment · pay · salary · knowledge graph ▸ knowledge graph ▸ warm._company_facts.build(): Read per-company facts (name, cities, stage, tier, pay power...) from the company table.
     def build():
         """Read per-company facts (name, cities, stage, tier, pay power...) from the company table."""
         rows = conn.execute(
@@ -407,9 +428,11 @@ def _company_facts(conn) -> dict[int, dict]:
     return _cached("facts", build)
 
 
+# ZONULY ▸ email drafting · email sending · knowledge graph ▸ knowledge graph ▸ warm._engaged(): company id -> how you're already engaged there: 'emailed' (a draft or a send) or
 def _engaged(conn) -> dict[int, str]:
     """company id -> how you're already engaged there: 'emailed' (a draft or a send) or
     'ready referrer' (someone confirmed current with an address)."""
+    # ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ warm._engaged.build(): Map company id to engagement: has a ready referrer with an address, or already emailed.
     def build():
         """Map company id to engagement: has a ready referrer with an address, or already emailed."""
         out: dict[int, str] = {}
@@ -422,9 +445,11 @@ def _engaged(conn) -> dict[int, str]:
     return _cached("engaged", build)
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm._investors(): Company to investors (FUNDED_BY edges), each investor's portfolio size, and investor labels.
 def _investors(conn) -> tuple[dict[str, set[str]], dict[str, int], dict[str, str]]:
     """Company to investors (FUNDED_BY edges), each investor's portfolio size, and investor labels.
     Cached per TTL; used to find similar companies by shared investors."""
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm._investors.build(): Read FUNDED_BY edges and investor nodes from the knowledge graph tables.
     def build():
         """Read FUNDED_BY edges and investor nodes from the knowledge graph tables."""
         by_co: dict[str, set[str]] = defaultdict(set)
@@ -436,8 +461,10 @@ def _investors(conn) -> tuple[dict[str, set[str]], dict[str, int], dict[str, str
     return _cached("investors", build)
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm._skills(): company -> the profile skills its jobs ask for, and each skill's idf over companies.
 def _skills(conn) -> tuple[dict[str, set[str]], dict[str, float], dict[str, str]]:
     """company -> the profile skills its jobs ask for, and each skill's idf over companies."""
+    # ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm._skills.build(): Read skills each company's jobs require from the knowledge graph and compute skill idf.
     def build():
         """Read skills each company's jobs require from the knowledge graph and compute skill idf."""
         by_co: dict[str, set[str]] = defaultdict(set)
@@ -453,6 +480,7 @@ def _skills(conn) -> tuple[dict[str, set[str]], dict[str, float], dict[str, str]
     return _cached("skills", build)
 
 
+# ZONULY ▸ dedup · pay · salary · knowledge graph ▸ knowledge graph ▸ warm._eligible(): A company worth recommending: not merged/quarantined/under the pay bar, not
 def _eligible(f: dict | None) -> bool:
     """A company worth recommending: not merged/quarantined/under the pay bar, not
     overrated, not do-not-contact, not a reject."""
@@ -462,6 +490,7 @@ def _eligible(f: dict | None) -> bool:
 
 # ---- people
 
+# ZONULY ▸ validation · guardrails · people search · referrers · knowledge graph ▸ knowledge graph ▸ warm._person_paths(): Every warm path from you to one contact, strongest first, each with its evidence.
 def _person_paths(c, *, bg: dict, aff: dict, prev: list, same: list, facts: dict, engaged: dict,
                   skill_re: re.Pattern | None) -> list[dict]:
     """Every warm path from you to one contact, strongest first, each with its evidence."""
@@ -520,6 +549,7 @@ def _person_paths(c, *, bg: dict, aff: dict, prev: list, same: list, facts: dict
     return paths
 
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ warm.referrer_signal(): A graph-only signal for ordering referrers (0–100) and its reasons. It does not
 def referrer_signal(c, paths: list[dict], *, evidence_rels: int = 0) -> dict:
     """A graph-only signal for ordering referrers (0–100) and its reasons. It does not
     replace referral_rank (contacts/roles.py) — it is a second opinion the UI shows and
@@ -554,6 +584,7 @@ def referrer_signal(c, paths: list[dict], *, evidence_rels: int = 0) -> dict:
     return {"score": min(100, score), "why": why, "warm": round(warm, 2)}
 
 
+# ZONULY ▸ validation · guardrails · people search · referrers · knowledge graph ▸ knowledge graph ▸ warm._evidence_rels(): Distinct kinds of evidence edge on a contact — found via, classified as, affiliated,
 def _evidence_rels(conn, cid: str) -> int:
     """Distinct kinds of evidence edge on a contact — found via, classified as, affiliated,
     previously at, same person. One source saying it twice counts once."""
@@ -566,6 +597,7 @@ def _evidence_rels(conn, cid: str) -> int:
     return n
 
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ warm._people_paths(): Find warm paths (shared school, employer, stack, same person) for each contact via the graph.
 def _people_paths(g: Graph, contacts: list, *, bg: dict | None = None) -> list[dict]:
     """Find warm paths (shared school, employer, stack, same person) for each contact via the graph.
     Returns one row per contact with its paths and a referrer signal score; no email addresses."""
@@ -602,6 +634,7 @@ def _people_paths(g: Graph, contacts: list, *, bg: dict | None = None) -> list[d
     return out
 
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ warm.contact_paths(): Warm paths + graph signal for one person. {} fields when nothing connects.
 def contact_paths(contact_id: int, *, g: Graph | None = None) -> dict:
     """Warm paths + graph signal for one person. {} fields when nothing connects."""
     from jobhunter.db import Contact
@@ -619,6 +652,7 @@ def contact_paths(contact_id: int, *, g: Graph | None = None) -> dict:
     return rows[0]
 
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ warm.warm_paths(): Every warm path into one company: the people (ranked by graph signal, only those
 def warm_paths(company_id: int, *, g: Graph | None = None, people: int = 12) -> dict:
     """Every warm path into one company: the people (ranked by graph signal, only those
     with at least one path, plus the top writable ones), and company-level paths —
@@ -701,6 +735,7 @@ def warm_paths(company_id: int, *, g: Graph | None = None, people: int = 12) -> 
     }
 
 
+# ZONULY ▸ people search · referrers · knowledge graph ▸ knowledge graph ▸ warm._summary(): Write a one-sentence summary of the warm paths found to a company's people.
 def _summary(people: list[dict], company_paths: list[dict]) -> str:
     """Write a one-sentence summary of the warm paths found to a company's people."""
     if not people and not company_paths:
@@ -721,6 +756,7 @@ def _summary(people: list[dict], company_paths: list[dict]) -> str:
 
 # ---- companies
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm.similar_companies(): "If you liked X": companies close to X in the graph, each with the reasons.
 def similar_companies(company_id: int, *, g: Graph | None = None, limit: int = 8) -> dict:
     """"If you liked X": companies close to X in the graph, each with the reasons.
 
@@ -744,6 +780,7 @@ def similar_companies(company_id: int, *, g: Graph | None = None, limit: int = 8
     return {"company_id": company_id, "company": me["name"], "similar": rows[:limit]}
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm._similar(): Recommend companies similar to the seed companies by shared investors and required skills.
 def _similar(conn, seeds: set[int], facts: dict, *, exclude: set[int] = frozenset()) -> list[dict]:
     """Recommend companies similar to the seed companies by shared investors and required skills.
     Adds bonuses for same city, region, stage and tier; returns rows sorted by score."""
@@ -751,6 +788,7 @@ def _similar(conn, seeds: set[int], facts: dict, *, exclude: set[int] = frozense
     sk_by, idf, sk_label = _skills(conn)
     scores: dict[int, dict] = {}
 
+    # ZONULY ▸ scoring · knowledge graph ▸ knowledge graph ▸ warm._similar.row(): Get or create the accumulating score row for a candidate company id.
     def row(oid: int) -> dict:
         """Get or create the accumulating score row for a candidate company id."""
         return scores.setdefault(oid, {"inv": defaultdict(float), "skills": set(), "j": 0.0, "seeds": set()})
@@ -821,6 +859,7 @@ def _similar(conn, seeds: set[int], facts: dict, *, exclude: set[int] = frozense
     return out
 
 
+# ZONULY ▸ knowledge graph ▸ knowledge graph ▸ warm.next_companies(): The next companies to work on: similar to the ones you are already engaged with
 def next_companies(*, g: Graph | None = None, seeds: list[int] | None = None, limit: int = 12) -> dict:
     """The next companies to work on: similar to the ones you are already engaged with
     (written to, or holding a ready referrer), excluding those. Personalised
@@ -842,6 +881,7 @@ def next_companies(*, g: Graph | None = None, seeds: list[int] | None = None, li
     return {"seeds": [facts[s]["name"] for s in seed_set if s in facts][:25], "companies": rows[:limit]}
 
 
+# ZONULY ▸ validation · guardrails · lock · knowledge graph ▸ knowledge graph ▸ warm.brief_section(): The `warm_paths` block for the researcher's brief: only the evidence-carrying
 def brief_section(contact_id: int) -> list[dict]:
     """The `warm_paths` block for the researcher's brief: only the evidence-carrying
     fields, strongest first. [] when nothing connects (the brief then has no section)."""
