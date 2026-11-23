@@ -897,6 +897,12 @@ def _only_verified_addresses(session, _flush_context, _instances) -> None:
             chk = session.get(EmailCheck, addr)
         if chk is not None and chk.verdict == "safe":
             obj.email, obj.email_verified_by = addr, chk.source
+            # a proved address is a real one, whoever proved it (Apify's SMTP check saves here
+            # without going through reacher.promote — 412 proved leads sat unlabelled, 2026-11-23)
+            # Only an unlabelled or "not proved yet" lead is relabelled; a bounce, an opt-out or a
+            # deliberate fake:<why> (a shared inbox, no person) keeps its label.
+            if (obj.email_status or "") in ("", "fake:not-proved", "fake:unknown"):
+                obj.email_status = "real"
             continue
         obj.email, obj.email_unverified, obj.email_verified_by = None, addr, None
         if obj.email_status not in _KEEP_STATUS:

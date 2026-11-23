@@ -123,7 +123,9 @@ def test_a_checked_good_guess_may_go_from_the_domain_inbox(db, monkeypatch):
     assert out["sent"] == 1
     with Session(db) as s:
         assert s.get(Email, eid).sender_inbox == ZOHO.key
-        assert s.get(Contact, pid).email_status == "check:ok"      # paid for once, kept
+        # the fixture's address is proved (a safe email_check row), so it is labelled real on save
+        # (2026-11-23) and the paid check is not needed: real counts as ok
+        assert s.get(Contact, pid).email_status == "real"
 
 
 def test_an_address_with_no_mail_server_is_never_sent(db, monkeypatch):
