@@ -106,6 +106,8 @@ def check(contact, address: str) -> str | None:
     stored = getattr(contact, "email_status", None) or ""
     if stored.startswith(PREFIX):
         return stored[len(PREFIX):]
+    if stored == "real":
+        return "ok"           # already proved (Reacher, Apify's SMTP check, a delivery): never pay twice
     domain = address.rsplit("@", 1)[-1] if "@" in address else ""
     mx = has_mail_server(domain)
     verdict = "no_mx" if mx is False else None

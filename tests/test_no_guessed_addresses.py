@@ -83,3 +83,25 @@ def test_a_proved_address_survives_even_if_its_provenance_looks_like_a_pattern(s
     c = session.exec(select(Contact).where(Contact.name == "Proved Person")).one()
     assert c.email == "real@acme.in"
     assert c.email_verified_by == "reacher"
+
+
+def test_an_apify_proved_address_is_labelled_real(session):
+    """2026-11-23: Apify's SMTP check writes the proof and the lead saves the address directly,
+    without reacher.promote. The flush hook must label it real, or the numbered CSV skips it."""
+    session.add(EmailCheck(address="eng@acme.in", verdict="safe", source="apify"))
+    session.commit()
+    session.add(Contact(company_id=1, name="Apify Person", source="apify", email="eng@acme.in"))
+    session.commit()
+    c = session.exec(select(Contact).where(Contact.name == "Apify Person")).one()
+    assert c.email == "eng@acme.in"
+    assert c.email_verified_by == "apify"
+    assert c.email_status == "real"
+
+
+def test_a_bounced_address_keeps_its_bounce_even_when_proved(session):
+    session.add(EmailCheck(address="gone@acme.in", verdict="safe", source="apify"))
+    session.commit()
+    session.add(Contact(company_id=1, name="Bounced Person", source="apify", email="gone@acme.in", email_status="bounced"))
+    session.commit()
+    c = session.exec(select(Contact).where(Contact.name == "Bounced Person")).one()
+    assert c.email_status == "bounced"

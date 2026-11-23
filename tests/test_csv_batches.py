@@ -59,9 +59,9 @@ def _fixture(engine):
                       email_status="real", referral_rank=1))
         s.add(Contact(id=2, company_id=2, name="Ravi Kumar", source="github", email="real2@zeta.in",
                       email_status="real", referral_rank=1))
-        # proved safe, but nobody said real — not a batch address
+        # proved safe, but labelled not-a-person (a shared inbox) — not a batch address
         s.add(Contact(id=3, company_id=1, name="Nita Shah", source="github", email="safe-not-real@acme.in",
-                      referral_rank=1))
+                      email_status="fake:inbox", referral_rank=1))
         # found on a page, never proved — the hook keeps it in email_unverified
         s.add(Contact(id=4, company_id=1, name="Dev Menon", source="site", email="hint@acme.in",
                       referral_rank=1))
