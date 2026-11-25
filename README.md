@@ -128,7 +128,7 @@ and reads the result back in. Nothing is ever marked verified because it would b
 
 | Stage | What happens |
 |---|---|
-| **Discover** | Funded, *underrated* startups and their open roles: ATS boards (Greenhouse, Lever, Ashby, Keka, Darwinbox, Zoho Recruit, Workable …), company careers pages, funding news, public LinkedIn job postings, India startup directories. |
+| **Discover** | Funded, *underrated* startups and their open roles: ATS boards (Greenhouse, Lever, Ashby, Keka, Darwinbox, Zoho Recruit, Workable …), company careers pages, funding news, public LinkedIn job postings, India startup directories, and remote roles open to India from Himalayas. |
 | **Admission + guardrails** | One gate for every company: a real name, not a duplicate, not famous or overrated (big tech, unicorns, listed, raised ≥ $1B or valued ≥ $5B), not a staffing agency or body shop, pays a fresher at least ₹20 LPA, right city. Every extracted field passes its own validator before it is written; a refused value is logged with its reason. |
 | **Selection confidence** | Each role gets a 0–100 chance of selection with a band and an itemised, sourced breakdown. Two weight profiles — **India** (Bengaluru / Hyderabad, fresher eligibility, pay floor) and **Remote** — and hard blockers (visa, 3+ years, senior titles). |
 | **Decision brain** | Ranks companies into shortlists — the *best bets* — by P(offer), pay power and hiring proof. |
@@ -155,8 +155,10 @@ bounced, and Google blocked the inbox. One afternoon's convenience cost the send
 **Evidence over vibes.** Every number on every page traces to a sentence someone wrote: the pay figure, the funding round,
 the reason a person is believed to work there, the reason a role scored 84.
 
-**Focus.** The pipeline works where the candidate wants to work. Right now that is **Bengaluru and Hyderabad**
-(`focus.cities` in `config.yaml`): the people step, Apify credit and every fill queue go there first; remote waits its turn.
+**Focus.** The pipeline works where the candidate wants to work. Right now that is **remote first, India second**
+(`focus.remote_first` in `config.yaml`): companies with a full-time, non-senior software role whose posting allows working
+from India go first in the people step, Apify credit and every fill queue, then **Bengaluru and Hyderabad**
+(`focus.cities`). A remote posting that states its pay has to reach $50k a year; one that states none is kept.
 
 **Budget-aware.** Paid sources (Apify) run behind a ledger, a 24-hour cache, a daily pace and a hard monthly stop read from
 the provider's own usage before every purchase.
@@ -286,7 +288,7 @@ python scripts/email_audit_reacher.py                # prove addresses with chec
 ## The knowledge graph
 
 The database carries a graph of everything — every company, role, person and email, plus the project's own decisions,
-gaps and session history — so any question has a path to its evidence.
+gaps and session history — so any question has a path to its evidence. On 25 Nov 2026 it held 92,291 nodes and 296,725 edges.
 
 ```bash
 python scripts/run.py kg build                       # reload context + sync data + BRIEF.md + viewer
@@ -301,7 +303,7 @@ Open `knowledge/graph.html` for the visual; `knowledge/BRIEF.md` is the generate
 
 ## Configuration
 
-Everything tunable lives in [`config.yaml`](config.yaml): the focus cities, targeting (famous names, funding and valuation
+Everything tunable lives in [`config.yaml`](config.yaml): remote-first focus and the focus cities, targeting (famous names, funding and valuation
 ceilings, the ₹20 LPA floor), selection weights per market, the decision brain's pools, send caps, tick budgets, Apify
 pace and monthly stop, model aliases. Secrets live only in `.env`.
 
@@ -320,6 +322,7 @@ jobhunter/
   guardrails.py  one validator per field, called by every write path
   interviews.py  interview reports and prep for the company page
   india_boards.py   company discovery from public ATS board APIs (city, domain and pay proved by the board)
+  remote.py         remote-from-India targets: which companies qualify, best first
   remote_boards.py  remote fresher and intern roles open to someone in India
   communities.py    Slack and Discord rooms that post jobs, from public directories
   tick.py        the scheduled run: leads first, companies after
