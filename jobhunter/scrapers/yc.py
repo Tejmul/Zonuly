@@ -114,3 +114,5 @@ async def fetch(http: httpx.AsyncClient, companies: list[dict] | None = None) ->
             jobs.append(j)
     log.info("yc: %d jobs from %d newly-discovered boards", len(jobs), len(fresh))
     return jobs
+
+
