@@ -1,6 +1,6 @@
 # ZoNuLy — context brief
 
-> Generated 2026-11-25T07:30 from the knowledge graph (92291 nodes, 296725 edges). Do not edit — run `python scripts/run.py kg brief`.
+> Generated 2026-11-28T07:15 from the knowledge graph (94877 nodes, 305289 edges). Do not edit — run `python scripts/run.py kg brief`.
 > To query: `kg search <text>` · `kg show <id>` · `kg path <a> <b>` · `kg compose "<problem>"` · to remember: `kg note "<what changed>" --about <id>`.
 
 ## The problem
@@ -19,10 +19,10 @@ An engineer on site in the US/UK/Germany costs ₹1.5–2 crore a year; the same
 
 ## Where the pipeline is right now (live)
 
-- **15439** jobs from 20 sources (careers 4151, ashby 3059, greenhouse 2697, wellfound 1742, linkedin-jobs 654, freehire 559, himalayas 525, workable 386, lever 375, hn 333, instahyre 296, wwr 276, jobfound 82, darwinbox 67, remoteok 67, smartrecruiters 50, breezy 39, yc 38, bamboohr 26, recruitee 17)
-- **453** scored · status: high_match 38, new 14986, scored 415
-- **7891** companies · **66682** contacts (pattern-guessed 670, published 18, scraped 59241, verified 6753)
-- emails: approved 45, failed 19, rejected 411, replied 2, sent 43 · replies: closed 1, negative 2, neutral 3, positive 1
+- **15876** jobs from 20 sources (careers 4262, ashby 3131, greenhouse 2748, wellfound 1832, linkedin-jobs 689, freehire 599, himalayas 528, workable 387, lever 383, hn 333, instahyre 307, wwr 280, jobfound 86, remoteok 70, darwinbox 68, smartrecruiters 51, breezy 40, yc 38, bamboohr 27, recruitee 17)
+- **453** scored · status: high_match 38, new 15423, scored 415
+- **7995** companies · **68687** contacts (pattern-guessed 670, published 18, scraped 61099, verified 6900)
+- emails: approved 45, failed 19, rejected 443, replied 2, sent 43 · replies: closed 1, negative 2, neutral 3, positive 1
 - top matches: [85] Backend Engineer — Intern (4 months, in-office) @ ethereal labs (job:3707); [85] Junior AI Engineer @ Silstone Health (job:3902); [85] Data Science Engineer Intern @ Eshal AI (job:3998); [78] Founding Software Engineer @ *Strello Health (job:1219); [78] Founding Full-Stack Engineer @ Arusto (job:3043); [78] Junior AI Engineer @ Planso (job:3085); [78] AI Engineer @ Frequency.cx (job:3129); [78] Founding Engineer for AI Consumer App @ Scalio (job:3592)
 
 ## Constraints and guarantees (never cut)
